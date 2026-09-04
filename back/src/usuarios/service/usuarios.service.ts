@@ -1,5 +1,6 @@
-import { Injectable, ConflictException } from '@nestjs/common';
-import { UsuariosRepository } from '../repository/usuarios.repository';
+import { Injectable, ConflictException, Inject } from '@nestjs/common';
+import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
+import type { IUsuariosRepository } from '../repository/usuarios.repository.interface';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Usuario } from '../entity/usuario.entity';
 import { ConfigService } from '@nestjs/config';
@@ -8,7 +9,9 @@ import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsuariosService {
   constructor(
-    private usuariosRepo: UsuariosRepository,
+    @Inject(USUARIOS_REPOSITORY)
+    private usuariosRepo: IUsuariosRepository,
+
     private catalogosService: CatalogosService,
     private configService: ConfigService,
   ) {}

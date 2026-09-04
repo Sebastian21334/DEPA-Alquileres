@@ -51,6 +51,11 @@ export class CatalogosService {
     await this.catalogosRepo.eliminarTipoAnunciante(id);
     return { mensaje: `Tipo de anunciante con ID ${id} eliminado correctamente` };
   }
+  async getTipoAnunciantePorId(id: number) {
+    const item = await this.catalogosRepo.buscarTipoAnunciantePorId(id);
+    if (!item) throw new NotFoundException(`El tipo de anunciante con ID ${id} no existe`);
+    return item;
+  }
 
   // --- TIPOS PROPIEDAD ---
   getTiposPropiedad() {
