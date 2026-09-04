@@ -13,29 +13,44 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existe = await this.usuariosService.buscarPorEmail(dto.email);
+    const email = dto.email.trim().toLowerCase();
+
+    // Mismo email normalizado para chequear duplicados y para guardar
+    const existe = await this.usuariosService.buscarPorEmail(email);
+    
     if (existe) {
       throw new ConflictException('El email ya está registrado');
     }
 
-    const passwordHash = await bcrypt.hash(dto.contrasenia, 10);
-
+    // El hasheo y la asignación de rol (Admin si es el primer usuario)
+    // quedan encapsulados en UsuariosService.crear — no se duplican acá.
     await this.usuariosService.crear({
       ...dto,
-      contrasenia: passwordHash,
+      email,
     });
 
     return { mensaje: 'Usuario registrado exitosamente' };
   }
 
   async login(dto: LoginDto) {
-    const user = await this.usuariosService.buscarPorEmail(dto.email);
-    if (!user) throw new UnauthorizedException('Credenciales inválidas');
+    const email = dto.email.trim().toLowerCase();
+
+    // Trae el usuario CON la contraseña hasheada (select: false por defecto)
+    // y con el rol ya resuelto, vía query builder en el repo.
+    const user = await this.usuariosService.validarUsuarioParaLogin(email, dto.contrasenia);
+
+    // Mismo mensaje para "no existe" y "contraseña incorrecta"
+    // → previene enumeración de usuarios
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
 
     const passValida = await bcrypt.compare(dto.contrasenia, user.contrasenia);
-    if (!passValida) throw new UnauthorizedException('Credenciales inválidas');
+    if (!passValida) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
 
-    const payload = { sub: user.id, email: user.email };
+    const payload = { sub: user.id, email: user.email, rol: user.rol?.nombre };
     return {
       access_token: await this.jwtService.signAsync(payload),
     };

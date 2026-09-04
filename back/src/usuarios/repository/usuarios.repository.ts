@@ -28,6 +28,14 @@ export class UsuariosRepository {
 
   buscarPorId(id: number): Promise<Usuario | null> {
     return this.repo.findOneBy({ id });
-}
+  }
 
+  async buscarParaLogin(email: string): Promise<Usuario | null> {
+    return this.repo
+      .createQueryBuilder('u')
+      .addSelect('u.contrasenia') // <-- Fuerza traer la columna oculta
+      .leftJoinAndSelect('u.rol', 'rol') // <-- Traemos el rol para saber si es Admin, Propietario, etc.
+      .where('u.email = :email', { email })
+      .getOne();
+  }
 }

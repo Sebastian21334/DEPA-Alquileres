@@ -18,7 +18,7 @@ export class Usuario {
   @Column({ type: 'varchar', length: 20 })
   telefono: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ select: false })
   contrasenia: string;
 
   @Column({ type: 'boolean', default: false })

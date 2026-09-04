@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-
+import { ConfigModule, ConfigService } from '@nestjs/config';;
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -23,6 +22,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     // Configuración global para leer el archivo .env
     ConfigModule.forRoot({
       isGlobal: true, 
+      envFilePath: ['.env'],
     }),
 
     // Configuración de TypeORM usando la DATABASE_URL
