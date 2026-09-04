@@ -7,9 +7,10 @@ import { TipoPropiedad } from '../entity/tipo-propiedad.entity';
 import { Modalidad } from '../entity/modalidad.entity';
 import { MetodoPago } from '../entity/metodo-pago.entity';
 import { TipoMoneda } from '../entity/tipo-moneda.entity';
+import { ICatalogosRepository } from './catalogos.repository.interface';
 
 @Injectable()
-export class CatalogosRepository {
+export class CatalogosRepository implements ICatalogosRepository {
   constructor(
     @InjectRepository(Rol) private rolRepo: Repository<Rol>,
     @InjectRepository(TipoAnunciante) private tipoAnuncianteRepo: Repository<TipoAnunciante>,

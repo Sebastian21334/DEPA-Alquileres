@@ -14,7 +14,7 @@ import { CatalogosModule } from '../catalogos/catalogos.module';
     },
     UsuariosService,
   ],
-  exports: [UsuariosService, USUARIOS_REPOSITORY],
+  exports: [UsuariosService],
   imports: [
     TypeOrmModule.forFeature([Usuario]),
     forwardRef(() => CatalogosModule),

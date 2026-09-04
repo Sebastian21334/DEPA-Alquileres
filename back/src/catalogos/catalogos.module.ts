@@ -7,6 +7,7 @@ import { Modalidad } from './entity/modalidad.entity';
 import { MetodoPago } from './entity/metodo-pago.entity';
 import { TipoMoneda } from './entity/tipo-moneda.entity';
 import { CatalogosRepository } from './repository/catalogos.repository';
+import { CATALOGOS_REPOSITORY } from './repository/catalogos.repository.interface';
 import { CatalogosService } from './service/catalogos.service';
 import { CatalogosController } from './controlador/catalogos.controller';
 import {AuthModule} from "../auth/auth.module";
@@ -17,7 +18,14 @@ import {AuthModule} from "../auth/auth.module";
     forwardRef(() => AuthModule),
   ],
   controllers: [CatalogosController],
-  providers: [CatalogosRepository, CatalogosService],
-  exports: [CatalogosRepository, CatalogosService], // así Usuarios/Anunciantes pueden usarlo sin duplicar repos
+  providers: [
+    CatalogosRepository,
+    {
+      provide: CATALOGOS_REPOSITORY,
+      useExisting: CatalogosRepository,
+    },
+    CatalogosService,
+  ],
+  exports: [CatalogosService],
 })
 export class CatalogosModule {}

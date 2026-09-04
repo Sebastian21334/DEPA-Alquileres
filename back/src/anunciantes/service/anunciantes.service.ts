@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
-import { AnunciantesRepository } from '../repository/anunciantes.repository';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ANUNCIANTES_REPOSITORY } from '../repository/anunciantes.repository.interface';
+import type { IAnunciantesRepository } from '../repository/anunciantes.repository.interface';
 import { SolicitarAnuncianteDto } from '../dto/solicitar-anunciante.dto';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
@@ -7,7 +8,8 @@ import { CatalogosService } from '../../catalogos/service/catalogos.service';
 @Injectable()
 export class AnunciantesService {
   constructor(
-    private readonly anunciantesRepo: AnunciantesRepository,
+    @Inject(ANUNCIANTES_REPOSITORY)
+    private readonly anunciantesRepo: IAnunciantesRepository,
     private usuariosService: UsuariosService,
     private catalogosService: CatalogosService,
   ) {}

@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { CatalogosRepository } from '../repository/catalogos.repository';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { CATALOGOS_REPOSITORY } from '../repository/catalogos.repository.interface';
+import type { ICatalogosRepository } from '../repository/catalogos.repository.interface';
 import { Rol } from '../entity/rol.entity';
 import { TipoAnunciante } from '../entity/tipo-anunciante.entity';
 import { TipoPropiedad } from '../entity/tipo-propiedad.entity';
@@ -9,7 +10,10 @@ import { TipoMoneda } from '../entity/tipo-moneda.entity';
 
 @Injectable()
 export class CatalogosService {
-  constructor(private catalogosRepo: CatalogosRepository) {}
+  constructor(
+    @Inject(CATALOGOS_REPOSITORY)
+    private catalogosRepo: ICatalogosRepository,
+  ) {}
 
   // --- ROLES ---
   getRoles() {
