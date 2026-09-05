@@ -36,4 +36,13 @@ export class AnunciantesRepository implements IAnunciantesRepository {
   eliminar(anunciante: Anunciante): Promise<Anunciante> {
     return this.repo.remove(anunciante);
   }
+
+  buscarPorId(id: number): Promise<Anunciante | null> {
+    return this.repo.findOne({
+      where: { idUsuario: id }, // ajustá el nombre real de la PK
+      relations: { usuario: true, tipoAnunciante: true },
+    });
+  }
+
+
 }

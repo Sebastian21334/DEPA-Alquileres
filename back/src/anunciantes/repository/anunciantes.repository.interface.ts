@@ -8,4 +8,5 @@ export interface IAnunciantesRepository {
   buscarPorUsuario(idUsuario: number): Promise<Anunciante | null>;
   buscarPendientes(): Promise<Anunciante[]>;
   eliminar(anunciante: Anunciante): Promise<Anunciante>;
+  buscarPorId(id: number): Promise<Anunciante | null>;
 }
