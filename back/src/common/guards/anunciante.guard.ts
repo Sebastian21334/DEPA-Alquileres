@@ -14,7 +14,7 @@ export class AnuncianteGuard implements CanActivate {
       throw new ForbiddenException('Debe ser un anunciante verificado para realizar esta acción');
     }
 
-    req.anunciante = anunciante; // opcional: lo dejás disponible para el controller
+    req.anunciante = anunciante;
     return true;
   }
 }

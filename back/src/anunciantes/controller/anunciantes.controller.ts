@@ -9,6 +9,7 @@ import {
   UseGuards,
   Req,
   ParseIntPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import { AnunciantesService } from '../service/anunciantes.service';
 import { SolicitarAnuncianteDto } from '../dto/solicitar-anunciante.dto';
@@ -37,6 +38,14 @@ export class AnunciantesController {
     return this.anunciantesService.getPendientes();
   }
 
+  @Get('mi-solicitud')
+  @UseGuards(JwtAuthGuard)
+  async miSolicitud(@Req() req: AuthenticatedRequest) {
+    const anunciante = await this.anunciantesService.buscarPorUsuario(req.user.id);
+    if (!anunciante) throw new NotFoundException('No solicitaste ser anunciante todavía');
+    return anunciante;
+  }
+
   @Patch(':id/aprobar')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
@@ -50,4 +59,6 @@ export class AnunciantesController {
   async rechazar(@Param('id', ParseIntPipe) id: number) {
     return this.anunciantesService.rechazar(id);
   }
+
+  
 }

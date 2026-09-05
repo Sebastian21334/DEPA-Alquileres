@@ -10,7 +10,7 @@ export class Imagen {
   url: string;
 
   // -- Relaciones --
-  @ManyToOne(() => Publicacion)
+  @ManyToOne(() => Publicacion, (publicacion) => publicacion.imagenes)
   @JoinColumn({ name: 'id_publicacion' })
-  publicacion: Publicacion;
+  publicacion: Publicacion;;
 }

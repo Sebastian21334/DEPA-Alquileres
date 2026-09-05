@@ -1,10 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { Provincia } from '../../ubicacion/entity/provincia.entity';
 import { Ciudad } from '../../ubicacion/entity/ciudad.entity';
 import { TipoPropiedad } from '../../catalogos/entity/tipo-propiedad.entity';
 import { Modalidad } from '../../catalogos/entity/modalidad.entity';
 import { TipoMoneda } from '../../catalogos/entity/tipo-moneda.entity';
+import { Imagen } from '../../imagenes/entity/imagen.entity';
 
 @Entity('publicacion')
 export class Publicacion {
@@ -60,4 +61,7 @@ export class Publicacion {
   @ManyToOne(() => TipoPropiedad)
   @JoinColumn({ name: 'id_tipo_propiedad' })
   tipoPropiedad: TipoPropiedad;
+
+  @OneToMany(() => Imagen, (imagen) => imagen.publicacion)
+  imagenes: Imagen[]
 }

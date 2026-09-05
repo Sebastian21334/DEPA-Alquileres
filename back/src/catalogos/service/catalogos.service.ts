@@ -91,6 +91,11 @@ export class CatalogosService {
     await this.catalogosRepo.eliminarTipoPropiedad(id);
     return { mensaje: `Tipo de propiedad con ID ${id} eliminado correctamente` };
   }
+  async getTipoPropiedadPorId(id: number) {
+    const item = await this.catalogosRepo.buscarTipoPropiedadPorId(id);
+    if (!item) throw new NotFoundException(`El tipo de propiedad con ID ${id} no existe`);
+    return item;
+  }
 
   // --- MODALIDADES ---
   getModalidades() {
@@ -113,6 +118,11 @@ export class CatalogosService {
     if (!item) throw new NotFoundException(`La modalidad con ID ${id} no existe`);
     await this.catalogosRepo.eliminarModalidad(id);
     return { mensaje: `Modalidad con ID ${id} eliminada correctamente` };
+  }
+  async getModalidadPorId(id: number) {
+    const item = await this.catalogosRepo.buscarModalidadPorId(id);
+    if (!item) throw new NotFoundException(`La modalidad con ID ${id} no existe`);
+    return item;
   }
 
   // --- MÉTODOS DE PAGO ---
@@ -159,5 +169,10 @@ export class CatalogosService {
     if (!item) throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
     await this.catalogosRepo.eliminarTipoMoneda(id);
     return { mensaje: `Tipo de moneda con ID ${id} eliminado correctamente` };
+  }
+  async getTipoMonedaPorId(id: number) {
+    const item = await this.catalogosRepo.buscarTipoMonedaPorId(id);
+    if (!item) throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
+    return item;
   }
 }

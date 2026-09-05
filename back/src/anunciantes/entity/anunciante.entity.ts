@@ -8,7 +8,7 @@ export class Anunciante {
   @PrimaryColumn({ name: 'id_usuario' })
   idUsuario: number;
 
-  @OneToOne(() => Usuario, { cascade: true, onDelete: 'CASCADE' })
+  @OneToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_usuario' })
   usuario: Usuario;
 

@@ -24,6 +24,8 @@ import { AuthModule } from '../auth/auth.module'; // <- agregar
     UsuariosModule,
     CatalogosModule,
     AuthModule, 
+    AnunciantesModule,
   ],
+  exports: [AnunciantesService],
 })
 export class AnunciantesModule {}
