@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, Inject } from '@nestjs/common';
+import { Injectable, ConflictException, Inject, NotFoundException } from '@nestjs/common';
 import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
 import type { IUsuariosRepository } from '../repository/usuarios.repository.interface';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
@@ -20,7 +20,7 @@ export class UsuariosService {
     return this.usuariosRepo.buscarPorEmail(email);
   }
 
-  async buscarPorId(id: number): Promise<Usuario | null> {
+   async buscarPorId(id: number): Promise<Usuario | null> {
     return this.usuariosRepo.buscarPorId(id);
   }
 
@@ -37,9 +37,15 @@ export class UsuariosService {
     const nombreRol = cantidadUsuarios === 0 ? 'Administrador' : 'Usuario';
 
     let rol = await this.catalogosService.getRolPorNombre(nombreRol);
+
+    if (!rol) {
+      rol = await this.catalogosService.crearRol({ nombre: nombreRol });
+    }
+    
     if (!rol) {
       if (cantidadUsuarios === 0) {
         rol = await this.catalogosService.crearRol({ nombre: nombreRol });
+        
       } else {
         throw new ConflictException(`No existe el rol '${nombreRol}'`);
       }
@@ -59,5 +65,24 @@ export class UsuariosService {
     // Solo busca — la comparación bcrypt vive en AuthService.login
     return this.usuariosRepo.buscarParaLogin(email);
   }
+
+  async cambiarRol(idUsuario: number, nombreRolNuevo: string): Promise<Usuario> {
+  const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+  if (!usuario) {
+    throw new NotFoundException('Usuario no encontrado');
+  }
+
+  const rolNuevo = await this.catalogosService.getRolPorNombre(nombreRolNuevo);
+  if (!rolNuevo) {
+    throw new NotFoundException(`El rol '${nombreRolNuevo}' no existe`);
+  }
+
+  if (usuario.rol.id === rolNuevo.id) {
+    throw new ConflictException(`El usuario ya tiene el rol '${nombreRolNuevo}'`);
+  }
+
+  usuario.rol = rolNuevo;
+  return this.usuariosRepo.guardar(usuario);
+}
   
 }

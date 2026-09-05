@@ -45,6 +45,9 @@ export class CatalogosRepository implements ICatalogosRepository {
   buscarTodosTiposAnunciante(): Promise<TipoAnunciante[]> {
     return this.tipoAnuncianteRepo.find();
   }
+  buscarTipoAnunciantePorNombre(nombre: string): Promise<TipoAnunciante | null> {
+    return this.tipoAnuncianteRepo.findOneBy({ nombre });
+  }
   buscarTipoAnunciantePorId(id: number): Promise<TipoAnunciante | null> {
     return this.tipoAnuncianteRepo.findOneBy({ id });
   }
@@ -62,6 +65,9 @@ export class CatalogosRepository implements ICatalogosRepository {
   // --- TIPOS PROPIEDAD ---
   buscarTodosTiposPropiedad(): Promise<TipoPropiedad[]> {
     return this.tipoPropiedadRepo.find();
+  }
+  buscarTipoPropiedadPorNombre(nombre: string): Promise<TipoPropiedad | null> {
+    return this.tipoPropiedadRepo.findOneBy({ nombre });
   }
   buscarTipoPropiedadPorId(id: number): Promise<TipoPropiedad | null> {
     return this.tipoPropiedadRepo.findOneBy({ id });
@@ -81,6 +87,9 @@ export class CatalogosRepository implements ICatalogosRepository {
   buscarTodasModalidades(): Promise<Modalidad[]> {
     return this.modalidadRepo.find();
   }
+  buscarModalidadPorNombre(nombre: string): Promise<Modalidad | null> {
+    return this.modalidadRepo.findOneBy({ nombre });
+  }
   buscarModalidadPorId(id: number): Promise<Modalidad | null> {
     return this.modalidadRepo.findOneBy({ id });
   }
@@ -99,6 +108,9 @@ export class CatalogosRepository implements ICatalogosRepository {
   buscarTodosMetodosPago(): Promise<MetodoPago[]> {
     return this.metodoPagoRepo.find();
   }
+  buscarMetodoPagoPorNombre(nombre: string): Promise<MetodoPago | null> {
+    return this.metodoPagoRepo.findOneBy({ nombre });
+  }
   buscarMetodoPagoPorId(id: number): Promise<MetodoPago | null> {
     return this.metodoPagoRepo.findOneBy({ id });
   }
@@ -116,6 +128,9 @@ export class CatalogosRepository implements ICatalogosRepository {
   // --- TIPOS MONEDA ---
   buscarTodosTiposMoneda(): Promise<TipoMoneda[]> {
     return this.tipoMonedaRepo.find();
+  }
+  buscarTipoMonedaPorNombre(nombre: string): Promise<TipoMoneda | null> {
+    return this.tipoMonedaRepo.findOneBy({ nombre });
   }
   buscarTipoMonedaPorId(id: number): Promise<TipoMoneda | null> {
     return this.tipoMonedaRepo.findOneBy({ id });
