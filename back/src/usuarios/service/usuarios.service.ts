@@ -16,14 +16,17 @@ export class UsuariosService {
     private configService: ConfigService,
   ) {}
 
+  /** Busca un usuario por correo para validar duplicados o iniciar sesion. */
   async buscarPorEmail(email: string): Promise<Usuario | null> {
     return this.usuariosRepo.buscarPorEmail(email);
   }
 
+  /** Busca un usuario por su clave primaria. */
    async buscarPorId(id: number): Promise<Usuario | null> {
     return this.usuariosRepo.buscarPorId(id);
   }
 
+  /** Hashea la contrasenia, asigna el rol inicial y persiste el usuario. */
   async crear(datos: any): Promise<Usuario> {
     // 1. Costo desde env (fallback 12)
     const rounds = Number(this.configService.get<string>('BCRYPT_COST') ?? '12');
@@ -31,13 +34,15 @@ export class UsuariosService {
     // 2. Hashear la contraseña en texto plano
     const contraseniaHash = await bcrypt.hash(datos.contrasenia, rounds);
 
-    // 3. Determinar rol: primer usuario → Administrador, los demás → Usuario
-    //    El cliente nunca manda el rol; lo asigna el servidor.
+    // El cliente nunca manda el rol: el primer usuario administra el sistema y
+    // todos los siguientes comienzan como usuarios normales.
     const cantidadUsuarios = await this.usuariosRepo.contarUsuarios();
     const nombreRol = cantidadUsuarios === 0 ? 'Administrador' : 'Usuario';
 
     let rol = await this.catalogosService.getRolPorNombre(nombreRol);
 
+    // El primer intento cubre el caso habitual. El segundo bloque conserva la
+    // posibilidad de crear el rol inicial si la base estaba completamente vacia.
     if (!rol) {
       rol = await this.catalogosService.crearRol({ nombre: nombreRol });
     }
@@ -51,7 +56,7 @@ export class UsuariosService {
       }
     }
 
-    // 4. Crear y guardar (contrasenia en texto plano se reemplaza por el hash)
+    // Se quita la contrasenia original para que solo el hash llegue a la entidad.
     const { contrasenia, ...resto } = datos;
     const nuevoUsuario = this.usuariosRepo.crear({
       ...resto,
@@ -61,11 +66,13 @@ export class UsuariosService {
     return this.usuariosRepo.guardar(nuevoUsuario);
   }
 
+  /** Obtiene el usuario con su hash; la comparacion se hace en AuthService. */
   async validarUsuarioParaLogin(email: string, password: string): Promise<Usuario | null> {
     // Solo busca — la comparación bcrypt vive en AuthService.login
     return this.usuariosRepo.buscarParaLogin(email);
   }
 
+  /** Cambia el rol de un usuario, evitando escrituras innecesarias. */
   async cambiarRol(idUsuario: number, nombreRolNuevo: string): Promise<Usuario> {
   const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
   if (!usuario) {

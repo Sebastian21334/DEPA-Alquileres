@@ -24,6 +24,7 @@ export class ImagenesService {
     this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
   }
 
+  /** Procesa una imagen, la guarda en Azure y registra su URL en la base. */
   async subir(idPublicacion: number, anuncianteQueOpera: Anunciante, archivo: ArchivoSubido) {
     const publicacion = await this.publicacionesService.buscarPorId(idPublicacion);
 
@@ -31,7 +32,7 @@ export class ImagenesService {
       throw new ForbiddenException('No podés subir imágenes a una publicación que no es tuya');
     }
 
-    // Validar que el contenido sea realmente una imagen (no solo el mimetype declarado)
+    // Validar el contenido real evita aceptar archivos disfrazados con un mimetype de imagen.
     let bufferProcesado: Buffer;
     try {
       bufferProcesado = await sharp(archivo.buffer)
@@ -43,6 +44,7 @@ export class ImagenesService {
     }
 
     const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
+    // El nombre incluye la publicacion y la hora para evitar colisiones entre cargas.
     const nombreBlob = `publicaciones/${idPublicacion}-${Date.now()}.jpg`;
     const blockBlobClient = containerClient.getBlockBlobClient(nombreBlob);
 
@@ -58,6 +60,7 @@ export class ImagenesService {
     return this.imagenesRepo.guardar(nuevaImagen);
   }
 
+  /** Elimina el blob y su registro, verificando antes la propiedad de la publicacion. */
   async eliminar(idImagen: number, anuncianteQueOpera: Anunciante) {
     const imagen = await this.imagenesRepo.buscarPorId(idImagen);
     if (!imagen) throw new NotFoundException('Imagen no encontrada');
@@ -73,10 +76,12 @@ export class ImagenesService {
     return this.imagenesRepo.eliminar(imagen);
   }
 
+  /** Lista las imagenes asociadas a una publicacion. */
   async listarPorPublicacion(idPublicacion: number) {
     return this.imagenesRepo.buscarPorPublicacion(idPublicacion);
   }
 
+  /** Convierte la URL publica de Azure al nombre relativo usado para borrarla. */
   private extraerNombreBlobDeUrl(url: string): string {
     const partes = new URL(url).pathname.split('/');
     return partes.slice(2).join('/');

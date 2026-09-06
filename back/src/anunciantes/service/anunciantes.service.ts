@@ -15,6 +15,7 @@ export class AnunciantesService {
     private catalogosService: CatalogosService,
   ) {}
 
+  /** Crea una solicitud pendiente y evita que un usuario tenga dos solicitudes. */
   async solicitarAlta(idUsuario: number, dto: SolicitarAnuncianteDto) {
     const usuario = await this.usuariosService.buscarPorId(idUsuario);
     if (!usuario) throw new NotFoundException('Usuario no encontrado');
@@ -38,6 +39,7 @@ export class AnunciantesService {
     return this.anunciantesRepo.guardar(nuevoAnunciante);
   }
 
+  /** Marca una solicitud pendiente como verificada para habilitar publicaciones. */
   async aprobar(idAnunciante: number): Promise<Anunciante> {
     const anunciante = await this.anunciantesRepo.buscarPorId(idAnunciante);
     if (!anunciante) throw new NotFoundException('Solicitud de anunciante no encontrada');
@@ -47,6 +49,7 @@ export class AnunciantesService {
     return this.anunciantesRepo.guardar(anunciante);
   }
 
+  /** Elimina una solicitud pendiente sin afectar al usuario que la envio. */
   async rechazar(idAnunciante: number): Promise<{ mensaje: string }> {
     const anunciante = await this.anunciantesRepo.buscarPorId(idAnunciante);
     if (!anunciante) throw new NotFoundException('Solicitud de anunciante no encontrada');
@@ -56,10 +59,12 @@ export class AnunciantesService {
     return { mensaje: 'Solicitud de anunciante rechazada' };
   }
 
+  /** Devuelve las solicitudes que todavia requieren una decision administrativa. */
   async getPendientes(): Promise<Anunciante[]> {
     return this.anunciantesRepo.buscarPendientes();
   }
 
+  /** Busca la solicitud asociada a un usuario concreto. */
   async buscarPorUsuario(idUsuario: number) {
     return this.anunciantesRepo.buscarPorUsuario(idUsuario);
   }

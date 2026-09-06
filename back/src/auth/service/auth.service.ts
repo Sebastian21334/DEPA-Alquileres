@@ -12,7 +12,10 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
+  /** Registra un usuario nuevo y delega el hash y la asignacion del rol. */
   async register(dto: RegisterDto) {
+    // La normalizacion evita que el mismo correo pueda registrarse con mayusculas
+    // o espacios distintos y luego fallar de forma inconsistente al iniciar sesion.
     const email = dto.email.trim().toLowerCase();
 
     // Mismo email normalizado para chequear duplicados y para guardar
@@ -32,6 +35,7 @@ export class AuthService {
     return { mensaje: 'Usuario registrado exitosamente' };
   }
 
+  /** Verifica las credenciales y devuelve un JWT con la identidad y el rol. */
   async login(dto: LoginDto) {
     const email = dto.email.trim().toLowerCase();
 
@@ -45,6 +49,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    // bcrypt compara contra el hash almacenado sin exponer nunca la contrasenia real.
     const passValida = await bcrypt.compare(dto.contrasenia, user.contrasenia);
     if (!passValida) {
       throw new UnauthorizedException('Credenciales inválidas');

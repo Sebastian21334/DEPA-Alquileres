@@ -15,7 +15,10 @@ export class PublicacionesService {
     private readonly ubicacionService: UbicacionService,
   ) {}
 
+  /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
   async crear(anunciante: Anunciante, dto: CrearPublicacionDto) {
+    // Estos servicios validan que cada catalogo y ubicacion exista; asi la
+    // publicacion no queda apuntando a claves foraneas inexistentes.
     const tipoMoneda = await this.catalogosService.getTipoMonedaPorId(dto.idTipoMoneda);
     const modalidad = await this.catalogosService.getModalidadPorId(dto.idModalidad);
     const tipoPropiedad = await this.catalogosService.getTipoPropiedadPorId(dto.idTipoPropiedad);
@@ -42,20 +45,24 @@ export class PublicacionesService {
     return this.publicacionesRepo.guardar(nueva);
   }
 
+  /** Busca una publicacion o devuelve 404 para los consumidores de la API. */
   async buscarPorId(id: number) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
     if (!publicacion) throw new NotFoundException('Publicación no encontrada');
     return publicacion;
   }
 
+  /** Devuelve unicamente las publicaciones visibles para visitantes. */
   async listarActivas() {
     return this.publicacionesRepo.buscarTodasActivas();
   }
 
+  /** Lista publicaciones de un anunciante, opcionalmente solo las activas. */
   async listarPorAnunciante(idAnunciante: number, soloActivas = false) {
     return this.publicacionesRepo.buscarPorAnunciante(idAnunciante, soloActivas);
   }
 
+  /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */
   async eliminar(id: number, anuncianteQueOpera: Anunciante) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
     if (!publicacion) throw new NotFoundException('Publicación no encontrada');
