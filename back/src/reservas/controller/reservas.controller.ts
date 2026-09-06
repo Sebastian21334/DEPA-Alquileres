@@ -10,12 +10,14 @@ export class ReservasController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
+  // El usuario que reserva sale del token, no de un campo manipulable del DTO.
   crear(@Body() dto: CrearReservaDto, @Req() req: any) {
     return this.reservasService.crear(dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('mis-reservas')
+  // Filtra el historial por el usuario autenticado.
   listarPorUsuario(@Req() req: any) {
     return this.reservasService.listarPorUsuario(req.user.id);
   }

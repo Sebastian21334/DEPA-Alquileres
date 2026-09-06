@@ -9,6 +9,7 @@ import { Imagen } from '../../imagenes/entity/imagen.entity';
 
 @Entity('publicacion')
 export class Publicacion {
+  // Una publicación es la unidad principal que se ofrece para alquiler.
   @PrimaryGeneratedColumn({ name: 'id_publicacion' })
   id: number;
 
@@ -27,7 +28,7 @@ export class Publicacion {
   @Column({ type: 'boolean', default: false })
   activa: boolean;
 
-  // -- Atributos consolidados del inmueble --
+  // Datos propios del inmueble, consolidados para consultarlos desde el anuncio.
   @Column({ type: 'varchar', length: 255 })
   direccion: string;
 
@@ -37,7 +38,7 @@ export class Publicacion {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   superficie: number;
 
-  // -- Relaciones --
+  // Catálogos y ubicación se guardan como FK para evitar repetir sus nombres.
   @ManyToOne(() => TipoMoneda)
   @JoinColumn({ name: 'id_tipo_moneda' })
   tipoMoneda: TipoMoneda;

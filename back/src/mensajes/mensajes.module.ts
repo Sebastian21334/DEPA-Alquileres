@@ -10,10 +10,12 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  // Los mensajes pertenecen a una publicación y siempre requieren identidad JWT.
   imports: [TypeOrmModule.forFeature([Mensaje]), PublicacionesModule, AuthModule],
   controllers: [MensajesController],
   providers: [
     MensajesService,
+    // Se expone la implementación mediante un token para mantener desacoplado el service.
     MensajeRepository,
     { provide: MENSAJE_REPOSITORY, useExisting: MensajeRepository },
   ],

@@ -35,6 +35,7 @@ export class ImagenesService {
     // Validar el contenido real evita aceptar archivos disfrazados con un mimetype de imagen.
     let bufferProcesado: Buffer;
     try {
+      // Sharp valida el contenido binario y normaliza todos los formatos a JPEG.
       bufferProcesado = await sharp(archivo.buffer)
         .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 75 })
@@ -48,6 +49,7 @@ export class ImagenesService {
     const nombreBlob = `publicaciones/${idPublicacion}-${Date.now()}.jpg`;
     const blockBlobClient = containerClient.getBlockBlobClient(nombreBlob);
 
+    // Azure recibe solo la versión procesada, reduciendo peso y estandarizando la URL.
     await blockBlobClient.uploadData(bufferProcesado, {
       blobHTTPHeaders: { blobContentType: 'image/jpeg' },
     });
@@ -83,6 +85,7 @@ export class ImagenesService {
 
   /** Convierte la URL publica de Azure al nombre relativo usado para borrarla. */
   private extraerNombreBlobDeUrl(url: string): string {
+    // La ruta contiene /<container>/<blob>; se descartan protocolo, host y container.
     const partes = new URL(url).pathname.split('/');
     return partes.slice(2).join('/');
   }

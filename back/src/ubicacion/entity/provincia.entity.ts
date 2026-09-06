@@ -3,6 +3,7 @@ import { Ciudad } from './ciudad.entity';
 
 @Entity('provincia')
 export class Provincia {
+  // Entidad padre de la jerarquía geográfica.
   @PrimaryGeneratedColumn({ name: 'id_provincia' })
   id: number;
 

@@ -12,6 +12,7 @@ export class UsuariosController {
   @Patch(':id/rol')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
+  // Solo administradores pueden cambiar el rol persistido de otro usuario.
   async cambiarRol(@Param('id') id: number, @Body() dto: CambiarRolDto) {
     return this.usuariosService.cambiarRol(id, dto.nombreRol);
   }

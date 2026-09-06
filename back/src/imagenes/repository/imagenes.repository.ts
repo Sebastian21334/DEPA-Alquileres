@@ -20,6 +20,7 @@ export class ImagenesRepository implements IImagenesRepository {
   }
 
   buscarPorId(id: number): Promise<Imagen | null> {
+    // La publicación y su anunciante permiten validar quién puede borrar la imagen.
     return this.repo.findOne({
       where: { id },
       relations: { publicacion: { anunciante: true } },

@@ -48,6 +48,7 @@ export class ReservasService {
       throw new ConflictException('El rango de fechas seleccionado no está disponible');
     }
 
+    // Las relaciones se crean con solo el ID: TypeORM puede resolver las FK sin cargar entidades completas.
     const reserva = this.reservaRepository.crear({
       finalizada: false,
       monto_pago: dto.monto_pago,
@@ -60,7 +61,7 @@ export class ReservasService {
     // Persistimos la reserva primero para obtener su ID antes de asociarlo a las fechas.
     const reservaGuardada = await this.reservaRepository.guardar(reserva);
 
-    // Asi no quedan fechas enlazadas a una reserva que nunca llego a crearse.
+    // Primero se guarda la reserva para no enlazar fechas a una reserva sin ID.
     await this.disponibilidadService.marcarComoReservadas(
       dto.id_publicacion,
       inicio,

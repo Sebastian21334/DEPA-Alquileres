@@ -1,10 +1,11 @@
-import { Injectable, ConflictException, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
 import type { IUsuariosRepository } from '../repository/usuarios.repository.interface';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Usuario } from '../entity/usuario.entity';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class UsuariosService {
@@ -89,7 +90,60 @@ export class UsuariosService {
   }
 
   usuario.rol = rolNuevo;
-  return this.usuariosRepo.guardar(usuario);
+    return this.usuariosRepo.guardar(usuario);
+  }
+
+  /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */
+async generarTokenVerificacion(usuario: Usuario): Promise<string> {
+  const token = crypto.randomBytes(32).toString('hex');
+  usuario.token_verificacion = token;
+  usuario.email_verificado = false;
+  await this.usuariosRepo.guardar(usuario);
+  return token;
 }
+
+/** Marca la cuenta como verificada y consume el token (uso único). */
+async verificarCuenta(token: string): Promise<void> {
+  const usuario = await this.usuariosRepo.buscarPorTokenVerificacion(token);
+  if (!usuario) {
+    throw new BadRequestException('Token de verificación inválido');
+  }
+
+  usuario.email_verificado = true;
+  usuario.token_verificacion = null;
+  await this.usuariosRepo.guardar(usuario);
+}
+
+/**
+ * Genera un token de recuperación si el email existe. Devuelve null si no existe,
+ * para que AuthService pueda responder siempre igual y no filtrar qué emails están registrados.
+ */
+async generarTokenRecuperacion(email: string): Promise<{ token: string; usuario: Usuario } | null> {
+  const usuario = await this.usuariosRepo.buscarPorEmail(email);
+  if (!usuario) return null;
+
+  const token = crypto.randomBytes(32).toString('hex');
+  usuario.token_recuperacion = token;
+  usuario.token_recuperacion_expira = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+  await this.usuariosRepo.guardar(usuario);
+
+  return { token, usuario };
+}
+
+/** Valida el token de recuperación (existencia y vigencia) y setea la nueva contraseña hasheada. */
+async restablecerContrasenia(token: string, nuevaContrasenia: string): Promise<void> {
+  const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
+
+  if (!usuario || !usuario.token_recuperacion_expira || usuario.token_recuperacion_expira < new Date()) {
+    throw new BadRequestException('Token inválido o expirado');
+  }
+
+  const rounds = Number(this.configService.get<string>('BCRYPT_COST') ?? '12');
+  usuario.contrasenia = await bcrypt.hash(nuevaContrasenia, rounds);
+  usuario.token_recuperacion = null;
+  usuario.token_recuperacion_expira = null;
+  await this.usuariosRepo.guardar(usuario);
+}
+
   
 }

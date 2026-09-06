@@ -10,6 +10,7 @@ export class PublicacionesController {
   constructor(private readonly publicacionesService: PublicacionesService) {}
 
   @Get()
+  // Las publicaciones activas son la vista pública principal del catálogo.
   async listarActivas() {
     return this.publicacionesService.listarActivas();
     }
@@ -20,6 +21,7 @@ export class PublicacionesController {
     @Query('activa') activa?: string,
     ) {
     const soloActivas = activa === 'true';
+    // La query llega como texto; solo el valor exacto true activa el filtro.
     return this.publicacionesService.listarPorAnunciante(idAnunciante, soloActivas);
     }
 
@@ -32,6 +34,7 @@ export class PublicacionesController {
 
   @Post()
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  // AnuncianteGuard agrega req.anunciante y evita confiar en un ID del body.
   async crear(@Req() req: any, @Body() dto: CrearPublicacionDto) {
     return this.publicacionesService.crear(req.anunciante, dto);
   }

@@ -5,6 +5,7 @@ import { MetodoPago } from '../../catalogos/entity/metodo-pago.entity';
 
 @Entity('reserva')
 export class Reserva {
+  // La reserva registra el pago y vincula al inquilino con una publicación.
   @PrimaryGeneratedColumn({ name: 'id_reserva' })
   id: number;
 
@@ -17,7 +18,7 @@ export class Reserva {
   @Column({ type: 'date' })
   fecha_pago: Date;
 
-  // -- Relaciones --
+  // Las fechas reservadas se mantienen en la entidad Fecha, no en Reserva.
   
   // Usuario que realiza la reserva (Inquilino)
   @ManyToOne(() => Usuario)

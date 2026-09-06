@@ -10,12 +10,14 @@ export class MensajesController {
   constructor(private readonly mensajesService: MensajesService) {}
 
   @Post()
+  // El remitente se toma del JWT, nunca del body enviado por el cliente.
   enviar(@Body() dto: EnviarMensajeDto, @Req() req: any) {
     return this.mensajesService.enviar(dto, req.user.id);
   }
 
   // Bandeja de entrada: lista de conversaciones del usuario logueado
   @Get()
+  // La bandeja se calcula exclusivamente para el usuario autenticado.
   listarConversaciones(@Req() req: any) {
     return this.mensajesService.listarConversaciones(req.user.id);
   }

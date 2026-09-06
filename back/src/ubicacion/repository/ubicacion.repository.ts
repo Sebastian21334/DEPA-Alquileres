@@ -28,6 +28,7 @@ export class UbicacionRepository implements IUbicacionRepository {
   }
 
   buscarCiudadPorId(id: number): Promise<Ciudad | null> {
+    // La provincia se carga para validar y reutilizar la relación al crear publicaciones.
     return this.ciudadRepo.findOne({
       where: { id },
       relations: { provincia: true },

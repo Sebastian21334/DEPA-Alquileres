@@ -26,6 +26,7 @@ export class CatalogosService {
   }
   /** Crea un rol y evita duplicados por nombre. */
   async crearRol(datos: Partial<Rol>) {
+    // Se consulta antes de insertar porque el catálogo no depende solo del error de DB.
     const existente = await this.catalogosRepo.buscarRolPorNombre(datos.nombre!);
     if (existente) {
       throw new ConflictException(`Ya existe el rol '${datos.nombre}'`);
@@ -90,8 +91,8 @@ export class CatalogosService {
     if (existente) {
       throw new ConflictException(`Ya existe el tipo de propiedad '${datos.nombre}'`);
     }
-  return this.catalogosRepo.crearTipoPropiedad(datos);
-}
+    return this.catalogosRepo.crearTipoPropiedad(datos);
+  }
   /** Actualiza un tipo de propiedad previamente existente. */
   async actualizarTipoPropiedad(id: number, datos: Partial<TipoPropiedad>) {
     const item = await this.catalogosRepo.buscarTipoPropiedadPorId(id);

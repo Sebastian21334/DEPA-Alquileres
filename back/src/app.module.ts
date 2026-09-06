@@ -14,6 +14,7 @@ import { DisponibilidadModule } from './disponibilidad/disponibilidad.module';
 import { ReservasModule } from './reservas/reservas.module';
 import { MensajesModule } from './mensajes/mensajes.module';
 import { CatalogosModule } from './catalogos/catalogos.module';
+import { MailModule } from './mail/mail.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -51,6 +52,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ReservasModule,
     MensajesModule,
     CatalogosModule,
+    MailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

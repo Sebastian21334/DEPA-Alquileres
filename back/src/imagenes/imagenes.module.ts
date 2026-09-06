@@ -10,6 +10,7 @@ import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  // Coordina el archivo recibido, el almacenamiento externo y su registro en DB.
   controllers: [ImagenesController],
   providers: [
     ImagenesRepository,
@@ -20,7 +21,9 @@ import { AuthModule } from '../auth/auth.module';
     ImagenesService,
   ],
   imports: [
+    // La entidad guarda la URL final, no los bytes de la imagen.
     TypeOrmModule.forFeature([Imagen]),
+    // Se consultan publicación, anunciante y usuario para validar propiedad.
     PublicacionesModule,
     AnunciantesModule,
     AuthModule,

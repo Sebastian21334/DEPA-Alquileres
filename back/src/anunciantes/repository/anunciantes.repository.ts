@@ -24,6 +24,7 @@ export class AnunciantesRepository implements IAnunciantesRepository {
   }
 
   buscarPendientes(): Promise<Anunciante[]> {
+    // El administrador necesita usuario y tipo para revisar la solicitud completa.
     return this.repo.find({
       where: { verificado: false },
       relations: {
@@ -38,6 +39,7 @@ export class AnunciantesRepository implements IAnunciantesRepository {
   }
 
   buscarPorId(id: number): Promise<Anunciante | null> {
+    // id coincide con idUsuario porque esa columna es la PK de Anunciante.
     return this.repo.findOne({
       where: { idUsuario: id }, // ajustá el nombre real de la PK
       relations: { usuario: true, tipoAnunciante: true },

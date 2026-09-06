@@ -38,6 +38,7 @@ export class FechaRepository implements IFechaRepository {
   }
 
   buscarPorRango(idPublicacion: number, fechaInicio: Date, fechaFin: Date): Promise<Fecha[]> {
+    // Between incluye ambos extremos, por eso el rango reserva también el día de salida.
     return this.repository.find({
       where: {
         publicacion: { id: idPublicacion },
@@ -48,6 +49,7 @@ export class FechaRepository implements IFechaRepository {
 
   async eliminar(id: number): Promise<number> {
     const resultado = await this.repository.delete(id);
+    // TypeORM no lanza 404: devuelve affected y el service decide la respuesta HTTP.
     return resultado.affected ?? 0;
   }
 }

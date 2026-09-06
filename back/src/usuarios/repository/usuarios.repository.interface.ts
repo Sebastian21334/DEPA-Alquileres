@@ -9,4 +9,6 @@ export interface IUsuariosRepository {
   contarUsuarios(): Promise<number>;
   buscarPorId(id: number): Promise<Usuario | null>;
   buscarParaLogin(email: string): Promise<Usuario | null>;
+  buscarPorTokenVerificacion(token: string): Promise<Usuario | null>;
+  buscarPorTokenRecuperacion(token: string): Promise<Usuario | null>;
 }

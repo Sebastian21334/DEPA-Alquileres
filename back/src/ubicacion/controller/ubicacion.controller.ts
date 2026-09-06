@@ -11,6 +11,7 @@ export class UbicacionController {
   constructor(private readonly ubicacionService: UbicacionService) {}
 
   @Get('provincias')
+  // Lecturas públicas usadas para completar formularios y filtros.
   async getProvincias() {
     return this.ubicacionService.getProvincias();
   }
@@ -31,6 +32,7 @@ export class UbicacionController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   async crearCiudad(@Body() dto: CrearCiudadDto) {
+    // Se resuelve la provincia antes de guardar para crear una relación válida.
     const provincia = await this.ubicacionService.getProvinciaPorId(dto.idProvincia);
     return this.ubicacionService.crearCiudad({ nombre: dto.nombre, provincia });
   }

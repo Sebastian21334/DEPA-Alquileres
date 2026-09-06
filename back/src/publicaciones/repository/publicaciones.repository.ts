@@ -20,6 +20,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
   }
 
   buscarPorId(id: number): Promise<Publicacion | null> {
+    // Esta consulta carga todas las relaciones necesarias para detalle, propiedad y galería.
     return this.repo.findOne({
       where: { id },
       relations: {
@@ -42,6 +43,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
   }
 
   buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]> {
+    // El spread agrega el filtro activa únicamente cuando el caller lo solicita.
     return this.repo.find({
       where: {
         anunciante: { idUsuario: idAnunciante },

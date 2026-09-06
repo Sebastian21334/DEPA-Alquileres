@@ -35,6 +35,7 @@ export class DisponibilidadService {
     // fechaRepository.crear() es un simple "new" con los valores por defecto,
     // no pega contra la base todavía.
     const fechas: Fecha[] = [];
+    // Se usa una copia de la fecha en cada iteración para no reutilizar la misma referencia mutable.
     for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
       fechas.push(
         this.fechaRepository.crear({
@@ -99,6 +100,7 @@ export class DisponibilidadService {
     const diasEsperados =
       Math.floor((fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
+    // Tener menos filas que días pedidos significa que el rango nunca fue habilitado completo.
     if (fechas.length < diasEsperados) return false;
 
     // Un solo dia ocupado vuelve invalido el rango completo de la reserva.
@@ -120,6 +122,7 @@ export class DisponibilidadService {
     // ocupado, relacion que tambien evita reutilizar esas fechas.
     const fechas = await this.fechaRepository.buscarPorRango(idPublicacion, fechaInicio, fechaFin);
 
+    // Se actualizan las mismas filas que se validaron; la reserva ya tiene ID para enlazarlas.
     for (const fecha of fechas) {
       fecha.disponible = false;
       fecha.reserva = { id: idReserva } as any;

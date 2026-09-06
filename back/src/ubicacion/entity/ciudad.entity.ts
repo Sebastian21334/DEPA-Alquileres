@@ -3,6 +3,7 @@ import { Provincia } from './provincia.entity';
 
 @Entity('ciudad')
 export class Ciudad {
+  // Una ciudad siempre queda asociada a una provincia mediante id_provincia.
   @PrimaryGeneratedColumn({ name: 'id_ciudad' })
   id: number;
 

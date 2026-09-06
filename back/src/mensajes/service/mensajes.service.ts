@@ -93,12 +93,14 @@ export class MensajesService {
     // conserva solamente el primero de cada par publicacion-interlocutor.
     const conversaciones = new Map<string, ConversacionResumen>();
 
+    // Como la consulta está ordenada DESC, el primer mensaje de cada clave es el último real.
     for (const mensaje of mensajes) {
       const idOtroUsuario =
         mensaje.origenUsuario.id === idUsuario ? mensaje.destinoUsuario.id : mensaje.origenUsuario.id;
 
       const clave = `${mensaje.publicacion.id}-${idOtroUsuario}`;
 
+      // La clave combina publicación e interlocutor para separar chats del mismo usuario.
       if (!conversaciones.has(clave)) {
         conversaciones.set(clave, {
           idPublicacion: mensaje.publicacion.id,

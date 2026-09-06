@@ -3,6 +3,7 @@ import { Usuario } from '../../usuarios/entity/usuario.entity';
 
 @Entity('rol')
 export class Rol {
+  // Los roles se almacenan como catálogo para autorizar endpoints administrativos.
   @PrimaryGeneratedColumn({ name: 'id_rol' })
   id: number;
 

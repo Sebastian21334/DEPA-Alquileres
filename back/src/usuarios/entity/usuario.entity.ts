@@ -28,4 +28,17 @@ export class Usuario {
   @ManyToOne(() => Rol, (rol) => rol.usuarios)
   @JoinColumn({ name: 'id_rol' })
   rol: Rol;
+
+  @Column({ type: 'boolean', default: false })
+  email_verificado: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  token_verificacion: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  token_recuperacion: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  token_recuperacion_expira: Date | null;
+
 }

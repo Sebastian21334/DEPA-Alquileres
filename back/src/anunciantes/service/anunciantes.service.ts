@@ -21,12 +21,14 @@ export class AnunciantesService {
     if (!usuario) throw new NotFoundException('Usuario no encontrado');
 
     const existeAnunciante = await this.anunciantesRepo.buscarPorUsuario(idUsuario);
+    // La PK coincide con el usuario, por lo que solo puede existir una solicitud por persona.
     if (existeAnunciante) throw new ConflictException('El usuario ya solicitó ser anunciante');
 
     const tipoAnunciante = await this.catalogosService.getTipoAnunciantePorId(dto.idTipoAnunciante);
     
     if (!tipoAnunciante) throw new NotFoundException('Tipo de anunciante no válido');
 
+    // La solicitud comienza pendiente; aprobarla es lo que habilita publicar.
     const nuevoAnunciante = this.anunciantesRepo.crear({
       idUsuario,
       usuario,

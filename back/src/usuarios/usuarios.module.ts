@@ -9,8 +9,10 @@ import { UsuariosController } from './contoller/usuarios.controller';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  // El controller expone únicamente operaciones administrativas de usuarios.
   controllers: [UsuariosController],
   providers: [
+    // Se registra la implementación concreta y luego se publica mediante un token.
     UsuariosRepository,
     {
       provide: USUARIOS_REPOSITORY,
@@ -20,7 +22,9 @@ import { AuthModule } from '../auth/auth.module';
   ],
   exports: [UsuariosService],
   imports: [
+    // TypeORM crea el repositorio de la entidad Usuario para este módulo.
     TypeOrmModule.forFeature([Usuario]),
+    // Catálogos aporta los roles; Auth y Usuarios tienen una dependencia circular.
     forwardRef(() => CatalogosModule),
     forwardRef(() => AuthModule),
   ],

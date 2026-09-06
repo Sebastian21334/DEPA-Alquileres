@@ -11,11 +11,13 @@ export class DisponibilidadController {
 
   @UseGuards(JwtAuthGuard, PropietarioPublicacionGuard)
   @Post()
+  // El guard obtiene la publicación desde id_publicacion y verifica propiedad.
   crear(@Body() dto: CrearDisponibilidadDto) {
     return this.disponibilidadService.crear(dto);
   }
 
   @Get('publicacion/:id')
+  // El calendario es público para que un visitante pueda elegir fechas.
   listarPorPublicacion(@Param('id', ParseIntPipe) id: number) {
     return this.disponibilidadService.listarPorPublicacion(id);
   }

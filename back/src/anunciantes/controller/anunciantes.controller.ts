@@ -24,6 +24,7 @@ export class AnunciantesController {
 
   @Post('solicitar')
   @UseGuards(JwtAuthGuard)
+  // La solicitud queda vinculada al usuario del JWT.
   async solicitarAlta(
     @Req() req: AuthenticatedRequest,
     @Body() dto: SolicitarAnuncianteDto,
@@ -34,6 +35,7 @@ export class AnunciantesController {
   @Get('pendientes')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
+  // Solo un administrador puede revisar solicitudes de terceros.
   async getPendientes() {
     return this.anunciantesService.getPendientes();
   }
@@ -41,6 +43,7 @@ export class AnunciantesController {
   @Get('mi-solicitud')
   @UseGuards(JwtAuthGuard)
   async miSolicitud(@Req() req: AuthenticatedRequest) {
+    // La ausencia se transforma en un mensaje claro para el usuario.
     const anunciante = await this.anunciantesService.buscarPorUsuario(req.user.id);
     if (!anunciante) throw new NotFoundException('No solicitaste ser anunciante todavía');
     return anunciante;

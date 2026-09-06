@@ -4,6 +4,7 @@ import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
 @Entity('mensaje')
 export class Mensaje {
+  // Un mensaje pertenece simultáneamente a una publicación y a dos usuarios.
   @PrimaryGeneratedColumn({ name: 'id_mensaje' })
   id: number;
 
@@ -13,7 +14,7 @@ export class Mensaje {
   @Column({ type: 'timestamp' })
   fecha: Date;
 
-  // -- Relaciones --
+  // Se separan origen y destino para reconstruir ambos sentidos de una conversación.
   @ManyToOne(() => Usuario)
   @JoinColumn({ name: 'id_origen_usuario' })
   origenUsuario: Usuario;

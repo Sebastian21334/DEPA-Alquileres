@@ -13,12 +13,14 @@ import { CatalogosController } from './controlador/catalogos.controller';
 import {AuthModule} from "../auth/auth.module";
 
 @Module({
+  // Centraliza las tablas maestras que son referenciadas por otros módulos.
   imports: [
     TypeOrmModule.forFeature([Rol, TipoAnunciante, TipoPropiedad, Modalidad, MetodoPago, TipoMoneda]),
     forwardRef(() => AuthModule),
   ],
   controllers: [CatalogosController],
   providers: [
+    // El token permite inyectar el contrato sin acoplar services al repositorio.
     CatalogosRepository,
     {
       provide: CATALOGOS_REPOSITORY,

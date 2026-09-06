@@ -8,6 +8,8 @@ import { Roles } from '../../common/decorators/roles.decorator';
 export class CatalogosController {
   constructor(private catalogosService: CatalogosService) {}
 
+  // Los GET son consultas públicas; las operaciones de escritura se protegen abajo.
+
   // ==========================================
   // ROLES
   // ==========================================
@@ -19,6 +21,7 @@ export class CatalogosController {
   @Post('roles')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
+  // Cada catálogo repite el mismo patrón: validar JWT, rol y delegar al service.
   crearRol(@Body() datos: { nombre: string }) {
     return this.catalogosService.crearRol(datos);
   }

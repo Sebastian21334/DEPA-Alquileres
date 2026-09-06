@@ -11,12 +11,14 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
+    // Reserva se guarda con TypeORM y delega disponibilidad en otro módulo.
     TypeOrmModule.forFeature([Reserva]),
     DisponibilidadModule,
     AuthModule,
   ],
   controllers: [ReservasController],
   providers: [
+    // El token desacopla el service de la implementación concreta del repositorio.
     ReservasService,
     ReservaRepository,
     {

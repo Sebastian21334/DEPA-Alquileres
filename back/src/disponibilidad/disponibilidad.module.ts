@@ -12,11 +12,13 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
+    // Se usan Fecha para el calendario y Publicacion para resolver propiedad.
     TypeOrmModule.forFeature([Fecha, Publicacion]),
     AuthModule,
   ],
   controllers: [DisponibilidadController],
   providers: [
+    // PropietarioPublicacionGuard evita modificar calendarios ajenos.
     DisponibilidadService,
     FechaRepository,
     {

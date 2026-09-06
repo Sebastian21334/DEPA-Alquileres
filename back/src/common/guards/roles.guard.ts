@@ -7,20 +7,20 @@ export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(ctx: ExecutionContext): boolean {
-    // 1. Leer los roles requeridos del decorador @Roles()
+    // 1. Busca metadata tanto en el método como en la clase; el método tiene prioridad.
     const required = this.reflector.getAllAndOverride<string[] | undefined>(
       ROLES_KEY,
       [ctx.getHandler(), ctx.getClass()],
     );
 
-    // 2. Si el handler no tiene @Roles(), dejar pasar
+    // 2. Sin metadata de roles no hay restricción de rol para este endpoint.
     if (!required?.length) return true;
 
-    // 3. Leer el rol cargado por JwtAuthGuard (viene del payload del JWT)
+    // 3. JwtStrategy ya validó el token y dejó el rol disponible en req.user.
     const req = ctx.switchToHttp().getRequest();
     const rol = req.user?.rol as string | undefined;
 
-    // 4. Verificar que el rol del usuario está entre los requeridos
+    // 4. La autorización es inclusiva: alcanza con que coincida uno de los roles.
     return !!rol && required.includes(rol);
   }
 }

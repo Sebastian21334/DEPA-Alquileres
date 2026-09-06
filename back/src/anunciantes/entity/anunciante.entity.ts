@@ -4,7 +4,7 @@ import { TipoAnunciante } from '../../catalogos/entity/tipo-anunciante.entity';
 
 @Entity('anunciante')
 export class Anunciante {
-  // La clave primaria es a la vez clave foránea hacia la tabla usuario
+  // El anunciante comparte el ID del usuario: es una extensión 1 a 1 de Usuario.
   @PrimaryColumn({ name: 'id_usuario' })
   idUsuario: number;
 
@@ -13,6 +13,7 @@ export class Anunciante {
   usuario: Usuario;
 
   @Column({ type: 'boolean', default: false })
+  // Solo los anunciantes verificados pueden publicar o administrar imágenes.
   verificado: boolean;
 
   @Column({ type: 'varchar', length: 15, nullable: true })

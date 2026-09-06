@@ -35,11 +35,22 @@ export class UsuariosRepository implements IUsuariosRepository {
   }
 
   async buscarParaLogin(email: string): Promise<Usuario | null> {
+    // La contraseña tiene select:false en la entidad y debe pedirse explícitamente solo aquí.
     return this.repo
       .createQueryBuilder('u')
       .addSelect('u.contrasenia') // <-- Fuerza traer la columna oculta
-      .leftJoinAndSelect('u.rol', 'rol') // <-- Traemos el rol para saber si es Admin, Propietario, etc.
+      // El rol se necesita para autorizar la sesión y para incluirlo en el JWT.
+      .leftJoinAndSelect('u.rol', 'rol')
       .where('u.email = :email', { email })
       .getOne();
   }
+
+  buscarPorTokenVerificacion(token: string): Promise<Usuario | null> {
+    return this.repo.findOne({ where: { token_verificacion: token } });
+  }
+
+  buscarPorTokenRecuperacion(token: string): Promise<Usuario | null> {
+    return this.repo.findOne({ where: { token_recuperacion: token } });
+  }
+
 }

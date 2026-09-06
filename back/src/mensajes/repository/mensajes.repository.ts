@@ -20,7 +20,7 @@ export class MensajeRepository implements IMensajeRepository {
   }
 
   buscarConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<Mensaje[]> {
-    // El par puede estar en cualquier sentido (A->B o B->A), por eso el OR
+    // El par puede estar en cualquier sentido (A->B o B->A), por eso el OR.
     return this.repository
       .createQueryBuilder('mensaje')
       .leftJoinAndSelect('mensaje.origenUsuario', 'origenUsuario')
@@ -28,6 +28,7 @@ export class MensajeRepository implements IMensajeRepository {
       .leftJoinAndSelect('mensaje.publicacion', 'publicacion')
       .where('mensaje.id_publicacion = :idPublicacion', { idPublicacion })
       .andWhere(
+        // Los dos términos representan ambos sentidos de la misma conversación.
         '((mensaje.id_origen_usuario = :idA AND mensaje.id_destino_usuario = :idB) OR ' +
           '(mensaje.id_origen_usuario = :idB AND mensaje.id_destino_usuario = :idA))',
         { idA: idUsuarioA, idB: idUsuarioB },

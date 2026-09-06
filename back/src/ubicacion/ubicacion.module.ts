@@ -9,6 +9,7 @@ import { UbicacionController } from './controller/ubicacion.controller';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  // Expone la jerarquía Provincia -> Ciudad usada por las publicaciones.
   controllers: [UbicacionController],
   providers: [
     UbicacionRepository,
@@ -19,6 +20,7 @@ import { AuthModule } from '../auth/auth.module';
     UbicacionService,
   ],
   imports: [
+    // Ambos repositorios usan las entidades registradas en este módulo.
     TypeOrmModule.forFeature([Provincia, Ciudad]),
     AuthModule,
   ],

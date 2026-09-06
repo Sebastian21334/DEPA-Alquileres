@@ -11,6 +11,7 @@ import { AuthModule } from '../auth/auth.module'; // <-- cambio
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 
 @Module({
+  // La publicación coordina catálogos, ubicación y anunciante propietario.
   controllers: [PublicacionesController],
   providers: [
     PublicacionesRepository,
@@ -21,7 +22,9 @@ import { AnunciantesModule } from '../anunciantes/anunciantes.module';
     PublicacionesService,
   ],
   imports: [
+    // Registra el repositorio TypeORM de publicaciones.
     TypeOrmModule.forFeature([Publicacion]),
+    // Se necesitan para resolver los IDs relacionales al crear una publicación.
     CatalogosModule,
     UbicacionModule,
     AuthModule, 

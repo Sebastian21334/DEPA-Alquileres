@@ -27,8 +27,10 @@ export class ImagenesController {
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
   @UseInterceptors(
     FileInterceptor('archivo', {
+      // El límite se aplica al archivo original antes de que Sharp lo comprima.
       limits: { fileSize: 10 * 1024 * 1024 }, // 10MB máx antes de comprimir
       fileFilter: (req, file, callback) => {
+        // Validar MIME temprano evita procesar o almacenar formatos no soportados.
         if (!TIPOS_PERMITIDOS.includes(file.mimetype)) {
           return callback(
             new BadRequestException('Solo se permiten imágenes (JPEG, PNG, WEBP, HEIC)'),
@@ -39,6 +41,7 @@ export class ImagenesController {
       },
     }),
   )
+  // AnuncianteGuard agrega req.anunciante después de comprobar que el usuario es propietario.
   async subir(
     @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
     @UploadedFile() archivo: ArchivoSubido,

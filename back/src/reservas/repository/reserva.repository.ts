@@ -32,6 +32,7 @@ export class ReservaRepository implements IReservaRepository {
   }
 
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]> {
+    // El orden descendente permite mostrar primero las reservas más recientes.
     return this.repository.find({
       where: { usuario: { id: idUsuario } },
       relations: { publicacion: true, metodoPago: true },
@@ -40,6 +41,7 @@ export class ReservaRepository implements IReservaRepository {
   }
 
   buscarPorPublicacion(idPublicacion: number): Promise<Reserva[]> {
+    // Se carga el usuario para que el anunciante pueda identificar al inquilino.
     return this.repository.find({
       where: { publicacion: { id: idPublicacion } },
       relations: { usuario: true, metodoPago: true },

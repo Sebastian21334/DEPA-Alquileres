@@ -39,6 +39,7 @@ export class UbicacionService {
 
   /** Lista ciudades y valida primero que la provincia padre exista. */
   async getCiudadesPorProvincia(idProvincia: number) {
+    // Primero valida el padre para no devolver un listado vacío ambiguo.
     await this.getProvinciaPorId(idProvincia); // valida que exista la provincia
     return this.ubicacionRepo.buscarCiudadesPorProvincia(idProvincia);
   }

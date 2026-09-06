@@ -25,6 +25,7 @@ export class PublicacionesService {
     const provincia = await this.ubicacionService.getProvinciaPorId(dto.idProvincia);
     const ciudad = await this.ubicacionService.getCiudadPorId(dto.idCiudad);
 
+    // La entidad recibe objetos completos para mantener sus relaciones TypeORM consistentes.
     const nueva = this.publicacionesRepo.crear({
       titulo: dto.titulo,
       descripcion: dto.descripcion,
@@ -68,6 +69,7 @@ export class PublicacionesService {
     if (!publicacion) throw new NotFoundException('Publicación no encontrada');
 
     if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
+      // El anunciante autenticado debe ser el dueño, aunque conozca el ID de otra publicación.
       throw new ForbiddenException('No podés eliminar una publicación que no es tuya');
     }
 

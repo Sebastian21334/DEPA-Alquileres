@@ -2,6 +2,7 @@
 import { IsInt, IsDateString, IsNumber, Min } from 'class-validator';
 
 export class CrearReservaDto {
+  // Las fechas se validan como ISO y luego se usan para consultar disponibilidad.
   @IsInt()
   id_publicacion: number;
 
