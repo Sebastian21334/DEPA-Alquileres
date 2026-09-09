@@ -16,7 +16,7 @@ export class Fecha {
   disponible: boolean;
 
   // -- Relaciones --
-  @ManyToOne(() => Publicacion)
+  @ManyToOne(() => Publicacion, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Publicacion;
 

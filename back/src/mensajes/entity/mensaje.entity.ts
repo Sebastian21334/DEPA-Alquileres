@@ -15,15 +15,15 @@ export class Mensaje {
   fecha: Date;
 
   // Se separan origen y destino para reconstruir ambos sentidos de una conversación.
-  @ManyToOne(() => Usuario)
+  @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_origen_usuario' })
   origenUsuario: Usuario;
 
-  @ManyToOne(() => Usuario)
+  @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_destino_usuario' })
   destinoUsuario: Usuario;
 
-  @ManyToOne(() => Publicacion)
+  @ManyToOne(() => Publicacion, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Publicacion;
 }

@@ -18,17 +18,37 @@ export class Reserva {
   @Column({ type: 'date' })
   fecha_pago: Date;
 
-  // Las fechas reservadas se mantienen en la entidad Fecha, no en Reserva.
+  // Se conserva una copia del periodo para mantener el historial aunque
+  // posteriormente se elimine la publicación o su calendario.
+  @Column({ type: 'date', nullable: true })
+  fecha_inicio: Date | null;
+
+  @Column({ type: 'date', nullable: true })
+  fecha_fin: Date | null;
+
+  // Copia historica de los datos del inquilino al momento de reservar.
+  // La relacion con Usuario puede quedar NULL si la cuenta se elimina.
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  usuario_nombre: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  usuario_apellido: string | null;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  usuario_email: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  usuario_telefono: string | null;
   
   // Usuario que realiza la reserva (Inquilino)
-  @ManyToOne(() => Usuario)
+  @ManyToOne(() => Usuario, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_usuario' })
-  usuario: Usuario;
+  usuario: Usuario | null;
 
   // Publicación que se está reservando
-  @ManyToOne(() => Publicacion)
+  @ManyToOne(() => Publicacion, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_publicacion' })
-  publicacion: Publicacion;
+  publicacion: Publicacion | null;
 
   // Método de pago utilizado (Crédito, Débito, QR)
   @ManyToOne(() => MetodoPago)

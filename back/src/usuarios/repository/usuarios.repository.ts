@@ -27,11 +27,22 @@ export class UsuariosRepository implements IUsuariosRepository {
     return this.repo.count();
   }
 
+  listarTodos(): Promise<Usuario[]> {
+    return this.repo.find({
+      relations: { rol: true },
+      order: { id: 'ASC' },
+    });
+  }
+
   async buscarPorId(id: number): Promise<Usuario | null> {
     return this.repo.findOne({
       where: { id: id }, // ajustá el nombre de la PK según tu convención
       relations: { rol: true },
     });
+  }
+
+  eliminar(usuario: Usuario): Promise<Usuario> {
+    return this.repo.remove(usuario);
   }
 
   async buscarParaLogin(email: string): Promise<Usuario | null> {

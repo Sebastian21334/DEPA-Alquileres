@@ -51,6 +51,10 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
+    if (user.bloqueado) {
+      throw new ForbiddenException('Tu usuario está bloqueado');
+    }
+
     // Se chequea después de la contraseña, para no revelar el estado de
     // verificación de una cuenta con credenciales incorrectas
     if (!user.email_verificado) {

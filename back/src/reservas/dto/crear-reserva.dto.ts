@@ -1,5 +1,5 @@
 // reservas/dto/crear-reserva.dto.ts
-import { IsInt, IsDateString, IsNumber, Min } from 'class-validator';
+import { IsInt, IsDateString } from 'class-validator';
 
 export class CrearReservaDto {
   // Las fechas se validan como ISO y luego se usan para consultar disponibilidad.
@@ -14,8 +14,4 @@ export class CrearReservaDto {
 
   @IsDateString()
   fecha_fin: string;
-
-  @IsNumber()
-  @Min(0)
-  monto_pago: number;
 }

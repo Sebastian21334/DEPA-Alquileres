@@ -47,7 +47,7 @@ export class Publicacion {
   @JoinColumn({ name: 'id_modalidad' })
   modalidad: Modalidad;
 
-  @ManyToOne(() => Anunciante)
+  @ManyToOne(() => Anunciante, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_anunciante' })
   anunciante: Anunciante;
 

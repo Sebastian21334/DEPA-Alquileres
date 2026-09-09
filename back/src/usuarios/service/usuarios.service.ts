@@ -1,10 +1,18 @@
-import { Injectable, ConflictException, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
 import type { IUsuariosRepository } from '../repository/usuarios.repository.interface';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Usuario } from '../entity/usuario.entity';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -25,6 +33,98 @@ export class UsuariosService {
   /** Busca un usuario por su clave primaria. */
    async buscarPorId(id: number): Promise<Usuario | null> {
     return this.usuariosRepo.buscarPorId(id);
+  }
+
+  /** Actualiza datos personales propios o de otro usuario cuando opera un administrador. */
+  async actualizarDatosPersonales(
+    idUsuario: number,
+    dto: ActualizarUsuarioDto,
+    idOperador: number,
+    rolOperador?: string,
+  ) {
+    if (idUsuario !== idOperador && rolOperador !== 'Administrador') {
+      throw new ForbiddenException('Solo podés modificar tus propios datos');
+    }
+
+    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    if (dto.email) {
+      const email = dto.email.trim().toLowerCase();
+      const usuarioConEmail = await this.usuariosRepo.buscarPorEmail(email);
+      if (usuarioConEmail && usuarioConEmail.id !== idUsuario) {
+        throw new ConflictException('El email ya está registrado');
+      }
+      usuario.email = email;
+    }
+
+    if (dto.nombre !== undefined) usuario.nombre = dto.nombre.trim();
+    if (dto.apellido !== undefined) usuario.apellido = dto.apellido.trim();
+    if (dto.telefono !== undefined) usuario.telefono = dto.telefono.trim();
+
+    const usuarioActualizado = await this.usuariosRepo.guardar(usuario);
+    return this.usuarioSinSecretos(usuarioActualizado);
+  }
+
+  /** Elimina un usuario. Las relaciones dependientes deben tener cascada configurada. */
+  async eliminar(idUsuario: number, idOperador: number) {
+    if (idUsuario === idOperador) {
+      throw new BadRequestException('No podés eliminar tu propia cuenta desde este endpoint');
+    }
+
+    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    await this.usuariosRepo.eliminar(usuario);
+    return { mensaje: 'Usuario eliminado correctamente' };
+  }
+
+  /** Bloquea o habilita el acceso de un usuario desde el panel administrativo. */
+  async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number) {
+    if (idUsuario === idOperador) {
+      throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');
+    }
+
+    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    usuario.bloqueado = bloqueado;
+    await this.usuariosRepo.guardar(usuario);
+
+    return {
+      mensaje: bloqueado ? 'Usuario bloqueado correctamente' : 'Usuario habilitado correctamente',
+    };
+  }
+
+  /** Lista usuarios para el panel administrativo sin exponer secretos de cuenta. */
+  async listarTodos() {
+    const usuarios = await this.usuariosRepo.listarTodos();
+
+    return usuarios.map((usuario) => this.usuarioSinSecretos(usuario));
+  }
+
+  private usuarioSinSecretos(usuario: Usuario) {
+    return {
+      id: usuario.id,
+      nombre: usuario.nombre,
+      apellido: usuario.apellido,
+      email: usuario.email,
+      telefono: usuario.telefono,
+      bloqueado: usuario.bloqueado,
+      email_verificado: usuario.email_verificado,
+      rol: usuario.rol
+        ? {
+            id: usuario.rol.id,
+            nombre: usuario.rol.nombre,
+          }
+        : null,
+    };
   }
 
   /** Hashea la contrasenia, asigna el rol inicial y persiste el usuario. */
@@ -74,7 +174,7 @@ export class UsuariosService {
   }
 
   /** Cambia el rol de un usuario, evitando escrituras innecesarias. */
-  async cambiarRol(idUsuario: number, nombreRolNuevo: string): Promise<Usuario> {
+  async cambiarRol(idUsuario: number, nombreRolNuevo: string) {
   const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
   if (!usuario) {
     throw new NotFoundException('Usuario no encontrado');
@@ -90,7 +190,8 @@ export class UsuariosService {
   }
 
   usuario.rol = rolNuevo;
-    return this.usuariosRepo.guardar(usuario);
+    const usuarioActualizado = await this.usuariosRepo.guardar(usuario);
+    return this.usuarioSinSecretos(usuarioActualizado);
   }
 
   /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */

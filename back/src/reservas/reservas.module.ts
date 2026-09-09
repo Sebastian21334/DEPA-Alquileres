@@ -8,6 +8,8 @@ import { ReservaRepository } from './repository/reserva.repository';
 import { RESERVA_REPOSITORY } from './repository/reserva.repository.interface';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
 import { AuthModule } from '../auth/auth.module';
+import { UsuariosModule } from '../usuarios/usuarios.module';
+import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { AuthModule } from '../auth/auth.module';
     TypeOrmModule.forFeature([Reserva]),
     DisponibilidadModule,
     AuthModule,
+    UsuariosModule,
+    PublicacionesModule,
   ],
   controllers: [ReservasController],
   providers: [

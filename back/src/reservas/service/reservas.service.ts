@@ -4,6 +4,8 @@ import { CrearReservaDto } from '../dto/crear-reserva.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import type { IReservaRepository } from '../repository/reserva.repository.interface';
 import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
+import { UsuariosService } from '../../usuarios/service/usuarios.service';
+import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 
 @Injectable()
 export class ReservasService {
@@ -15,25 +17,36 @@ export class ReservasService {
     // interfaz propia, es un service normal que exporta lógica de negocio
     // (no una capa de acceso a datos), así que no necesita el mismo patrón.
     private readonly disponibilidadService: DisponibilidadService,
+    private readonly usuariosService: UsuariosService,
+    private readonly publicacionesService: PublicacionesService,
   ) {}
 
   /**
-   * Crea una reserva. Nota clave: Reserva NO guarda fecha_inicio/fecha_fin
-   * propias -> el rango reservado se deduce de las filas de Fecha que
-   * terminan apuntando a esta reserva. Por eso el flujo es:
+  * Crea una reserva y conserva una copia del periodo y de los datos del
+  * inquilino para mantener el historial aunque la cuenta sea eliminada.
+  * El flujo es:
    *   1) validar el rango recibido en el DTO
    *   2) preguntarle a Disponibilidad si ese rango está libre
    *   3) recién ahí crear la Reserva
    *   4) y por último, marcar esas Fechas como ocupadas
    */
   async crear(dto: CrearReservaDto, idUsuario: number): Promise<Reserva> {
-    // El DTO trae el rango, pero la entidad Reserva solo guarda la publicacion;
-    // las fechas concretas quedan representadas por las filas de disponibilidad.
+    // El DTO trae el rango; Reserva conserva el periodo y Fecha mantiene
+    // cada dia para bloquearlo en el calendario.
     const inicio = new Date(dto.fecha_inicio);
     const fin = new Date(dto.fecha_fin);
 
     if (inicio > fin) {
       throw new BadRequestException('La fecha de inicio no puede ser posterior a la de fin');
+    }
+
+    const publicacion = await this.publicacionesService.buscarPorId(dto.id_publicacion);
+    const cantidadDias = Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const precioDiario = Number(publicacion.precio);
+    const montoCalculado = Number((precioDiario * cantidadDias).toFixed(2));
+
+    if (!Number.isFinite(montoCalculado) || montoCalculado < 0) {
+      throw new BadRequestException('No se pudo calcular el monto de la reserva');
     }
 
     // Delegamos la pregunta "¿está libre este rango?" al módulo que es
@@ -48,13 +61,24 @@ export class ReservasService {
       throw new ConflictException('El rango de fechas seleccionado no está disponible');
     }
 
+    const usuario = await this.usuariosService.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('No se encontró el usuario que realiza la reserva');
+    }
+
     // Las relaciones se crean con solo el ID: TypeORM puede resolver las FK sin cargar entidades completas.
     const reserva = this.reservaRepository.crear({
       finalizada: false,
-      monto_pago: dto.monto_pago,
+      monto_pago: montoCalculado,
       fecha_pago: new Date(), // fecha en que se efectúa el pago, no del alojamiento
-      usuario: { id: idUsuario } as any,
-      publicacion: { id: dto.id_publicacion } as any,
+      fecha_inicio: inicio,
+      fecha_fin: fin,
+      usuario_nombre: usuario.nombre,
+      usuario_apellido: usuario.apellido,
+      usuario_email: usuario.email,
+      usuario_telefono: usuario.telefono,
+      usuario,
+      publicacion,
       metodoPago: { id: dto.id_metodo_pago } as any,
     });
 

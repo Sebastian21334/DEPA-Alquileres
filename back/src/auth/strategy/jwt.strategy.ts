@@ -1,11 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, UnauthorizedException, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { UsuariosService } from '../../usuarios/service/usuarios.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  constructor(cfg: ConfigService) {
+  constructor(
+    cfg: ConfigService,
+    @Inject(forwardRef(() => UsuariosService))
+    private readonly usuariosService: UsuariosService,
+  ) {
     super({
       // Solo acepta tokens enviados como "Authorization: Bearer <token>".
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -17,9 +22,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: { sub: number; email: string; rol?: string }) {
-    // El payload ya trae lo necesario (firmado en AuthService.login).
-    // Evitamos una query extra por cada request protegido.
-    // Passport coloca este objeto en req.user para que lo usen controllers y guards.
-    return { id: payload.sub, email: payload.email, rol: payload.rol };
+    // Se consulta el estado actual para revocar inmediatamente el acceso de usuarios bloqueados.
+    const usuario = await this.usuariosService.buscarPorId(payload.sub);
+    if (!usuario || usuario.bloqueado) {
+      throw new UnauthorizedException('La cuenta no está habilitada');
+    }
+
+    // El rol actual también se refresca, evitando confiar en un rol antiguo del JWT.
+    return { id: usuario.id, email: usuario.email, rol: usuario.rol?.nombre };
   }
 }
