@@ -57,11 +57,20 @@ export class UsuariosRepository implements IUsuariosRepository {
   }
 
   buscarPorTokenVerificacion(token: string): Promise<Usuario | null> {
+    // No hace falta re-seleccionar token_verificacion: el service solo lo
+    // sobrescribe (a null) después de encontrarlo, nunca lee su valor.
     return this.repo.findOne({ where: { token_verificacion: token } });
   }
 
   buscarPorTokenRecuperacion(token: string): Promise<Usuario | null> {
-    return this.repo.findOne({ where: { token_recuperacion: token } });
+    // A diferencia del anterior, acá el service sí necesita leer
+    // token_recuperacion_expira para validar la vigencia, así que hay que
+    // forzar su selección igual que con la contraseña en buscarParaLogin.
+    return this.repo
+      .createQueryBuilder('u')
+      .addSelect(['u.token_recuperacion', 'u.token_recuperacion_expira'])
+      .where('u.token_recuperacion = :token', { token })
+      .getOne();
   }
 
 }
