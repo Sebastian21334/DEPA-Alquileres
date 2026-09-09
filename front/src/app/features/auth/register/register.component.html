@@ -1,0 +1,86 @@
+<section class="auth">
+  <div class="auth__card">
+    <div class="auth__brand"><strong>SI</strong>Alquileres</div>
+    <h1 class="auth__title">Creá tu cuenta</h1>
+    <p class="auth__subtitle">Buscá y reservá propiedades en alquiler.</p>
+
+    @if (mensajeExito()) {
+      <div class="auth__success" role="status">
+        <p>{{ mensajeExito() }}</p>
+        <p>Revisá tu correo y hacé clic en el link de verificación para poder iniciar sesión.</p>
+        <a routerLink="/login" class="btn btn--primary">Ir a iniciar sesión</a>
+      </div>
+    } @else {
+      <form class="auth__form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+        @if (error()) {
+          <div class="auth__error" role="alert">{{ error() }}</div>
+        }
+
+        <div class="auth__row">
+          <div class="auth__field">
+            <label for="nombre">Nombre</label>
+            <input id="nombre" type="text" formControlName="nombre" autocomplete="given-name" />
+            @if (form.controls.nombre.invalid && form.controls.nombre.touched) {
+              <span class="auth__hint auth__hint--error">Ingresá tu nombre (mínimo 2 caracteres).</span>
+            }
+          </div>
+
+          <div class="auth__field">
+            <label for="apellido">Apellido</label>
+            <input id="apellido" type="text" formControlName="apellido" autocomplete="family-name" />
+            @if (form.controls.apellido.invalid && form.controls.apellido.touched) {
+              <span class="auth__hint auth__hint--error">Ingresá tu apellido (mínimo 2 caracteres).</span>
+            }
+          </div>
+        </div>
+
+        <div class="auth__field">
+          <label for="email">Email</label>
+          <input id="email" type="email" formControlName="email" autocomplete="email" />
+          @if (form.controls.email.invalid && form.controls.email.touched) {
+            <span class="auth__hint auth__hint--error">Ingresá un email válido.</span>
+          }
+        </div>
+
+        <div class="auth__field">
+          <label for="telefono">Teléfono</label>
+          <input id="telefono" type="tel" formControlName="telefono" autocomplete="tel" />
+          @if (form.controls.telefono.invalid && form.controls.telefono.touched) {
+            <span class="auth__hint auth__hint--error">Ingresá un teléfono de contacto.</span>
+          }
+        </div>
+
+        <div class="auth__field">
+          <label for="contrasenia">Contraseña</label>
+          <input id="contrasenia" type="password" formControlName="contrasenia" autocomplete="new-password" />
+          @if (form.controls.contrasenia.touched && form.controls.contrasenia.errors; as errores) {
+            <span class="auth__hint auth__hint--error">
+              La contraseña debe tener al menos 8 caracteres, incluyendo una letra, un número y un carácter especial.
+            </span>
+          } @else {
+            <span class="auth__hint">Mínimo 8 caracteres, con una letra, un número y un carácter especial.</span>
+          }
+        </div>
+
+        <div class="auth__field">
+          <label for="confirmarContrasenia">Confirmar contraseña</label>
+          <input
+            id="confirmarContrasenia"
+            type="password"
+            formControlName="confirmarContrasenia"
+            autocomplete="new-password"
+          />
+          @if (form.errors?.['contraseniasDistintas'] && form.controls.confirmarContrasenia.touched) {
+            <span class="auth__hint auth__hint--error">Las contraseñas no coinciden.</span>
+          }
+        </div>
+
+        <button type="submit" class="btn btn--primary" [disabled]="enviando()">
+          {{ enviando() ? 'Creando cuenta…' : 'Crear cuenta' }}
+        </button>
+      </form>
+
+      <p class="auth__switch">¿Ya tenés cuenta? <a routerLink="/login">Iniciá sesión</a></p>
+    }
+  </div>
+</section>

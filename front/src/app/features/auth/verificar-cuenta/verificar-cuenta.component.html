@@ -1,0 +1,21 @@
+<section class="auth">
+  <div class="auth__card">
+    <div class="auth__brand"><strong>SI</strong>Alquileres</div>
+    @switch (estado()) {
+      @case ('verificando') {
+        <h1 class="auth__title">Verificando tu cuenta…</h1>
+        <p class="auth__subtitle">{{ mensaje() }}</p>
+      }
+      @case ('exito') {
+        <h1 class="auth__title">¡Cuenta verificada!</h1>
+        <p class="auth__subtitle">{{ mensaje() }}</p>
+        <a routerLink="/login" class="btn btn--primary">Ir a iniciar sesión</a>
+      }
+      @case ('error') {
+        <h1 class="auth__title">No pudimos verificar tu cuenta</h1>
+        <p class="auth__subtitle auth__subtitle--error">{{ mensaje() }}</p>
+        <a routerLink="/registro" class="btn btn--primary">Volver a registrarme</a>
+      }
+    }
+  </div>
+</section>
