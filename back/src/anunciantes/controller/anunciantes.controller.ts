@@ -24,6 +24,7 @@ import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-r
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 
 const TIPOS_DOCUMENTO = [
+  // Los documentos pueden ser imágenes; el video solo se acepta para el rostro.
   'image/jpeg',
   'image/png',
   'image/webp',
@@ -34,13 +35,16 @@ const TIPOS_DOCUMENTO = [
 
 const DOCUMENTOS_INTERCEPTOR = FileFieldsInterceptor(
   [
+    // Cada campo representa un documento obligatorio y acepta un solo archivo.
     { name: 'dni_frente', maxCount: 1 },
     { name: 'dni_dorso', maxCount: 1 },
     { name: 'rostro', maxCount: 1 },
   ],
   {
+    // Multer limita el archivo antes de entregarlo al servicio.
     limits: { fileSize: 20 * 1024 * 1024 },
     fileFilter: (req, file, callback) => {
+      // El MIME se valida temprano para no almacenar formatos no soportados.
       if (!TIPOS_DOCUMENTO.includes(file.mimetype)) {
         return callback(new BadRequestException('Formato de documento no permitido'), false);
       }
@@ -70,6 +74,7 @@ export class AnunciantesController {
     @Req() req: AuthenticatedRequest,
     @UploadedFiles() archivos: any,
   ) {
+    // El usuario autenticado se obtiene del JWT; nunca se recibe un ID manipulable.
     return this.anunciantesService.subirDocumentos(req.user.id, archivos);
   }
 
@@ -80,6 +85,7 @@ export class AnunciantesController {
     @Req() req: AuthenticatedRequest,
     @UploadedFiles() archivos: any,
   ) {
+    // El servicio solo permite este endpoint si la solicitud anterior fue rechazada.
     return this.anunciantesService.subirDocumentos(req.user.id, archivos, true);
   }
 
@@ -104,6 +110,7 @@ export class AnunciantesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   async aprobar(@Param('id', ParseIntPipe) id: number) {
+    // La aprobación cambia verificado y habilita la creación de publicaciones.
     return this.anunciantesService.aprobar(id);
   }
 
@@ -114,6 +121,7 @@ export class AnunciantesController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: RechazarVerificacionDto,
   ) {
+    // El motivo se valida mediante DTO y queda guardado en el historial.
     return this.anunciantesService.rechazar(id, dto);
   }
 

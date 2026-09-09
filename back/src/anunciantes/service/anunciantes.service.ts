@@ -29,6 +29,8 @@ export class AnunciantesService {
     private readonly mailService: IMailService,
     private readonly configService: ConfigService,
   ) {
+    // El servicio usa el mismo almacenamiento de Azure que las imágenes,
+    // pero separa los documentos de identidad en otro contenedor.
     const connectionString = this.configService.get<string>('AZURE_STORAGE_CONNECTION_STRING');
     if (!connectionString) throw new Error('Falta AZURE_STORAGE_CONNECTION_STRING');
     this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
@@ -51,7 +53,7 @@ export class AnunciantesService {
     
     if (!tipoAnunciante) throw new NotFoundException('Tipo de anunciante no válido');
 
-    // La solicitud comienza pendiente; aprobarla es lo que habilita publicar.
+    // El anunciante se crea primero para poder asociarle la solicitud de identidad.
     const nuevoAnunciante = this.anunciantesRepo.crear({
       idUsuario,
       usuario,
@@ -62,6 +64,7 @@ export class AnunciantesService {
     });
 
     const anunciante = await this.anunciantesRepo.guardar(nuevoAnunciante);
+    // La solicitud comienza pendiente; aprobarla es lo que habilita publicar.
     const solicitud = this.verificacionRepo.crearSolicitud({
       anunciante,
       estado: EstadoVerificacion.PENDIENTE,
@@ -81,6 +84,7 @@ export class AnunciantesService {
     },
     reenvio = false,
   ) {
+    // Se recupera la solicitud vigente y se impide modificar una ya aprobada.
     const solicitud = await this.obtenerSolicitud(idUsuario);
     if (solicitud.estado === EstadoVerificacion.APROBADA) {
       throw new ConflictException('La identidad ya fue aprobada');
@@ -89,6 +93,7 @@ export class AnunciantesService {
       throw new ConflictException('Solo se puede reenviar una solicitud rechazada');
     }
 
+    // FileFieldsInterceptor entrega cada archivo dentro de un arreglo.
     const frente = archivos.dni_frente?.[0];
     const dorso = archivos.dni_dorso?.[0];
     const rostro = archivos.rostro?.[0];
@@ -96,9 +101,11 @@ export class AnunciantesService {
       throw new BadRequestException('Se requieren DNI frente, DNI dorso y foto o video facial');
     }
 
+    // Los tres archivos se validan y se suben antes de cambiar el estado.
     solicitud.dni_frente_url = await this.subirDocumento(frente, idUsuario, 'dni-frente');
     solicitud.dni_dorso_url = await this.subirDocumento(dorso, idUsuario, 'dni-dorso');
     solicitud.rostro_url = await this.subirDocumento(rostro, idUsuario, 'rostro');
+    // Un reenvío representa una nueva revisión independiente en el historial.
     if (reenvio) solicitud.numero_revision += 1;
     solicitud.estado = reenvio ? EstadoVerificacion.REENVIADA : EstadoVerificacion.PENDIENTE;
     solicitud.motivo_rechazo = null;
@@ -113,6 +120,7 @@ export class AnunciantesService {
     if (!anunciante) throw new NotFoundException('Solicitud de anunciante no encontrada');
     if (anunciante.verificado) throw new ConflictException('El anunciante ya está verificado');
 
+    // No se puede aprobar una solicitud que no tenga los tres documentos.
     const solicitud = await this.verificacionRepo.buscarSolicitudPorAnunciante(idAnunciante);
     if (!solicitud || !solicitud.dni_frente_url || !solicitud.dni_dorso_url || !solicitud.rostro_url) {
       throw new ConflictException('La solicitud todavía no tiene toda la documentación requerida');
@@ -121,12 +129,14 @@ export class AnunciantesService {
       throw new ConflictException('La solicitud no está pendiente de aprobación');
     }
 
+    // El booleano existente se mantiene como dato rápido para AnuncianteGuard.
     anunciante.verificado = true;
     const actualizado = await this.anunciantesRepo.guardar(anunciante);
     solicitud.estado = EstadoVerificacion.APROBADA;
     solicitud.motivo_rechazo = null;
     solicitud.actualizada_en = new Date();
     await this.verificacionRepo.guardarSolicitud(solicitud);
+    // Se registra también la aprobación para conservar auditoría completa.
     await this.guardarRevision(solicitud, EstadoVerificacion.APROBADA);
     await this.mailService.enviarResultadoVerificacion(anunciante.usuario.email, true);
     return actualizado;
@@ -141,6 +151,7 @@ export class AnunciantesService {
     const solicitud = await this.verificacionRepo.buscarSolicitudPorAnunciante(idAnunciante);
     if (!solicitud) throw new NotFoundException('Solicitud de verificación no encontrada');
 
+    // Rechazar ya no elimina al anunciante: conserva la solicitud y habilita corregirla.
     solicitud.estado = EstadoVerificacion.RECHAZADA;
     solicitud.motivo_rechazo = dto.motivo.trim();
     solicitud.actualizada_en = new Date();
@@ -161,6 +172,7 @@ export class AnunciantesService {
   }
 
   async buscarSolicitudConHistorial(idUsuario: number) {
+    // El guard sigue usando buscarPorUsuario; este método expone además documentación e historial.
     const solicitud = await this.verificacionRepo.buscarSolicitudPorAnunciante(idUsuario);
     if (!solicitud) return null;
     return {
@@ -180,6 +192,7 @@ export class AnunciantesService {
     estado: EstadoVerificacion,
     motivo: string | null = null,
   ) {
+    // Cada cambio de estado se convierte en una entrada independiente de auditoría.
     const revision = this.verificacionRepo.crearRevision({
       anunciante: solicitud.anunciante,
       numero_revision: solicitud.numero_revision,
@@ -190,6 +203,7 @@ export class AnunciantesService {
   }
 
   private async subirDocumento(archivo: ArchivoSubido, idUsuario: number, tipo: string): Promise<string> {
+    // El rostro puede ser imagen o video; el DNI siempre debe ser imagen.
     const esVideo = archivo.mimetype.startsWith('video/');
     const limite = esVideo ? 20 * 1024 * 1024 : 5 * 1024 * 1024;
     if (archivo.size > limite) {
@@ -204,6 +218,7 @@ export class AnunciantesService {
       throw new BadRequestException(`Formato no permitido para ${tipo}`);
     }
 
+    // Las imágenes se normalizan a JPEG; los videos se almacenan sin recodificarlos.
     let contenido = archivo.buffer;
     const extension = esVideo ? 'mp4' : 'jpg';
     if (!esVideo) {
@@ -214,6 +229,7 @@ export class AnunciantesService {
       }
     }
 
+    // El nombre generado evita colisiones y no expone el nombre original del archivo.
     const blob = this.blobServiceClient
       .getContainerClient(this.containerName)
       .getBlockBlobClient(`usuarios/${idUsuario}/${tipo}-${Date.now()}.${extension}`);

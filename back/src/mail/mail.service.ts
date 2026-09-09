@@ -55,7 +55,9 @@ export class MailService implements IMailService {
     aprobada: boolean,
     motivo?: string,
   ): Promise<void> {
+    // El mismo método cubre los dos resultados administrativos.
     const asunto = aprobada ? 'Verificación de identidad aprobada' : 'Verificación de identidad rechazada';
+    // El motivo proviene de un administrador y se escapa antes de insertarse en HTML.
     const motivoSeguro = (motivo ?? 'Documentación no válida')
       .replaceAll('&', '&amp;')
       .replaceAll('<', '&lt;')
