@@ -50,6 +50,25 @@ export class MailService implements IMailService {
     );
   }
 
+  async enviarResultadoVerificacion(
+    destinatario: string,
+    aprobada: boolean,
+    motivo?: string,
+  ): Promise<void> {
+    const asunto = aprobada ? 'Verificación de identidad aprobada' : 'Verificación de identidad rechazada';
+    const motivoSeguro = (motivo ?? 'Documentación no válida')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+    const contenido = aprobada
+      ? '<p>Tu identidad fue verificada correctamente. Ya podés publicar propiedades.</p>'
+      : `<p>Tu solicitud de verificación fue rechazada.</p><p>Motivo: ${motivoSeguro}</p><p>Podés cargar nuevamente la documentación desde tu cuenta.</p>`;
+
+    await this.enviar(destinatario, asunto, contenido);
+  }
+
   // Método privado compartido para no repetir la lógica de envío en cada método público
   private async enviar(destinatario: string, asunto: string, html: string): Promise<void> {
     // Azure devuelve un poller porque el envío es asíncrono; se espera hasta su estado final.
