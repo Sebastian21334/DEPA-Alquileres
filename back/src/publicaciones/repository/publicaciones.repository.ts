@@ -36,9 +36,19 @@ export class PublicacionesRepository implements IPublicacionesRepository {
   }
 
   buscarTodasActivas(): Promise<Publicacion[]> {
+    // Se agregan imagenes y anunciante porque el listado público (home) necesita
+    // mostrar la imagen principal y el estado "verificado" del anunciante por cada tarjeta.
     return this.repo.find({
       where: { activa: true },
-      relations: { tipoPropiedad: true, ciudad: true, provincia: true, modalidad: true },
+      relations: {
+        tipoPropiedad: true,
+        ciudad: true,
+        provincia: true,
+        modalidad: true,
+        tipoMoneda: true,
+        imagenes: true,
+        anunciante: { usuario: true },
+      },
     });
   }
 

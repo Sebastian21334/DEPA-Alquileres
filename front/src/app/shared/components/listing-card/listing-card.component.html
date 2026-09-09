@@ -1,0 +1,42 @@
+<article class="card">
+  <div class="card__media">
+    @if (imagenPrincipal) {
+      <img [src]="imagenPrincipal" [alt]="publicacion().titulo" loading="lazy" />
+    } @else {
+      <div class="card__media-placeholder" aria-hidden="true">Sin imagen</div>
+    }
+
+    <span class="badge badge--listing">Publicación</span>
+
+    @if (publicacion().modalidad?.nombre) {
+      <span class="badge badge--modalidad">{{ publicacion().modalidad?.nombre }}</span>
+    }
+
+    @if (verificado) {
+      <span class="badge badge--verified" title="Anunciante verificado">✓ Dueño verificado</span>
+    }
+  </div>
+
+  <div class="card__body">
+    <h3 class="card__title">{{ publicacion().titulo }}</h3>
+
+    @if (ubicacion) {
+      <p class="card__location">📍 {{ ubicacion }}</p>
+    }
+
+    <ul class="card__specs">
+      <li>{{ publicacion().cantidad_ambientes }} amb.</li>
+      <li>{{ publicacion().superficie }} m²</li>
+      @if (publicacion().tipoPropiedad?.nombre) {
+        <li>{{ publicacion().tipoPropiedad?.nombre }}</li>
+      }
+    </ul>
+
+    <div class="card__footer">
+      <span class="card__price">
+        {{ publicacion().tipoMoneda?.nombre }} {{ publicacion().precio | number: '1.0-0' }}
+      </span>
+      <a class="btn btn--primary" [routerLink]="['/publicaciones', publicacion().id]">Ver publicación</a>
+    </div>
+  </div>
+</article>

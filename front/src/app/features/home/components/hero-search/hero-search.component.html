@@ -1,0 +1,35 @@
+<section class="hero">
+  <div class="hero__inner">
+    <h1 class="hero__title">Encontrá tu próximo hogar</h1>
+    <p class="hero__subtitle">¿Qué tipo de alquiler estás buscando?</p>
+
+    @if (modalidades().length) {
+      <div class="hero__modalidades">
+        @for (m of modalidades(); track m.id) {
+          <button
+            type="button"
+            class="modalidad-btn"
+            [class.modalidad-btn--active]="form().controls['idModalidad'].value === m.id"
+            (click)="toggleModalidad(m.id)"
+          >
+            {{ m.nombre }}
+          </button>
+        }
+      </div>
+    }
+
+    <form class="hero__search" [formGroup]="form()" (ngSubmit)="onSubmit()">
+      <label class="hero__search-label" for="ubicacion">Buscá en tu zona</label>
+      <div class="hero__search-row">
+        <input
+          id="ubicacion"
+          type="text"
+          formControlName="ubicacion"
+          placeholder="Ingresá la localidad/región"
+          autocomplete="off"
+        />
+        <button type="submit" class="btn btn--primary">Buscar</button>
+      </div>
+    </form>
+  </div>
+</section>

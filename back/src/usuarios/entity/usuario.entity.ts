@@ -32,13 +32,16 @@ export class Usuario {
   @Column({ type: 'boolean', default: false })
   email_verificado: boolean;
 
-  @Column({ type: 'varchar', nullable: true })
+  // select:false (igual que contrasenia): son credenciales de un solo uso y no
+  // deben viajar en ninguna respuesta que solo pidió el usuario "normal", por
+  // ejemplo el join publico anunciante.usuario en GET /publicaciones.
+  @Column({ type: 'varchar', nullable: true, select: false })
   token_verificacion: string | null;
 
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', nullable: true, select: false })
   token_recuperacion: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, select: false })
   token_recuperacion_expira: Date | null;
 
 }

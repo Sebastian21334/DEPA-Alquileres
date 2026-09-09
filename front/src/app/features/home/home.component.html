@@ -1,0 +1,11 @@
+<app-hero-search [form]="form" [modalidades]="modalidades()" />
+
+<app-advanced-filters [form]="form" [tiposPropiedad]="tiposPropiedad()" />
+
+<app-listing-grid
+  [listings]="paginadas()"
+  [loading]="cargando()"
+  [error]="error()"
+  [hasMore]="hayMas()"
+  (loadMore)="cargarMas()"
+/>
