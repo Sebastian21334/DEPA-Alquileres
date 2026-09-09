@@ -1,4 +1,11 @@
-import { Injectable, UnauthorizedException, ConflictException, ForbiddenException, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
@@ -9,6 +16,8 @@ import { MAIL_SERVICE } from '../../mail/mail.interface';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usuariosService: UsuariosService,
     private jwtService: JwtService,
@@ -31,7 +40,18 @@ export class AuthService {
     });
 
     const token = await this.usuariosService.generarTokenVerificacion(usuario);
-    await this.mailService.enviarVerificacion(usuario.email, token);
+
+    // El alta de la cuenta ya quedó confirmada en la base (usuario + token de
+    // verificación). Si el proveedor de mail falla o rate-limitea (Azure
+    // Communication Services devuelve 429 con bastante facilidad), no
+    // queremos que el cliente reciba un error creyendo que el registro no se
+    // hizo: solo el mail no salió, y el usuario puede pedir uno nuevo más
+    // tarde. Se loguea para que quede auditado sin romper la respuesta.
+    try {
+      await this.mailService.enviarVerificacion(usuario.email, token);
+    } catch (error) {
+      this.logger.error(`No se pudo enviar el mail de verificación a ${usuario.email}`, error as Error);
+    }
 
     return { mensaje: 'Usuario registrado exitosamente, revisá tu email para verificar la cuenta' };
   }
@@ -77,7 +97,14 @@ export class AuthService {
 
     // Si no existe el usuario, igual devolvemos éxito (evita enumeración de emails)
     if (resultado) {
-      await this.mailService.enviarRecuperacion(resultado.usuario.email, resultado.token);
+      // Mismo criterio que en register(): el token ya quedó persistido, así
+      // que una falla del proveedor de mail no debe convertirse en un error
+      // para el cliente (ver nota en register()).
+      try {
+        await this.mailService.enviarRecuperacion(resultado.usuario.email, resultado.token);
+      } catch (error) {
+        this.logger.error(`No se pudo enviar el mail de recuperación a ${resultado.usuario.email}`, error as Error);
+      }
     }
 
     return { mensaje: 'Si el email existe, vas a recibir un link para restablecer tu contraseña' };

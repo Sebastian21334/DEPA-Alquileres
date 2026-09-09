@@ -1,0 +1,37 @@
+<section class="auth">
+  <div class="auth__card">
+    <div class="auth__brand"><strong>SI</strong>Alquileres</div>
+    <h1 class="auth__title">Iniciá sesión</h1>
+    <p class="auth__subtitle">Ingresá con tu email y contraseña.</p>
+
+    <form class="auth__form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+      @if (error()) {
+        <div class="auth__error" role="alert">{{ error() }}</div>
+      }
+
+      <div class="auth__field">
+        <label for="email">Email</label>
+        <input id="email" type="email" formControlName="email" autocomplete="email" />
+        @if (form.controls.email.invalid && form.controls.email.touched) {
+          <span class="auth__hint auth__hint--error">Ingresá un email válido.</span>
+        }
+      </div>
+
+      <div class="auth__field">
+        <label for="contrasenia">Contraseña</label>
+        <input id="contrasenia" type="password" formControlName="contrasenia" autocomplete="current-password" />
+        @if (form.controls.contrasenia.invalid && form.controls.contrasenia.touched) {
+          <span class="auth__hint auth__hint--error">Ingresá tu contraseña.</span>
+        }
+      </div>
+
+      <a routerLink="/recuperar-contrasenia" class="auth__forgot">¿Olvidaste tu contraseña?</a>
+
+      <button type="submit" class="btn btn--primary" [disabled]="enviando()">
+        {{ enviando() ? 'Ingresando…' : 'Ingresar' }}
+      </button>
+    </form>
+
+    <p class="auth__switch">¿No tenés cuenta? <a routerLink="/registro">Creá una</a></p>
+  </div>
+</section>

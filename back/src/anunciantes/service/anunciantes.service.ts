@@ -1,4 +1,11 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BlobServiceClient } from '@azure/storage-blob';
 import sharp from 'sharp';
@@ -18,6 +25,8 @@ import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 
 @Injectable()
 export class AnunciantesService {
+  private readonly logger = new Logger(AnunciantesService.name);
+
   constructor(
     @Inject(ANUNCIANTES_REPOSITORY)
     private readonly anunciantesRepo: IAnunciantesRepository,
@@ -138,7 +147,19 @@ export class AnunciantesService {
     await this.verificacionRepo.guardarSolicitud(solicitud);
     // Se registra también la aprobación para conservar auditoría completa.
     await this.guardarRevision(solicitud, EstadoVerificacion.APROBADA);
-    await this.mailService.enviarResultadoVerificacion(anunciante.usuario.email, true);
+
+    // La aprobación ya quedó persistida (anunciante.verificado = true). Si
+    // el mail de notificación falla o el proveedor rate-limitea, no debe
+    // revertirse ni reportarse como error: el anunciante ya puede publicar.
+    try {
+      await this.mailService.enviarResultadoVerificacion(anunciante.usuario.email, true);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo enviar el mail de aprobación a ${anunciante.usuario.email}`,
+        error as Error,
+      );
+    }
+
     return actualizado;
   }
 
@@ -157,7 +178,17 @@ export class AnunciantesService {
     solicitud.actualizada_en = new Date();
     await this.verificacionRepo.guardarSolicitud(solicitud);
     await this.guardarRevision(solicitud, EstadoVerificacion.RECHAZADA, solicitud.motivo_rechazo);
-    await this.mailService.enviarResultadoVerificacion(anunciante.usuario.email, false, solicitud.motivo_rechazo);
+
+    // Mismo criterio que en aprobar(): el rechazo ya quedó persistido.
+    try {
+      await this.mailService.enviarResultadoVerificacion(anunciante.usuario.email, false, solicitud.motivo_rechazo);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo enviar el mail de rechazo a ${anunciante.usuario.email}`,
+        error as Error,
+      );
+    }
+
     return { mensaje: 'Solicitud de verificación rechazada' };
   }
 

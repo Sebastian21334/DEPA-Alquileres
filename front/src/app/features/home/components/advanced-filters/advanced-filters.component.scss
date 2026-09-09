@@ -1,5 +1,5 @@
 .advanced {
-  background: var(--color-primary);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-dark));
 }
 
 .advanced__inner {
@@ -17,10 +17,10 @@
   background: transparent;
   border: none;
   color: var(--color-primary-contrast);
-  font-weight: 700;
-  padding: 0.85rem 0;
+  font-weight: 800;
+  font-size: 1.05rem;
+  padding: 1rem 0;
   cursor: pointer;
-  font-size: 0.95rem;
 }
 
 .advanced__chevron {
@@ -33,41 +33,50 @@
 
 .advanced__panel {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
   background: var(--color-surface);
   border-radius: var(--radius-md);
-  padding: 1rem;
-  margin-bottom: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
   align-items: end;
+  box-shadow: var(--shadow-card);
 }
 
 .advanced__field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .advanced__field select,
 .advanced__field input {
-  padding: 0.5rem 0.6rem;
+  padding: 0.6rem 0.75rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   font-size: 0.9rem;
+  font-weight: 400;
   color: var(--color-text);
   background: var(--color-bg);
 }
 
+.advanced__field select:focus,
+.advanced__field input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
 .advanced__clear {
   align-self: end;
-  padding: 0.5rem 0.9rem;
-  border-radius: var(--radius-sm);
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-muted);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   height: fit-content;
 }

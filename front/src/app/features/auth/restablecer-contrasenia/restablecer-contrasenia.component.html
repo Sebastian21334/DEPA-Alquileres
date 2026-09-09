@@ -1,0 +1,51 @@
+<section class="auth">
+  <div class="auth__card">
+    <div class="auth__brand"><strong>SI</strong>Alquileres</div>
+    <h1 class="auth__title">Restablecer contraseña</h1>
+
+    @if (mensajeExito()) {
+      <p class="auth__subtitle">{{ mensajeExito() }}</p>
+      <a routerLink="/login" class="btn btn--primary">Ir a iniciar sesión</a>
+    } @else if (!tokenValido()) {
+      <p class="auth__subtitle auth__subtitle--error">{{ error() }}</p>
+      <a routerLink="/recuperar-contrasenia" class="btn btn--primary">Pedir un nuevo link</a>
+    } @else {
+      <p class="auth__subtitle">Elegí tu nueva contraseña.</p>
+
+      <form class="auth__form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+        @if (error()) {
+          <div class="auth__error" role="alert">{{ error() }}</div>
+        }
+
+        <div class="auth__field">
+          <label for="contrasenia">Nueva contraseña</label>
+          <input id="contrasenia" type="password" formControlName="contrasenia" autocomplete="new-password" />
+          @if (form.controls.contrasenia.touched && form.controls.contrasenia.errors) {
+            <span class="auth__hint auth__hint--error">
+              La contraseña debe tener al menos 8 caracteres, incluyendo una letra, un número y un carácter especial.
+            </span>
+          } @else {
+            <span class="auth__hint">Mínimo 8 caracteres, con una letra, un número y un carácter especial.</span>
+          }
+        </div>
+
+        <div class="auth__field">
+          <label for="confirmarContrasenia">Confirmar contraseña</label>
+          <input
+            id="confirmarContrasenia"
+            type="password"
+            formControlName="confirmarContrasenia"
+            autocomplete="new-password"
+          />
+          @if (form.errors?.['contraseniasDistintas'] && form.controls.confirmarContrasenia.touched) {
+            <span class="auth__hint auth__hint--error">Las contraseñas no coinciden.</span>
+          }
+        </div>
+
+        <button type="submit" class="btn btn--primary" [disabled]="enviando()">
+          {{ enviando() ? 'Guardando…' : 'Restablecer contraseña' }}
+        </button>
+      </form>
+    }
+  </div>
+</section>
