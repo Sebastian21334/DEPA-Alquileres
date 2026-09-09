@@ -1,0 +1,39 @@
+<section class="advanced">
+  <div class="advanced__inner">
+    <button type="button" class="advanced__toggle" (click)="toggle()" [attr.aria-expanded]="abierto()">
+      Búsqueda avanzada
+      <span class="advanced__chevron" [class.advanced__chevron--open]="abierto()">⌄</span>
+    </button>
+
+    @if (abierto()) {
+      <div class="advanced__panel" [formGroup]="form()">
+        <div class="advanced__field">
+          <label for="tipoPropiedad">Tipo de propiedad</label>
+          <select id="tipoPropiedad" formControlName="idTipoPropiedad">
+            <option [ngValue]="null">Todos</option>
+            @for (t of tiposPropiedad(); track t.id) {
+              <option [ngValue]="t.id">{{ t.nombre }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="advanced__field">
+          <label for="precioMin">Precio mínimo</label>
+          <input id="precioMin" type="number" min="0" formControlName="precioMin" placeholder="Sin mínimo" />
+        </div>
+
+        <div class="advanced__field">
+          <label for="precioMax">Precio máximo</label>
+          <input id="precioMax" type="number" min="0" formControlName="precioMax" placeholder="Sin máximo" />
+        </div>
+
+        <div class="advanced__field">
+          <label for="ambientes">Ambientes (mínimo)</label>
+          <input id="ambientes" type="number" min="0" formControlName="ambientes" placeholder="Cualquiera" />
+        </div>
+
+        <button type="button" class="advanced__clear" (click)="limpiar()">Limpiar filtros</button>
+      </div>
+    }
+  </div>
+</section>

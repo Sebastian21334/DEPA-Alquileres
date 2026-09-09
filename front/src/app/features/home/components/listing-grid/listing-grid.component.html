@@ -1,0 +1,32 @@
+<section class="results">
+  <div class="results__inner">
+    @if (error()) {
+      <div class="results__state results__state--error">
+        <p>{{ error() }}</p>
+      </div>
+    } @else if (loading()) {
+      <div class="results__grid" aria-busy="true">
+        @for (s of skeletons; track $index) {
+          <div class="skeleton-card"></div>
+        }
+      </div>
+    } @else if (listings().length === 0) {
+      <div class="results__state">
+        <p class="results__state-title">No encontramos publicaciones</p>
+        <p>Probá ajustar la ubicación o los filtros de búsqueda.</p>
+      </div>
+    } @else {
+      <div class="results__grid">
+        @for (p of listings(); track p.id) {
+          <app-listing-card [publicacion]="p" />
+        }
+      </div>
+
+      @if (hasMore()) {
+        <div class="results__load-more">
+          <button type="button" class="btn btn--outline" (click)="loadMore.emit()">Cargar más</button>
+        </div>
+      }
+    }
+  </div>
+</section>

@@ -1,3 +1,61 @@
-/* You can add global styles to this file, and also import other style files */
-
+/* Estilos globales de la aplicación. */
 @import 'tailwindcss';
+
+/*
+ * Design tokens (RNF4 + "sin identidad visual definida"):
+ * Todavía no hay paleta/tipografía/logo definidos para el proyecto, así que se
+ * usa una paleta neutra y prolija. Todo queda centralizado acá como custom
+ * properties de CSS para poder reemplazarlas más adelante sin tocar los
+ * componentes (que solo referencian var(--...)).
+ */
+:root {
+  /* Marca (placeholder, fácilmente reemplazable) */
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-contrast: #ffffff;
+  --color-accent: #0ea5e9;
+
+  /* Superficie / texto */
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+
+  /* Layout */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
+  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.12);
+  --max-width-page: 1200px;
+
+  color-scheme: light;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+body {
+  min-height: 100dvh;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+}
