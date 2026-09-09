@@ -2,34 +2,49 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens (RNF4 + "sin identidad visual definida"):
- * Todavía no hay paleta/tipografía/logo definidos para el proyecto, así que se
- * usa una paleta neutra y prolija. Todo queda centralizado acá como custom
- * properties de CSS para poder reemplazarlas más adelante sin tocar los
- * componentes (que solo referencian var(--...)).
+ * Design tokens (paleta de marca SIAlquileres):
+ * Naranja/rojo como color principal (CTAs, badges de "Largo Plazo"), azul como
+ * color secundario (badges de "Temporario", acentos) y ámbar como color de
+ * apoyo (precios, calificaciones). Todo queda centralizado acá como custom
+ * properties de CSS para no tocar los componentes (que solo referencian
+ * var(--...)) si la paleta cambia más adelante.
  */
 :root {
-  /* Marca (placeholder, fácilmente reemplazable) */
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
+  /* Marca */
+  --color-primary: #d8471e;
+  --color-primary-dark: #b83913;
+  --color-primary-light: #fbeee8;
   --color-primary-contrast: #ffffff;
-  --color-accent: #0ea5e9;
+
+  --color-secondary: #0e46a1;
+  --color-secondary-dark: #0b3780;
+  --color-secondary-light: #e8eefb;
+
+  --color-accent: #ff9f1c;
 
   /* Superficie / texto */
-  --color-bg: #f8fafc;
+  --color-bg: #f7f7f9;
   --color-surface: #ffffff;
-  --color-border: #e2e8f0;
-  --color-text: #0f172a;
-  --color-text-muted: #64748b;
+  --color-border: #e5e7eb;
+  --color-text: #101828;
+  --color-text-muted: #667085;
   --color-success: #16a34a;
   --color-danger: #dc2626;
 
+  /* Superficies oscuras (hero, login/registro, tira de resultados) */
+  --color-dark: #14161f;
+  --color-dark-surface: #1f212b;
+  --color-dark-border: #333542;
+  --color-dark-text: #f5f6f8;
+  --color-dark-text-muted: #9ca0ae;
+
   /* Layout */
-  --radius-sm: 6px;
-  --radius-md: 12px;
-  --radius-lg: 20px;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
-  --shadow-card-hover: 0 4px 12px rgba(15, 23, 42, 0.12);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow-card-hover: 0 8px 20px rgba(16, 24, 40, 0.14);
   --max-width-page: 1200px;
 
   color-scheme: light;

@@ -2,7 +2,7 @@
   <div class="navbar__inner">
     <a routerLink="/" class="navbar__logo" aria-label="Ir al inicio">
       <span class="navbar__logo-mark">SI</span>
-      <span class="navbar__logo-text">Alquileres</span>
+      <span class="navbar__logo-text"><strong>SI</strong>Alquileres</span>
     </a>
 
     <nav class="navbar__actions">
@@ -10,6 +10,7 @@
         <a routerLink="/perfil" class="navbar__avatar" title="{{ auth.currentUser()?.email }}">
           {{ (auth.currentUser()?.email ?? '?').charAt(0).toUpperCase() }}
         </a>
+        <button type="button" class="btn btn--ghost" (click)="logout()">Salir</button>
       } @else {
         <a routerLink="/login" class="btn btn--ghost">Ingresar</a>
       }
