@@ -2,6 +2,15 @@ import { Component, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Publicacion } from '../../models/publicacion.model';
+import {
+  LucideBookmark,
+  LucideBadgeCheck,
+  LucideHexagon,
+  LucideRuler,
+  LucideHome,
+  LucideMapPin,
+  LucideArrowRight,
+} from '@lucide/angular';
 
 // Tarjeta reutilizable de una publicación. No está atada al estilo visual del
 // prototipo, solo a su contenido: imagen principal, indicador de "Publicación",
@@ -10,7 +19,17 @@ import { Publicacion } from '../../models/publicacion.model';
 @Component({
   selector: 'app-listing-card',
   standalone: true,
-  imports: [DecimalPipe, RouterLink],
+  imports: [
+    RouterLink,
+    DecimalPipe,
+    LucideBookmark,
+    LucideBadgeCheck,
+    LucideHexagon,
+    LucideRuler,
+    LucideHome,
+    LucideMapPin,
+    LucideArrowRight,
+  ],
   templateUrl: './listing-card.component.html',
   styleUrl: './listing-card.component.scss',
 })

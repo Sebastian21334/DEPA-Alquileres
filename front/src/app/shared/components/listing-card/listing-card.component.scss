@@ -2,10 +2,9 @@
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
-  border: none;
-  border-radius: var(--radius-md);
+  border: 2px solid var(--color-text);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-card);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
   height: 100%;
 }
@@ -46,50 +45,68 @@
 
 .badge {
   position: absolute;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  padding: 0.3rem 0.7rem;
+  padding: 0.35rem 0.85rem;
   border-radius: var(--radius-pill);
-  color: #fff;
   line-height: 1.4;
 }
 
-.badge--listing {
-  top: 0.6rem;
-  left: 0.6rem;
-  background: var(--color-text);
-  background: rgba(16, 24, 40, 0.65);
-  backdrop-filter: blur(2px);
-}
-
 .badge--modalidad {
-  top: 0.6rem;
-  right: 0.6rem;
+  top: 0.7rem;
+  left: 0.7rem;
   background: var(--color-primary);
+  color: var(--color-primary-contrast);
 }
 
 .badge--verified {
-  bottom: 0.6rem;
-  left: 0.6rem;
+  bottom: 0.7rem;
+  right: 0.7rem;
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.25);
+  box-shadow: var(--shadow-card);
+}
+
+.badge--verified svg {
+  color: var(--color-secondary);
+}
+
+.card__save {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
 }
 
 .card__body {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem 1.1rem 1.15rem;
+  gap: 0.6rem;
+  padding: 1.1rem 1.25rem 1.25rem;
   flex: 1;
+}
+
+.card__title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .card__title {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 800;
   color: var(--color-text);
   letter-spacing: -0.01em;
@@ -101,54 +118,72 @@
 
 .card__location {
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.85rem;
   color: var(--color-text-muted);
 }
 
 .card__specs {
   list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0.25rem 0 0;
-  padding: 0;
+  gap: 0.6rem;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--color-text-muted);
 }
 
 .card__specs li {
-  background: var(--color-bg);
-  border-radius: var(--radius-pill);
-  padding: 0.25rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.card__spec-icon {
+  display: grid;
+  place-items: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
 }
 
 .card__footer {
   margin-top: auto;
-  padding-top: 0.85rem;
+  padding-top: 0.4rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .card__price {
   font-weight: 800;
-  font-size: 1.15rem;
+  font-size: 1.4rem;
   color: var(--color-text);
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.5rem 1rem;
+  padding: 0.6rem 1.2rem;
   border-radius: var(--radius-pill);
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
   border: none;
+  margin-top: auto;
+  align-self: flex-end;
 }
 
 .btn--primary {

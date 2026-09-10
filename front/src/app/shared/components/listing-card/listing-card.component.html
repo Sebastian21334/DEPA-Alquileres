@@ -6,29 +6,47 @@
       <div class="card__media-placeholder" aria-hidden="true">Sin imagen</div>
     }
 
-    <span class="badge badge--listing">Publicación</span>
-
     @if (publicacion().modalidad?.nombre) {
       <span class="badge badge--modalidad">{{ publicacion().modalidad?.nombre }}</span>
     }
 
+    <button type="button" class="card__save" aria-label="Guardar publicación">
+      <svg lucideBookmark [size]="18"></svg>
+    </button>
+
     @if (verificado) {
-      <span class="badge badge--verified" title="Anunciante verificado">✓ Dueño verificado</span>
+      <span class="badge badge--verified">
+        <svg lucideBadgeCheck [size]="14"></svg>
+        Dueño Verificado
+      </span>
     }
   </div>
 
   <div class="card__body">
-    <h3 class="card__title">{{ publicacion().titulo }}</h3>
-
-    @if (ubicacion) {
-      <p class="card__location">📍 {{ ubicacion }}</p>
-    }
+    <div class="card__title-group">
+      <h3 class="card__title">{{ publicacion().titulo }}</h3>
+      @if (ubicacion) {
+        <p class="card__location">
+          <svg lucideMapPin [size]="14"></svg>
+          {{ ubicacion }}
+        </p>
+      }
+    </div>
 
     <ul class="card__specs">
-      <li>{{ publicacion().cantidad_ambientes }} amb.</li>
-      <li>{{ publicacion().superficie }} m²</li>
+      <li>
+        <span class="card__spec-icon"><svg lucideHexagon [size]="14"></svg></span>
+        {{ publicacion().cantidad_ambientes }} amb.
+      </li>
+      <li>
+        <span class="card__spec-icon"><svg lucideRuler [size]="14"></svg></span>
+        {{ publicacion().superficie }} m²
+      </li>
       @if (publicacion().tipoPropiedad?.nombre) {
-        <li>{{ publicacion().tipoPropiedad?.nombre }}</li>
+        <li>
+          <span class="card__spec-icon"><svg lucideHome [size]="14"></svg></span>
+          {{ publicacion().tipoPropiedad?.nombre }}
+        </li>
       }
     </ul>
 
@@ -36,7 +54,11 @@
       <span class="card__price">
         {{ publicacion().tipoMoneda?.nombre }} {{ publicacion().precio | number: '1.0-0' }}
       </span>
-      <a class="btn btn--primary" [routerLink]="['/publicaciones', publicacion().id]">Ver publicación</a>
+
+      <a class="btn btn--primary" [routerLink]="['/publicaciones', publicacion().id]">
+        Ver
+        <svg lucideArrowRight [size]="16"></svg>
+      </a>
     </div>
   </div>
 </article>

@@ -1,6 +1,6 @@
 .results {
   padding: 2.5rem 1rem 3.5rem;
-  background: var(--color-dark);
+  background: var(--color-bg);
 }
 
 .results__inner {
@@ -17,17 +17,17 @@
 .results__state {
   text-align: center;
   padding: 3rem 1rem;
-  color: var(--color-dark-text-muted);
+  color: var(--color-text-muted);
 }
 
 .results__state--error {
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .results__state-title {
   font-weight: 700;
   font-size: 1.1rem;
-  color: var(--color-dark-text);
+  color: var(--color-text);
   margin-bottom: 0.25rem;
 }
 
@@ -40,9 +40,9 @@
 .btn--outline {
   padding: 0.65rem 1.75rem;
   border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  background: transparent;
-  color: var(--color-dark-text);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
   font-weight: 700;
   cursor: pointer;
 }
@@ -58,9 +58,9 @@
   border-radius: var(--radius-md);
   background: linear-gradient(
     100deg,
-    var(--color-dark-surface) 30%,
-    #2a2c38 50%,
-    var(--color-dark-surface) 70%
+    var(--color-border) 30%,
+    #f0f1f3 50%,
+    var(--color-border) 70%
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;

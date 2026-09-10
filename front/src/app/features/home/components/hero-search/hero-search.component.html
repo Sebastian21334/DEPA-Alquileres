@@ -5,10 +5,12 @@
 
     @if (modalidades().length) {
       <div class="hero__modalidades">
-        @for (m of modalidades(); track m.id) {
+        @for (m of modalidades(); track m.id; let i = $index) {
           <button
             type="button"
             class="modalidad-btn"
+            [class.modalidad-btn--primary]="i === 0"
+            [class.modalidad-btn--secondary]="i === 1"
             [class.modalidad-btn--active]="form().controls['idModalidad'].value === m.id"
             (click)="toggleModalidad(m.id)"
           >

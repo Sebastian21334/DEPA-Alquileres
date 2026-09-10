@@ -8,18 +8,22 @@ import { AdvancedFiltersComponent } from './components/advanced-filters/advanced
 import { ListingGridComponent } from './components/listing-grid/listing-grid.component';
 import { ListingService } from './listing.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
+import { UbicacionService } from '../../shared/services/ubicacion.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
-import { Modalidad, TipoPropiedad } from '../../shared/models/catalogo.model';
+import { Modalidad, TipoPropiedad, TipoMoneda } from '../../shared/models/catalogo.model';
+import { Ciudad } from '../../shared/models/ubicacion.model';
 
 // Filtros combinables de búsqueda (RN-22). No es una entidad del DER: es el
 // contrato interno del formulario de esta página.
 interface FiltrosPublicacion {
   ubicacion: string;
   idModalidad: number | null;
-  idTipoPropiedad: number | null;
+  idsTipoPropiedad: number[];
+  idsCiudad: number[];
+  idsTipoMoneda: number[];
   precioMin: number | null;
   precioMax: number | null;
-  ambientes: number | null;
+  ambientesSeleccionados: string[];
 }
 
 const TAMANIO_PAGINA = 9;
@@ -34,6 +38,7 @@ const TAMANIO_PAGINA = 9;
 export class HomeComponent {
   private readonly listingService = inject(ListingService);
   private readonly catalogoService = inject(CatalogoService);
+  private readonly ubicacionService = inject(UbicacionService);
   private readonly fb = inject(FormBuilder);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -41,10 +46,12 @@ export class HomeComponent {
   protected readonly form = this.fb.nonNullable.group({
     ubicacion: '',
     idModalidad: null as number | null,
-    idTipoPropiedad: null as number | null,
+    idsTipoPropiedad: [[] as number[]],
+    idsCiudad: [[] as number[]],
+    idsTipoMoneda: [[] as number[]],
     precioMin: null as number | null,
     precioMax: null as number | null,
-    ambientes: null as number | null,
+    ambientesSeleccionados: [[] as string[]],
   });
 
   // --- Estado de datos (signals, sin NgRx) ---
@@ -53,6 +60,8 @@ export class HomeComponent {
   protected readonly error = signal<string | null>(null);
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
   protected readonly modalidades = signal<Modalidad[]>([]);
+  protected readonly ciudades = signal<Ciudad[]>([]);
+  protected readonly monedas = signal<TipoMoneda[]>([]);
 
   private readonly filtros = signal<FiltrosPublicacion>(this.form.getRawValue());
   private readonly visibleCount = signal(TAMANIO_PAGINA);
@@ -67,8 +76,11 @@ export class HomeComponent {
     this.cargarCatalogos();
 
     // RNF8: se debounca la entrada de búsqueda para no refiltrar en cada tecla.
-    this.form.valueChanges.pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef)).subscribe((valores) => {
-      this.filtros.set(valores as FiltrosPublicacion);
+    // Se usa getRawValue() (no el valor del evento) porque advanced-filters
+    // puede deshabilitar controles individuales al apagar una tarjeta de
+    // filtro, y valueChanges no incluye los controles disabled.
+    this.form.valueChanges.pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.filtros.set(this.form.getRawValue() as FiltrosPublicacion);
       this.visibleCount.set(TAMANIO_PAGINA); // nueva búsqueda: vuelve a la primera "página"
     });
   }
@@ -101,6 +113,14 @@ export class HomeComponent {
       next: (data) => this.tiposPropiedad.set(data),
       error: (err) => console.error('No se pudieron cargar los tipos de propiedad', err),
     });
+    this.catalogoService.getTiposMoneda().subscribe({
+      next: (data) => this.monedas.set(data),
+      error: (err) => console.error('No se pudieron cargar las monedas', err),
+    });
+    this.ubicacionService.getTodasCiudades().subscribe({
+      next: (data) => this.ciudades.set(data),
+      error: (err) => console.error('No se pudieron cargar las ciudades', err),
+    });
   }
 
   // RN-22: los filtros deben poder combinarse entre sí. Se aplican todos sobre
@@ -115,11 +135,29 @@ export class HomeComponent {
         if (!texto.includes(ubicacion)) return false;
       }
       if (f.idModalidad != null && p.modalidad?.id !== f.idModalidad) return false;
-      if (f.idTipoPropiedad != null && p.tipoPropiedad?.id !== f.idTipoPropiedad) return false;
+
+      if (f.idsTipoPropiedad.length && !f.idsTipoPropiedad.includes(p.tipoPropiedad?.id ?? -1)) {
+        return false;
+      }
+      if (f.idsCiudad.length && !f.idsCiudad.includes(p.ciudad?.id ?? -1)) {
+        return false;
+      }
+      if (f.idsTipoMoneda.length && !f.idsTipoMoneda.includes(p.tipoMoneda?.id ?? -1)) {
+        return false;
+      }
       if (f.precioMin != null && p.precio < f.precioMin) return false;
       if (f.precioMax != null && p.precio > f.precioMax) return false;
-      if (f.ambientes != null && p.cantidad_ambientes < f.ambientes) return false;
+
+      if (f.ambientesSeleccionados.length && !this.coincideAmbientes(p.cantidad_ambientes, f.ambientesSeleccionados)) {
+        return false;
+      }
       return true;
     });
+  }
+
+  // Traduce los buckets de UI ('1' | '2' | '3' | '4+') a la cantidad real de
+  // ambientes de la publicación.
+  private coincideAmbientes(cantidad: number, buckets: string[]): boolean {
+    return buckets.some((b) => (b === '4+' ? cantidad >= 4 : cantidad === Number(b)));
   }
 }

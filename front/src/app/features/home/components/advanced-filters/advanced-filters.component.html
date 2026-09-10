@@ -1,4 +1,4 @@
-<section class="advanced">
+<section class="advanced" [class.advanced--secondary]="esSecundaria()">
   <div class="advanced__inner">
     <button type="button" class="advanced__toggle" (click)="toggle()" [attr.aria-expanded]="abierto()">
       Búsqueda avanzada
@@ -6,32 +6,212 @@
     </button>
 
     @if (abierto()) {
-      <div class="advanced__panel" [formGroup]="form()">
-        <div class="advanced__field">
-          <label for="tipoPropiedad">Tipo de propiedad</label>
-          <select id="tipoPropiedad" formControlName="idTipoPropiedad">
-            <option [ngValue]="null">Todos</option>
-            @for (t of tiposPropiedad(); track t.id) {
-              <option [ngValue]="t.id">{{ t.nombre }}</option>
+      <div class="advanced__grid" [formGroup]="form()">
+        <!-- Locación -->
+        <div class="filter-card" [class.filter-card--off]="!activos().ubicacion">
+          <div class="filter-card__header">
+            <span class="filter-card__title"><svg lucideMapPin [size]="18"></svg> Locación</span>
+            <button
+              type="button"
+              class="switch"
+              [class.switch--on]="activos().ubicacion"
+              (click)="toggleSeccion('ubicacion')"
+              [attr.aria-pressed]="activos().ubicacion"
+              aria-label="Activar filtro de locación"
+            ></button>
+          </div>
+          <div class="filter-card__body">
+            <select
+              class="filter-card__select"
+              [disabled]="!activos().ubicacion"
+              (change)="onSeleccionarCiudad($any($event.target).value); $any($event.target).value = ''"
+            >
+              <option value="" disabled selected>Seleccioná una ciudad o barrio</option>
+              @for (c of ciudades(); track c.id) {
+                <option [value]="c.id">{{ etiquetaCiudad(c) }}</option>
+              }
+            </select>
+
+            @if (ciudadesSeleccionadas().length) {
+              <div class="chips">
+                @for (c of ciudadesSeleccionadas(); track c.id) {
+                  <span class="chip">
+                    {{ c.nombre }}
+                    <button type="button" (click)="quitarCiudad(c.id)" aria-label="Quitar">
+                      <svg lucideX [size]="12"></svg>
+                    </button>
+                  </span>
+                }
+              </div>
             }
-          </select>
+          </div>
         </div>
 
-        <div class="advanced__field">
-          <label for="precioMin">Precio mínimo</label>
-          <input id="precioMin" type="number" min="0" formControlName="precioMin" placeholder="Sin mínimo" />
+        <!-- Tipo de propiedad -->
+        <div class="filter-card" [class.filter-card--off]="!activos().tipoPropiedad">
+          <div class="filter-card__header">
+            <span class="filter-card__title"><svg lucideHome [size]="18"></svg> Tipo de Propiedad</span>
+            <button
+              type="button"
+              class="switch"
+              [class.switch--on]="activos().tipoPropiedad"
+              (click)="toggleSeccion('tipoPropiedad')"
+              [attr.aria-pressed]="activos().tipoPropiedad"
+              aria-label="Activar filtro de tipo de propiedad"
+            ></button>
+          </div>
+          <div class="filter-card__body filter-card__body--checklist">
+            @for (t of tiposPropiedad(); track t.id) {
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  [disabled]="!activos().tipoPropiedad"
+                  [checked]="tipoPropiedadSeleccionado(t.id)"
+                  (change)="toggleTipoPropiedad(t.id)"
+                />
+                {{ t.nombre }}
+              </label>
+            }
+          </div>
         </div>
 
-        <div class="advanced__field">
-          <label for="precioMax">Precio máximo</label>
-          <input id="precioMax" type="number" min="0" formControlName="precioMax" placeholder="Sin máximo" />
+        <!-- Ambientes -->
+        <div class="filter-card" [class.filter-card--off]="!activos().ambientes">
+          <div class="filter-card__header">
+            <span class="filter-card__title"><svg lucideHexagon [size]="18"></svg> Ambientes</span>
+            <button
+              type="button"
+              class="switch"
+              [class.switch--on]="activos().ambientes"
+              (click)="toggleSeccion('ambientes')"
+              [attr.aria-pressed]="activos().ambientes"
+              aria-label="Activar filtro de ambientes"
+            ></button>
+          </div>
+          <div class="filter-card__body filter-card__body--checklist">
+            @for (b of ambientesBuckets; track b) {
+              <label class="checkbox">
+                <input
+                  type="checkbox"
+                  [disabled]="!activos().ambientes"
+                  [checked]="ambienteSeleccionado(b)"
+                  (change)="toggleAmbiente(b)"
+                />
+                {{ b === '4+' ? '4 o más' : b === '1' ? 'Monoambiente' : b }}
+              </label>
+            }
+            <label class="checkbox">
+              <input
+                type="checkbox"
+                [disabled]="!activos().ambientes"
+                [checked]="!ambienteSeleccionado('1') && !ambienteSeleccionado('2') && !ambienteSeleccionado('3') && !ambienteSeleccionado('4+')"
+                (change)="limpiarAmbientes()"
+              />
+              Todos
+            </label>
+          </div>
         </div>
 
-        <div class="advanced__field">
-          <label for="ambientes">Ambientes (mínimo)</label>
-          <input id="ambientes" type="number" min="0" formControlName="ambientes" placeholder="Cualquiera" />
+        <!-- Moneda -->
+        <div class="filter-card" [class.filter-card--off]="!activos().moneda">
+          <div class="filter-card__header">
+            <span class="filter-card__title"><svg lucideCoins [size]="18"></svg> Moneda</span>
+            <button
+              type="button"
+              class="switch"
+              [class.switch--on]="activos().moneda"
+              (click)="toggleSeccion('moneda')"
+              [attr.aria-pressed]="activos().moneda"
+              aria-label="Activar filtro de moneda"
+            ></button>
+          </div>
+          <div class="filter-card__body">
+            <select
+              class="filter-card__select"
+              [disabled]="!activos().moneda"
+              (change)="onSeleccionarMoneda($any($event.target).value); $any($event.target).value = ''"
+            >
+              <option value="" disabled selected>Pesos Argentinos (ARS)</option>
+              @for (m of monedas(); track m.id) {
+                <option [value]="m.id">{{ m.nombre }}</option>
+              }
+            </select>
+
+            @if (monedasSeleccionadas().length) {
+              <div class="chips">
+                @for (m of monedasSeleccionadas(); track m.id) {
+                  <span class="chip">
+                    {{ m.nombre }}
+                    <button type="button" (click)="quitarMoneda(m.id)" aria-label="Quitar">
+                      <svg lucideX [size]="12"></svg>
+                    </button>
+                  </span>
+                }
+              </div>
+            }
+          </div>
         </div>
 
+        <!-- Precio -->
+        <div class="filter-card" [class.filter-card--off]="!activos().precio">
+          <div class="filter-card__header">
+            <span class="filter-card__title"><svg lucidePiggyBank [size]="18"></svg> Precio</span>
+            <button
+              type="button"
+              class="switch"
+              [class.switch--on]="activos().precio"
+              (click)="toggleSeccion('precio')"
+              [attr.aria-pressed]="activos().precio"
+              aria-label="Activar filtro de precio"
+            ></button>
+          </div>
+          <div class="filter-card__body">
+            <div class="precio-inputs">
+              <input
+                type="number"
+                formControlName="precioMin"
+                placeholder="Mínimo"
+                [disabled]="!activos().precio"
+              />
+              <input
+                type="number"
+                formControlName="precioMax"
+                placeholder="Máximo"
+                [disabled]="!activos().precio"
+              />
+            </div>
+
+            <div class="price-slider">
+              <input
+                type="range"
+                class="price-slider__thumb price-slider__thumb--min"
+                [min]="precioMinLimite"
+                [max]="precioMaxLimite"
+                step="10000"
+                [value]="precioMinValor"
+                [disabled]="!activos().precio"
+                (input)="onPrecioMinRange($any($event.target).value)"
+              />
+              <input
+                type="range"
+                class="price-slider__thumb price-slider__thumb--max"
+                [min]="precioMinLimite"
+                [max]="precioMaxLimite"
+                step="10000"
+                [value]="precioMaxValor"
+                [disabled]="!activos().precio"
+                (input)="onPrecioMaxRange($any($event.target).value)"
+              />
+            </div>
+            <div class="price-slider__labels">
+              <span>$ {{ precioMinValor | number: '1.0-0' : 'es-AR' }}</span>
+              <span>$ {{ precioMaxEtiqueta }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="advanced__footer">
         <button type="button" class="advanced__clear" (click)="limpiar()">Limpiar filtros</button>
       </div>
     }

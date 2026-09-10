@@ -1,6 +1,12 @@
 <app-hero-search [form]="form" [modalidades]="modalidades()" />
 
-<app-advanced-filters [form]="form" [tiposPropiedad]="tiposPropiedad()" />
+<app-advanced-filters
+  [form]="form"
+  [tiposPropiedad]="tiposPropiedad()"
+  [ciudades]="ciudades()"
+  [monedas]="monedas()"
+  [modalidades]="modalidades()"
+/>
 
 <app-listing-grid
   [listings]="paginadas()"

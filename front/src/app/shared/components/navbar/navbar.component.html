@@ -1,20 +1,28 @@
 <header class="navbar">
   <div class="navbar__inner">
-    <a routerLink="/" class="navbar__logo" aria-label="Ir al inicio">
-      <span class="navbar__logo-mark">SI</span>
-      <span class="navbar__logo-text"><strong>SI</strong>Alquileres</span>
-    </a>
+    <div class="navbar__start">
+      <button type="button" class="navbar__menu" aria-label="Abrir menú">☰</button>
 
-    <nav class="navbar__actions">
       @if (auth.isAuthenticated) {
         <a routerLink="/perfil" class="navbar__avatar" title="{{ auth.currentUser()?.email }}">
           {{ (auth.currentUser()?.email ?? '?').charAt(0).toUpperCase() }}
         </a>
-        <button type="button" class="btn btn--ghost" (click)="logout()">Salir</button>
+        <button type="button" class="navbar__link" (click)="logout()">Salir</button>
       } @else {
-        <a routerLink="/login" class="btn btn--ghost">Ingresar</a>
+        <span class="navbar__avatar navbar__avatar--placeholder" aria-hidden="true">👤</span>
+        <a routerLink="/login" class="navbar__link">Ingresar</a>
       }
+    </div>
+
+    <a routerLink="/" class="navbar__logo" aria-label="Ir al inicio">
+      <span class="navbar__logo-text">
+        <span class="navbar__logo-text--accent">SI</span>Alquileres
+      </span>
+    </a>
+
+    <div class="navbar__end">
+      <span class="navbar__owner-hint">¿Sos propietario?</span>
       <a routerLink="/publicaciones/nueva" class="btn btn--primary">Publicar</a>
-    </nav>
+    </div>
   </div>
 </header>

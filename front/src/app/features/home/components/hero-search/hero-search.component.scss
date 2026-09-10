@@ -2,11 +2,8 @@
   position: relative;
   padding: 3.5rem 1rem 4rem;
   background:
-    linear-gradient(180deg, rgba(10, 12, 20, 0.55) 0%, rgba(10, 12, 20, 0.82) 100%),
-    radial-gradient(circle at 15% 20%, rgba(216, 71, 30, 0.35), transparent 45%),
-    radial-gradient(circle at 85% 15%, rgba(14, 70, 161, 0.4), transparent 40%),
-    radial-gradient(circle at 50% 100%, rgba(255, 159, 28, 0.15), transparent 50%),
-    var(--color-dark);
+    linear-gradient(180deg, rgba(20, 22, 31, 0.35) 0%, rgba(20, 22, 31, 0.7) 100%),
+    url('/images/hero-bg.jpeg') center / cover no-repeat;
   color: var(--color-dark-text);
   overflow: hidden;
 }
@@ -24,16 +21,16 @@
 
 .hero__title {
   margin: 0;
-  font-size: clamp(1.8rem, 4.5vw, 2.75rem);
-  font-weight: 800;
+  font-size: clamp(2.2rem, 5vw, 3rem);
+  font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--color-dark-text);
 }
 
 .hero__subtitle {
   margin: 0 0 0.5rem;
-  color: var(--color-dark-text-muted);
-  font-size: 1.05rem;
+  color: var(--color-dark-text);
+  font-size: 1.15rem;
 }
 
 .hero__modalidades {
@@ -45,26 +42,31 @@
 }
 
 .modalidad-btn {
-  padding: 0.75rem 2rem;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-dark-text);
+  padding: 0.85rem 2.25rem;
+  border-radius: var(--radius-md);
+  border: none;
   font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: filter 0.15s ease, transform 0.1s ease;
+  color: var(--color-primary-contrast);
+}
+
+.modalidad-btn--primary {
+  background: var(--color-primary);
+}
+
+.modalidad-btn--secondary {
+  background: var(--color-secondary);
 }
 
 .modalidad-btn:hover {
-  border-color: var(--color-primary);
+  filter: brightness(1.08);
 }
 
 .modalidad-btn--active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: var(--color-primary-contrast);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 45%, transparent);
+  filter: brightness(0.92);
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 35%, transparent);
 }
 
 .hero__search {
@@ -85,9 +87,10 @@
   gap: 0.5rem;
   width: 100%;
   background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   padding: 0.4rem 0.4rem 0.4rem 1.1rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-card);
 }
 
 .hero__search-row input {
