@@ -2,7 +2,7 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--color-surface);
+  background: var(--color-surface, #fff);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -20,18 +20,20 @@
   justify-self: start;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 1rem; /* Un poco más de espacio entre menú y avatar */
   min-width: 0;
 }
 
+/* Cambios en el menú: Naranja y más grueso */
 .navbar__menu {
   background: transparent;
   border: none;
-  font-size: 1.3rem;
+  font-size: 2rem;
+  font-weight: 800;
   line-height: 1;
-  color: var(--color-text);
+  color: #ff9800; 
   cursor: pointer;
-  padding: 0.25rem;
+  padding: 0;
 }
 
 .navbar__link {
@@ -39,7 +41,7 @@
   border: none;
   color: var(--color-text);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 1rem;
   text-decoration: none;
   cursor: pointer;
 }
@@ -51,72 +53,73 @@
   text-decoration: none;
 }
 
-.navbar__logo-text {
-  font-size: 1.7rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  color: var(--color-secondary);
+/* Ajuste para la imagen del logo */
+.navbar__logo-img {
+  height: 40px; 
+  width: auto;
+  display: block;
 }
 
-.navbar__logo-text--accent {
-  color: var(--color-primary);
-}
-
+/* Cambio CLAVE: de columna a fila (row) para alinearlos lado a lado */
 .navbar__end {
   justify-self: end;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.15rem;
+  flex-direction: row; 
+  align-items: center; 
+  gap: 1rem;
   min-width: 0;
 }
 
+/* Texto más grande y oscuro */
 .navbar__owner-hint {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  font-size: 1rem;
+  font-weight: 500;
+  color: #1a237e; /* Azul oscuro del prototipo */
 }
 
+/* Avatar: Colores naranjas y tamaño ajustado */
 .navbar__avatar {
   display: grid;
   place-items: center;
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border-radius: 50%;
-  background: var(--color-secondary);
-  color: #fff;
+  background: #ffbc59; /* Naranja claro */
+  color: #d84315; /* Naranja oscuro */
   font-weight: 700;
   text-decoration: none;
-  font-size: 1rem;
+  font-size: 1.2rem;
   flex-shrink: 0;
 }
 
 .navbar__avatar--placeholder {
-  background: var(--color-border);
-  color: var(--color-text-muted);
+  background: #ffbc59;
+  color: #d84315;
 }
 
+/* Ajustes del Botón: Forma cuadrada y naranja intenso */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.55rem 1.15rem;
-  border-radius: var(--radius-pill);
+  padding: 0.6rem 1.4rem;
+  border-radius: 6px; /* Borde suave en vez de píldora */
   border: 1px solid transparent;
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 1rem;
   text-decoration: none;
   cursor: pointer;
   transition: filter 0.15s ease, transform 0.15s ease;
 }
 
 .btn--primary {
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
+  background: #ff9800; /* Naranja del botón */
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);
 }
 
 .btn--primary:hover {
-  background: var(--color-primary-dark);
+  background: #f57c00;
   transform: translateY(-1px);
 }
 
@@ -125,12 +128,12 @@
     display: none;
   }
 
-  .navbar__logo-text {
-    font-size: 1.25rem;
+  .navbar__logo-img {
+    height: 30px;
   }
 
   .navbar__link {
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     white-space: nowrap;
   }
 
@@ -141,6 +144,6 @@
 
   .btn--primary {
     padding: 0.5rem 0.9rem;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
   }
 }

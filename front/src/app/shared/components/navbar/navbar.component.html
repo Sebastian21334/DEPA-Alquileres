@@ -1,6 +1,7 @@
 <header class="navbar">
   <div class="navbar__inner">
     <div class="navbar__start">
+      <!-- Menú hamburguesa ajustado -->
       <button type="button" class="navbar__menu" aria-label="Abrir menú">☰</button>
 
       @if (auth.isAuthenticated) {
@@ -9,15 +10,19 @@
         </a>
         <button type="button" class="navbar__link" (click)="logout()">Salir</button>
       } @else {
-        <span class="navbar__avatar navbar__avatar--placeholder" aria-hidden="true">👤</span>
+        <!-- Avatar actualizado con ícono SVG estilo prototipo -->
+        <span class="navbar__avatar navbar__avatar--placeholder" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+          </svg>
+        </span>
         <a routerLink="/login" class="navbar__link">Ingresar</a>
       }
     </div>
 
+    <!-- Logo DEPA (Debes colocar la ruta de tu imagen real) -->
     <a routerLink="/" class="navbar__logo" aria-label="Ir al inicio">
-      <span class="navbar__logo-text">
-        <span class="navbar__logo-text--accent">SI</span>Alquileres
-      </span>
+      <img src="/images/Logo.png" alt="DEPA" class="navbar__logo-img">
     </a>
 
     <div class="navbar__end">
