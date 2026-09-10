@@ -27,6 +27,18 @@ export class UbicacionRepository implements IUbicacionRepository {
     return this.provinciaRepo.save(provincia);
   }
 
+  async actualizarProvincia(
+    id: number,
+    datos: Partial<Provincia>,
+  ): Promise<Provincia> {
+    await this.provinciaRepo.update(id, datos);
+    return (await this.buscarProvinciaPorId(id))!;
+  }
+
+  async eliminarProvincia(id: number): Promise<void> {
+    await this.provinciaRepo.delete(id);
+  }
+
   buscarCiudadPorId(id: number): Promise<Ciudad | null> {
     // La provincia se carga para validar y reutilizar la relación al crear publicaciones.
     return this.ciudadRepo.findOne({
@@ -44,5 +56,14 @@ export class UbicacionRepository implements IUbicacionRepository {
   crearCiudad(datos: Partial<Ciudad>): Promise<Ciudad> {
     const ciudad = this.ciudadRepo.create(datos);
     return this.ciudadRepo.save(ciudad);
+  }
+
+  async actualizarCiudad(id: number, datos: Partial<Ciudad>): Promise<Ciudad> {
+    await this.ciudadRepo.update(id, datos);
+    return (await this.buscarCiudadPorId(id))!;
+  }
+
+  async eliminarCiudad(id: number): Promise<void> {
+    await this.ciudadRepo.delete(id);
   }
 }

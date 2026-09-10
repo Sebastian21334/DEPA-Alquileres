@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Param, Body, ParseIntPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { UbicacionService } from '../service/ubicacion.service';
 import { CrearProvinciaDto } from '../dto/crear-provincia.dto';
 import { CrearCiudadDto } from '../dto/crear-ciudad.dto';
@@ -28,12 +38,52 @@ export class UbicacionController {
     return this.ubicacionService.crearProvincia(dto);
   }
 
+  @Put('provincias/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  actualizarProvincia(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CrearProvinciaDto,
+  ) {
+    return this.ubicacionService.actualizarProvincia(id, dto);
+  }
+
+  @Delete('provincias/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  eliminarProvincia(@Param('id', ParseIntPipe) id: number) {
+    return this.ubicacionService.eliminarProvincia(id);
+  }
+
   @Post('ciudades')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   async crearCiudad(@Body() dto: CrearCiudadDto) {
     // Se resuelve la provincia antes de guardar para crear una relación válida.
-    const provincia = await this.ubicacionService.getProvinciaPorId(dto.idProvincia);
+    const provincia = await this.ubicacionService.getProvinciaPorId(
+      dto.idProvincia,
+    );
     return this.ubicacionService.crearCiudad({ nombre: dto.nombre, provincia });
+  }
+
+  @Put('ciudades/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  actualizarCiudad(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CrearCiudadDto,
+  ) {
+    return this.ubicacionService.actualizarCiudad(
+      id,
+      dto.nombre,
+      dto.idProvincia,
+    );
+  }
+
+  @Delete('ciudades/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  eliminarCiudad(@Param('id', ParseIntPipe) id: number) {
+    return this.ubicacionService.eliminarCiudad(id);
   }
 }

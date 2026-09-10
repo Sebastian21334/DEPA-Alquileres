@@ -43,7 +43,7 @@ export class CatalogosService {
   async eliminarRol(id: number) {
     const rol = await this.catalogosRepo.buscarRolPorId(id);
     if (!rol) throw new NotFoundException(`El rol con ID ${id} no existe`);
-    await this.catalogosRepo.eliminarRol(id);
+    await this.eliminarSeguro(() => this.catalogosRepo.eliminarRol(id), 'rol');
     return { mensaje: `Rol con ID ${id} eliminado correctamente` };
   }
 
@@ -70,7 +70,7 @@ export class CatalogosService {
   async eliminarTipoAnunciante(id: number) {
     const item = await this.catalogosRepo.buscarTipoAnunciantePorId(id);
     if (!item) throw new NotFoundException(`El tipo de anunciante con ID ${id} no existe`);
-    await this.catalogosRepo.eliminarTipoAnunciante(id);
+    await this.eliminarSeguro(() => this.catalogosRepo.eliminarTipoAnunciante(id), 'tipo de anunciante');
     return { mensaje: `Tipo de anunciante con ID ${id} eliminado correctamente` };
   }
   /** Busca una categoria de anunciante o informa que la relacion no existe. */
@@ -103,7 +103,7 @@ export class CatalogosService {
   async eliminarTipoPropiedad(id: number) {
     const item = await this.catalogosRepo.buscarTipoPropiedadPorId(id);
     if (!item) throw new NotFoundException(`El tipo de propiedad con ID ${id} no existe`);
-    await this.catalogosRepo.eliminarTipoPropiedad(id);
+    await this.eliminarSeguro(() => this.catalogosRepo.eliminarTipoPropiedad(id), 'tipo de propiedad');
     return { mensaje: `Tipo de propiedad con ID ${id} eliminado correctamente` };
   }
   /** Resuelve el tipo de propiedad requerido al crear una publicacion. */
@@ -136,7 +136,7 @@ export class CatalogosService {
   async eliminarModalidad(id: number) {
     const item = await this.catalogosRepo.buscarModalidadPorId(id);
     if (!item) throw new NotFoundException(`La modalidad con ID ${id} no existe`);
-    await this.catalogosRepo.eliminarModalidad(id);
+    await this.eliminarSeguro(() => this.catalogosRepo.eliminarModalidad(id), 'modalidad');
     return { mensaje: `Modalidad con ID ${id} eliminada correctamente` };
   }
   /** Resuelve una modalidad para asociarla a una publicacion. */
@@ -169,7 +169,7 @@ export class CatalogosService {
   async eliminarMetodoPago(id: number) {
     const item = await this.catalogosRepo.buscarMetodoPagoPorId(id);
     if (!item) throw new NotFoundException(`El método de pago con ID ${id} no existe`);
-    await this.catalogosRepo.eliminarMetodoPago(id);
+    await this.eliminarSeguro(() => this.catalogosRepo.eliminarMetodoPago(id), 'método de pago');
     return { mensaje: `Método de pago con ID ${id} eliminado correctamente` };
   }
 
@@ -196,7 +196,7 @@ export class CatalogosService {
   async eliminarTipoMoneda(id: number) {
     const item = await this.catalogosRepo.buscarTipoMonedaPorId(id);
     if (!item) throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
-    await this.catalogosRepo.eliminarTipoMoneda(id);
+    await this.eliminarSeguro(() => this.catalogosRepo.eliminarTipoMoneda(id), 'moneda');
     return { mensaje: `Tipo de moneda con ID ${id} eliminado correctamente` };
   }
   /** Resuelve la moneda asociada al precio de una publicacion. */
@@ -204,5 +204,16 @@ export class CatalogosService {
     const item = await this.catalogosRepo.buscarTipoMonedaPorId(id);
     if (!item) throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
     return item;
+  }
+
+  private async eliminarSeguro(accion: () => Promise<void>, nombre: string): Promise<void> {
+    try {
+      await accion();
+    } catch (error: any) {
+      if (error?.code === '23503') {
+        throw new ConflictException(`No se puede eliminar el ${nombre} porque está siendo utilizado`);
+      }
+      throw error;
+    }
   }
 }
