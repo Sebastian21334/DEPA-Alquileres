@@ -1,4 +1,4 @@
-<article class="card">
+<article class="card" [class.card--temporary]="esTemporaria">
   <div class="card__media">
     @if (imagenPrincipal) {
       <img [src]="imagenPrincipal" [alt]="publicacion().titulo" loading="lazy" />
@@ -52,7 +52,7 @@
 
     <div class="card__footer">
       <span class="card__price">
-        {{ publicacion().tipoMoneda?.nombre }} {{ publicacion().precio | number: '1.0-0' }}
+        {{ publicacion().tipoMoneda?.nombre }} {{ precioFormateado }}
       </span>
 
       <a class="btn btn--primary" [routerLink]="['/publicaciones', publicacion().id]">

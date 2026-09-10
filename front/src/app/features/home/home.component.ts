@@ -26,7 +26,7 @@ interface FiltrosPublicacion {
   ambientesSeleccionados: string[];
 }
 
-const TAMANIO_PAGINA = 9;
+const TAMANIO_PAGINA = 8;
 
 @Component({
   selector: 'app-home',
@@ -67,7 +67,9 @@ export class HomeComponent {
   private readonly visibleCount = signal(TAMANIO_PAGINA);
 
   // Lista completa filtrada (client-side, ver listing.service.ts) y la página visible.
-  protected readonly filtradas = computed(() => this.aplicarFiltros(this.publicaciones(), this.filtros()));
+  protected readonly filtradas = computed(() =>
+    this.aplicarFiltros(this.publicaciones(), this.filtros()),
+  );
   protected readonly paginadas = computed(() => this.filtradas().slice(0, this.visibleCount()));
   protected readonly hayMas = computed(() => this.visibleCount() < this.filtradas().length);
 
@@ -79,10 +81,12 @@ export class HomeComponent {
     // Se usa getRawValue() (no el valor del evento) porque advanced-filters
     // puede deshabilitar controles individuales al apagar una tarjeta de
     // filtro, y valueChanges no incluye los controles disabled.
-    this.form.valueChanges.pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      this.filtros.set(this.form.getRawValue() as FiltrosPublicacion);
-      this.visibleCount.set(TAMANIO_PAGINA); // nueva búsqueda: vuelve a la primera "página"
-    });
+    this.form.valueChanges
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.filtros.set(this.form.getRawValue() as FiltrosPublicacion);
+        this.visibleCount.set(TAMANIO_PAGINA); // nueva búsqueda: vuelve a la primera "página"
+      });
   }
 
   protected cargarMas(): void {
@@ -131,7 +135,8 @@ export class HomeComponent {
 
     return listado.filter((p) => {
       if (ubicacion) {
-        const texto = `${p.ciudad?.nombre ?? ''} ${p.provincia?.nombre ?? ''} ${p.direccion}`.toLowerCase();
+        const texto =
+          `${p.ciudad?.nombre ?? ''} ${p.provincia?.nombre ?? ''} ${p.direccion}`.toLowerCase();
         if (!texto.includes(ubicacion)) return false;
       }
       if (f.idModalidad != null && p.modalidad?.id !== f.idModalidad) return false;
@@ -148,7 +153,10 @@ export class HomeComponent {
       if (f.precioMin != null && p.precio < f.precioMin) return false;
       if (f.precioMax != null && p.precio > f.precioMax) return false;
 
-      if (f.ambientesSeleccionados.length && !this.coincideAmbientes(p.cantidad_ambientes, f.ambientesSeleccionados)) {
+      if (
+        f.ambientesSeleccionados.length &&
+        !this.coincideAmbientes(p.cantidad_ambientes, f.ambientesSeleccionados)
+      ) {
         return false;
       }
       return true;

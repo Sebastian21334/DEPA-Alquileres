@@ -1,6 +1,5 @@
 import { Component, computed, effect, signal, input } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { DecimalPipe } from '@angular/common';
 import {
   LucideMapPin,
   LucideHome,
@@ -36,7 +35,6 @@ const PRECIO_MAX = 1_500_000;
   standalone: true,
   imports: [
     ReactiveFormsModule,
-    DecimalPipe,
     LucideMapPin,
     LucideHome,
     LucideHexagon,
@@ -54,8 +52,6 @@ export class AdvancedFiltersComponent {
   readonly monedas = input<TipoMoneda[]>([]);
   readonly modalidades = input<{ id: number; nombre: string }[]>([]);
 
-  protected readonly abierto = signal(false);
-
   protected readonly precioMinLimite = PRECIO_MIN;
   protected readonly precioMaxLimite = PRECIO_MAX;
 
@@ -63,10 +59,17 @@ export class AdvancedFiltersComponent {
 
   private readonly idModalidadSeleccionada = signal<number | null>(null);
 
+  protected readonly tieneModalidad = computed(() => this.idModalidadSeleccionada() != null);
+
   protected readonly esSecundaria = computed(() => {
     const id = this.idModalidadSeleccionada();
     const lista = this.modalidades();
-    return lista.findIndex((m) => m.id === id) === 1;
+    return (
+      lista
+        .find((m) => m.id === id)
+        ?.nombre.toLowerCase()
+        .includes('tempor') ?? false
+    );
   });
 
   protected readonly activos = signal<Record<SeccionFiltro, boolean>>({
@@ -98,10 +101,6 @@ export class AdvancedFiltersComponent {
     });
   }
 
-  protected toggle(): void {
-    this.abierto.update((v) => !v);
-  }
-
   protected toggleSeccion(seccion: SeccionFiltro): void {
     const activaAhora = !this.activos()[seccion];
     this.activos.update((a) => ({ ...a, [seccion]: activaAhora }));
@@ -117,6 +116,7 @@ export class AdvancedFiltersComponent {
         control.disable({ emitEvent: false });
       }
     }
+    this.form().updateValueAndValidity();
   }
 
   // ---- Ubicación ----
@@ -124,7 +124,7 @@ export class AdvancedFiltersComponent {
     return (this.form().controls['idsCiudad']?.value ?? []) as number[];
   }
 
-    protected ciudadesSeleccionadas(): Ciudad[] {
+  protected ciudadesSeleccionadas(): Ciudad[] {
     const ids = new Set(this.ciudadesSeleccionadasIds);
     return this.ciudades().filter((c) => ids.has(c.id));
   }
@@ -214,8 +214,14 @@ export class AdvancedFiltersComponent {
     return (this.form().controls['precioMax']?.value as number) ?? PRECIO_MAX;
   }
 
+  protected get precioMinEtiqueta(): string {
+    return this.precioMinValor.toLocaleString('es-AR');
+  }
+
   protected get precioMaxEtiqueta(): string {
-    return this.precioMaxValor >= PRECIO_MAX ? `${PRECIO_MAX.toLocaleString('es-AR')}+` : this.precioMaxValor.toLocaleString('es-AR');
+    return this.precioMaxValor >= PRECIO_MAX
+      ? `${PRECIO_MAX.toLocaleString('es-AR')}+`
+      : this.precioMaxValor.toLocaleString('es-AR');
   }
 
   protected onPrecioMinRange(valor: string): void {

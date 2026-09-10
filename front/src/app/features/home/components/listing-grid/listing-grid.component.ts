@@ -16,6 +16,7 @@ import { Publicacion } from '../../../../shared/models/publicacion.model';
 export class ListingGridComponent {
   readonly listings = input.required<Publicacion[]>();
   readonly loading = input(false);
+  readonly total = input(0);
   readonly error = input<string | null>(null);
   readonly hasMore = input(false);
 

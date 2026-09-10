@@ -1,4 +1,9 @@
 <section class="results">
+  @if (!loading() && !error()) {
+    <h2 class="results__count" aria-live="polite">
+      {{ total() }} {{ total() === 1 ? 'propiedad encontrada' : 'propiedades encontradas' }}
+    </h2>
+  }
   <div class="results__inner">
     @if (error()) {
       <div class="results__state results__state--error">
@@ -24,7 +29,9 @@
 
       @if (hasMore()) {
         <div class="results__load-more">
-          <button type="button" class="btn btn--outline" (click)="loadMore.emit()">Cargar más</button>
+          <button type="button" class="btn btn--outline" (click)="loadMore.emit()">
+            Cargar más
+          </button>
         </div>
       }
     }

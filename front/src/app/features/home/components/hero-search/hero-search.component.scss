@@ -1,134 +1,130 @@
 .hero {
-  position: relative;
-  padding: 3.5rem 1rem 4rem;
+  padding: 80px 24px 100px;
   background:
-    linear-gradient(180deg, rgba(20, 22, 31, 0.35) 0%, rgba(20, 22, 31, 0.7) 100%),
-    url('/images/hero-bg.jpeg') center / cover no-repeat;
-  color: var(--color-dark-text);
-  overflow: hidden;
+    linear-gradient(#0009, #0009),
+    url('/images/hero-mydepa.jpg') center / cover no-repeat;
+  color: white;
 }
-
 .hero__inner {
-  position: relative;
-  max-width: 720px;
-  margin: 0 auto;
+  max-width: 1200px;
+  margin: auto;
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.85rem;
 }
-
 .hero__title {
   margin: 0;
-  font-size: clamp(2.2rem, 5vw, 3rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--color-dark-text);
+  font-size: clamp(2.2rem, 4.8vw, 4.25rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
 }
-
 .hero__subtitle {
-  margin: 0 0 0.5rem;
-  color: var(--color-dark-text);
-  font-size: 1.15rem;
+  margin: 22px 0 34px;
+  font-size: clamp(1.1rem, 2.2vw, 1.875rem);
+  font-weight: 600;
 }
-
 .hero__modalidades {
   display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+  gap: 50px;
 }
-
 .modalidad-btn {
-  padding: 0.85rem 2.25rem;
-  border-radius: var(--radius-md);
-  border: none;
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: filter 0.15s ease, transform 0.1s ease;
-  color: var(--color-primary-contrast);
-}
-
-.modalidad-btn--primary {
+  min-width: 240px;
+  padding: 18px 26px;
+  border: 0;
+  border-radius: 7px;
+  color: white;
   background: var(--color-primary);
+  font-size: 1.875rem;
+  font-weight: 700;
+  cursor: pointer;
 }
-
 .modalidad-btn--secondary {
   background: var(--color-secondary);
 }
-
 .modalidad-btn:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
 }
-
 .modalidad-btn--active {
-  filter: brightness(0.92);
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 35%, transparent);
+  outline: 3px solid white;
+  outline-offset: 4px;
 }
-
 .hero__search {
-  width: 100%;
-  max-width: 560px;
+  max-width: 485px;
+  margin: 82px auto 0;
 }
-
 .hero__search-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-}
-
-.hero__search-row {
   display: flex;
-  gap: 0.5rem;
-  width: 100%;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  padding: 0.4rem 0.4rem 0.4rem 1.1rem;
-  box-shadow: var(--shadow-card);
-}
-
-.hero__search-row input {
-  flex: 1;
-  border: none;
-  outline: none;
-  padding: 0.6rem 0.4rem;
-  font-size: 1rem;
-  background: transparent;
-  color: var(--color-text);
-  min-width: 0;
-}
-
-.btn {
-  display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0.7rem 1.5rem;
-  border-radius: var(--radius-pill);
-  border: none;
-  font-weight: 700;
+  gap: 6px;
+  margin-bottom: 22px;
+  font-size: 1.875rem;
+  font-weight: 600;
+}
+.hero__search-label svg {
+  color: var(--color-accent);
+}
+.hero__search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 99px;
+  padding: 5px 10px 5px 22px;
+  box-shadow: 0 4px 8px #0005;
+}
+.hero__search-row:focus-within {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.hero__search-row input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 0;
+}
+.btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: white;
+  background: var(--color-accent);
+  box-shadow: 0 2px 5px #0003;
   cursor: pointer;
-  white-space: nowrap;
 }
-
-.btn--primary {
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
+button:focus-visible {
+  outline: 3px solid white;
+  outline-offset: 4px;
 }
-
-.btn--primary:hover {
-  background: var(--color-primary-dark);
-}
-
-@media (max-width: 480px) {
-  .hero__search-row {
-    flex-direction: column;
-    border-radius: var(--radius-md);
-    padding: 0.6rem;
+@media (max-width: 600px) {
+  .hero {
+    padding: 52px 20px 60px;
+  }
+  .hero__modalidades {
+    gap: 16px;
+  }
+  .modalidad-btn {
+    min-width: 0;
+    flex: 1;
+    padding: 16px 12px;
+    font-size: 1.1rem;
+  }
+  .hero__search {
+    margin-top: 48px;
+  }
+  .hero__search-label {
+    font-size: 1.4rem;
   }
 }

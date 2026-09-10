@@ -5,13 +5,14 @@
 
     @if (modalidades().length) {
       <div class="hero__modalidades">
-        @for (m of modalidades(); track m.id; let i = $index) {
+        @for (m of modalidadesOrdenadas(); track m.id; let i = $index) {
           <button
             type="button"
             class="modalidad-btn"
-            [class.modalidad-btn--primary]="i === 0"
-            [class.modalidad-btn--secondary]="i === 1"
+            [class.modalidad-btn--primary]="!esTemporaria(m.nombre)"
+            [class.modalidad-btn--secondary]="esTemporaria(m.nombre)"
             [class.modalidad-btn--active]="form().controls['idModalidad'].value === m.id"
+            [attr.aria-pressed]="form().controls['idModalidad'].value === m.id"
             (click)="toggleModalidad(m.id)"
           >
             {{ m.nombre }}
@@ -21,7 +22,9 @@
     }
 
     <form class="hero__search" [formGroup]="form()" (ngSubmit)="onSubmit()">
-      <label class="hero__search-label" for="ubicacion">Buscá en tu zona</label>
+      <label class="hero__search-label" for="ubicacion"
+        ><svg lucideMapPin [size]="28" aria-hidden="true"></svg> Buscá en tu zona:</label
+      >
       <div class="hero__search-row">
         <input
           id="ubicacion"
@@ -30,7 +33,9 @@
           placeholder="Ingresá la localidad/región"
           autocomplete="off"
         />
-        <button type="submit" class="btn btn--primary">Buscar</button>
+        <button type="submit" class="btn btn--primary" aria-label="Buscar propiedades">
+          <svg lucideSearch [size]="20" aria-hidden="true"></svg>
+        </button>
       </div>
     </form>
   </div>

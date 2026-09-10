@@ -9,6 +9,7 @@
 />
 
 <app-listing-grid
+  [total]="filtradas().length"
   [listings]="paginadas()"
   [loading]="cargando()"
   [error]="error()"

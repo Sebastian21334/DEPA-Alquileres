@@ -1,6 +1,13 @@
 import { Routes } from '@angular/router';
+import { adminGuard } from './core/guards/admin.guard';
 
 export const routes: Routes = [
+  {
+    path: 'admin',
+    canActivate: [adminGuard],
+    loadComponent: () => import('./features/admin/admin.component').then((m) => m.AdminComponent),
+    title: 'Panel administrativo — SIAlquileres',
+  },
   {
     path: '',
     loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent),
@@ -8,18 +15,22 @@ export const routes: Routes = [
   },
   {
     path: 'login',
-    loadComponent: () => import('./features/auth/login/login.component').then((m) => m.LoginComponent),
+    loadComponent: () =>
+      import('./features/auth/login/login.component').then((m) => m.LoginComponent),
     title: 'Iniciar sesión — SIAlquileres',
   },
   {
     path: 'registro',
-    loadComponent: () => import('./features/auth/register/register.component').then((m) => m.RegisterComponent),
+    loadComponent: () =>
+      import('./features/auth/register/register.component').then((m) => m.RegisterComponent),
     title: 'Crear cuenta — SIAlquileres',
   },
   {
     path: 'verificar-cuenta',
     loadComponent: () =>
-      import('./features/auth/verificar-cuenta/verificar-cuenta.component').then((m) => m.VerificarCuentaComponent),
+      import('./features/auth/verificar-cuenta/verificar-cuenta.component').then(
+        (m) => m.VerificarCuentaComponent,
+      ),
     title: 'Verificar cuenta — SIAlquileres',
   },
   {

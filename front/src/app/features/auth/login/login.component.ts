@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 
 // RF2 (autenticación) + caso de uso "Iniciar sesión" (ID 2). Los mensajes de
@@ -19,6 +19,7 @@ export class LoginComponent {
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
@@ -42,7 +43,8 @@ export class LoginComponent {
     this.authService.login({ email: email.trim().toLowerCase(), contrasenia }).subscribe({
       next: () => {
         this.enviando.set(false);
-        this.router.navigateByUrl('/');
+        const destino = this.route.snapshot.queryParamMap.get('returnUrl');
+        this.router.navigateByUrl(destino?.startsWith('/') ? destino : '/');
       },
       error: (err: Error) => {
         this.enviando.set(false);

@@ -1,0 +1,370 @@
+<section class="admin">
+  <header class="admin__header">
+    <div>
+      <p class="admin__eyebrow">Administración</p>
+      <h1>Panel de control</h1>
+      <p>Gestioná usuarios y revisá solicitudes de anunciantes.</p>
+    </div>
+    <button class="button button--light" type="button" (click)="reload()" [disabled]="loading()">
+      <svg lucideRefreshCw [size]="18"></svg> Actualizar
+    </button>
+  </header>
+
+  @if (error()) {
+    <div class="alert alert--error" role="alert">{{ error() }}</div>
+  }
+  @if (notice()) {
+    <div class="alert alert--success" role="status">{{ notice() }}</div>
+  }
+
+  <div class="stats">
+    <article>
+      <svg lucideUsers [size]="25"></svg>
+      <div>
+        <strong>{{ users().length }}</strong
+        ><span>Usuarios registrados</span>
+      </div>
+    </article>
+    <article>
+      <svg lucideShieldCheck [size]="25"></svg>
+      <div>
+        <strong>{{ requests().length }}</strong
+        ><span>Solicitudes pendientes</span>
+      </div>
+    </article>
+  </div>
+
+  <section class="panel">
+    <div class="panel__title">
+      <div>
+        <h2>Solicitudes de verificación</h2>
+        <p>Documentación pendiente de revisión.</p>
+      </div>
+      <span class="counter">{{ requests().length }}</span>
+    </div>
+    @if (loading()) {
+      <p class="empty">Cargando solicitudes…</p>
+    } @else if (!requests().length) {
+      <p class="empty">No hay solicitudes pendientes.</p>
+    } @else {
+      <div class="requests">
+        @for (request of requests(); track request.id) {
+          <article class="request">
+            <div class="request__identity">
+              <span class="avatar">{{
+                (request.anunciante.usuario?.nombre || 'A').charAt(0)
+              }}</span>
+              <div>
+                <h3>
+                  {{ request.anunciante.usuario?.nombre || 'Anunciante' }}
+                  {{ request.anunciante.usuario?.apellido }}
+                </h3>
+                <p>{{ request.anunciante.usuario?.email || request.anunciante.numero_contacto }}</p>
+              </div>
+            </div>
+            <dl>
+              <div>
+                <dt>CUIT/CUIL</dt>
+                <dd>{{ request.anunciante.cuit_cuil || 'Sin informar' }}</dd>
+              </div>
+              <div>
+                <dt>Revisión</dt>
+                <dd>#{{ request.numero_revision }}</dd>
+              </div>
+            </dl>
+            <div class="documents">
+              @if (request.dni_frente_url) {
+                <a [href]="request.dni_frente_url" target="_blank" rel="noopener">DNI frente</a>
+              }
+              @if (request.dni_dorso_url) {
+                <a [href]="request.dni_dorso_url" target="_blank" rel="noopener">DNI dorso</a>
+              }
+              @if (request.rostro_url) {
+                <a [href]="request.rostro_url" target="_blank" rel="noopener">Rostro</a>
+              }
+            </div>
+            @if (rejectId() === request.id) {
+              <div class="reject-box">
+                <label [for]="'reason-' + request.id">Motivo del rechazo</label
+                ><textarea
+                  [id]="'reason-' + request.id"
+                  [(ngModel)]="rejectReason"
+                  maxlength="500"
+                  placeholder="Explicá qué documentación debe corregir"
+                ></textarea>
+                <div>
+                  <button type="button" class="button button--ghost" (click)="cancelReject()">
+                    Cancelar</button
+                  ><button
+                    type="button"
+                    class="button button--danger"
+                    (click)="confirmReject(request)"
+                    [disabled]="!rejectReason.trim()"
+                  >
+                    Confirmar rechazo
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <div class="actions">
+                <button
+                  type="button"
+                  class="button button--danger-outline"
+                  (click)="openReject(request)"
+                >
+                  <svg lucideX [size]="17"></svg> Rechazar</button
+                ><button
+                  type="button"
+                  class="button button--success"
+                  (click)="approve(request)"
+                  [disabled]="busy() === 'request-' + request.anunciante.idUsuario"
+                >
+                  <svg lucideCheck [size]="17"></svg> Aprobar
+                </button>
+              </div>
+            }
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="panel__title panel__title--users">
+      <div>
+        <h2>Usuarios</h2>
+        <p>Administrá el acceso y los roles del sistema.</p>
+      </div>
+      <label class="search"
+        ><svg lucideSearch [size]="18"></svg
+        ><input
+          type="search"
+          placeholder="Buscar por nombre o email"
+          [ngModel]="query()"
+          (ngModelChange)="query.set($event)"
+      /></label>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Contacto</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th class="right">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of filteredUsers(); track user.id) {
+            <tr>
+              <td>
+                <strong>{{ user.nombre }} {{ user.apellido }}</strong
+                ><small>{{ user.email_verificado ? 'Email verificado' : 'Email pendiente' }}</small>
+              </td>
+              <td>
+                {{ user.email }}<small>{{ user.telefono }}</small>
+              </td>
+              <td>
+                <select
+                  [value]="user.rol?.nombre"
+                  (change)="changeRole(user, $any($event.target).value)"
+                  [disabled]="busy() === 'user-' + user.id"
+                >
+                  <option>Usuario</option>
+                  <option>Anunciante</option>
+                  <option>Administrador</option>
+                </select>
+              </td>
+              <td>
+                <span class="status" [class.status--blocked]="user.bloqueado">{{
+                  user.bloqueado ? 'Bloqueado' : 'Activo'
+                }}</span>
+              </td>
+              <td class="right">
+                <button
+                  type="button"
+                  class="link-button"
+                  (click)="toggleUser(user)"
+                  [disabled]="busy() === 'user-' + user.id"
+                >
+                  {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
+                </button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5" class="empty">No se encontraron usuarios.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="panel management">
+    <div class="panel__title">
+      <div>
+        <h2>Catálogos</h2>
+        <p>Alta, baja, modificación y consulta de los catálogos del sistema.</p>
+      </div>
+    </div>
+    <div class="catalog-grid">
+      @for (section of catalogs(); track section.key) {
+        <article class="catalog-card">
+          <h3>{{ section.label }}</h3>
+          <form class="inline-form" (ngSubmit)="addCatalog(section)">
+            <input
+              [(ngModel)]="newValues[section.key]"
+              [name]="'new-' + section.key"
+              maxlength="100"
+              placeholder="Nuevo elemento"
+            /><button class="button button--primary" type="submit">Agregar</button>
+          </form>
+          <ul class="crud-list">
+            @for (item of section.items; track item.id) {
+              <li>
+                @if (editing === section.key + '-' + item.id) {
+                  <input
+                    [(ngModel)]="draft"
+                    maxlength="100"
+                    (keyup.enter)="saveCatalog(section, item)"
+                  /><button
+                    class="link-button link-button--save"
+                    type="button"
+                    (click)="saveCatalog(section, item)"
+                  >
+                    Guardar</button
+                  ><button class="link-button" type="button" (click)="cancelEdit()">
+                    Cancelar
+                  </button>
+                } @else {
+                  <span>{{ item.nombre }}</span
+                  ><span class="crud-actions"
+                    ><button
+                      class="link-button link-button--edit"
+                      type="button"
+                      (click)="edit(section.key, item)"
+                    >
+                      Editar</button
+                    ><button
+                      class="link-button"
+                      type="button"
+                      (click)="deleteCatalog(section, item)"
+                    >
+                      Eliminar
+                    </button></span
+                  >
+                }
+              </li>
+            } @empty {
+              <li class="empty-row">Sin elementos</li>
+            }
+          </ul>
+        </article>
+      }
+    </div>
+  </section>
+
+  <section class="panel management">
+    <div class="panel__title">
+      <div>
+        <h2>Ubicaciones</h2>
+        <p>Administrá provincias y sus ciudades.</p>
+      </div>
+    </div>
+    <div class="location-grid">
+      <article class="catalog-card">
+        <h3>Provincias</h3>
+        <form class="inline-form" (ngSubmit)="addProvince()">
+          <input
+            [(ngModel)]="newValues['province']"
+            name="new-province"
+            maxlength="100"
+            placeholder="Nueva provincia"
+          /><button class="button button--primary" type="submit">Agregar</button>
+        </form>
+        <ul class="crud-list">
+          @for (item of provinces(); track item.id) {
+            <li [class.selected]="selectedProvince() === item.id">
+              @if (editing === 'province-' + item.id) {
+                <input
+                  [(ngModel)]="draft"
+                  maxlength="100"
+                  (keyup.enter)="saveProvince(item)"
+                /><button
+                  class="link-button link-button--save"
+                  type="button"
+                  (click)="saveProvince(item)"
+                >
+                  Guardar</button
+                ><button class="link-button" type="button" (click)="cancelEdit()">Cancelar</button>
+              } @else {
+                <button class="location-name" type="button" (click)="selectProvince(item.id)">
+                  {{ item.nombre }}</button
+                ><span class="crud-actions"
+                  ><button
+                    class="link-button link-button--edit"
+                    type="button"
+                    (click)="edit('province', item)"
+                  >
+                    Editar</button
+                  ><button class="link-button" type="button" (click)="deleteProvince(item)">
+                    Eliminar
+                  </button></span
+                >
+              }
+            </li>
+          } @empty {
+            <li class="empty-row">Sin provincias</li>
+          }
+        </ul>
+      </article>
+      <article class="catalog-card">
+        <h3>Ciudades</h3>
+        <form class="inline-form" (ngSubmit)="addCity()">
+          <input
+            [(ngModel)]="newValues['city']"
+            name="new-city"
+            maxlength="100"
+            placeholder="Nueva ciudad"
+            [disabled]="!selectedProvince()"
+          /><button class="button button--primary" type="submit" [disabled]="!selectedProvince()">
+            Agregar
+          </button>
+        </form>
+        <ul class="crud-list">
+          @for (item of cities(); track item.id) {
+            <li>
+              @if (editing === 'city-' + item.id) {
+                <input [(ngModel)]="draft" maxlength="100" (keyup.enter)="saveCity(item)" /><button
+                  class="link-button link-button--save"
+                  type="button"
+                  (click)="saveCity(item)"
+                >
+                  Guardar</button
+                ><button class="link-button" type="button" (click)="cancelEdit()">Cancelar</button>
+              } @else {
+                <span>{{ item.nombre }}</span
+                ><span class="crud-actions"
+                  ><button
+                    class="link-button link-button--edit"
+                    type="button"
+                    (click)="edit('city', item)"
+                  >
+                    Editar</button
+                  ><button class="link-button" type="button" (click)="deleteCity(item)">
+                    Eliminar
+                  </button></span
+                >
+              }
+            </li>
+          } @empty {
+            <li class="empty-row">
+              {{ selectedProvince() ? 'Sin ciudades' : 'Seleccioná una provincia' }}
+            </li>
+          }
+        </ul>
+      </article>
+    </div>
+  </section>
+</section>

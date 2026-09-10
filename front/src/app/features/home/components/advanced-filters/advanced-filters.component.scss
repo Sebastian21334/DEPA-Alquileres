@@ -1,20 +1,24 @@
-
 .advanced {
-  --accent: var(--color-primary);
-  --accent-dark: var(--color-primary-dark);
+  --accent: var(--color-accent);
 
   background: var(--accent);
-  padding-bottom: 1.5rem;
+  padding-bottom: 0;
+  border-radius: 7px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 14px 20px #0005;
 }
 
+.advanced--primary {
+  --accent: var(--color-primary);
+}
 
 .advanced--secondary {
   --accent: var(--color-secondary);
-  --accent-dark: var(--color-secondary-dark);
 }
 
 .advanced__inner {
-  max-width: var(--max-width-page);
+  max-width: 1440px;
   margin: 0 auto;
   padding: 0 1rem;
 }
@@ -29,38 +33,48 @@
   border: none;
   color: var(--color-primary-contrast);
   font-weight: 700;
-  font-size: 1.15rem;
+  font-size: clamp(1.2rem, 2.2vw, 1.875rem);
   padding: 1.1rem 0;
   cursor: pointer;
 }
 
-
 .advanced__chevron {
-  font-size: 1.3rem;
-  line-height: 1;
+  width: 20px;
+  height: 20px;
+  border-right: 3px solid white;
+  border-bottom: 3px solid white;
+  transform: rotate(45deg);
+  margin: -8px 0 0 12px;
   transition: transform 0.15s ease;
 }
 
-.advanced__chevron--open {
-  transform: rotate(180deg);
+.advanced[open] .advanced__chevron {
+  transform: rotate(225deg);
+  margin-top: 8px;
 }
 
 .advanced__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px 20px;
+  padding: 28px 40px;
 }
 
 .filter-card {
   background: var(--color-surface);
-  border-radius: var(--radius-md);
+  border-radius: 7px;
+  flex: 1 1 260px;
+  max-width: 380px;
+  min-height: 155px;
   padding: 1rem 1.1rem;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 12px 16px #0004;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
 }
 
 .filter-card--off {
@@ -85,12 +99,12 @@
   align-items: center;
   gap: 0.45rem;
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 1.2rem;
   color: var(--color-text);
 }
 
 .filter-card__title svg {
-  color: var(--accent, var(--color-primary));
+  color: var(--color-accent);
   flex-shrink: 0;
 }
 
@@ -113,7 +127,7 @@
   border: 1px solid var(--color-border);
   font-size: 0.85rem;
   color: var(--color-text);
-  background: var(--color-bg);
+  background: white;
 }
 
 .checkbox {
@@ -121,13 +135,13 @@
   align-items: center;
   gap: 0.4rem;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--color-text);
   cursor: pointer;
 }
 
 .checkbox input {
-  accent-color: var(--accent, var(--color-primary));
+  accent-color: var(--color-accent);
 }
 
 .chips {
@@ -140,7 +154,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background: var(--color-accent);
+  background: #ffd699;
   color: #4a2e00;
   font-size: 0.78rem;
   font-weight: 700;
@@ -183,7 +197,7 @@
 }
 
 .switch--on {
-  background: var(--accent, var(--color-primary));
+  background: var(--color-accent);
 }
 
 .switch--on::after {
@@ -203,7 +217,7 @@
   border: 1px solid var(--color-border);
   font-size: 0.85rem;
   color: var(--color-text);
-  background: var(--color-bg);
+  background: white;
 }
 
 .price-slider {
@@ -235,7 +249,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--accent, var(--color-primary));
+  background: var(--color-accent);
   border: 2px solid #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   margin-top: -6px;
@@ -253,7 +267,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--accent, var(--color-primary));
+  background: var(--color-accent);
   border: 2px solid #fff;
   cursor: pointer;
 }
@@ -269,6 +283,7 @@
 .advanced__footer {
   display: flex;
   justify-content: flex-end;
+  padding: 0 40px 24px;
 }
 
 .advanced__clear {
@@ -283,4 +298,39 @@
 
 .advanced__clear:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+.advanced[open] > .advanced__toggle {
+  box-shadow: 0 10px 15px #0003;
+}
+.precio-inputs input {
+  min-width: 0;
+}
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 3px solid #124aa6;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .advanced__grid {
+    padding: 20px 0;
+    gap: 18px;
+  }
+  .filter-card {
+    max-width: none;
+  }
+  .advanced__footer {
+    padding: 0 0 20px;
+  }
+}
+
+.advanced__toggle {
+  list-style: none;
+}
+.advanced__toggle::-webkit-details-marker {
+  display: none;
+}
+.advanced__toggle:focus-visible {
+  outline: 3px solid white;
+  outline-offset: -5px;
 }

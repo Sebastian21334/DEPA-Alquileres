@@ -1,5 +1,4 @@
 import { Component, input } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Publicacion } from '../../models/publicacion.model';
 import {
@@ -21,7 +20,6 @@ import {
   standalone: true,
   imports: [
     RouterLink,
-    DecimalPipe,
     LucideBookmark,
     LucideBadgeCheck,
     LucideHexagon,
@@ -35,6 +33,14 @@ import {
 })
 export class ListingCardComponent {
   readonly publicacion = input.required<Publicacion>();
+
+  protected get precioFormateado(): string {
+    return Number(this.publicacion().precio).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+  }
+
+  protected get esTemporaria(): boolean {
+    return this.publicacion().modalidad?.nombre.toLowerCase().includes('tempor') ?? false;
+  }
 
   protected get imagenPrincipal(): string | null {
     return this.publicacion().imagenes?.[0]?.url ?? null;

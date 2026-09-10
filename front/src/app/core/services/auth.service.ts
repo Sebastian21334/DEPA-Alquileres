@@ -58,6 +58,14 @@ export class AuthService {
     return this.currentUser() !== null;
   }
 
+  get token(): string | null {
+    return this.isBrowser ? localStorage.getItem(TOKEN_KEY) : null;
+  }
+
+  get isAdmin(): boolean {
+    return this.currentUser()?.rol === 'Administrador';
+  }
+
   /** POST /auth/register — crea la cuenta (siempre como Inquilino) y dispara el mail de verificación. */
   register(dto: RegisterDto): Observable<MensajeResponse> {
     return this.http.post<MensajeResponse>(`${this.baseUrl}/register`, dto);
