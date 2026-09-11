@@ -1,0 +1,57 @@
+<section class="detail-shell" aria-live="polite">
+  @if (loading()) {
+    <div class="state"><app-spinner /><p>Cargando publicación…</p></div>
+  } @else if (error()) {
+    <div class="state state--error"><h1>Publicación no disponible</h1><p>{{ error() }}</p><a routerLink="/">Volver a las publicaciones</a></div>
+  } @else if (publication(); as item) {
+    <div class="gallery">
+      <div class="gallery__main">
+        @if (images().length) {
+          <img [src]="images()[selectedImage()].url" [alt]="item.titulo" />
+          @if (images().length > 1) {
+            <button class="gallery__arrow gallery__arrow--left" type="button" (click)="previousImage()" aria-label="Imagen anterior">‹</button>
+            <button class="gallery__arrow gallery__arrow--right" type="button" (click)="nextImage()" aria-label="Imagen siguiente">›</button>
+            <span class="gallery__count">{{ selectedImage() + 1 }}/{{ images().length }}</span>
+          }
+        } @else { <div class="gallery__empty">Sin imágenes disponibles</div> }
+      </div>
+      @if (images().length > 1) {
+        <div class="gallery__thumbs">
+          @for (image of images(); track image.id; let index = $index) {
+            <button type="button" [class.is-active]="selectedImage() === index" (click)="selectImage(index)" [attr.aria-label]="'Ver imagen ' + (index + 1)"><img [src]="image.url" alt="" /></button>
+          }
+        </div>
+      }
+    </div>
+    <div class="content">
+      <div class="intro">
+        <div class="badges">
+          @if (item.modalidad?.nombre) { <span class="badge">{{ item.modalidad?.nombre }}</span> }
+          @if (item.anunciante?.verificado) { <span class="badge badge--verified">✓ Anunciante verificado</span> }
+        </div>
+        <h1>{{ item.titulo }}</h1><p class="location">⌖ {{ location(item) }}</p>
+      </div>
+      <section class="features"><h2>Características principales</h2><div class="features__grid">
+        <div><span>⌂</span><strong>{{ item.cantidad_ambientes }} ambientes</strong><small>Cantidad de ambientes</small></div>
+        <div><span>▱</span><strong>{{ item.superficie }} m²</strong><small>Superficie total</small></div>
+        @if (item.tipoPropiedad?.nombre) { <div><span>◇</span><strong>{{ item.tipoPropiedad?.nombre }}</strong><small>Tipo de propiedad</small></div> }
+        @if (item.modalidad?.nombre) { <div><span>⌛</span><strong>{{ item.modalidad?.nombre }}</strong><small>Modalidad de alquiler</small></div> }
+      </div></section>
+      <section class="description"><h2>Descripción</h2><p>{{ item.descripcion }}</p></section>
+      <section class="price-panel">
+        <div><strong>{{ price(item) }}</strong><span>{{ item.modalidad?.nombre ?? 'Alquiler' }}</span></div>
+        <div class="actions">
+          @if (whatsappUrl(item); as whatsapp) { <a class="button button--whatsapp" [href]="whatsapp" target="_blank" rel="noopener">Contactar por WhatsApp</a> }
+          @if (emailUrl(item); as email) { <a class="button button--primary" [href]="email">Enviar mensaje</a> }
+        </div>
+      </section>
+      @if (item.anunciante; as advertiser) {
+        <section class="advertiser-card">
+          <div class="avatar">{{ advertiserName().charAt(0) }}</div>
+          <div><h2>{{ advertiserName() }}</h2><p>{{ advertiser.tipoAnunciante?.nombre ?? 'Anunciante' }}</p>@if (advertiser.verificado) { <span class="verified">✓ Identidad verificada</span> }</div>
+          <a class="button button--primary" [routerLink]="['/perfil', advertiser.idUsuario]">Ver perfil y publicaciones</a>
+        </section>
+      }
+    </div>
+  }
+</section>

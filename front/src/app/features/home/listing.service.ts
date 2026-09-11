@@ -29,4 +29,14 @@ export class ListingService {
   getActivas(): Observable<Publicacion[]> {
     return this.http.get<Publicacion[]>(this.baseUrl);
   }
+
+  getById(id: number): Observable<Publicacion> {
+    return this.http.get<Publicacion>(`${this.baseUrl}/${id}`);
+  }
+
+  getByAdvertiser(id: number): Observable<Publicacion[]> {
+    return this.http.get<Publicacion[]>(`${this.baseUrl}/anunciante/${id}`, {
+      params: { activa: 'true' },
+    });
+  }
 }

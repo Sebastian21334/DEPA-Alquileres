@@ -1,0 +1,26 @@
+<section class="profile-shell" aria-live="polite">
+  @if (loading()) { <div class="state"><app-spinner /><p>Cargando perfil…</p></div> }
+  @else if (error()) { <div class="state"><h1>Perfil no disponible</h1><p>{{ error() }}</p><a routerLink="/">Volver al inicio</a></div> }
+  @else if (advertiser(); as owner) {
+    <div class="profile-layout">
+      <aside>
+        <section class="owner-card">
+          <div class="avatar">{{ name().charAt(0) }}</div><h1>{{ name() }}</h1>
+          @if (owner.verificado) { <span class="verified">✓ Identidad verificada</span> }
+          <p>{{ owner.tipoAnunciante?.nombre ?? 'Anunciante' }}</p>
+          @if (locations()) { <p>⌖ {{ locations() }}</p> }
+          <strong>{{ publications().length }} {{ publications().length === 1 ? 'publicación activa' : 'publicaciones activas' }}</strong>
+          @if (whatsappUrl(); as whatsapp) { <a class="contact" [href]="whatsapp" target="_blank" rel="noopener">Contactar por WhatsApp</a> }
+        </section>
+        <section class="public-data"><h2>Datos públicos</h2>
+          @if (owner.usuario?.email) { <span>Email de contacto</span><a [href]="'mailto:' + owner.usuario?.email">{{ owner.usuario?.email }}</a> }
+          @if (owner.numero_contacto) { <span>Teléfono</span><p>{{ owner.numero_contacto }}</p> }
+          <span>Tipo de anunciante</span><p>{{ owner.tipoAnunciante?.nombre ?? 'Anunciante' }}</p>
+        </section>
+      </aside>
+      <main><div class="heading"><h2>Publicaciones de {{ owner.usuario?.nombre ?? name() }}</h2><span>{{ publications().length }} propiedades</span></div>
+        <div class="listings">@for (item of publications(); track item.id) { <app-listing-card [publicacion]="item" /> }</div>
+      </main>
+    </div>
+  }
+</section>

@@ -1,0 +1,31 @@
+:host { display: block; }
+.detail-shell { min-height: 65vh; background: var(--color-surface); }
+.gallery { max-width: 1440px; margin: 0 auto; }
+.gallery__main { position: relative; height: clamp(300px, 48vw, 620px); overflow: hidden; background: #e7e8eb; }
+.gallery__main > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery__empty, .state { min-height: 55vh; display: grid; place-content: center; justify-items: center; color: var(--color-text-muted); }
+.gallery__arrow { position: absolute; top: 50%; translate: 0 -50%; width: 42px; height: 42px; border: 0; border-radius: 50%; color: white; background: #111a; font-size: 2rem; cursor: pointer; }
+.gallery__arrow--left { left: 18px; } .gallery__arrow--right { right: 18px; }
+.gallery__count { position: absolute; left: 18px; bottom: 16px; padding: 5px 10px; border-radius: 999px; color: white; background: #111b; font-size: .78rem; }
+.gallery__thumbs { display: flex; gap: 10px; padding: 12px 16px 0; overflow-x: auto; }
+.gallery__thumbs button { width: 152px; height: 86px; flex: 0 0 auto; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: none; cursor: pointer; }
+.gallery__thumbs button.is-active { border-color: var(--color-accent); }.gallery__thumbs img { width: 100%; height: 100%; object-fit: cover; }
+.content { max-width: var(--max-width-page); margin: 0 auto; padding: 26px 24px 56px; }
+.intro h1 { margin: 10px 0 6px; font-size: clamp(1.65rem, 3vw, 2.55rem); }.location { margin: 0; color: var(--color-text-muted); }
+.badges { display: flex; gap: 8px; flex-wrap: wrap; }.badge { padding: 5px 10px; border-radius: 999px; background: var(--color-primary); color: white; font-size: .75rem; font-weight: 700; }
+.badge--verified, .verified { background: var(--color-secondary-light); color: var(--color-secondary); }
+.features, .description { padding: 28px 0; border-top: 1px solid var(--color-border); }.features { margin-top: 26px; } h2 { margin: 0 0 14px; font-size: 1rem; }
+.features__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.features__grid > div { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; padding: 14px; border: 1px solid var(--color-border); border-radius: 9px; }
+.features__grid span { grid-row: 1 / 3; color: var(--color-accent); font-size: 1.25rem; }.features__grid strong { font-size: .9rem; }.features__grid small { color: var(--color-text-muted); }
+.description p { margin: 0; color: #475467; line-height: 1.7; white-space: pre-line; }
+.price-panel { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-bg); }
+.price-panel > div:first-child { display: flex; flex-direction: column; }.price-panel strong { font-size: clamp(1.7rem, 3vw, 2.35rem); }.price-panel span { color: var(--color-text-muted); }
+.actions { display: flex; gap: 12px; flex: 1; justify-content: flex-end; }
+.button { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: 0 22px; border-radius: 7px; color: white; text-decoration: none; font-weight: 700; }.button--primary { background: var(--color-accent); }.button--whatsapp { background: #25d366; }
+.advertiser-card { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 16px; margin-top: 30px; padding: 22px; border: 1px solid var(--color-border); border-radius: 14px; }
+.avatar { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, var(--color-accent), var(--color-primary)); color: white; font-size: 1.5rem; font-weight: 800; }
+.advertiser-card h2 { margin: 0 0 4px; font-size: 1.15rem; }.advertiser-card p { margin: 0 0 6px; color: var(--color-text-muted); }.verified { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+.state--error { text-align: center; }.state--error a { color: var(--color-primary); font-weight: 700; }
+@media (max-width: 760px) { .features__grid { grid-template-columns: repeat(2, 1fr); }.price-panel { align-items: stretch; flex-direction: column; }.actions { justify-content: stretch; flex-direction: column; }.button { width: 100%; }.advertiser-card { grid-template-columns: auto 1fr; }.advertiser-card .button { grid-column: 1 / -1; } }
+@media (max-width: 480px) { .content { padding-inline: 16px; }.gallery__main { height: 280px; }.features__grid { grid-template-columns: 1fr; } }

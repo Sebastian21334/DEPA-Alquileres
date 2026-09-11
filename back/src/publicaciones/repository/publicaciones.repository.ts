@@ -59,7 +59,16 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         anunciante: { idUsuario: idAnunciante },
         ...(soloActivas ? { activa: true } : {}),
       },
-      relations: { tipoPropiedad: true, ciudad: true, provincia: true },
+      relations: {
+        tipoPropiedad: true,
+        ciudad: true,
+        provincia: true,
+        modalidad: true,
+        tipoMoneda: true,
+        imagenes: true,
+        anunciante: { usuario: true, tipoAnunciante: true },
+      },
+      order: { fecha_publicacion: 'DESC' },
     });
   }
 

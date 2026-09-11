@@ -14,6 +14,22 @@ export const routes: Routes = [
     title: 'SIAlquileres — Encontrá tu próximo hogar',
   },
   {
+    path: 'publicaciones/:id',
+    loadComponent: () =>
+      import('./features/publication-detail/publication-detail.component').then(
+        (m) => m.PublicationDetailComponent,
+      ),
+    title: 'Detalle de publicación — SIAlquileres',
+  },
+  {
+    path: 'perfil/:id',
+    loadComponent: () =>
+      import('./features/advertiser-profile/advertiser-profile.component').then(
+        (m) => m.AdvertiserProfileComponent,
+      ),
+    title: 'Perfil del anunciante — SIAlquileres',
+  },
+  {
     path: 'login',
     loadComponent: () =>
       import('./features/auth/login/login.component').then((m) => m.LoginComponent),
