@@ -1,20 +1,109 @@
 .footer {
-  border-top: 1px solid var(--color-dark-border);
-  background: var(--color-dark);
-  color: var(--color-dark-text-muted);
-  margin-top: 0;
+  background: #fff;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
 }
 
 .footer__inner {
   max-width: var(--max-width-page);
   margin: 0 auto;
-  padding: 1.5rem 1rem;
-  text-align: center;
-  color: inherit;
-  font-size: 0.85rem;
+  padding: 2.75rem 1.25rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 2rem;
+  flex-wrap: wrap;
 }
 
-.footer__muted {
-  margin-top: 0.25rem;
-  opacity: 0.8;
+.footer__brand {
+  max-width: 340px;
+}
+.footer__logo {
+  height: 48px;
+  width: auto;
+  display: block;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.footer__logo:hover {
+  transform: scale(1.06) rotate(-2deg);
+}
+.footer__brand p {
+  margin: 1rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #344054;
+}
+
+.footer__cols {
+  display: flex;
+  gap: 4rem;
+}
+.footer__cols div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.footer__cols h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+.footer__cols a {
+  position: relative;
+  width: fit-content;
+  font-size: 0.88rem;
+  color: #475467;
+  text-decoration: none;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+/* Subrayado naranja que crece al pasar el mouse */
+.footer__cols a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 2px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+.footer__cols a:hover {
+  color: var(--color-text);
+  transform: translateX(3px);
+}
+.footer__cols a:hover::after {
+  transform: scaleX(1);
+}
+
+.footer__bottom {
+  max-width: var(--max-width-page);
+  margin: 0 auto;
+  padding: 1.1rem 1.25rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+.footer__bottom p {
+  margin: 0;
+}
+.footer__heart {
+  display: inline-block;
+  color: var(--color-primary);
+  animation: heartbeat 1.6s ease-in-out infinite;
+}
+@keyframes heartbeat {
+  0%, 60%, 100% { transform: scale(1); }
+  20% { transform: scale(1.3); }
+  40% { transform: scale(0.95); }
+}
+
+@media (max-width: 600px) {
+  .footer__cols {
+    gap: 2.5rem;
+  }
 }

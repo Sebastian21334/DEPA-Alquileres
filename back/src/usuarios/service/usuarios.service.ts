@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
 import type { IUsuariosRepository } from '../repository/usuarios.repository.interface';
@@ -14,9 +15,14 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import * as crypto from 'crypto';
+import sharp from 'sharp';
+import { BlobServiceClient } from '@azure/storage-blob';
+import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
 
 @Injectable()
 export class UsuariosService {
+  private readonly logger = new Logger(UsuariosService.name);
+
   constructor(
     @Inject(USUARIOS_REPOSITORY)
     private usuariosRepo: IUsuariosRepository,
@@ -102,6 +108,82 @@ export class UsuariosService {
     };
   }
 
+  /** Devuelve los datos del usuario autenticado sin exponer secretos de cuenta. */
+  async obtenerPerfil(idUsuario: number) {
+    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    return this.usuarioSinSecretos(usuario);
+  }
+
+  /** Procesa y guarda la foto de perfil del usuario, reemplazando la anterior. */
+  async actualizarFoto(idUsuario: number, archivo: ArchivoSubido) {
+    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+
+    let contenido: Buffer;
+    try {
+      // Sharp valida que sea una imagen real y la recorta cuadrada para el avatar.
+      contenido = await sharp(archivo.buffer)
+        .rotate()
+        .resize(400, 400, { fit: 'cover' })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+    } catch {
+      throw new BadRequestException('El archivo no es una imagen válida');
+    }
+
+    // Va al mismo contenedor público que las fotos de publicaciones, así la URL
+    // es permanente y se puede mostrar sin firmar.
+    const blob = this.contenedorImagenes().getBlockBlobClient(
+      `usuarios/${idUsuario}/perfil-${Date.now()}.jpg`,
+    );
+    await blob.uploadData(contenido, { blobHTTPHeaders: { blobContentType: 'image/jpeg' } });
+
+    const anterior = usuario.foto_url;
+    usuario.foto_url = blob.url;
+    const actualizado = await this.usuariosRepo.guardar(usuario);
+    await this.borrarFotoAnterior(anterior);
+    return this.usuarioSinSecretos(actualizado);
+  }
+
+  /** Quita la foto de perfil y vuelve a mostrarse la inicial. */
+  async eliminarFoto(idUsuario: number) {
+    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    const anterior = usuario.foto_url;
+    usuario.foto_url = null;
+    const actualizado = await this.usuariosRepo.guardar(usuario);
+    await this.borrarFotoAnterior(anterior);
+    return this.usuarioSinSecretos(actualizado);
+  }
+
+  private contenedorImagenes() {
+    const connectionString = this.configService.get<string>('AZURE_STORAGE_CONNECTION_STRING');
+    if (!connectionString) throw new Error('Falta AZURE_STORAGE_CONNECTION_STRING');
+    const container = this.configService.get<string>('AZURE_STORAGE_CONTAINER') ?? 'imagenes';
+    return BlobServiceClient.fromConnectionString(connectionString).getContainerClient(container);
+  }
+
+  private async borrarFotoAnterior(url: string | null) {
+    if (!url) return;
+    const contenedor = this.contenedorImagenes();
+    // Solo se borran blobs propios; nunca una URL externa.
+    if (!url.startsWith(contenedor.url)) return;
+    try {
+      const nombreBlob = decodeURIComponent(new URL(url).pathname.split('/').slice(2).join('/'));
+      await contenedor.deleteBlob(nombreBlob);
+    } catch (error) {
+      // La foto nueva ya quedó guardada; un blob huérfano no debe romper la operación.
+      this.logger.warn(`No se pudo borrar la foto anterior ${url}: ${(error as Error).message}`);
+    }
+  }
+
   /** Lista usuarios para el panel administrativo sin exponer secretos de cuenta. */
   async listarTodos() {
     const usuarios = await this.usuariosRepo.listarTodos();
@@ -118,6 +200,7 @@ export class UsuariosService {
       telefono: usuario.telefono,
       bloqueado: usuario.bloqueado,
       email_verificado: usuario.email_verificado,
+      foto_url: usuario.foto_url,
       rol: usuario.rol
         ? {
             id: usuario.rol.id,
@@ -138,7 +221,7 @@ export class UsuariosService {
     // El cliente nunca manda el rol: el primer usuario administra el sistema y
     // todos los siguientes comienzan como usuarios normales.
     const cantidadUsuarios = await this.usuariosRepo.contarUsuarios();
-    const nombreRol = cantidadUsuarios === 0 ? 'Administrador' : 'Usuario';
+    const nombreRol = cantidadUsuarios === 0 ? 'Administrador' : 'Inquilino';
 
     let rol = await this.catalogosService.getRolPorNombre(nombreRol);
 

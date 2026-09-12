@@ -1,16 +1,21 @@
-<header class="navbar">
+<header class="navbar" [class.navbar--scrolled]="scrolled()">
   <div class="navbar__inner">
     <div class="navbar__start">
-      <!-- Menú hamburguesa ajustado -->
-      <button type="button" class="navbar__menu" aria-label="Abrir menú">☰</button>
+      <button
+        type="button"
+        class="navbar__menu"
+        aria-label="Abrir menú"
+        aria-controls="menu-lateral"
+        [attr.aria-expanded]="menuAbierto()"
+        (click)="abrirMenu()"
+      >☰</button>
 
       @if (auth.isAuthenticated) {
-        <a routerLink="/perfil" class="navbar__avatar" title="{{ auth.currentUser()?.email }}">
-          {{ (auth.currentUser()?.email ?? '?').charAt(0).toUpperCase() }}
+        <a routerLink="/mi-perfil" class="navbar__user" title="Mi perfil">
+          <app-avatar class="navbar__avatar" [foto]="perfil.usuario()?.foto_url" [nombre]="nombreVisible()" />
+          <span class="navbar__link navbar__name">{{ nombreVisible() }}</span>
         </a>
-        <button type="button" class="navbar__link" (click)="logout()">Salir</button>
       } @else {
-        <!-- Avatar actualizado con ícono SVG estilo prototipo -->
         <span class="navbar__avatar navbar__avatar--placeholder" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
             <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -20,14 +25,133 @@
       }
     </div>
 
-    <!-- Logo DEPA (Debes colocar la ruta de tu imagen real) -->
     <a routerLink="/" class="navbar__logo" aria-label="Ir al inicio">
       <img src="/images/Logo.png" alt="DEPA" class="navbar__logo-img">
     </a>
 
     <div class="navbar__end">
       <span class="navbar__owner-hint">¿Sos propietario?</span>
-      <a routerLink="/publicaciones/nueva" class="btn btn--primary">Publicar</a>
+      <a routerLink="/publicaciones/nueva" class="btn btn--primary shine">Publicar</a>
     </div>
   </div>
 </header>
+
+<div class="drawer-overlay" [class.is-open]="menuAbierto()" (click)="cerrarMenu()" aria-hidden="true"></div>
+
+<nav
+  id="menu-lateral"
+  class="drawer"
+  [class.is-open]="menuAbierto()"
+  [attr.aria-hidden]="!menuAbierto()"
+  [attr.inert]="menuAbierto() ? null : ''"
+  aria-label="Menú principal"
+>
+  <div class="drawer__head">
+    <img src="/images/Logo.png" alt="DEPA" class="drawer__logo">
+    <button type="button" class="drawer__close" aria-label="Cerrar menú" (click)="cerrarMenu()">
+      <svg lucideX [size]="22"></svg>
+    </button>
+  </div>
+
+  @if (auth.isAuthenticated) {
+    <a routerLink="/mi-perfil" class="drawer__user">
+      <app-avatar class="navbar__avatar" [foto]="perfil.usuario()?.foto_url" [nombre]="nombreVisible()" />
+      <span class="drawer__user-text">
+        <strong>{{ nombreVisible() }}</strong>
+        <small>
+          @if (perfil.esAnuncianteVerificado()) { Anunciante verificado } @else { {{ etiquetaRol(auth.currentUser()?.rol) }} }
+        </small>
+      </span>
+    </a>
+  }
+
+  <ul class="drawer__list">
+    <li>
+      <a routerLink="/" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" class="drawer__item">
+        <svg lucideHouse [size]="20"></svg> Inicio
+      </a>
+    </li>
+
+    @if (auth.isAuthenticated) {
+      <li>
+        <a routerLink="/mi-perfil" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" class="drawer__item">
+          <svg lucideUser [size]="20"></svg> Mi perfil
+        </a>
+      </li>
+
+      <li>
+        <button type="button" class="drawer__item" [attr.aria-expanded]="chatsAbiertos()" (click)="alternarChats()">
+          <svg lucideMessageCircle [size]="20"></svg> Mis chats
+          <svg lucideChevronDown [size]="18" class="drawer__chevron" [class.is-open]="chatsAbiertos()"></svg>
+        </button>
+        @if (chatsAbiertos()) {
+          <div class="drawer__chats">
+            @if (cargandoChats()) {
+              <p class="drawer__muted">Cargando chats…</p>
+            } @else if (errorChats()) {
+              <p class="drawer__muted drawer__muted--error">{{ errorChats() }}</p>
+            } @else {
+              @for (conv of conversaciones(); track conv.idPublicacion + '-' + conv.idOtroUsuario) {
+                <button type="button" class="drawer__chat" (click)="abrirChat(conv)">
+                  <app-avatar class="drawer__chat-avatar" [foto]="otro(conv).foto_url" [nombre]="nombreOtro(conv)" />
+                  <span class="drawer__chat-text">
+                    <strong>{{ nombreOtro(conv) }}</strong>
+                    <small class="drawer__chat-title">{{ conv.ultimoMensaje.publicacion.titulo }}</small>
+                    <small>{{ conv.ultimoMensaje.texto }}</small>
+                  </span>
+                </button>
+              } @empty {
+                <p class="drawer__muted">Todavía no tenés conversaciones. Escribile a un anunciante desde una publicación.</p>
+              }
+            }
+          </div>
+        }
+      </li>
+
+      @if (perfil.esAnuncianteVerificado()) {
+        <li class="drawer__section">Anunciante</li>
+        <li>
+          <a routerLink="/publicaciones/nueva" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideSquarePlus [size]="20"></svg> Publicar propiedad
+          </a>
+        </li>
+        <li>
+          <a routerLink="/mis-publicaciones" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideLayoutList [size]="20"></svg> Mis publicaciones
+          </a>
+        </li>
+      } @else {
+        <li>
+          <a routerLink="/mi-perfil/anunciante" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideBadgeCheck [size]="20"></svg> Quiero ser anunciante
+          </a>
+        </li>
+      }
+
+      @if (auth.isAdmin) {
+        <li>
+          <a routerLink="/admin" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideShieldCheck [size]="20"></svg> Panel administrativo
+          </a>
+        </li>
+      }
+
+      <li class="drawer__bottom">
+        <button type="button" class="drawer__item drawer__item--danger" (click)="logout()">
+          <svg lucideLogOut [size]="20"></svg> Cerrar sesión
+        </button>
+      </li>
+    } @else {
+      <li>
+        <a routerLink="/login" routerLinkActive="is-active" class="drawer__item">
+          <svg lucideLogIn [size]="20"></svg> Ingresar
+        </a>
+      </li>
+      <li>
+        <a routerLink="/registro" routerLinkActive="is-active" class="drawer__item">
+          <svg lucideUserPlus [size]="20"></svg> Crear cuenta
+        </a>
+      </li>
+    }
+  </ul>
+</nav>

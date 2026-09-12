@@ -2,32 +2,21 @@ import { Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Publicacion } from '../../models/publicacion.model';
 import {
-  LucideBookmark,
-  LucideBadgeCheck,
-  LucideHexagon,
-  LucideRuler,
-  LucideHome,
-  LucideMapPin,
   LucideArrowRight,
+  LucideBadgeCheck,
+  LucideBookmark,
+  LucideLayoutGrid,
+  LucideMapPin,
+  LucideRuler,
 } from '@lucide/angular';
 
-// Tarjeta reutilizable de una publicación. No está atada al estilo visual del
-// prototipo, solo a su contenido: imagen principal, indicador de "Publicación",
-// indicador de "Dueño verificado" (si anunciante.verificado), título, ubicación,
-// ambientes/m², precio y botón "Ver publicación" -> /publicaciones/:id.
+// Tarjeta reutilizable de una publicación (prototipo "Card"): foto con badge de
+// modalidad y "Dueño Verificado", título + ubicación, columna de características
+// (ambientes y m², que son las que existen en la entidad) y precio con botón "Ver".
 @Component({
   selector: 'app-listing-card',
   standalone: true,
-  imports: [
-    RouterLink,
-    LucideBookmark,
-    LucideBadgeCheck,
-    LucideHexagon,
-    LucideRuler,
-    LucideHome,
-    LucideMapPin,
-    LucideArrowRight,
-  ],
+  imports: [RouterLink, LucideArrowRight, LucideBadgeCheck, LucideBookmark, LucideLayoutGrid, LucideMapPin, LucideRuler],
   templateUrl: './listing-card.component.html',
   styleUrl: './listing-card.component.scss',
 })
@@ -36,6 +25,10 @@ export class ListingCardComponent {
 
   protected get precioFormateado(): string {
     return Number(this.publicacion().precio).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+  }
+
+  protected get superficie(): string {
+    return Number(this.publicacion().superficie).toLocaleString('es-AR', { maximumFractionDigits: 0 });
   }
 
   protected get esTemporaria(): boolean {

@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Output, input } from '@angular/core';
 import { ListingCardComponent } from '../../../../shared/components/listing-card/listing-card.component';
 import { Publicacion } from '../../../../shared/models/publicacion.model';
+import { RevealDirective } from '../../../../shared/directives/reveal.directive';
 
 // Grilla de resultados: estado de carga (skeletons), estado vacío y paginación
 // simple ("Cargar más"). El backend actual no pagina server-side, así que
@@ -9,7 +10,7 @@ import { Publicacion } from '../../../../shared/models/publicacion.model';
 @Component({
   selector: 'app-listing-grid',
   standalone: true,
-  imports: [ListingCardComponent],
+  imports: [ListingCardComponent, RevealDirective],
   templateUrl: './listing-grid.component.html',
   styleUrl: './listing-grid.component.scss',
 })

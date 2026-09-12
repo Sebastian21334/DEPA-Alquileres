@@ -1,0 +1,52 @@
+<section class="chat" [class.is-min]="chat().minimizado" [attr.aria-label]="'Chat con ' + chat().nombreOtro">
+  <header class="chat__head" (click)="chatService.alternarMinimizado(chat())">
+    <span class="chat__avatar"><app-avatar class="chat__avatar-img" [foto]="chat().fotoOtro" [nombre]="chat().nombreOtro" /></span>
+    <span class="chat__title">
+      <strong>{{ chat().nombreOtro }}</strong>
+      <small>{{ chat().titulo }}</small>
+    </span>
+    <button type="button" aria-label="Minimizar" (click)="$event.stopPropagation(); chatService.alternarMinimizado(chat())">
+      <svg lucideMinus [size]="18"></svg>
+    </button>
+    <button type="button" aria-label="Cerrar chat" (click)="$event.stopPropagation(); chatService.cerrar(chat())">
+      <svg lucideX [size]="18"></svg>
+    </button>
+  </header>
+
+  @if (!chat().minimizado) {
+    <a class="chat__link" [routerLink]="['/publicaciones', chat().idPublicacion]">Ver publicación</a>
+
+    <div class="chat__body" #lista>
+      @if (cargando()) {
+        <p class="chat__empty">Cargando…</p>
+      } @else {
+        @for (m of mensajes(); track m.id) {
+          <div class="chat__msg" [class.is-mine]="m.origenUsuario.id === miId()">
+            <p>{{ m.texto }}</p>
+            <time>{{ hora(m.fecha) }}</time>
+          </div>
+        } @empty {
+          <p class="chat__empty">Escribí tu consulta a {{ chat().nombreOtro }}.</p>
+        }
+      }
+    </div>
+
+    @if (error()) {
+      <p class="chat__error" role="alert">{{ error() }}</p>
+    }
+
+    <form class="chat__form" (ngSubmit)="enviar()">
+      <input
+        name="texto"
+        [(ngModel)]="texto"
+        maxlength="250"
+        placeholder="Escribí un mensaje…"
+        autocomplete="off"
+        [disabled]="enviando()"
+      />
+      <button type="submit" aria-label="Enviar" [disabled]="enviando() || !texto.trim()">
+        <svg lucideSend [size]="18"></svg>
+      </button>
+    </form>
+  }
+</section>

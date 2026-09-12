@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { BlobServiceClient } from '@azure/storage-blob';
+import { BlobSASPermissions, BlobServiceClient } from '@azure/storage-blob';
 import sharp from 'sharp';
 import { ANUNCIANTES_REPOSITORY } from '../repository/anunciantes.repository.interface';
 import type { IAnunciantesRepository } from '../repository/anunciantes.repository.interface';
@@ -194,7 +194,38 @@ export class AnunciantesService {
 
   /** Devuelve las solicitudes que todavia requieren una decision administrativa. */
   async getPendientes() {
-    return this.verificacionRepo.buscarPendientes();
+    const solicitudes = await this.verificacionRepo.buscarPendientes();
+    // El contenedor de documentos es privado: la URL guardada no se puede abrir
+    // directamente, así que al administrador se le entregan URLs firmadas temporales.
+    return Promise.all(
+      solicitudes.map(async (solicitud) => ({
+        ...solicitud,
+        dni_frente_url: await this.firmarUrlDocumento(solicitud.dni_frente_url),
+        dni_dorso_url: await this.firmarUrlDocumento(solicitud.dni_dorso_url),
+        rostro_url: await this.firmarUrlDocumento(solicitud.rostro_url),
+      })),
+    );
+  }
+
+  /** Genera una URL SAS de solo lectura válida por 15 minutos para un documento privado. */
+  private async firmarUrlDocumento(url: string | null): Promise<string | null> {
+    if (!url) return null;
+    let nombreBlob = url;
+    try {
+      // La URL tiene la forma https://<cuenta>/<container>/<blob>; se descarta el container.
+      nombreBlob = decodeURIComponent(new URL(url).pathname.split('/').slice(2).join('/'));
+      return await this.blobServiceClient
+        .getContainerClient(this.containerName)
+        .getBlobClient(nombreBlob)
+        .generateSasUrl({
+          permissions: BlobSASPermissions.parse('r'),
+          expiresOn: new Date(Date.now() + 15 * 60 * 1000),
+        });
+    } catch (error) {
+      // Sin AccountKey en la connection string no se puede firmar; no se rompe el listado.
+      this.logger.error(`No se pudo firmar la URL del documento ${nombreBlob}`, error as Error);
+      return url;
+    }
   }
 
   /** Busca la solicitud asociada a un usuario concreto. */

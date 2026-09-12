@@ -7,4 +7,5 @@ export interface Usuario {
   apellido: string;
   email?: string;
   telefono?: string;
+  foto_url?: string | null;
 }

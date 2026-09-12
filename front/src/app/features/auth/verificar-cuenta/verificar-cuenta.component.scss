@@ -14,10 +14,10 @@
 .auth__card {
   width: 100%;
   max-width: 440px;
-  background: var(--color-dark-surface);
-  border: 1px solid var(--color-dark-border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
   padding: 2.25rem 2rem;
   text-align: center;
   display: flex;
@@ -27,31 +27,36 @@
 }
 
 .auth__brand {
+  display: block;
+  text-decoration: none;
   font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--color-dark-text);
+  color: var(--color-text);
 }
 
-.auth__brand strong {
-  color: var(--color-primary);
+.auth__brand img {
+  display: block;
+  height: 44px;
+  width: auto;
+  margin: 0 auto;
 }
 
 .auth__title {
   margin: 0;
   font-size: 1.4rem;
   font-weight: 800;
-  color: var(--color-dark-text);
+  color: var(--color-text);
 }
 
 .auth__subtitle {
   margin: 0;
-  color: var(--color-dark-text-muted);
+  color: var(--color-text-muted);
   font-size: 0.95rem;
 }
 
 .auth__subtitle--error {
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .btn {

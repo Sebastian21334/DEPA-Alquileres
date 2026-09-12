@@ -23,14 +23,14 @@
 
     <form class="hero__search" [formGroup]="form()" (ngSubmit)="onSubmit()">
       <label class="hero__search-label" for="ubicacion"
-        ><svg lucideMapPin [size]="28" aria-hidden="true"></svg> Buscá en tu zona:</label
+        ><svg lucideMapPin [size]="28" aria-hidden="true"></svg> Busca en tu zona:</label
       >
       <div class="hero__search-row">
         <input
           id="ubicacion"
           type="text"
           formControlName="ubicacion"
-          placeholder="Ingresá la localidad/región"
+          placeholder="Ingresá la Localidad/Región"
           autocomplete="off"
         />
         <button type="submit" class="btn btn--primary" aria-label="Buscar propiedades">

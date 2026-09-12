@@ -1,7 +1,8 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder } from '@angular/forms';
-import { debounceTime } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { debounceTime, map } from 'rxjs';
 
 import { HeroSearchComponent } from './components/hero-search/hero-search.component';
 import { AdvancedFiltersComponent } from './components/advanced-filters/advanced-filters.component';
@@ -76,6 +77,23 @@ export class HomeComponent {
   constructor() {
     this.cargarPublicaciones();
     this.cargarCatalogos();
+
+    // ?modalidad=largo|temporario (links del footer) preselecciona la modalidad
+    // cuando ya llegó el catálogo, resolviéndola por nombre y no por id fijo.
+    const modalidadQuery = toSignal(
+      inject(ActivatedRoute).queryParamMap.pipe(map((q) => q.get('modalidad'))),
+      { initialValue: null },
+    );
+    effect(() => {
+      const buscada = modalidadQuery()?.toLowerCase();
+      const lista = this.modalidades();
+      if (!buscada || !lista.length) return;
+      const encontrada = lista.find((m) => {
+        const nombre = m.nombre.toLowerCase();
+        return buscada.startsWith('temp') ? nombre.includes('tempor') : !nombre.includes('tempor');
+      });
+      if (encontrada) untracked(() => this.form.controls.idModalidad.setValue(encontrada.id));
+    });
 
     // RNF8: se debounca la entrada de búsqueda para no refiltrar en cada tecla.
     // Se usa getRawValue() (no el valor del evento) porque advanced-filters

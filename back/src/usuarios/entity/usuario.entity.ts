@@ -32,6 +32,10 @@ export class Usuario {
   @Column({ type: 'boolean', default: false })
   email_verificado: boolean;
 
+  // Foto de perfil pública (contenedor de imágenes de Azure). Null = se muestra la inicial.
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  foto_url: string | null;
+
   // select:false (igual que contrasenia): son credenciales de un solo uso y no
   // deben viajar en ninguna respuesta que solo pidió el usuario "normal", por
   // ejemplo el join publico anunciante.usuario en GET /publicaciones.

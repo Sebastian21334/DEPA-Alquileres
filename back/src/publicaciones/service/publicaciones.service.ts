@@ -5,6 +5,7 @@ import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { UbicacionService } from '../../ubicacion/service/ubicacion.service';
+import { Publicacion } from '../entity/publicacion.entity';
 
 @Injectable()
 export class PublicacionesService {
@@ -34,7 +35,9 @@ export class PublicacionesService {
       cantidad_ambientes: dto.cantidad_ambientes,
       superficie: dto.superficie,
       fecha_publicacion: new Date(),
-      activa: true,
+      // Regla de negocio: una publicación no puede estar publicada sin al menos una
+      // imagen. Nace inactiva y ImagenesService la activa al guardar la primera foto.
+      activa: false,
       anunciante,
       tipoMoneda,
       modalidad,
@@ -51,6 +54,13 @@ export class PublicacionesService {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
     if (!publicacion) throw new NotFoundException('Publicación no encontrada');
     return publicacion;
+  }
+
+  /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
+  async activar(publicacion: Publicacion) {
+    if (publicacion.activa) return publicacion;
+    publicacion.activa = true;
+    return this.publicacionesRepo.guardar(publicacion);
   }
 
   /** Devuelve unicamente las publicaciones visibles para visitantes. */
