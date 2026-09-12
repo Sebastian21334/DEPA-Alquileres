@@ -65,12 +65,20 @@ export class PublicacionesService {
 
   /** Devuelve unicamente las publicaciones visibles para visitantes. */
   async listarActivas() {
-    return this.publicacionesRepo.buscarTodasActivas();
+    const activas = await this.publicacionesRepo.buscarTodasActivas();
+    return activas.filter((p) => this.tieneImagenes(p));
   }
 
   /** Lista publicaciones de un anunciante, opcionalmente solo las activas. */
   async listarPorAnunciante(idAnunciante: number, soloActivas = false) {
-    return this.publicacionesRepo.buscarPorAnunciante(idAnunciante, soloActivas);
+    const publicaciones = await this.publicacionesRepo.buscarPorAnunciante(idAnunciante, soloActivas);
+    // El dueño ve todas (para poder completarlas); la vista pública solo las que cumplen la regla.
+    return soloActivas ? publicaciones.filter((p) => this.tieneImagenes(p)) : publicaciones;
+  }
+
+  /** Regla de negocio: una publicación sin imágenes nunca se muestra públicamente. */
+  private tieneImagenes(publicacion: Publicacion): boolean {
+    return (publicacion.imagenes?.length ?? 0) > 0;
   }
 
   /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */
