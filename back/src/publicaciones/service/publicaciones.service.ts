@@ -58,9 +58,12 @@ export class PublicacionesService {
 
   /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
   async activar(publicacion: Publicacion) {
-    if (publicacion.activa) return publicacion;
+    if (publicacion.activa) return;
+    // Se actualiza solo la columna: guardar la entidad completa haría que TypeORM
+    // sincronice publicacion.imagenes (leída antes de subir la foto, vacía) y
+    // desvincule la imagen recién creada (id_publicacion = NULL).
+    await this.publicacionesRepo.marcarActiva(publicacion.id);
     publicacion.activa = true;
-    return this.publicacionesRepo.guardar(publicacion);
   }
 
   /** Devuelve unicamente las publicaciones visibles para visitantes. */

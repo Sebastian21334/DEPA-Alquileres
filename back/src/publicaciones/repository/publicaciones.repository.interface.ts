@@ -3,6 +3,7 @@ import { Publicacion } from '../entity/publicacion.entity';
 export interface IPublicacionesRepository {
   crear(datos: Partial<Publicacion>): Publicacion;
   guardar(publicacion: Publicacion): Promise<Publicacion>;
+  marcarActiva(id: number): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
   buscarTodasActivas(): Promise<Publicacion[]>;
  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]>; 

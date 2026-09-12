@@ -19,6 +19,11 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     return this.repo.save(publicacion);
   }
 
+  async marcarActiva(id: number): Promise<void> {
+    // UPDATE directo: no toca relaciones (a diferencia de save con la entidad cargada).
+    await this.repo.update({ id }, { activa: true });
+  }
+
   buscarPorId(id: number): Promise<Publicacion | null> {
     // Esta consulta carga todas las relaciones necesarias para detalle, propiedad y galería.
     return this.repo.findOne({
