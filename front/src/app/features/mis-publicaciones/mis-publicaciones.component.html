@@ -1,0 +1,116 @@
+<section class="acct-page">
+  <div class="acct-wrap">
+    <div class="acct-heading">
+      <div>
+        <h1>Mis publicaciones</h1>
+        @if (!cargando() && !error()) {
+          <p>{{ publicaciones().length }} en total · {{ activas() }} activas</p>
+        }
+      </div>
+      <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">
+        <svg lucideSquarePlus [size]="18"></svg> Nueva publicación
+      </a>
+    </div>
+
+    @if (aviso()) {
+      <div class="acct-alert acct-alert--info notice" role="status">
+        {{ aviso() }} Podés volver a cargarlas desde "Imágenes".
+        <button type="button" aria-label="Cerrar aviso" (click)="aviso.set('')"><svg lucideX [size]="16"></svg></button>
+      </div>
+    }
+
+    @if (cargando()) {
+      <div class="acct-state"><app-spinner /><p>Cargando tus publicaciones…</p></div>
+    } @else if (error()) {
+      <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
+    } @else {
+      @for (pub of publicaciones(); track pub.id) {
+        <article class="acct-card item" [class.is-busy]="ocupada() === pub.id">
+          <div class="item__main">
+            <div class="item__thumb">
+              @if (pub.imagenes?.length) {
+                <img [src]="pub.imagenes![0].url" [alt]="pub.titulo" />
+              } @else {
+                <span>Sin fotos</span>
+              }
+            </div>
+
+            <div class="item__info">
+              <div class="item__badges">
+                @if (pub.activa) {
+                  <span class="acct-badge acct-badge--ok">Activa</span>
+                } @else if (!pub.imagenes?.length) {
+                  <span class="acct-badge acct-badge--warn" title="Una publicación necesita al menos una imagen para mostrarse">No publicada · falta una imagen</span>
+                } @else {
+                  <span class="acct-badge">Inactiva</span>
+                }
+                @if (pub.modalidad?.nombre) { <span class="acct-badge acct-badge--info">{{ pub.modalidad?.nombre }}</span> }
+                <small>Publicada el {{ fecha(pub.fecha_publicacion) }}</small>
+              </div>
+              <h2>{{ pub.titulo }}</h2>
+              <p class="item__location"><svg lucideMapPin [size]="14"></svg> {{ ubicacion(pub) }}</p>
+              <p class="item__specs">
+                <strong>{{ precio(pub) }}</strong> · {{ pub.cantidad_ambientes }} amb. · {{ pub.superficie }} m²
+                @if (pub.tipoPropiedad?.nombre) { · {{ pub.tipoPropiedad?.nombre }} }
+              </p>
+            </div>
+
+            <div class="item__actions">
+              <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', pub.id]">
+                <svg lucideEye [size]="16"></svg> Ver
+              </a>
+              <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="alternarImagenes(pub.id)"
+                [attr.aria-expanded]="expandida() === pub.id">
+                <svg lucideImagePlus [size]="16"></svg> Imágenes ({{ pub.imagenes?.length ?? 0 }})
+              </button>
+              @if (confirmandoBorrado() === pub.id) {
+                <span class="confirm">
+                  ¿Eliminar?
+                  <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === pub.id" (click)="eliminar(pub)">Sí</button>
+                  <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="confirmandoBorrado.set(null)">No</button>
+                </span>
+              } @else {
+                <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" (click)="confirmandoBorrado.set(pub.id)">
+                  <svg lucideTrash2 [size]="16"></svg> Eliminar
+                </button>
+              }
+            </div>
+          </div>
+
+          @if (errorFila()?.id === pub.id) {
+            <div class="acct-alert acct-alert--error item__error" role="alert">{{ errorFila()?.mensaje }}</div>
+          }
+
+          @if (expandida() === pub.id) {
+            <div class="gallery">
+              @for (img of pub.imagenes ?? []; track img.id; let i = $index) {
+                <figure>
+                  <img [src]="img.url" [alt]="'Imagen ' + (i + 1)" />
+                  @if (i === 0) { <span class="gallery__cover">Portada</span> }
+                  <button type="button" aria-label="Eliminar imagen"
+                    [disabled]="ocupada() === pub.id || (pub.imagenes?.length ?? 0) <= 1"
+                    [title]="(pub.imagenes?.length ?? 0) <= 1 ? 'La publicación debe tener al menos una imagen' : 'Eliminar imagen'"
+                    (click)="eliminarImagen(pub, img.id)">
+                    <svg lucideTrash2 [size]="14"></svg>
+                  </button>
+                </figure>
+              }
+              <label class="gallery__add">
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  [disabled]="ocupada() === pub.id" (change)="subirImagenes(pub, $event)" />
+                <svg lucideImagePlus [size]="24"></svg>
+                <span>{{ ocupada() === pub.id ? 'Procesando…' : 'Agregar' }}</span>
+              </label>
+            </div>
+          }
+        </article>
+      } @empty {
+        <div class="acct-card acct-state">
+          <h2>Todavía no publicaste propiedades</h2>
+          <p>Cuando publiques una, vas a poder administrarla desde acá.</p>
+          <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">Publicar mi primera propiedad</a>
+        </div>
+      }
+    }
+  </div>
+</section>

@@ -1,6 +1,35 @@
 <footer class="footer">
-  <div class="footer__inner">
-    <p>© {{ anio }} SIAlquileres — Plataforma de gestión y centralización de propiedades en alquiler.</p>
-    <p class="footer__muted">Proyecto académico — Seminario Integrador, UTN FRVM.</p>
+  <div class="footer__inner" appReveal>
+    <div class="footer__brand">
+      <a routerLink="/" aria-label="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" class="footer__logo" /></a>
+      <p>
+        Encontrá tu próximo hogar de forma simple, rápida y confiable. Conectando dueños y
+        profesionales en toda la región.
+      </p>
+    </div>
+
+    <nav class="footer__cols" aria-label="Enlaces del sitio">
+      <div>
+        <h3>Buscar</h3>
+        <a routerLink="/" [queryParams]="{ modalidad: 'largo' }" fragment="resultados">Alquiler Largo Plazo</a>
+        <a routerLink="/" [queryParams]="{ modalidad: 'temporario' }" fragment="resultados">Alquiler Temporario</a>
+        <a routerLink="/publicaciones/nueva">Publicar propiedad</a>
+      </div>
+      <div>
+        <h3>Tu cuenta</h3>
+        @if (auth.isAuthenticated) {
+          <a routerLink="/mi-perfil">Mi perfil</a>
+          <a routerLink="/mi-perfil/anunciante">Quiero ser anunciante</a>
+        } @else {
+          <a routerLink="/login">Iniciar sesión</a>
+          <a routerLink="/registro">Crear cuenta</a>
+        }
+      </div>
+    </nav>
+  </div>
+
+  <div class="footer__bottom">
+    <p>© {{ anio }} DEPA. Todos los derechos reservados.</p>
+    <p>Hecho con <span class="footer__heart" aria-label="amor">♥</span> en Córdoba, Argentina</p>
   </div>
 </footer>

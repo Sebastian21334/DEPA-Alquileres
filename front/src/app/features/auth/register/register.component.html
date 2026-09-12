@@ -1,6 +1,6 @@
 <section class="auth">
   <div class="auth__card">
-    <div class="auth__brand"><strong>SI</strong>Alquileres</div>
+    <a routerLink="/" class="auth__brand" aria-label="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" /></a>
     <h1 class="auth__title">Creá tu cuenta</h1>
     <p class="auth__subtitle">Buscá y reservá propiedades en alquiler.</p>
 
@@ -52,7 +52,13 @@
 
         <div class="auth__field">
           <label for="contrasenia">Contraseña</label>
-          <input id="contrasenia" type="password" formControlName="contrasenia" autocomplete="new-password" />
+          <div class="password-field">
+            <input id="contrasenia" [type]="verContrasenia() ? 'text' : 'password'" formControlName="contrasenia" autocomplete="new-password" />
+            <button type="button" class="password-toggle" (click)="verContrasenia.set(!verContrasenia())"
+              [attr.aria-label]="verContrasenia() ? 'Ocultar contraseña' : 'Mostrar contraseña'" [attr.aria-pressed]="verContrasenia()">
+              @if (verContrasenia()) { <svg lucideEyeOff [size]="18"></svg> } @else { <svg lucideEye [size]="18"></svg> }
+            </button>
+          </div>
           @if (form.controls.contrasenia.touched && form.controls.contrasenia.errors; as errores) {
             <span class="auth__hint auth__hint--error">
               La contraseña debe tener al menos 8 caracteres, incluyendo una letra, un número y un carácter especial.
@@ -64,12 +70,18 @@
 
         <div class="auth__field">
           <label for="confirmarContrasenia">Confirmar contraseña</label>
-          <input
-            id="confirmarContrasenia"
-            type="password"
-            formControlName="confirmarContrasenia"
-            autocomplete="new-password"
-          />
+          <div class="password-field">
+            <input
+              id="confirmarContrasenia"
+              [type]="verConfirmacion() ? 'text' : 'password'"
+              formControlName="confirmarContrasenia"
+              autocomplete="new-password"
+            />
+            <button type="button" class="password-toggle" (click)="verConfirmacion.set(!verConfirmacion())"
+              [attr.aria-label]="verConfirmacion() ? 'Ocultar contraseña' : 'Mostrar contraseña'" [attr.aria-pressed]="verConfirmacion()">
+              @if (verConfirmacion()) { <svg lucideEyeOff [size]="18"></svg> } @else { <svg lucideEye [size]="18"></svg> }
+            </button>
+          </div>
           @if (form.errors?.['contraseniasDistintas'] && form.controls.confirmarContrasenia.touched) {
             <span class="auth__hint auth__hint--error">Las contraseñas no coinciden.</span>
           }

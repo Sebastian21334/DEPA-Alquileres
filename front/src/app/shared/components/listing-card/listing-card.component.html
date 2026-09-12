@@ -1,10 +1,12 @@
 <article class="card" [class.card--temporary]="esTemporaria">
-  <div class="card__media">
-    @if (imagenPrincipal) {
-      <img [src]="imagenPrincipal" [alt]="publicacion().titulo" loading="lazy" />
-    } @else {
-      <div class="card__media-placeholder" aria-hidden="true">Sin imagen</div>
-    }
+  <div class="card__top">
+    <a class="card__media" [routerLink]="['/publicaciones', publicacion().id]" tabindex="-1" aria-hidden="true">
+      @if (imagenPrincipal) {
+        <img [src]="imagenPrincipal" [alt]="publicacion().titulo" loading="lazy" />
+      } @else {
+        <div class="card__media-placeholder">Sin imagen</div>
+      }
+    </a>
 
     @if (publicacion().modalidad?.nombre) {
       <span class="badge badge--modalidad">{{ publicacion().modalidad?.nombre }}</span>
@@ -27,37 +29,33 @@
       <h3 class="card__title">{{ publicacion().titulo }}</h3>
       @if (ubicacion) {
         <p class="card__location">
-          <svg lucideMapPin [size]="14"></svg>
+          <svg lucideMapPin [size]="15"></svg>
           {{ ubicacion }}
         </p>
       }
     </div>
 
     <ul class="card__specs">
-      <li>
-        <span class="card__spec-icon"><svg lucideHexagon [size]="14"></svg></span>
-        {{ publicacion().cantidad_ambientes }} amb.
+      <li [title]="publicacion().cantidad_ambientes + ' ambientes'">
+        <span class="card__spec-value">{{ publicacion().cantidad_ambientes }}</span>
+        <svg lucideLayoutGrid [size]="22" aria-hidden="true"></svg>
+        <span class="sr-only">ambientes</span>
       </li>
-      <li>
-        <span class="card__spec-icon"><svg lucideRuler [size]="14"></svg></span>
-        {{ publicacion().superficie }} m²
+      <li [title]="publicacion().superficie + ' m²'">
+        <span class="card__spec-value">{{ superficie }}</span>
+        <svg lucideRuler [size]="22" aria-hidden="true"></svg>
+        <span class="sr-only">m² de superficie</span>
       </li>
-      @if (publicacion().tipoPropiedad?.nombre) {
-        <li>
-          <span class="card__spec-icon"><svg lucideHome [size]="14"></svg></span>
-          {{ publicacion().tipoPropiedad?.nombre }}
-        </li>
-      }
     </ul>
 
     <div class="card__footer">
       <span class="card__price">
-        {{ publicacion().tipoMoneda?.nombre }} {{ precioFormateado }}
+        <small>{{ publicacion().tipoMoneda?.nombre }}</small> {{ precioFormateado }}
       </span>
 
-      <a class="btn btn--primary" [routerLink]="['/publicaciones', publicacion().id]">
+      <a class="btn btn--primary shine" [routerLink]="['/publicaciones', publicacion().id]">
         Ver
-        <svg lucideArrowRight [size]="16"></svg>
+        <svg lucideArrowRight [size]="18"></svg>
       </a>
     </div>
   </div>

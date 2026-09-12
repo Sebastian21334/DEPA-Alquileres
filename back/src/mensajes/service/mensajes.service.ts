@@ -36,8 +36,23 @@ export class MensajesService {
     // el endpoint no permite iniciar conversaciones arbitrarias entre usuarios.
     const publicacion = await this.publicacionesService.buscarPorId(dto.id_publicacion);
 
-    if (publicacion.anunciante.usuario.id !== dto.id_destino_usuario) {
-      throw new ForbiddenException('El destinatario no es el anunciante de esta publicación');
+    const idAnunciante = publicacion.anunciante.usuario.id;
+    if (idAnunciante !== dto.id_destino_usuario) {
+      // Única excepción: el anunciante respondiendo a alguien que ya le escribió
+      // por esta publicación. Así puede contestar, pero no abrir chats arbitrarios.
+      const esRespuestaDelAnunciante =
+        idUsuarioOrigen === idAnunciante &&
+        (
+          await this.mensajeRepository.buscarConversacion(
+            dto.id_publicacion,
+            idUsuarioOrigen,
+            dto.id_destino_usuario,
+          )
+        ).length > 0;
+
+      if (!esRespuestaDelAnunciante) {
+        throw new ForbiddenException('El destinatario no es el anunciante de esta publicación');
+      }
     }
 
     const mensaje = this.mensajeRepository.crear({

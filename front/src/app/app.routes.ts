@@ -1,17 +1,48 @@
 import { Routes } from '@angular/router';
 import { adminGuard } from './core/guards/admin.guard';
+import { anuncianteGuard, authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
     path: 'admin',
     canActivate: [adminGuard],
     loadComponent: () => import('./features/admin/admin.component').then((m) => m.AdminComponent),
-    title: 'Panel administrativo — SIAlquileres',
+    title: 'Panel administrativo — DEPA',
   },
   {
     path: '',
     loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent),
-    title: 'SIAlquileres — Encontrá tu próximo hogar',
+    title: 'DEPA — Encontrá tu próximo hogar',
+  },
+  {
+    // Debe ir antes de 'publicaciones/:id' para que "nueva" no se tome como id.
+    path: 'publicaciones/nueva',
+    canActivate: [anuncianteGuard],
+    loadComponent: () =>
+      import('./features/crear-publicacion/crear-publicacion.component').then((m) => m.CrearPublicacionComponent),
+    title: 'Publicar propiedad — DEPA',
+  },
+  {
+    path: 'mis-publicaciones',
+    canActivate: [anuncianteGuard],
+    loadComponent: () =>
+      import('./features/mis-publicaciones/mis-publicaciones.component').then((m) => m.MisPublicacionesComponent),
+    title: 'Mis publicaciones — DEPA',
+  },
+  {
+    path: 'mi-perfil',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/mi-perfil/mi-perfil.component').then((m) => m.MiPerfilComponent),
+    title: 'Mi perfil — DEPA',
+  },
+  {
+    path: 'mi-perfil/anunciante',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/solicitud-anunciante/solicitud-anunciante.component').then(
+        (m) => m.SolicitudAnuncianteComponent,
+      ),
+    title: 'Convertite en anunciante — DEPA',
   },
   {
     path: 'publicaciones/:id',
@@ -19,7 +50,7 @@ export const routes: Routes = [
       import('./features/publication-detail/publication-detail.component').then(
         (m) => m.PublicationDetailComponent,
       ),
-    title: 'Detalle de publicación — SIAlquileres',
+    title: 'Detalle de publicación — DEPA',
   },
   {
     path: 'perfil/:id',
@@ -27,19 +58,19 @@ export const routes: Routes = [
       import('./features/advertiser-profile/advertiser-profile.component').then(
         (m) => m.AdvertiserProfileComponent,
       ),
-    title: 'Perfil del anunciante — SIAlquileres',
+    title: 'Perfil del anunciante — DEPA',
   },
   {
     path: 'login',
     loadComponent: () =>
       import('./features/auth/login/login.component').then((m) => m.LoginComponent),
-    title: 'Iniciar sesión — SIAlquileres',
+    title: 'Iniciar sesión — DEPA',
   },
   {
     path: 'registro',
     loadComponent: () =>
       import('./features/auth/register/register.component').then((m) => m.RegisterComponent),
-    title: 'Crear cuenta — SIAlquileres',
+    title: 'Crear cuenta — DEPA',
   },
   {
     path: 'verificar-cuenta',
@@ -47,7 +78,7 @@ export const routes: Routes = [
       import('./features/auth/verificar-cuenta/verificar-cuenta.component').then(
         (m) => m.VerificarCuentaComponent,
       ),
-    title: 'Verificar cuenta — SIAlquileres',
+    title: 'Verificar cuenta — DEPA',
   },
   {
     path: 'recuperar-contrasenia',
@@ -55,7 +86,7 @@ export const routes: Routes = [
       import('./features/auth/recuperar-contrasenia/recuperar-contrasenia.component').then(
         (m) => m.RecuperarContraseniaComponent,
       ),
-    title: 'Recuperar contraseña — SIAlquileres',
+    title: 'Recuperar contraseña — DEPA',
   },
   {
     // OJO: este path debe coincidir exactamente con el que arma
@@ -66,6 +97,6 @@ export const routes: Routes = [
       import('./features/auth/restablecer-contrasenia/restablecer-contrasenia.component').then(
         (m) => m.RestablecerContraseniaComponent,
       ),
-    title: 'Restablecer contraseña — SIAlquileres',
+    title: 'Restablecer contraseña — DEPA',
   },
 ];

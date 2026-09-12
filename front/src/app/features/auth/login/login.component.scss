@@ -5,7 +5,8 @@
   align-items: center;
   padding: 2.5rem 1rem 3rem;
   background:
-    linear-gradient(180deg, rgba(10, 12, 20, 0.65) 0%, rgba(10, 12, 20, 0.9) 100%),
+    linear-gradient(180deg, rgba(10, 12, 20, 0.45) 0%, rgba(10, 12, 20, 0.75) 100%),
+    var(--auth-bg-image, none) center / cover no-repeat,
     radial-gradient(circle at 20% 10%, rgba(216, 71, 30, 0.3), transparent 45%),
     radial-gradient(circle at 85% 85%, rgba(14, 70, 161, 0.35), transparent 45%),
     var(--color-dark);
@@ -14,37 +15,42 @@
 .auth__card {
   width: 100%;
   max-width: 400px;
-  background: var(--color-dark-surface);
-  border: 1px solid var(--color-dark-border);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
   padding: 2.25rem 2rem;
 }
 
 .auth__brand {
+  display: block;
+  text-decoration: none;
   text-align: center;
   font-size: 1.3rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--color-dark-text);
+  color: var(--color-text);
   margin-bottom: 1.25rem;
 }
 
-.auth__brand strong {
-  color: var(--color-primary);
+.auth__brand img {
+  display: block;
+  height: 44px;
+  width: auto;
+  margin: 0 auto;
 }
 
 .auth__title {
   margin: 0 0 0.25rem;
   font-size: 1.5rem;
   font-weight: 800;
-  color: var(--color-dark-text);
+  color: var(--color-text);
   text-align: center;
 }
 
 .auth__subtitle {
   margin: 0 0 1.75rem;
-  color: var(--color-dark-text-muted);
+  color: var(--color-text-muted);
   font-size: 0.9rem;
   text-align: center;
 }
@@ -64,20 +70,20 @@
 .auth__field label {
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--color-dark-text);
+  color: var(--color-text);
 }
 
 .auth__field input {
   padding: 0.7rem 0.9rem;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-dark-border);
+  border: 1px solid var(--color-border);
   font-size: 0.95rem;
-  color: var(--color-dark-text);
-  background: #16171f;
+  color: var(--color-text);
+  background: #fff;
 }
 
 .auth__field input::placeholder {
-  color: #6b6f7d;
+  color: #98a2b3;
 }
 
 .auth__field input:focus {
@@ -88,11 +94,11 @@
 
 .auth__hint {
   font-size: 0.78rem;
-  color: var(--color-dark-text-muted);
+  color: var(--color-text-muted);
 }
 
 .auth__hint--error {
-  color: #f87171;
+  color: var(--color-danger);
 }
 
 .auth__forgot {
@@ -108,9 +114,9 @@
 }
 
 .auth__error {
-  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+  background: #fef2f2;
   border: 1px solid var(--color-danger);
-  color: #fca5a5;
+  color: #b91c1c;
   padding: 0.6rem 0.75rem;
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
@@ -120,7 +126,7 @@
   margin: 1.5rem 0 0;
   text-align: center;
   font-size: 0.88rem;
-  color: var(--color-dark-text-muted);
+  color: var(--color-text-muted);
 }
 
 .auth__switch a {
@@ -158,4 +164,34 @@
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 2.75rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: var(--color-text);
+  background: var(--color-bg);
 }

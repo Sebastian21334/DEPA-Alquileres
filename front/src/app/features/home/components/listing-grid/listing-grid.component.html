@@ -1,8 +1,12 @@
-<section class="results">
+<section class="results" id="resultados">
   @if (!loading() && !error()) {
-    <h2 class="results__count" aria-live="polite">
-      {{ total() }} {{ total() === 1 ? 'propiedad encontrada' : 'propiedades encontradas' }}
-    </h2>
+    <!-- El @for sobre [total()] recrea el título cuando cambia el número, y así se repite la animación. -->
+    @for (t of [total()]; track t) {
+      <h2 class="results__count" aria-live="polite">
+        <span class="results__number">{{ t }}</span>
+        {{ t === 1 ? 'Propiedad encontrada' : 'Propiedades encontradas' }}
+      </h2>
+    }
   }
   <div class="results__inner">
     @if (error()) {
@@ -16,20 +20,20 @@
         }
       </div>
     } @else if (listings().length === 0) {
-      <div class="results__state">
+      <div class="results__state" appReveal="zoom">
         <p class="results__state-title">No encontramos publicaciones</p>
         <p>Probá ajustar la ubicación o los filtros de búsqueda.</p>
       </div>
     } @else {
       <div class="results__grid">
-        @for (p of listings(); track p.id) {
-          <app-listing-card [publicacion]="p" />
+        @for (p of listings(); track p.id; let i = $index) {
+          <app-listing-card [publicacion]="p" appReveal="zoom" [revealDelay]="(i % 4) * 90" />
         }
       </div>
 
       @if (hasMore()) {
         <div class="results__load-more">
-          <button type="button" class="btn btn--outline" (click)="loadMore.emit()">
+          <button type="button" class="btn btn--outline shine" (click)="loadMore.emit()">
             Cargar más
           </button>
         </div>

@@ -1,6 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { LucideEye, LucideEyeOff } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../shared/validators/password.validators';
 
@@ -19,7 +20,7 @@ import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, LucideEye, LucideEyeOff],
   templateUrl: './register.component.html',
   styleUrl: './register.component.scss',
 })
@@ -30,6 +31,8 @@ export class RegisterComponent {
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly mensajeExito = signal<string | null>(null);
+  protected readonly verContrasenia = signal(false);
+  protected readonly verConfirmacion = signal(false);
 
   protected readonly form = this.fb.nonNullable.group(
     {

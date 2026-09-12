@@ -59,7 +59,10 @@ export class ImagenesService {
       publicacion,
     });
 
-    return this.imagenesRepo.guardar(nuevaImagen);
+    const guardada = await this.imagenesRepo.guardar(nuevaImagen);
+    // Con la primera imagen la publicación cumple la regla y pasa a estar visible.
+    await this.publicacionesService.activar(publicacion);
+    return guardada;
   }
 
   /** Elimina el blob y su registro, verificando antes la propiedad de la publicacion. */
@@ -69,6 +72,14 @@ export class ImagenesService {
 
     if (imagen.publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
       throw new ForbiddenException('No podés eliminar una imagen que no es tuya');
+    }
+
+    // Regla de negocio: la publicación debe conservar al menos una imagen.
+    const imagenesDePublicacion = await this.imagenesRepo.buscarPorPublicacion(imagen.publicacion.id);
+    if (imagenesDePublicacion.length <= 1) {
+      throw new BadRequestException(
+        'Una publicación debe tener al menos una imagen. Subí otra antes de borrar esta.',
+      );
     }
 
     const containerClient = this.blobServiceClient.getContainerClient(this.containerName);

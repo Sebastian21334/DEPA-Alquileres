@@ -67,6 +67,11 @@ export class AdminComponent {
   protected draft = '';
   protected newValues: Record<string, string> = {};
   protected rejectReason = '';
+  // Opciones del select de rol: salen del catálogo de roles de la BD, así que
+  // crear o renombrar un rol en la sección Catálogos se refleja al instante.
+  protected readonly roles = computed(
+    () => this.catalogs().find((s) => s.key === 'roles')?.items ?? [],
+  );
   protected readonly filteredUsers = computed(() => {
     const q = this.query().trim().toLowerCase();
     return q
@@ -120,7 +125,8 @@ export class AdminComponent {
       'Estado del usuario actualizado.',
     );
   }
-  protected changeRole(user: AdminUser, role: string): void {
+  protected changeRole(user: AdminUser, select: HTMLSelectElement): void {
+    const role = select.value;
     if (role === user.rol?.nombre) return;
     this.run(
       `user-${user.id}`,
@@ -128,6 +134,8 @@ export class AdminComponent {
       (updated) =>
         this.users.update((v) => v.map((u) => (u.id === user.id ? (updated as AdminUser) : u))),
       'Rol actualizado.',
+      // Si el backend lo rechaza, el select vuelve a mostrar el rol que realmente tiene.
+      () => (select.value = user.rol?.nombre ?? ''),
     );
   }
   protected approve(request: VerificationRequest): void {
@@ -166,6 +174,7 @@ export class AdminComponent {
     request: () => any,
     success: (value: unknown) => void,
     message: string,
+    failure?: () => void,
   ): void {
     this.busy.set(key);
     this.error.set(null);
@@ -177,6 +186,7 @@ export class AdminComponent {
         this.busy.set(null);
       },
       error: (e: Error) => {
+        failure?.();
         this.error.set(e.message);
         this.busy.set(null);
       },

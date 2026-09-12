@@ -1,6 +1,6 @@
 <section class="auth">
   <div class="auth__card">
-    <div class="auth__brand"><strong>SI</strong>Alquileres</div>
+    <a routerLink="/" class="auth__brand" aria-label="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" /></a>
     <h1 class="auth__title">Iniciá sesión</h1>
     <p class="auth__subtitle">Ingresá con tu email y contraseña.</p>
 
@@ -19,7 +19,13 @@
 
       <div class="auth__field">
         <label for="contrasenia">Contraseña</label>
-        <input id="contrasenia" type="password" formControlName="contrasenia" autocomplete="current-password" />
+        <div class="password-field">
+          <input id="contrasenia" [type]="verContrasenia() ? 'text' : 'password'" formControlName="contrasenia" autocomplete="current-password" />
+          <button type="button" class="password-toggle" (click)="verContrasenia.set(!verContrasenia())"
+            [attr.aria-label]="verContrasenia() ? 'Ocultar contraseña' : 'Mostrar contraseña'" [attr.aria-pressed]="verContrasenia()">
+            @if (verContrasenia()) { <svg lucideEyeOff [size]="18"></svg> } @else { <svg lucideEye [size]="18"></svg> }
+          </button>
+        </div>
         @if (form.controls.contrasenia.invalid && form.controls.contrasenia.touched) {
           <span class="auth__hint auth__hint--error">Ingresá tu contraseña.</span>
         }

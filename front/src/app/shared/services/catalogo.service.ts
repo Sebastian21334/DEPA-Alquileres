@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Modalidad, TipoPropiedad, TipoMoneda } from '../models/catalogo.model';
+import { Modalidad, TipoAnunciante, TipoPropiedad, TipoMoneda } from '../models/catalogo.model';
 
 // Consume el módulo `catalogos` del backend (back/src/catalogos). Son lecturas
 // públicas (sin JWT) usadas para poblar selectores de filtros.
@@ -19,6 +19,11 @@ export class CatalogoService {
   /** GET /catalogos/modalidades */
   getModalidades(): Observable<Modalidad[]> {
     return this.http.get<Modalidad[]>(`${this.baseUrl}/modalidades`);
+  }
+
+  /** GET /catalogos/tipos-anunciante */
+  getTiposAnunciante(): Observable<TipoAnunciante[]> {
+    return this.http.get<TipoAnunciante[]>(`${this.baseUrl}/tipos-anunciante`);
   }
 
   /** GET /catalogos/tipos-moneda */

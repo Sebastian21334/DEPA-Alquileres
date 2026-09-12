@@ -167,13 +167,16 @@
               </td>
               <td>
                 <select
-                  [value]="user.rol?.nombre"
-                  (change)="changeRole(user, $any($event.target).value)"
-                  [disabled]="busy() === 'user-' + user.id"
+                  (change)="changeRole(user, $any($event.target))"
+                  [disabled]="busy() === 'user-' + user.id || !roles().length"
+                  [attr.aria-label]="'Rol de ' + user.email"
                 >
-                  <option>Usuario</option>
-                  <option>Anunciante</option>
-                  <option>Administrador</option>
+                  @if (!user.rol) {
+                    <option value="" selected disabled>Sin rol</option>
+                  }
+                  @for (role of roles(); track role.id) {
+                    <option [value]="role.nombre" [selected]="role.id === user.rol?.id">{{ role.nombre }}</option>
+                  }
                 </select>
               </td>
               <td>

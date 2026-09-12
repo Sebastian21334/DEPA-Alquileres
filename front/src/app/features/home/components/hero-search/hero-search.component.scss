@@ -1,21 +1,52 @@
 .hero {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   padding: 80px 24px 100px;
-  background:
-    linear-gradient(#0009, #0009),
-    url('/images/hero-mydepa.jpg') center / cover no-repeat;
+  background: #111;
   color: white;
+}
+/* Foto aérea con zoom lento (efecto Ken Burns) debajo del velo oscuro. */
+.hero::before,
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.hero::before {
+  background: url('/images/hero-mydepa.jpg') center / cover no-repeat;
+  animation: hero-zoom 22s ease-in-out infinite alternate;
+}
+.hero::after {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.7));
+}
+@keyframes hero-zoom {
+  from { transform: scale(1); }
+  to { transform: scale(1.14) translateY(-1.5%); }
 }
 .hero__inner {
   max-width: 1200px;
   margin: auto;
   text-align: center;
 }
+.hero__title,
+.hero__subtitle,
+.hero__modalidades,
+.hero__search {
+  animation: depa-fade-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.hero__subtitle { animation-delay: 0.15s; }
+.hero__modalidades { animation-delay: 0.3s; }
+.hero__search { animation-delay: 0.45s; }
+
 .hero__title {
   margin: 0;
   font-size: clamp(2.2rem, 4.8vw, 4.25rem);
   font-weight: 800;
   line-height: 1.15;
   letter-spacing: -0.025em;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 }
 .hero__subtitle {
   margin: 22px 0 34px;
@@ -35,19 +66,31 @@
   border-radius: 7px;
   color: white;
   background: var(--color-primary);
+  font: inherit;
   font-size: 1.875rem;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.25s ease,
+    filter 0.2s ease;
 }
 .modalidad-btn--secondary {
   background: var(--color-secondary);
 }
 .modalidad-btn:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.1);
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.45);
+}
+.modalidad-btn:active {
+  transform: scale(0.97);
 }
 .modalidad-btn--active {
   outline: 3px solid white;
   outline-offset: 4px;
+  animation: depa-pop 0.4s ease;
 }
 .hero__search {
   max-width: 485px;
@@ -64,6 +107,12 @@
 }
 .hero__search-label svg {
   color: var(--color-accent);
+  animation: pin-bounce 2.4s ease-in-out infinite;
+}
+@keyframes pin-bounce {
+  0%, 70%, 100% { transform: translateY(0); }
+  80% { transform: translateY(-7px); }
+  90% { transform: translateY(0); }
 }
 .hero__search-row {
   display: flex;
@@ -74,10 +123,13 @@
   border-radius: 99px;
   padding: 5px 10px 5px 22px;
   box-shadow: 0 4px 8px #0005;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 .hero__search-row:focus-within {
   outline: 3px solid var(--color-accent);
   outline-offset: 3px;
+  transform: scale(1.03);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 .hero__search-row input {
   flex: 1;
@@ -103,6 +155,10 @@
   background: var(--color-accent);
   box-shadow: 0 2px 5px #0003;
   cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.btn:hover {
+  transform: scale(1.12) rotate(8deg);
 }
 button:focus-visible {
   outline: 3px solid white;

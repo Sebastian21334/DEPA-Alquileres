@@ -1,0 +1,140 @@
+<section class="acct-page">
+  <div class="acct-wrap acct-wrap--narrow">
+    <div class="acct-heading">
+      <div>
+        <h1>Convertite en anunciante</h1>
+        <p>Verificamos tu identidad para que quienes buscan alquiler confíen en tus publicaciones.</p>
+      </div>
+      <a routerLink="/mi-perfil" class="acct-btn acct-btn--ghost acct-btn--sm">Volver a mi perfil</a>
+    </div>
+
+    @if (cargando()) {
+      <div class="acct-state"><app-spinner /><p>Cargando tu solicitud…</p></div>
+    } @else {
+      <ol class="steps" aria-label="Pasos de la verificación">
+        <li [class.is-done]="paso() !== 'datos'" [class.is-current]="paso() === 'datos'"><span>1</span> Datos</li>
+        <li [class.is-done]="paso() === 'revision' || paso() === 'aprobada'" [class.is-current]="paso() === 'documentos'"><span>2</span> Documentación</li>
+        <li [class.is-done]="paso() === 'aprobada'" [class.is-current]="paso() === 'revision'"><span>3</span> Revisión</li>
+      </ol>
+
+      @if (exito()) { <div class="acct-alert acct-alert--success" role="status">{{ exito() }}</div> }
+      @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
+
+      @switch (paso()) {
+        @case ('datos') {
+          <form class="acct-card" [formGroup]="form" (ngSubmit)="enviarDatos()" novalidate>
+            <h2>Datos del anunciante</h2>
+            <div class="acct-grid">
+              <div class="acct-field acct-span">
+                <label for="tipo">Tipo de anunciante</label>
+                <select id="tipo" formControlName="idTipoAnunciante">
+                  <option [ngValue]="0" disabled>Seleccioná una opción</option>
+                  @for (t of tipos(); track t.id) { <option [ngValue]="t.id">{{ t.nombre }}</option> }
+                </select>
+                @if (form.controls.idTipoAnunciante.invalid && form.controls.idTipoAnunciante.touched) {
+                  <span class="acct-hint acct-hint--error">Elegí si sos propietario, inmobiliaria, etc.</span>
+                }
+              </div>
+              <div class="acct-field">
+                <label for="cuit">CUIT / CUIL</label>
+                <input id="cuit" formControlName="cuit" inputmode="numeric" placeholder="20-12345678-9" />
+                @if (form.controls.cuit.invalid && form.controls.cuit.touched) {
+                  <span class="acct-hint acct-hint--error">Ingresá un CUIT/CUIL válido (11 dígitos).</span>
+                }
+              </div>
+              <div class="acct-field">
+                <label for="contacto">Número de contacto</label>
+                <input id="contacto" type="tel" formControlName="numero_contacto" placeholder="+54 353 400-0000" />
+                @if (form.controls.numero_contacto.invalid && form.controls.numero_contacto.touched) {
+                  <span class="acct-hint acct-hint--error">Ingresá un teléfono (máximo 20 caracteres).</span>
+                }
+              </div>
+            </div>
+            <div class="acct-actions form-actions">
+              <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviando()">
+                {{ enviando() ? 'Guardando…' : 'Continuar' }}
+              </button>
+            </div>
+          </form>
+        }
+
+        @case ('documentos') {
+          <form class="acct-card" (submit)="enviarDocumentos($event)">
+            <h2>Documentación de identidad</h2>
+            @if (solicitud()?.estado === 'rechazada') {
+              <div class="acct-alert acct-alert--error spaced">
+                <strong>Tu solicitud anterior fue rechazada.</strong>
+                @if (solicitud()?.motivo_rechazo) { <br />Motivo: {{ solicitud()?.motivo_rechazo }} }
+              </div>
+            }
+            <p class="intro">Subí fotos nítidas y sin reflejos. Solo las ve el equipo que revisa la solicitud.</p>
+
+            <div class="docs">
+              @for (doc of documentos; track doc.campo) {
+                @let archivo = archivos()[doc.campo];
+                <label class="doc" [class.is-ready]="archivo">
+                  <input type="file" [accept]="doc.accept" (change)="seleccionarArchivo(doc.campo, $event)" />
+                  <span class="doc__icon">
+                    @if (archivo) { <svg lucideFileCheck [size]="26"></svg> } @else { <svg lucideUpload [size]="26"></svg> }
+                  </span>
+                  <strong>{{ doc.titulo }}</strong>
+                  @if (archivo) {
+                    <small class="doc__name">{{ archivo.name }} · {{ tamanio(archivo) }}</small>
+                  } @else {
+                    <small>{{ doc.ayuda }}</small>
+                  }
+                  @if (erroresArchivo()[doc.campo]; as msg) { <small class="acct-hint--error">{{ msg }}</small> }
+                </label>
+              }
+            </div>
+
+            <div class="acct-actions form-actions">
+              <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviando()">
+                {{ enviando() ? 'Subiendo documentación…' : (solicitud()?.estado === 'rechazada' ? 'Reenviar documentación' : 'Enviar documentación') }}
+              </button>
+            </div>
+          </form>
+        }
+
+        @case ('revision') {
+          <div class="acct-card status">
+            <span class="status__icon status__icon--wait"><svg lucideClock [size]="34"></svg></span>
+            <h2>Tu solicitud está en revisión</h2>
+            <p>Recibimos tus datos y documentación. Te vamos a avisar por email cuando un administrador la revise.</p>
+          </div>
+        }
+
+        @case ('aprobada') {
+          <div class="acct-card status">
+            <span class="status__icon"><svg lucideBadgeCheck [size]="34"></svg></span>
+            <h2>¡Ya sos anunciante verificado!</h2>
+            <p>Podés publicar propiedades y administrarlas desde el menú.</p>
+            <div class="acct-actions">
+              <a routerLink="/mis-publicaciones" class="acct-btn acct-btn--ghost">Mis publicaciones</a>
+              <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">Publicar propiedad</a>
+            </div>
+          </div>
+        }
+      }
+
+      @if (solicitud()?.revisiones?.length) {
+        <section class="acct-card">
+          <h2>Historial de revisiones</h2>
+          <ul class="history">
+            @for (r of solicitud()!.revisiones; track r.id) {
+              <li>
+                <span class="acct-badge" [class.acct-badge--ok]="r.estado === 'aprobada'" [class.acct-badge--error]="r.estado === 'rechazada'">
+                  {{ r.estado }}
+                </span>
+                <div>
+                  <strong>Revisión #{{ r.numero_revision }}</strong> · {{ fecha(r.creada_en) }}
+                  @if (r.motivo) { <p>{{ r.motivo }}</p> }
+                </div>
+              </li>
+            }
+          </ul>
+        </section>
+      }
+    }
+  </div>
+</section>
