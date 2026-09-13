@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm --prefix front run build",
+  "outputDirectory": "front/dist/front/browser",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
