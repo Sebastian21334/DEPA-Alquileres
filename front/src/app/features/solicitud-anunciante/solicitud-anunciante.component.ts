@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { LucideBadgeCheck, LucideClock, LucideFileCheck, LucideUpload } from '@lucide/angular';
+import { LucideBadgeCheck, LucideClock, LucideFileCheck, LucideUpload, LucideX } from '@lucide/angular';
 import { PerfilService } from '../../core/services/perfil.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { TipoAnunciante } from '../../shared/models/catalogo.model';
@@ -20,7 +20,7 @@ const MB = 1024 * 1024;
 @Component({
   selector: 'app-solicitud-anunciante',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, SpinnerComponent, LucideBadgeCheck, LucideClock, LucideFileCheck, LucideUpload],
+  imports: [ReactiveFormsModule, RouterLink, SpinnerComponent, LucideBadgeCheck, LucideClock, LucideFileCheck, LucideUpload, LucideX],
   templateUrl: './solicitud-anunciante.component.html',
   styleUrl: './solicitud-anunciante.component.scss',
 })
@@ -36,6 +36,7 @@ export class SolicitudAnuncianteComponent {
   protected readonly error = signal('');
   protected readonly exito = signal('');
   protected readonly archivos = signal<Partial<Record<CampoDocumento, File>>>({});
+  protected readonly vistasPrevias = signal<Partial<Record<CampoDocumento, string>>>({});
   protected readonly erroresArchivo = signal<Partial<Record<CampoDocumento, string>>>({});
 
   protected readonly documentos: { campo: CampoDocumento; titulo: string; ayuda: string; accept: string }[] = [
@@ -99,6 +100,9 @@ export class SolicitudAnuncianteComponent {
     const archivo = (event.target as HTMLInputElement).files?.[0];
     const errores = { ...this.erroresArchivo() };
     const archivos = { ...this.archivos() };
+    const vistas = { ...this.vistasPrevias() };
+    if (vistas[campo]) URL.revokeObjectURL(vistas[campo]!);
+    delete vistas[campo];
     delete errores[campo];
     delete archivos[campo];
 
@@ -109,11 +113,29 @@ export class SolicitudAnuncianteComponent {
       const limite = esVideo ? 20 * MB : 5 * MB;
       if (!permitido) errores[campo] = 'Formato no permitido.';
       else if (archivo.size > limite) errores[campo] = `Supera el máximo de ${esVideo ? '20' : '5'} MB.`;
-      else archivos[campo] = archivo;
+      else {
+        archivos[campo] = archivo;
+        if (IMAGENES.includes(archivo.type)) vistas[campo] = URL.createObjectURL(archivo);
+      }
     }
 
     this.erroresArchivo.set(errores);
     this.archivos.set(archivos);
+    this.vistasPrevias.set(vistas);
+  }
+
+  protected quitarArchivo(campo: CampoDocumento, event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const input = (event.currentTarget as HTMLElement).closest('label')?.querySelector('input[type="file"]') as HTMLInputElement | null;
+    if (input) input.value = '';
+    const archivos = { ...this.archivos() };
+    const vistas = { ...this.vistasPrevias() };
+    if (vistas[campo]) URL.revokeObjectURL(vistas[campo]!);
+    delete archivos[campo];
+    delete vistas[campo];
+    this.archivos.set(archivos);
+    this.vistasPrevias.set(vistas);
   }
 
   protected enviarDocumentos(event: Event): void {
@@ -134,6 +156,8 @@ export class SolicitudAnuncianteComponent {
       next: () => {
         this.enviando.set(false);
         this.archivos.set({});
+        Object.values(this.vistasPrevias()).forEach((url) => url && URL.revokeObjectURL(url));
+        this.vistasPrevias.set({});
         this.exito.set('¡Documentación enviada! Un administrador la va a revisar a la brevedad.');
         this.recargar();
       },

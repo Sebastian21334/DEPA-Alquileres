@@ -297,6 +297,20 @@ dd {
   font-weight: 700;
   text-decoration: none;
 }
+.documents .document-preview {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px 4px 4px;
+}
+.document-preview img,
+.document-preview video {
+  width: 54px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 5px;
+  background: #dfe6ea;
+}
 .actions {
   display: flex;
   justify-content: end;

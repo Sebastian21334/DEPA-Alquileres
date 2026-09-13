@@ -169,6 +169,9 @@ export class AdminComponent {
       'Solicitud rechazada.',
     );
   }
+  protected esVideo(url: string): boolean {
+    return /\.(mp4|webm|mov)(?:\?|$)/i.test(url);
+  }
   private run(
     key: string,
     request: () => any,
@@ -257,7 +260,6 @@ export class AdminComponent {
     this.api.listarProvincias().subscribe({
       next: (v) => {
         this.provinces.set(v);
-        if (v.length && !this.selectedProvince()) this.selectProvince(v[0].id);
       },
       error: (e: Error) => this.error.set(e.message),
     });

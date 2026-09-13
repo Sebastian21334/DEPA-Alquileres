@@ -77,6 +77,14 @@
                   <span class="doc__icon">
                     @if (archivo) { <svg lucideFileCheck [size]="26"></svg> } @else { <svg lucideUpload [size]="26"></svg> }
                   </span>
+                  @if (archivo) {
+                    @if (vistasPrevias()[doc.campo]; as vista) {
+                      <img class="doc__preview" [src]="vista" [alt]="'Vista previa de ' + doc.titulo" />
+                    }
+                    <button type="button" class="doc__remove" (click)="quitarArchivo(doc.campo, $event)">
+                      <svg lucideX [size]="15"></svg> Quitar
+                    </button>
+                  }
                   <strong>{{ doc.titulo }}</strong>
                   @if (archivo) {
                     <small class="doc__name">{{ archivo.name }} · {{ tamanio(archivo) }}</small>

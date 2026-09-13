@@ -74,13 +74,26 @@
             </dl>
             <div class="documents">
               @if (request.dni_frente_url) {
-                <a [href]="request.dni_frente_url" target="_blank" rel="noopener">DNI frente</a>
+                <a class="document-preview" [href]="request.dni_frente_url" target="_blank" rel="noopener">
+                  <img [src]="request.dni_frente_url" alt="Vista previa DNI frente" />
+                  <span>DNI frente</span>
+                </a>
               }
               @if (request.dni_dorso_url) {
-                <a [href]="request.dni_dorso_url" target="_blank" rel="noopener">DNI dorso</a>
+                <a class="document-preview" [href]="request.dni_dorso_url" target="_blank" rel="noopener">
+                  <img [src]="request.dni_dorso_url" alt="Vista previa DNI dorso" />
+                  <span>DNI dorso</span>
+                </a>
               }
               @if (request.rostro_url) {
-                <a [href]="request.rostro_url" target="_blank" rel="noopener">Rostro</a>
+                <a class="document-preview" [href]="request.rostro_url" target="_blank" rel="noopener">
+                  @if (esVideo(request.rostro_url)) {
+                    <video [src]="request.rostro_url" muted></video>
+                  } @else {
+                    <img [src]="request.rostro_url" alt="Vista previa del rostro" />
+                  }
+                  <span>Rostro</span>
+                </a>
               }
             </div>
             @if (rejectId() === request.id) {
@@ -325,6 +338,17 @@
       <article class="catalog-card">
         <h3>Ciudades</h3>
         <form class="inline-form" (ngSubmit)="addCity()">
+          <select
+            [ngModel]="selectedProvince()"
+            name="city-province"
+            aria-label="Provincia de la nueva ciudad"
+            (ngModelChange)="selectProvince($event)"
+          >
+            <option [ngValue]="null" disabled>Seleccioná una provincia</option>
+            @for (province of provinces(); track province.id) {
+              <option [ngValue]="province.id">{{ province.nombre }}</option>
+            }
+          </select>
           <input
             [(ngModel)]="newValues['city']"
             name="new-city"
