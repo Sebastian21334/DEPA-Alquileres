@@ -102,6 +102,11 @@ export class AuthService {
       .pipe(tap((res) => this.guardarSesion(res.access_token)));
   }
 
+  /** POST /auth/reenviar-verificacion — solicita un nuevo mail para una cuenta pendiente. */
+  reenviarVerificacion(dto: LoginDto): Observable<MensajeResponse> {
+    return this.http.post<MensajeResponse>(`${this.baseUrl}/reenviar-verificacion`, dto);
+  }
+
   /** Cierra la sesión activa (borra el token y limpia el estado en memoria). */
   logout(): void {
     if (this.isBrowser) localStorage.removeItem(TOKEN_KEY);

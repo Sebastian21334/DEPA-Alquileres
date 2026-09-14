@@ -122,6 +122,31 @@
   font-size: 0.85rem;
 }
 
+.auth__success {
+  background: #ecfdf3;
+  border: 1px solid #86efac;
+  color: #166534;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.auth__resend {
+  align-self: flex-start;
+  margin-top: -0.7rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth__resend:hover { text-decoration: underline; }
+.auth__resend:disabled { opacity: 0.6; cursor: not-allowed; }
+
 .auth__switch {
   margin: 1.5rem 0 0;
   text-align: center;

@@ -7,6 +7,15 @@
     <form class="auth__form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
       @if (error()) {
         <div class="auth__error" role="alert">{{ error() }}</div>
+        @if (puedeReenviarVerificacion()) {
+          <button type="button" class="auth__resend" (click)="reenviarVerificacion()" [disabled]="reenviandoVerificacion()">
+            {{ reenviandoVerificacion() ? 'Enviando…' : 'Reenviar email de verificación' }}
+          </button>
+        }
+      }
+
+      @if (verificacionReenviada()) {
+        <div class="auth__success" role="status">{{ verificacionReenviada() }}</div>
       }
 
       <div class="auth__field">

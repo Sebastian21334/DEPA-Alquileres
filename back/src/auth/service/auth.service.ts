@@ -87,6 +87,39 @@ export class AuthService {
     };
   }
 
+  /** Genera un token nuevo y reenvía el mail para una cuenta aún no verificada. */
+  async reenviarVerificacion(dto: LoginDto) {
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.usuariosService.validarUsuarioParaLogin(email, dto.contrasenia);
+
+    if (!user) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    const passValida = await bcrypt.compare(dto.contrasenia, user.contrasenia);
+    if (!passValida) {
+      throw new UnauthorizedException('Credenciales inválidas');
+    }
+
+    if (user.bloqueado) {
+      throw new ForbiddenException('Tu usuario está bloqueado');
+    }
+
+    // Si ya se verificó, no se genera ni se envía un token innecesario.
+    if (user.email_verificado) {
+      return { mensaje: 'Si tu cuenta necesita verificación, vas a recibir un nuevo email' };
+    }
+
+    const token = await this.usuariosService.generarTokenVerificacion(user);
+    try {
+      await this.mailService.enviarVerificacion(user.email, token);
+    } catch (error) {
+      this.logger.error(`No se pudo reenviar el mail de verificación a ${user.email}`, error as Error);
+    }
+
+    return { mensaje: 'Te enviamos un nuevo email de verificación. Revisá tu bandeja de entrada y spam' };
+  }
+
   async verificarCuenta(token: string) {
     await this.usuariosService.verificarCuenta(token);
     return { mensaje: 'Cuenta verificada correctamente' };

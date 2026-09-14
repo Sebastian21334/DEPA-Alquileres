@@ -18,6 +18,12 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Post('reenviar-verificacion')
+  // Requiere las mismas credenciales para evitar abusos y enumeración de cuentas.
+  reenviarVerificacion(@Body() dto: LoginDto) {
+    return this.authService.reenviarVerificacion(dto);
+  }
+
   @Post('verificar-cuenta')
   // El token llega desde el link del correo y se consume una sola vez.
   verificarCuenta(@Body('token') token: string) {

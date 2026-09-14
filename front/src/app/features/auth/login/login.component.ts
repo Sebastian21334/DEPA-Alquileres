@@ -24,6 +24,8 @@ export class LoginComponent {
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly reenviandoVerificacion = signal(false);
+  protected readonly verificacionReenviada = signal<string | null>(null);
   protected readonly verContrasenia = signal(false);
 
   protected readonly form = this.fb.nonNullable.group({
@@ -39,6 +41,7 @@ export class LoginComponent {
 
     this.enviando.set(true);
     this.error.set(null);
+    this.verificacionReenviada.set(null);
 
     const { email, contrasenia } = this.form.getRawValue();
 
@@ -50,6 +53,33 @@ export class LoginComponent {
       },
       error: (err: Error) => {
         this.enviando.set(false);
+        this.error.set(err.message);
+      },
+    });
+  }
+
+  protected puedeReenviarVerificacion(): boolean {
+    return this.error() === 'Tenés que verificar tu email antes de iniciar sesión';
+  }
+
+  protected reenviarVerificacion(): void {
+    if (this.reenviandoVerificacion() || this.form.controls.email.invalid || !this.form.controls.contrasenia.value) {
+      this.form.controls.email.markAsTouched();
+      this.form.controls.contrasenia.markAsTouched();
+      return;
+    }
+
+    const { email, contrasenia } = this.form.getRawValue();
+    this.reenviandoVerificacion.set(true);
+
+    this.authService.reenviarVerificacion({ email: email.trim().toLowerCase(), contrasenia }).subscribe({
+      next: ({ mensaje }) => {
+        this.reenviandoVerificacion.set(false);
+        this.error.set(null);
+        this.verificacionReenviada.set(mensaje);
+      },
+      error: (err: Error) => {
+        this.reenviandoVerificacion.set(false);
         this.error.set(err.message);
       },
     });
