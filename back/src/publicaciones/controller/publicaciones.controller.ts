@@ -1,9 +1,9 @@
-import { Controller, Post, Get, Delete, Param, Body, UseGuards, Req, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Param, Body, UseGuards, Req, ParseIntPipe, Query } from '@nestjs/common';
 import { PublicacionesService } from '../service/publicaciones.service';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
+import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AnuncianteGuard } from '../../common/guards/anunciante.guard';
-import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
 
 @Controller('publicaciones')
 export class PublicacionesController {
@@ -37,6 +37,16 @@ export class PublicacionesController {
   // AnuncianteGuard agrega req.anunciante y evita confiar en un ID del body.
   async crear(@Req() req: any, @Body() dto: CrearPublicacionDto) {
     return this.publicacionesService.crear(req.anunciante, dto);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  async actualizar(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Body() dto: ActualizarPublicacionDto,
+  ) {
+    return this.publicacionesService.actualizar(id, req.anunciante, dto);
   }
 
   @Delete(':id')

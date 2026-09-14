@@ -1,0 +1,20 @@
+.calendar { padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; background: white; }
+.calendar__header { display: grid; grid-template-columns: 36px 1fr 36px; align-items: center; margin-bottom: 14px; text-transform: capitalize; text-align: center; }
+.calendar__header button { width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--color-secondary); font-size: 1.6rem; cursor: pointer; }
+.calendar__header button:hover { background: var(--color-secondary-light); }
+.calendar__weekdays, .calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.calendar__weekdays { margin-bottom: 6px; color: var(--color-text-muted); text-align: center; font-size: .72rem; font-weight: 700; }
+.calendar__grid button, .calendar__grid > span { min-height: 38px; }
+.calendar__grid button { border: 0; border-radius: 8px; background: transparent; color: var(--color-text); cursor: pointer; }
+.calendar__grid button:hover:not(:disabled) { background: var(--color-secondary-light); }
+.calendar__grid button:disabled { color: #b7bfca; cursor: not-allowed; }
+.calendar__grid button.is-available:not(.is-range) { background: #edf9f1; color: #15733a; font-weight: 700; }
+.calendar__grid button.is-unavailable { background: #f4f5f7; color: #98a2b3; text-decoration: line-through; }
+.calendar__grid button.is-booked { background: #fff0ed; color: var(--color-primary); }
+.calendar__grid button.is-range { border-radius: 5px; background: #dbe9ff; color: var(--color-secondary-dark); font-weight: 700; }
+.calendar__grid button.is-edge { background: var(--color-secondary); color: white; }
+.calendar__legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; color: var(--color-text-muted); font-size: .72rem; }
+.calendar__legend span { display: inline-flex; align-items: center; gap: 5px; }
+.calendar__legend i { width: 10px; height: 10px; border-radius: 50%; }
+.legend-available { background: #44b96b; }.legend-blocked { background: #b7bfca; }.legend-booked { background: var(--color-primary); }
+@media (max-width: 420px) { .calendar { padding: 12px; }.calendar__grid button, .calendar__grid > span { min-height: 34px; } }

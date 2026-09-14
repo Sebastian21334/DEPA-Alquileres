@@ -1,7 +1,8 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PUBLICACIONES_REPOSITORY } from '../repository/publicaciones.repository.interface';
 import type { IPublicacionesRepository } from '../repository/publicaciones.repository.interface';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
+import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { UbicacionService } from '../../ubicacion/service/ubicacion.service';
@@ -82,6 +83,41 @@ export class PublicacionesService {
   /** Regla de negocio: una publicación sin imágenes nunca se muestra públicamente. */
   private tieneImagenes(publicacion: Publicacion): boolean {
     return (publicacion.imagenes?.length ?? 0) > 0;
+  }
+
+  /** Modifica una publicación conservando la fecha original y validando propiedad. */
+  async actualizar(id: number, anuncianteQueOpera: Anunciante, dto: ActualizarPublicacionDto) {
+    const publicacion = await this.publicacionesRepo.buscarPorId(id);
+    if (!publicacion) throw new NotFoundException('Publicación no encontrada');
+    if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
+      throw new ForbiddenException('No podés modificar una publicación que no es tuya');
+    }
+
+    if (dto.titulo !== undefined) publicacion.titulo = dto.titulo;
+    if (dto.descripcion !== undefined) publicacion.descripcion = dto.descripcion;
+    if (dto.precio !== undefined) publicacion.precio = dto.precio;
+    if (dto.direccion !== undefined) publicacion.direccion = dto.direccion;
+    if (dto.cantidad_ambientes !== undefined) publicacion.cantidad_ambientes = dto.cantidad_ambientes;
+    if (dto.superficie !== undefined) publicacion.superficie = dto.superficie;
+    if (dto.activa !== undefined) publicacion.activa = dto.activa;
+
+    if (dto.idTipoMoneda !== undefined) {
+      publicacion.tipoMoneda = await this.catalogosService.getTipoMonedaPorId(dto.idTipoMoneda);
+    }
+    if (dto.idModalidad !== undefined) {
+      publicacion.modalidad = await this.catalogosService.getModalidadPorId(dto.idModalidad);
+    }
+    if (dto.idTipoPropiedad !== undefined) {
+      publicacion.tipoPropiedad = await this.catalogosService.getTipoPropiedadPorId(dto.idTipoPropiedad);
+    }
+    if (dto.idProvincia !== undefined) {
+      publicacion.provincia = await this.ubicacionService.getProvinciaPorId(dto.idProvincia);
+    }
+    if (dto.idCiudad !== undefined) {
+      publicacion.ciudad = await this.ubicacionService.getCiudadPorId(dto.idCiudad);
+    }
+
+    return this.publicacionesRepo.guardar(publicacion);
   }
 
   /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */

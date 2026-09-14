@@ -1,0 +1,48 @@
+<section class="publication-page">
+  <header class="page-heading">
+    <a routerLink="/">← Volver</a>
+    <span>{{ editing ? 'Administrar propiedad' : 'Nueva propiedad' }}</span>
+    <h1>{{ editing ? 'Modificar publicación' : 'Crear una publicación' }}</h1>
+    <p>Completá los datos del inmueble. Los campos marcados son obligatorios.</p>
+  </header>
+
+  @if (loading()) {
+    <div class="state"><app-spinner /><p>Cargando publicación…</p></div>
+  } @else {
+    <form class="publication-form" [formGroup]="form" (ngSubmit)="submit()">
+      <section class="form-card">
+        <div class="card-heading"><span>1</span><div><h2>Información principal</h2><p>Así se mostrará tu propiedad en los resultados.</p></div></div>
+        <div class="field field--full"><label for="title">Título *</label><input id="title" formControlName="titulo" placeholder="Ej. Departamento luminoso en el centro" /></div>
+        <div class="field field--full"><label for="description">Descripción *</label><textarea id="description" rows="5" formControlName="descripcion" placeholder="Contá qué hace especial a la propiedad"></textarea></div>
+        <div class="field"><label for="modality">Modalidad *</label><select id="modality" formControlName="idModalidad"><option [ngValue]="null">Seleccionar</option>@for (item of modalidades(); track item.id) { <option [ngValue]="item.id">{{ item.nombre }}</option> }</select></div>
+        <div class="field"><label for="propertyType">Tipo de propiedad *</label><select id="propertyType" formControlName="idTipoPropiedad"><option [ngValue]="null">Seleccionar</option>@for (item of tiposPropiedad(); track item.id) { <option [ngValue]="item.id">{{ item.nombre }}</option> }</select></div>
+        <div class="field"><label for="price">Precio {{ isTemporary() ? 'por día' : 'mensual' }} *</label><input id="price" type="number" min="1" formControlName="precio" /></div>
+        <div class="field"><label for="currency">Moneda *</label><select id="currency" formControlName="idTipoMoneda"><option [ngValue]="null">Seleccionar</option>@for (item of monedas(); track item.id) { <option [ngValue]="item.id">{{ item.nombre }}</option> }</select></div>
+      </section>
+
+      <section class="form-card">
+        <div class="card-heading"><span>2</span><div><h2>Ubicación y características</h2><p>Ingresá datos precisos para facilitar la búsqueda.</p></div></div>
+        <div class="field field--full"><label for="address">Dirección *</label><input id="address" formControlName="direccion" placeholder="Calle y número" /></div>
+        <div class="field"><label for="province">Provincia *</label><select id="province" formControlName="idProvincia"><option [ngValue]="null">Seleccionar</option>@for (item of provincias(); track item.id) { <option [ngValue]="item.id">{{ item.nombre }}</option> }</select></div>
+        <div class="field"><label for="city">Ciudad *</label><select id="city" formControlName="idCiudad"><option [ngValue]="null">Seleccionar</option>@for (item of filteredCities(); track item.id) { <option [ngValue]="item.id">{{ item.nombre }}</option> }</select></div>
+        <div class="field"><label for="rooms">Ambientes *</label><input id="rooms" type="number" min="1" formControlName="cantidad_ambientes" /></div>
+        <div class="field"><label for="surface">Superficie (m²) *</label><input id="surface" type="number" min="1" formControlName="superficie" /></div>
+      </section>
+
+      @if (isTemporary()) {
+        <section class="form-card form-card--calendar">
+          <div class="card-heading"><span>3</span><div><h2>Calendario de disponibilidad</h2><p>{{ editing ? 'Agregá rangos nuevos o tocá un día para bloquearlo o rehabilitarlo.' : 'Elegí el primer y el último día que estarán disponibles.' }}</p></div></div>
+          <div class="range-summary"><div><span>Desde</span><strong>{{ availabilityStart() ?? 'Sin seleccionar' }}</strong></div><div><span>Hasta</span><strong>{{ availabilityEnd() ?? 'Sin seleccionar' }}</strong></div></div>
+          <app-availability-calendar mode="setup" [selectedStart]="availabilityStart()" [selectedEnd]="availabilityEnd()" (dateSelected)="selectAvailabilityDate($event)" />
+          @if (editing && availability().length) {
+            <div class="manage-heading"><h3>Administrar días cargados</h3><p>Verde: disponible. Gris: bloqueado manualmente. Rojo: reservado y no editable.</p></div>
+            <app-availability-calendar mode="manage" [dates]="availability()" (availabilityToggle)="toggleAvailability($event)" />
+          }
+        </section>
+      }
+
+      @if (error()) { <p class="form-error" role="alert">{{ error() }}</p> }
+      <footer class="form-actions"><a routerLink="/">Cancelar</a><button type="submit" [disabled]="saving() || form.disabled">{{ saving() ? 'Guardando…' : (editing ? 'Guardar cambios' : 'Publicar propiedad') }}</button></footer>
+    </form>
+  }
+</section>

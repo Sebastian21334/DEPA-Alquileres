@@ -27,6 +27,13 @@ interface FiltrosPublicacion {
   ambientesSeleccionados: string[];
 }
 
+type OrdenPublicaciones =
+  | 'recientes'
+  | 'antiguas'
+  | 'precio-menor'
+  | 'precio-mayor'
+  | 'titulo';
+
 const TAMANIO_PAGINA = 8;
 
 @Component({
@@ -66,12 +73,16 @@ export class HomeComponent {
 
   private readonly filtros = signal<FiltrosPublicacion>(this.form.getRawValue());
   private readonly visibleCount = signal(TAMANIO_PAGINA);
+  protected readonly orden = signal<OrdenPublicaciones>('recientes');
 
   // Lista completa filtrada (client-side, ver listing.service.ts) y la página visible.
   protected readonly filtradas = computed(() =>
     this.aplicarFiltros(this.publicaciones(), this.filtros()),
   );
-  protected readonly paginadas = computed(() => this.filtradas().slice(0, this.visibleCount()));
+  protected readonly ordenadas = computed(() =>
+    this.ordenarPublicaciones(this.filtradas(), this.orden()),
+  );
+  protected readonly paginadas = computed(() => this.ordenadas().slice(0, this.visibleCount()));
   protected readonly hayMas = computed(() => this.visibleCount() < this.filtradas().length);
 
   constructor() {
@@ -109,6 +120,11 @@ export class HomeComponent {
 
   protected cargarMas(): void {
     this.visibleCount.update((v) => v + TAMANIO_PAGINA);
+  }
+
+  protected cambiarOrden(orden: string): void {
+    this.orden.set(orden as OrdenPublicaciones);
+    this.visibleCount.set(TAMANIO_PAGINA);
   }
 
   private cargarPublicaciones(): void {
@@ -179,6 +195,43 @@ export class HomeComponent {
       }
       return true;
     });
+  }
+
+  private ordenarPublicaciones(
+    listado: Publicacion[],
+    orden: OrdenPublicaciones,
+  ): Publicacion[] {
+    // Se ordena una copia para no mutar el estado fuente de las publicaciones.
+    return [...listado].sort((a, b) => {
+      switch (orden) {
+        case 'antiguas':
+          return this.compararFechas(a, b);
+        case 'precio-menor':
+          return a.precio - b.precio;
+        case 'precio-mayor':
+          return b.precio - a.precio;
+        case 'titulo':
+          return a.titulo.localeCompare(b.titulo, 'es', { sensitivity: 'base' });
+        case 'recientes':
+        default:
+          return this.compararFechas(b, a);
+      }
+    });
+  }
+
+  private compararFechas(a: Publicacion, b: Publicacion): number {
+    const fechaA = this.fechaPublicacion(a);
+    const fechaB = this.fechaPublicacion(b);
+
+    if (fechaA == null) return fechaB == null ? 0 : 1;
+    if (fechaB == null) return -1;
+    return fechaA - fechaB;
+  }
+
+  private fechaPublicacion(publicacion: Publicacion): number | null {
+    const fecha = Date.parse(publicacion.fecha_publicacion);
+    // Las publicaciones sin una fecha válida se ubican al final en cualquier orden por fecha.
+    return Number.isNaN(fecha) ? null : fecha;
   }
 
   // Traduce los buckets de UI ('1' | '2' | '3' | '4+') a la cantidad real de

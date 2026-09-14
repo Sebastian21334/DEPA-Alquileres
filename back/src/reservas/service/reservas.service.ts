@@ -41,6 +41,9 @@ export class ReservasService {
     }
 
     const publicacion = await this.publicacionesService.buscarPorId(dto.id_publicacion);
+    if (!publicacion.modalidad?.nombre.toLowerCase().includes('tempor')) {
+      throw new BadRequestException('Solo las publicaciones temporales admiten reservas por fecha');
+    }
     const cantidadDias = Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const precioDiario = Number(publicacion.precio);
     const montoCalculado = Number((precioDiario * cantidadDias).toFixed(2));

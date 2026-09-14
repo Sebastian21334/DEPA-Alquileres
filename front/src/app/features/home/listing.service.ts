@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Publicacion } from '../../shared/models/publicacion.model';
+import { Publicacion, PublicacionPayload } from '../../shared/models/publicacion.model';
 
 /**
  * Consume el módulo `publicaciones` del backend (back/src/publicaciones).
@@ -38,5 +38,14 @@ export class ListingService {
     return this.http.get<Publicacion[]>(`${this.baseUrl}/anunciante/${id}`, {
       params: { activa: 'true' },
     });
+  }
+
+
+  create(payload: PublicacionPayload): Observable<Publicacion> {
+    return this.http.post<Publicacion>(this.baseUrl, payload);
+  }
+
+  update(id: number, payload: Partial<PublicacionPayload>): Observable<Publicacion> {
+    return this.http.patch<Publicacion>(`${this.baseUrl}/${id}`, payload);
   }
 }

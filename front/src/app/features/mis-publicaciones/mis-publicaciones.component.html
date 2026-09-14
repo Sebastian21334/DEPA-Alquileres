@@ -59,6 +59,9 @@
               <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', pub.id]">
                 <svg lucideEye [size]="16"></svg> Ver
               </a>
+              <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', pub.id, 'editar']">
+                Editar
+              </a>
               <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="alternarImagenes(pub.id)"
                 [attr.aria-expanded]="expandida() === pub.id">
                 <svg lucideImagePlus [size]="16"></svg> Imágenes ({{ pub.imagenes?.length ?? 0 }})

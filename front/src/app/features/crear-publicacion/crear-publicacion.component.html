@@ -151,6 +151,32 @@
           </div>
         </section>
 
+        @if (esTemporaria()) {
+          <section class="step" id="disponibilidad" appReveal>
+            <h2><span class="step__num">06</span> Días disponibles *</h2>
+            <p class="availability-help">
+              Elegí el primer y el último día del período que querés habilitar. Después vas a poder
+              bloquear días puntuales desde “Modificar publicación”.
+            </p>
+            <app-availability-calendar
+              mode="setup"
+              [selectedStart]="disponibilidadInicio()"
+              [selectedEnd]="disponibilidadFin()"
+              (dateSelected)="seleccionarDisponibilidad($event)"
+            />
+            <p class="availability-summary" aria-live="polite">
+              @if (disponibilidadInicio() && disponibilidadFin()) {
+                Período disponible: <strong>{{ disponibilidadInicio() }}</strong> al
+                <strong>{{ disponibilidadFin() }}</strong>
+              } @else if (disponibilidadInicio()) {
+                Inicio: <strong>{{ disponibilidadInicio() }}</strong>. Ahora elegí el último día.
+              } @else {
+                Seleccioná una fecha de inicio.
+              }
+            </p>
+          </section>
+        }
+
         <p class="create__note">Antes de publicar, revisá que los datos y las fotos sean correctos.</p>
         @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
 

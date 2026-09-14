@@ -29,3 +29,17 @@ export interface Publicacion {
   anunciante?: Anunciante;
   imagenes?: Imagen[];
 }
+
+export interface PublicacionPayload {
+  titulo: string;
+  descripcion: string;
+  precio: number;
+  direccion: string;
+  cantidad_ambientes: number;
+  superficie: number;
+  idTipoMoneda: number;
+  idModalidad: number;
+  idProvincia: number;
+  idCiudad: number;
+  idTipoPropiedad: number;
+}

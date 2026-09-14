@@ -1,0 +1,40 @@
+<section class="calendar" aria-label="Calendario de disponibilidad">
+  <header class="calendar__header">
+    <button type="button" (click)="previousMonth()" aria-label="Mes anterior">‹</button>
+    <strong>{{ monthLabel() }}</strong>
+    <button type="button" (click)="nextMonth()" aria-label="Mes siguiente">›</button>
+  </header>
+
+  <div class="calendar__weekdays" aria-hidden="true">
+    @for (name of weekDays; track name) { <span>{{ name }}</span> }
+  </div>
+
+  <div class="calendar__grid">
+    @for (day of days(); track $index) {
+      @if (day) {
+        <button
+          type="button"
+          [disabled]="isDisabled(day)"
+          [class.is-available]="day.record?.disponible"
+          [class.is-unavailable]="day.record && !day.record.disponible"
+          [class.is-booked]="isBooked(day)"
+          [class.is-range]="isInRange(day.iso)"
+          [class.is-edge]="selectedStart() === day.iso || selectedEnd() === day.iso"
+          (click)="select(day)"
+          [attr.aria-label]="day.iso"
+        >{{ day.day }}</button>
+      } @else { <span></span> }
+    }
+  </div>
+
+  <footer class="calendar__legend">
+    @if (mode() === 'manage') {
+      <span><i class="legend-available"></i>Disponible</span>
+      <span><i class="legend-blocked"></i>Bloqueado</span>
+      <span><i class="legend-booked"></i>Reservado</span>
+    } @else if (mode() === 'select') {
+      <span><i class="legend-available"></i>Disponible</span>
+      <span><i class="legend-blocked"></i>No disponible</span>
+    }
+  </footer>
+</section>

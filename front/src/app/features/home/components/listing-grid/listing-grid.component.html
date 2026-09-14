@@ -1,12 +1,24 @@
 <section class="results" id="resultados">
   @if (!loading() && !error()) {
-    <!-- El @for sobre [total()] recrea el título cuando cambia el número, y así se repite la animación. -->
-    @for (t of [total()]; track t) {
-      <h2 class="results__count" aria-live="polite">
-        <span class="results__number">{{ t }}</span>
-        {{ t === 1 ? 'Propiedad encontrada' : 'Propiedades encontradas' }}
-      </h2>
-    }
+    <div class="results__toolbar">
+      @for (t of [total()]; track t) {
+        <h2 class="results__count" aria-live="polite">
+          <span class="results__number">{{ t }}</span>
+          {{ t === 1 ? 'Propiedad encontrada' : 'Propiedades encontradas' }}
+        </h2>
+      }
+
+      <label class="results__sort">
+        <span>Ordenar por</span>
+        <select [value]="sortOrder()" (change)="sortChange.emit($any($event.target).value)">
+          <option value="recientes">Más recientes</option>
+          <option value="antiguas">Más antiguas</option>
+          <option value="precio-menor">Menor precio</option>
+          <option value="precio-mayor">Mayor precio</option>
+          <option value="titulo">Nombre (A-Z)</option>
+        </select>
+      </label>
+    </div>
   }
   <div class="results__inner">
     @if (error()) {

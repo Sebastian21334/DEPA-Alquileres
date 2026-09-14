@@ -20,8 +20,10 @@ export class ListingGridComponent {
   readonly total = input(0);
   readonly error = input<string | null>(null);
   readonly hasMore = input(false);
+  readonly sortOrder = input('recientes');
 
   @Output() loadMore = new EventEmitter<void>();
+  @Output() sortChange = new EventEmitter<string>();
 
   protected readonly skeletons = Array.from({ length: 6 });
 }

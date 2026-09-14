@@ -26,13 +26,14 @@ export class FechaRepository implements IFechaRepository {
   buscarPorId(id: number): Promise<Fecha | null> {
     return this.repository.findOne({
       where: { id },
-      relations: { publicacion: true },
+      relations: { publicacion: true, reserva: true },
     });
   }
 
   buscarPorPublicacion(idPublicacion: number): Promise<Fecha[]> {
     return this.repository.find({
       where: { publicacion: { id: idPublicacion } },
+      relations: { reserva: true },
       order: { fecha: 'ASC' },
     });
   }
@@ -44,6 +45,7 @@ export class FechaRepository implements IFechaRepository {
         publicacion: { id: idPublicacion },
         fecha: Between(fechaInicio, fechaFin),
       },
+      order: { fecha: 'ASC' },
     });
   }
 

@@ -7,9 +7,11 @@ import { LucideImagePlus, LucideX } from '@lucide/angular';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { UbicacionService } from '../../shared/services/ubicacion.service';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
+import { AvailabilityService } from '../../shared/services/availability.service';
 import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
 import { Ciudad, Provincia } from '../../shared/models/ubicacion.model';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
+import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_IMAGEN = 10 * 1024 * 1024;
@@ -25,7 +27,14 @@ interface ImagenSeleccionada {
 @Component({
   selector: 'app-crear-publicacion',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, RevealDirective, LucideImagePlus, LucideX],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    RevealDirective,
+    AvailabilityCalendarComponent,
+    LucideImagePlus,
+    LucideX,
+  ],
   templateUrl: './crear-publicacion.component.html',
   styleUrl: './crear-publicacion.component.scss',
 })
@@ -35,6 +44,7 @@ export class CrearPublicacionComponent {
   private readonly catalogos = inject(CatalogoService);
   private readonly ubicacion = inject(UbicacionService);
   private readonly gestion = inject(GestionPublicacionesService);
+  private readonly availability = inject(AvailabilityService);
 
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
   protected readonly modalidades = signal<Modalidad[]>([]);
@@ -43,6 +53,13 @@ export class CrearPublicacionComponent {
   protected readonly ciudades = signal<Ciudad[]>([]);
   protected readonly cargandoCiudades = signal(true);
   private readonly provinciaElegida = signal(0);
+  private readonly modalidadElegida = signal(0);
+  protected readonly disponibilidadInicio = signal<string | null>(null);
+  protected readonly disponibilidadFin = signal<string | null>(null);
+  protected readonly esTemporaria = computed(() => {
+    const modalidad = this.modalidades().find((item) => item.id === this.modalidadElegida());
+    return modalidad?.nombre.toLocaleLowerCase().includes('tempor') ?? false;
+  });
 
   /** Opciones del select de ciudad: agrupadas por provincia, o solo las de la provincia elegida. */
   protected readonly gruposCiudades = computed(() => {
@@ -105,6 +122,13 @@ export class CrearPublicacionComponent {
     });
 
     const { idProvincia, idCiudad } = this.form.controls;
+    this.form.controls.idModalidad.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
+      this.modalidadElegida.set(id);
+      if (!this.esTemporaria()) {
+        this.disponibilidadInicio.set(null);
+        this.disponibilidadFin.set(null);
+      }
+    });
     idProvincia.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
       this.provinciaElegida.set(id);
       // Si la ciudad elegida no pertenece a la nueva provincia, se limpia.
@@ -177,19 +201,35 @@ export class CrearPublicacionComponent {
     this.imagenes.update((lista) => lista.filter((_, i) => i !== index));
   }
 
+  protected seleccionarDisponibilidad(fecha: string): void {
+    const inicio = this.disponibilidadInicio();
+    if (!inicio || this.disponibilidadFin() || fecha < inicio) {
+      this.disponibilidadInicio.set(fecha);
+      this.disponibilidadFin.set(null);
+      return;
+    }
+    this.disponibilidadFin.set(fecha);
+    if (this.error().startsWith('Elegí el período')) this.error.set('');
+  }
+
   protected publicar(): void {
     if (this.enviando()) return;
     // Regla de negocio: no se puede publicar sin al menos una imagen.
     const sinFotos = this.imagenes().length === 0;
     this.faltanFotos.set(sinFotos);
-    if (this.form.invalid || sinFotos) {
+    const sinDisponibilidad =
+      this.esTemporaria() && (!this.disponibilidadInicio() || !this.disponibilidadFin());
+    if (this.form.invalid || sinFotos || sinDisponibilidad) {
       this.form.markAllAsTouched();
       this.error.set(
-        sinFotos && this.form.valid
+        sinDisponibilidad && this.form.valid && !sinFotos
+          ? 'Elegí el período de días disponibles para el alquiler temporal.'
+          : sinFotos && this.form.valid
           ? 'Agregá al menos una foto de la propiedad para poder publicarla.'
           : 'Revisá los campos marcados.',
       );
-      if (sinFotos) document.getElementById('fotos')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const destino = sinDisponibilidad ? 'disponibilidad' : sinFotos ? 'fotos' : null;
+      if (destino) document.getElementById(destino)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -214,15 +254,27 @@ export class CrearPublicacionComponent {
       .pipe(
         // Las fotos se suben de a una para no saturar al backend (Sharp + Azure).
         concatMap((publicacion) =>
-          from(imagenes).pipe(
-            concatMap((img, i) => {
-              this.progreso.set(`Subiendo imagen ${i + 1} de ${imagenes.length}…`);
-              return this.gestion.subirImagen(publicacion.id, img.archivo).pipe(
-                catchError(() => of(null)),
-              );
-            }),
-            toArray(),
-            concatMap((subidas) => of({ publicacion, fallidas: subidas.filter((s) => s === null).length })),
+          (this.esTemporaria()
+            ? (this.progreso.set('Guardando días disponibles…'),
+              this.availability.addRange(
+                publicacion.id,
+                this.disponibilidadInicio()!,
+                this.disponibilidadFin()!,
+              ))
+            : of([])
+          ).pipe(
+            concatMap(() =>
+              from(imagenes).pipe(
+                concatMap((img, i) => {
+                  this.progreso.set(`Subiendo imagen ${i + 1} de ${imagenes.length}…`);
+                  return this.gestion.subirImagen(publicacion.id, img.archivo).pipe(
+                    catchError(() => of(null)),
+                  );
+                }),
+                toArray(),
+                concatMap((subidas) => of({ publicacion, fallidas: subidas.filter((s) => s === null).length })),
+              ),
+            ),
           ),
         ),
       )

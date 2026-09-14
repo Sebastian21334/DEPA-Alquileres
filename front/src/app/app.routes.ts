@@ -45,6 +45,15 @@ export const routes: Routes = [
     title: 'Convertite en anunciante — DEPA',
   },
   {
+    path: 'publicaciones/:id/editar',
+    canActivate: [anuncianteGuard],
+    loadComponent: () =>
+      import('./features/publication-form/publication-form.component').then(
+        (m) => m.PublicationFormComponent,
+      ),
+    title: 'Modificar publicación — DEPA',
+  },
+  {
     path: 'publicaciones/:id',
     loadComponent: () =>
       import('./features/publication-detail/publication-detail.component').then(

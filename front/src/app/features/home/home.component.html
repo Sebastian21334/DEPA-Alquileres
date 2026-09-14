@@ -14,5 +14,7 @@
   [loading]="cargando()"
   [error]="error()"
   [hasMore]="hayMas()"
+  [sortOrder]="orden()"
   (loadMore)="cargarMas()"
+  (sortChange)="cambiarOrden($event)"
 />

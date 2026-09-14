@@ -31,12 +31,16 @@ export class DisponibilidadService {
       throw new BadRequestException('La fecha de inicio no puede ser posterior a la de fin');
     }
 
+    const existentes = await this.fechaRepository.buscarPorRango(dto.id_publicacion, inicio, fin);
+    const fechasExistentes = new Set(existentes.map((item) => this.claveFecha(item.fecha)));
+
     // Armamos una entidad Fecha (todavía sin guardar) por cada día del rango.
     // fechaRepository.crear() es un simple "new" con los valores por defecto,
     // no pega contra la base todavía.
     const fechas: Fecha[] = [];
     // Se usa una copia de la fecha en cada iteración para no reutilizar la misma referencia mutable.
     for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+      if (fechasExistentes.has(this.claveFecha(d))) continue;
       fechas.push(
         this.fechaRepository.crear({
           fecha: new Date(d), // copia del Date del loop, evita que todas apunten a la misma referencia
@@ -47,6 +51,7 @@ export class DisponibilidadService {
     }
 
     // Recién acá se hace el insert real, todo en una sola operación (batch)
+    if (!fechas.length) return existentes;
     return this.fechaRepository.guardarVarias(fechas);
   }
 
@@ -67,8 +72,16 @@ export class DisponibilidadService {
     const fecha = await this.fechaRepository.buscarPorId(id);
     if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
 
+    if (dto.disponible && fecha.reserva) {
+      throw new BadRequestException('No se puede liberar un día asociado a una reserva');
+    }
+
     fecha.disponible = dto.disponible;
     return this.fechaRepository.guardar(fecha);
+  }
+
+  private claveFecha(fecha: Date): string {
+    return new Date(fecha).toISOString().slice(0, 10);
   }
 
   /** Elimina un dia y convierte el resultado del repositorio en un 404 claro. */

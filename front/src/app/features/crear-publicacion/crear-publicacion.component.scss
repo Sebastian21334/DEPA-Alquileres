@@ -65,6 +65,22 @@
 .photo__remove:hover { transform: scale(1.12) rotate(90deg); background: var(--color-danger); }
 .step > .acct-hint { display: block; margin-top: 0.6rem; }
 
+.availability-help {
+  margin: -0.35rem 0 1rem;
+  color: #475467;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.availability-summary {
+  margin: 0.9rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 9px;
+  background: #fff4e5;
+  color: #344054;
+  font-size: 0.88rem;
+}
+.availability-summary strong { color: var(--color-accent); }
+
 .create__note { margin: 0.25rem 0 0; font-size: 0.85rem; color: var(--color-text-muted); }
 .progress { align-self: center; margin-right: auto; font-size: 0.88rem; color: var(--color-text-muted); }
 
