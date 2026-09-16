@@ -64,10 +64,15 @@ export class ChatWindowComponent implements OnInit {
           ),
           takeUntilDestroyed(),
         )
-        .subscribe((mensajes) => {
+          .subscribe((mensajes) => {
           this.mensajes.set(mensajes);
           this.cargando.set(false);
           if (!this.enviando()) this.error.set('');
+          if (mensajes.some((m) => m.destinoUsuario.id === this.miId() && !m.leido)) {
+            this.chatService.marcarComoLeidos(this.chat().idPublicacion, this.chat().idOtroUsuario).subscribe({
+              next: () => this.refrescar$.next(),
+            });
+          }
         });
     }
 

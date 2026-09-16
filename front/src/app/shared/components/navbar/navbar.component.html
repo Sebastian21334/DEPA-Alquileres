@@ -70,6 +70,11 @@
         <svg lucideHouse [size]="20"></svg> Inicio
       </a>
     </li>
+    <li>
+      <a routerLink="/publicaciones" routerLinkActive="is-active" class="drawer__item">
+        <svg lucideLayoutList [size]="20"></svg> Explorar publicaciones
+      </a>
+    </li>
 
     @if (auth.isAuthenticated) {
       <li>
@@ -98,6 +103,9 @@
                     <small class="drawer__chat-title">{{ conv.ultimoMensaje.publicacion.titulo }}</small>
                     <small>{{ conv.ultimoMensaje.texto }}</small>
                   </span>
+                  @if (conv.cantidadNoLeidos) {
+                    <span class="drawer__unread" [attr.aria-label]="conv.cantidadNoLeidos + ' mensajes sin leer'">{{ conv.cantidadNoLeidos }}</span>
+                  }
                 </button>
               } @empty {
                 <p class="drawer__muted">Todavía no tenés conversaciones. Escribile a un anunciante desde una publicación.</p>
@@ -106,6 +114,15 @@
           </div>
         }
       </li>
+
+      @if (esInquilino()) {
+        <li class="drawer__section">Inquilino</li>
+        <li>
+          <a routerLink="/mis-reservas" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideCalendarDays [size]="20"></svg> Mis reservas
+          </a>
+        </li>
+      }
 
       @if (perfil.esAnuncianteVerificado()) {
         <li class="drawer__section">Anunciante</li>

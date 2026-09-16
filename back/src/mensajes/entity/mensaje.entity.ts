@@ -14,6 +14,13 @@ export class Mensaje {
   @Column({ type: 'timestamp' })
   fecha: Date;
 
+  // Permite mostrar el doble tilde al remitente y los pendientes al destinatario.
+  @Column({ type: 'boolean', default: false })
+  leido: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fecha_lectura: Date | null;
+
   // Se separan origen y destino para reconstruir ambos sentidos de una conversación.
   @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_origen_usuario' })

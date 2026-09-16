@@ -121,6 +121,8 @@
 }
 .chat__msg time { display: block; margin-top: 3px; padding: 0 4px; font-size: 0.68rem; color: var(--color-text-muted); }
 .chat__msg.is-mine time { text-align: right; }
+.chat__read { margin-left: 3px; color: #98a2b3; font-weight: 800; letter-spacing: -2px; }
+.chat__read.is-read { color: #0ea5e9; }
 @keyframes msg-in-left { from { opacity: 0; transform: translateX(-14px) scale(0.96); } to { opacity: 1; transform: none; } }
 @keyframes msg-in-right { from { opacity: 0; transform: translateX(14px) scale(0.96); } to { opacity: 1; transform: none; } }
 

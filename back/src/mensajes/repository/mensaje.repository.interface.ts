@@ -7,6 +7,7 @@ export interface IMensajeRepository {
   buscarConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<Mensaje[]>;
   // Todos los mensajes donde el usuario participa (como origen o destino), sin importar publicación ni interlocutor
   buscarPorUsuario(idUsuario: number): Promise<Mensaje[]>;
+  marcarConversacionComoLeida(idPublicacion: number, idRemitente: number, idDestinatario: number): Promise<void>;
 }
 
 export const MENSAJE_REPOSITORY = 'MENSAJE_REPOSITORY';

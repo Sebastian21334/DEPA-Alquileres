@@ -1,0 +1,3 @@
+<section class="explore-head"><div><p>Catálogo de alquileres</p><h1>{{ titulo() }}</h1></div><a routerLink="/" class="explore-head__back">Volver al inicio</a></section>
+<app-listing-grid [total]="resultado().total" [listings]="resultado().datos" [loading]="cargando()" [error]="error()" />
+@if (!cargando() && !error() && resultado().totalPaginas > 1) { <nav class="pagination" aria-label="Paginación de publicaciones"><button type="button" (click)="irAPagina(resultado().pagina - 1)" [disabled]="resultado().pagina === 1">Anterior</button><span>Página {{ resultado().pagina }} de {{ resultado().totalPaginas }}</span><button type="button" (click)="irAPagina(resultado().pagina + 1)" [disabled]="resultado().pagina === resultado().totalPaginas">Siguiente</button></nav> }

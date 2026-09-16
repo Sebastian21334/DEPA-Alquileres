@@ -5,6 +5,8 @@ export interface Mensaje {
   id: number;
   texto: string;
   fecha: string;
+  leido: boolean;
+  fecha_lectura: string | null;
   origenUsuario: Usuario;
   destinoUsuario: Usuario;
   publicacion: { id: number; titulo: string };
@@ -15,4 +17,5 @@ export interface ConversacionResumen {
   idPublicacion: number;
   idOtroUsuario: number;
   ultimoMensaje: Mensaje;
+  cantidadNoLeidos: number;
 }

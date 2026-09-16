@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -26,8 +26,12 @@ export class ListingService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/publicaciones`;
 
-  getActivas(): Observable<Publicacion[]> {
-    return this.http.get<Publicacion[]>(this.baseUrl);
+  getActivas(opciones: { pagina?: number; limite?: number; categoria?: string } = {}): Observable<PaginaPublicaciones> {
+    let params = new HttpParams();
+    if (opciones.pagina) params = params.set('pagina', opciones.pagina);
+    if (opciones.limite) params = params.set('limite', opciones.limite);
+    if (opciones.categoria) params = params.set('categoria', opciones.categoria);
+    return this.http.get<PaginaPublicaciones>(this.baseUrl, { params });
   }
 
   getById(id: number): Observable<Publicacion> {
@@ -48,4 +52,12 @@ export class ListingService {
   update(id: number, payload: Partial<PublicacionPayload>): Observable<Publicacion> {
     return this.http.patch<Publicacion>(`${this.baseUrl}/${id}`, payload);
   }
+}
+
+export interface PaginaPublicaciones {
+  datos: Publicacion[];
+  pagina: number;
+  limite: number;
+  total: number;
+  totalPaginas: number;
 }

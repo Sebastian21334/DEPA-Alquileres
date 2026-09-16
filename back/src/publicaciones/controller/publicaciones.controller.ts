@@ -11,9 +11,9 @@ export class PublicacionesController {
 
   @Get()
   // Las publicaciones activas son la vista pública principal del catálogo.
-  async listarActivas() {
-    return this.publicacionesService.listarActivas();
-    }
+  async listarActivas(@Query('pagina') pagina?: string, @Query('limite') limite?: string, @Query('categoria') categoria?: any) {
+    return this.publicacionesService.listarActivas(Number(pagina) || 1, Number(limite) || 12, categoria);
+  }
 
     @Get('anunciante/:idAnunciante')
     async listarPorAnunciante(

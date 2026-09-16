@@ -23,7 +23,7 @@
         @for (m of mensajes(); track m.id) {
           <div class="chat__msg" [class.is-mine]="m.origenUsuario.id === miId()">
             <p>{{ m.texto }}</p>
-            <time>{{ hora(m.fecha) }}</time>
+            <time>{{ hora(m.fecha) }} @if (m.origenUsuario.id === miId()) { <span class="chat__read" [class.is-read]="m.leido" [attr.aria-label]="m.leido ? 'Leído' : 'Enviado'">{{ m.leido ? '✓✓' : '✓' }}</span> }</time>
           </div>
         } @empty {
           <p class="chat__empty">Escribí tu consulta a {{ chat().nombreOtro }}.</p>

@@ -7,3 +7,25 @@
   --color-text: #0b2435;
   --color-bg: #303030;
 }
+
+.home-hero { max-width: var(--max-width-page, 1200px); margin: 0 auto; padding: 3rem 1rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; background: linear-gradient(115deg, #fff7ed, #fff); }
+.home-hero p { margin: 0 0 .35rem; color: var(--color-primary); font-weight: 800; text-transform: uppercase; font-size: .78rem; letter-spacing: .08em; }.home-hero h1 { margin: 0 0 .5rem; color: var(--color-text); }.home-hero span { color: var(--color-text-muted); }.home-hero__button { padding: .75rem 1rem; border-radius: 7px; background: var(--color-primary); color: #fff; text-decoration: none; font-weight: 800; white-space: nowrap; }.home-state { padding: 2rem 1rem; text-align: center; }.home-state--error { color: var(--color-danger); }
+
+.featured {
+  max-width: var(--max-width-page, 1200px);
+  margin: 0 auto;
+  padding: 2.75rem 1rem 1rem;
+}
+
+.featured__heading { margin-bottom: 2rem; }
+.featured__heading h2, .featured__section h3 { margin: 0; color: var(--color-text); }
+.featured__heading h2 { font-size: clamp(1.65rem, 3vw, 2.2rem); }
+.featured__eyebrow { margin: 0 0 .35rem; color: var(--color-primary); font-weight: 800; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+.featured__section { margin-top: 2.25rem; }
+.featured__section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }.featured__section-heading a { color: var(--color-secondary); font-weight: 800; text-decoration: none; }.featured__section-heading a:hover { text-decoration: underline; }
+.featured__section h2 { font-size: 1.3rem; }
+.featured__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+
+@media (max-width: 1050px) { .featured__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 580px) { .featured { padding-top: 2rem; } .featured__grid { display: flex; overflow-x: auto; padding-bottom: .5rem; } .featured__grid app-listing-card { min-width: 280px; } }
+@media (max-width: 650px) { .home-hero { align-items: flex-start; flex-direction: column; } }

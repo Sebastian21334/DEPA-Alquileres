@@ -14,6 +14,7 @@ export interface ConversacionResumen {
   idPublicacion: number;
   idOtroUsuario: number;
   ultimoMensaje: Mensaje;
+  cantidadNoLeidos: number;
 }
 
 @Injectable()
@@ -64,6 +65,8 @@ export class MensajesService {
     const mensaje = this.mensajeRepository.crear({
       texto: dto.texto,
       fecha: new Date(),
+      leido: false,
+      fecha_lectura: null,
       origenUsuario: { id: idUsuarioOrigen } as any,
       destinoUsuario: { id: dto.id_destino_usuario } as any,
       publicacion: { id: dto.id_publicacion } as any,
@@ -139,10 +142,19 @@ export class MensajesService {
           idPublicacion: mensaje.publicacion.id,
           idOtroUsuario,
           ultimoMensaje: mensaje,
+          cantidadNoLeidos: 0,
         });
+      }
+      if (mensaje.destinoUsuario.id === idUsuario && !mensaje.leido) {
+        conversaciones.get(clave)!.cantidadNoLeidos += 1;
       }
     }
 
     return Array.from(conversaciones.values());
+  }
+
+  /** Marca como leídos solamente los mensajes que el usuario recibió en este chat. */
+  async marcarConversacionComoLeida(idPublicacion: number, idOtroUsuario: number, idUsuarioActual: number): Promise<void> {
+    await this.mensajeRepository.marcarConversacionComoLeida(idPublicacion, idOtroUsuario, idUsuarioActual);
   }
 }

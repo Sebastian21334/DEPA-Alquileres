@@ -15,6 +15,14 @@ export const routes: Routes = [
     title: 'DEPA — Encontrá tu próximo hogar',
   },
   {
+    path: 'publicaciones',
+    loadComponent: () =>
+      import('./features/explorar-publicaciones/explorar-publicaciones.component').then(
+        (m) => m.ExplorarPublicacionesComponent,
+      ),
+    title: 'Explorar publicaciones — DEPA',
+  },
+  {
     // Debe ir antes de 'publicaciones/:id' para que "nueva" no se tome como id.
     path: 'publicaciones/nueva',
     canActivate: [anuncianteGuard],

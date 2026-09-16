@@ -47,4 +47,16 @@ export class MensajeRepository implements IMensajeRepository {
       .orderBy('mensaje.fecha', 'DESC') // el más nuevo primero, importante para armar la lista de conversaciones
       .getMany();
   }
+
+  async marcarConversacionComoLeida(idPublicacion: number, idRemitente: number, idDestinatario: number): Promise<void> {
+    await this.repository
+      .createQueryBuilder()
+      .update(Mensaje)
+      .set({ leido: true, fecha_lectura: new Date() })
+      .where('id_publicacion = :idPublicacion', { idPublicacion })
+      .andWhere('id_origen_usuario = :idRemitente', { idRemitente })
+      .andWhere('id_destino_usuario = :idDestinatario', { idDestinatario })
+      .andWhere('leido = false')
+      .execute();
+  }
 }

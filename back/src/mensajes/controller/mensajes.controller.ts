@@ -1,5 +1,5 @@
 // mensajes/controlador/mensajes.controller.ts
-import { Controller, Get, Post, Body, Param, ParseIntPipe, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, UseGuards, Req } from '@nestjs/common';
 import { MensajesService } from '../service/mensajes.service';
 import { EnviarMensajeDto } from '../dto/enviar-mensaje.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -30,5 +30,14 @@ export class MensajesController {
     @Req() req: any,
   ) {
     return this.mensajesService.listarConversacion(idPublicacion, idOtroUsuario, req.user.id);
+  }
+
+  @Patch('publicacion/:idPublicacion/usuario/:idOtroUsuario/leer')
+  marcarComoLeida(
+    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
+    @Param('idOtroUsuario', ParseIntPipe) idOtroUsuario: number,
+    @Req() req: any,
+  ) {
+    return this.mensajesService.marcarConversacionComoLeida(idPublicacion, idOtroUsuario, req.user.id);
   }
 }

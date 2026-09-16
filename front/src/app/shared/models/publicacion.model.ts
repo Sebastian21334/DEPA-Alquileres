@@ -14,6 +14,8 @@ export interface Publicacion {
   fecha_publicacion: string;
   precio: number;
   activa: boolean;
+  /** Cantidad de reservas no canceladas; llega desde GET /publicaciones/destacadas. */
+  cantidad_reservas?: number;
 
   // Datos del inmueble, embebidos (ver Propiedad en propiedad.model.ts).
   direccion: string;

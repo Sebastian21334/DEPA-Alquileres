@@ -9,6 +9,7 @@ import { CatalogosModule } from '../catalogos/catalogos.module';
 import { UbicacionModule } from '../ubicacion/ubicacion.module';
 import { AuthModule } from '../auth/auth.module'; // <-- cambio
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
+import { Reserva } from '../reservas/entity/reserva.entity';
 
 @Module({
   // La publicación coordina catálogos, ubicación y anunciante propietario.
@@ -23,7 +24,7 @@ import { AnunciantesModule } from '../anunciantes/anunciantes.module';
   ],
   imports: [
     // Registra el repositorio TypeORM de publicaciones.
-    TypeOrmModule.forFeature([Publicacion]),
+    TypeOrmModule.forFeature([Publicacion, Reserva]),
     // Se necesitan para resolver los IDs relacionales al crear una publicación.
     CatalogosModule,
     UbicacionModule,

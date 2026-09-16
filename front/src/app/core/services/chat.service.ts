@@ -25,6 +25,10 @@ export class ChatService {
   private readonly baseUrl = `${environment.apiUrl}/mensajes`;
 
   readonly abiertos = signal<ChatAbierto[]>([]);
+  readonly mensajesNoLeidos = signal(0);
+  readonly toast = signal<string | null>(null);
+  private ultimoTotalNoLeidos = -1;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** GET /mensajes — una fila por conversación, con el último mensaje. */
   listarConversaciones(): Observable<ConversacionResumen[]> {
@@ -43,6 +47,19 @@ export class ChatService {
       id_destino_usuario: idDestino,
       texto,
     });
+  }
+
+  marcarComoLeidos(idPublicacion: number, idOtroUsuario: number): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/publicacion/${idPublicacion}/usuario/${idOtroUsuario}/leer`, {});
+  }
+
+  actualizarNoLeidos(conversaciones: ConversacionResumen[]): void {
+    const total = conversaciones.reduce((acumulado, conversacion) => acumulado + conversacion.cantidadNoLeidos, 0);
+    this.mensajesNoLeidos.set(total);
+    if (total > 0 && (this.ultimoTotalNoLeidos === -1 || total > this.ultimoTotalNoLeidos)) {
+      this.mostrarToast(total === 1 ? 'Tenés 1 mensaje sin leer' : `Tenés ${total} mensajes sin leer`);
+    }
+    this.ultimoTotalNoLeidos = total;
   }
 
   abrir(chat: Omit<ChatAbierto, 'minimizado'>): void {
@@ -65,6 +82,15 @@ export class ChatService {
 
   cerrarTodos(): void {
     this.abiertos.set([]);
+    this.mensajesNoLeidos.set(0);
+    this.ultimoTotalNoLeidos = -1;
+    this.toast.set(null);
+  }
+
+  private mostrarToast(mensaje: string): void {
+    this.toast.set(mensaje);
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => this.toast.set(null), 6000);
   }
 
   private esMismo(a: Pick<ChatAbierto, 'idPublicacion' | 'idOtroUsuario'>, b: typeof a): boolean {

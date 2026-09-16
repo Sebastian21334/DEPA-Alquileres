@@ -1,6 +1,6 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PUBLICACIONES_REPOSITORY } from '../repository/publicaciones.repository.interface';
-import type { IPublicacionesRepository } from '../repository/publicaciones.repository.interface';
+import type { CategoriaInicio, ConsultaPublicaciones, IPublicacionesRepository } from '../repository/publicaciones.repository.interface';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
@@ -67,10 +67,14 @@ export class PublicacionesService {
     publicacion.activa = true;
   }
 
-  /** Devuelve unicamente las publicaciones visibles para visitantes. */
-  async listarActivas() {
-    const activas = await this.publicacionesRepo.buscarTodasActivas();
-    return activas.filter((p) => this.tieneImagenes(p));
+  /** Lista pública paginada; el límite se acota para proteger la base de datos. */
+  async listarActivas(pagina = 1, limite = 12, categoria?: CategoriaInicio) {
+    const consulta: ConsultaPublicaciones = {
+      pagina: Math.max(1, pagina),
+      limite: Math.min(Math.max(1, limite), 50),
+      categoria,
+    };
+    return this.publicacionesRepo.buscarPaginadas(consulta);
   }
 
   /** Lista publicaciones de un anunciante, opcionalmente solo las activas. */
