@@ -71,6 +71,42 @@ export class MailService implements IMailService {
     await this.enviar(destinatario, asunto, contenido);
   }
 
+  async enviarReservaConfirmada(destinatario: string, titulo: string, fechaInicio: Date, fechaFin: Date): Promise<void> {
+    await this.enviar(destinatario, 'Tu reserva fue confirmada', `<p>Tu reserva para <strong>${this.escapar(titulo)}</strong> fue confirmada.</p><p>Fechas: ${this.fecha(fechaInicio)} al ${this.fecha(fechaFin)}.</p><p>Podés verla desde <a href="${this.frontendUrl}/mis-reservas">Mis reservas</a>.</p>`);
+  }
+
+  async enviarNuevaReserva(destinatario: string, titulo: string, nombreInquilino: string, fechaInicio: Date, fechaFin: Date): Promise<void> {
+    await this.enviar(destinatario, 'Nueva reserva recibida', `<p><strong>${this.escapar(nombreInquilino)}</strong> reservó tu publicación <strong>${this.escapar(titulo)}</strong>.</p><p>Fechas: ${this.fecha(fechaInicio)} al ${this.fecha(fechaFin)}.</p><p>Consultá los datos desde <a href="${this.frontendUrl}/mis-reservas">Reservas recibidas</a>.</p>`);
+  }
+
+  async enviarMensajeNuevo(destinatario: string, nombreRemitente: string, titulo: string): Promise<void> {
+    await this.enviar(destinatario, 'Tenés un nuevo mensaje', `<p><strong>${this.escapar(nombreRemitente)}</strong> te escribió por <strong>${this.escapar(titulo)}</strong>.</p><p>Entrá a DEPA para responder desde el chat.</p>`);
+  }
+
+  async enviarSolicitudAnunciante(destinatario: string): Promise<void> {
+    await this.enviar(destinatario, 'Recibimos tu solicitud de anunciante', `<p>Recibimos tu solicitud para ser anunciante.</p><p>Cuando completes la documentación, nuestro equipo la revisará y te avisaremos el resultado por este medio.</p>`);
+  }
+
+  async enviarSolicitudParaRevision(destinatarios: string[], nombreSolicitante: string, emailSolicitante: string): Promise<void> {
+    await Promise.all(destinatarios.map((email) => this.enviar(email, 'Nueva solicitud de anunciante para revisar', `<p><strong>${this.escapar(nombreSolicitante)}</strong> envió su documentación para ser anunciante.</p><p>Contacto: ${this.escapar(emailSolicitante)}.</p><p>Revisala desde el panel de administración.</p>`)));
+  }
+
+  async enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string): Promise<void> {
+    const motivoSeguro = motivo ? `<p>Motivo: ${this.escapar(motivo)}</p>` : '';
+    const contenido = bloqueado
+      ? `<p>Tu cuenta fue bloqueada y no podrás iniciar sesión.</p>${motivoSeguro}<p>Si creés que se trata de un error, comunicate con soporte.</p>`
+      : '<p>Tu cuenta fue habilitada nuevamente. Ya podés iniciar sesión.</p>';
+    await this.enviar(destinatario, bloqueado ? 'Tu cuenta fue bloqueada' : 'Tu cuenta fue habilitada', contenido);
+  }
+
+  private fecha(valor: Date): string {
+    return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(new Date(valor));
+  }
+
+  private escapar(valor: string): string {
+    return valor.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+  }
+
   // Método privado compartido para no repetir la lógica de envío en cada método público
   private async enviar(destinatario: string, asunto: string, html: string): Promise<void> {
     // Azure devuelve un poller porque el envío es asíncrono; se espera hasta su estado final.

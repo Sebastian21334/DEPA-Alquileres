@@ -1,10 +1,13 @@
 // mensajes/servicio/mensajes.service.ts
-import { Inject, Injectable, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { Mensaje } from '../entity/mensaje.entity';
 import { EnviarMensajeDto } from '../dto/enviar-mensaje.dto';
 import type { IMensajeRepository } from '../repository/mensaje.repository.interface';
 import { MENSAJE_REPOSITORY } from '../repository/mensaje.repository.interface';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
+import { UsuariosService } from '../../usuarios/service/usuarios.service';
+import type { IMailService } from '../../mail/mail.interface';
+import { MAIL_SERVICE } from '../../mail/mail.interface';
 
 // Forma que le devolvemos al front para la lista de conversaciones (bandeja de entrada)
 export interface ConversacionResumen {
@@ -15,11 +18,14 @@ export interface ConversacionResumen {
 
 @Injectable()
 export class MensajesService {
+  private readonly logger = new Logger(MensajesService.name);
   constructor(
     @Inject(MENSAJE_REPOSITORY)
     private readonly mensajeRepository: IMensajeRepository,
     // Se comunica con el service de Publicaciones, nunca con su repositorio directo
     private readonly publicacionesService: PublicacionesService,
+    private readonly usuariosService: UsuariosService,
+    @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
   ) {}
 
   /**
@@ -63,7 +69,19 @@ export class MensajesService {
       publicacion: { id: dto.id_publicacion } as any,
     });
 
-    return this.mensajeRepository.guardar(mensaje);
+    const guardado = await this.mensajeRepository.guardar(mensaje);
+    const [destinatario, remitente] = await Promise.all([
+      this.usuariosService.buscarPorId(dto.id_destino_usuario),
+      this.usuariosService.buscarPorId(idUsuarioOrigen),
+    ]);
+    if (destinatario && remitente) {
+      try {
+        await this.mailService.enviarMensajeNuevo(destinatario.email, `${remitente.nombre} ${remitente.apellido}`.trim(), publicacion.titulo);
+      } catch (error) {
+        this.logger.error(`No se pudo enviar el aviso de chat a ${destinatario.email}`, error as Error);
+      }
+    }
+    return guardado;
   }
 
   /**

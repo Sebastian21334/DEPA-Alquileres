@@ -18,6 +18,8 @@ import * as crypto from 'crypto';
 import sharp from 'sharp';
 import { BlobServiceClient } from '@azure/storage-blob';
 import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
+import type { IMailService } from '../../mail/mail.interface';
+import { MAIL_SERVICE } from '../../mail/mail.interface';
 
 @Injectable()
 export class UsuariosService {
@@ -29,6 +31,7 @@ export class UsuariosService {
 
     private catalogosService: CatalogosService,
     private configService: ConfigService,
+    @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
   ) {}
 
   /** Busca un usuario por correo para validar duplicados o iniciar sesion. */
@@ -90,7 +93,7 @@ export class UsuariosService {
   }
 
   /** Bloquea o habilita el acceso de un usuario desde el panel administrativo. */
-  async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number) {
+  async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
     if (idUsuario === idOperador) {
       throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');
     }
@@ -102,6 +105,12 @@ export class UsuariosService {
 
     usuario.bloqueado = bloqueado;
     await this.usuariosRepo.guardar(usuario);
+
+    try {
+      await this.mailService.enviarCambioBloqueo(usuario.email, bloqueado, motivo?.trim());
+    } catch (error) {
+      this.logger.error(`No se pudo notificar el cambio de acceso a ${usuario.email}`, error as Error);
+    }
 
     return {
       mensaje: bloqueado ? 'Usuario bloqueado correctamente' : 'Usuario habilitado correctamente',
@@ -189,6 +198,15 @@ export class UsuariosService {
     const usuarios = await this.usuariosRepo.listarTodos();
 
     return usuarios.map((usuario) => this.usuarioSinSecretos(usuario));
+  }
+
+  /** Correos de las cuentas con permiso de administración para notificaciones internas. */
+  async emailsAdministradores(): Promise<string[]> {
+    const usuarios = await this.usuariosRepo.listarTodos();
+    return usuarios
+      .filter((usuario) => usuario.rol?.nombre === 'Administrador')
+      .map((usuario) => usuario.email)
+      .filter(Boolean);
   }
 
   private usuarioSinSecretos(usuario: Usuario) {

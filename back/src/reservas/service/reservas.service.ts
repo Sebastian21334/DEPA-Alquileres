@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { Reserva } from '../entity/reserva.entity';
 import { CrearReservaDto } from '../dto/crear-reserva.dto';
@@ -15,9 +16,12 @@ import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { Modalidad } from '../../catalogos/entity/modalidad.entity';
+import type { IMailService } from '../../mail/mail.interface';
+import { MAIL_SERVICE } from '../../mail/mail.interface';
 
 @Injectable()
 export class ReservasService {
+  private readonly logger = new Logger(ReservasService.name);
   constructor(
     // Repositorio por interfaz, igual criterio que en Disponibilidad
     @Inject(RESERVA_REPOSITORY)
@@ -28,6 +32,7 @@ export class ReservasService {
     private readonly disponibilidadService: DisponibilidadService,
     private readonly usuariosService: UsuariosService,
     private readonly publicacionesService: PublicacionesService,
+    @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
   ) {}
 
   /**
@@ -117,6 +122,17 @@ export class ReservasService {
       fin,
       reservaGuardada.id,
     );
+
+    // Los avisos son posteriores a la persistencia: un problema con el proveedor
+    // de correo nunca revierte una reserva que ya fue confirmada.
+    const nombreInquilino = `${usuario.nombre} ${usuario.apellido}`.trim();
+    const emailAnunciante = publicacion.anunciante?.usuario?.email;
+    await Promise.allSettled([
+      this.mailService.enviarReservaConfirmada(usuario.email, publicacion.titulo, inicio, fin),
+      ...(emailAnunciante ? [this.mailService.enviarNuevaReserva(emailAnunciante, publicacion.titulo, nombreInquilino, inicio, fin)] : []),
+    ]).then((resultados) => resultados.forEach((resultado) => {
+      if (resultado.status === 'rejected') this.logger.error('No se pudo enviar una notificación de reserva', resultado.reason);
+    }));
 
     return reservaGuardada;
   }

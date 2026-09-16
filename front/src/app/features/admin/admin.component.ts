@@ -115,12 +115,17 @@ export class AdminComponent {
     });
   }
   protected toggleUser(user: AdminUser): void {
+    const bloquear = !user.bloqueado;
+    // El motivo viaja al backend y se incluye en el correo de bloqueo. Cancelar
+    // el cuadro evita cambiar el estado por accidente.
+    const motivo = bloquear ? window.prompt(`Motivo del bloqueo para ${user.nombre} ${user.apellido}:`) : undefined;
+    if (bloquear && motivo === null) return;
     this.run(
       `user-${user.id}`,
-      () => this.api.cambiarBloqueo(user.id, !user.bloqueado),
+      () => this.api.cambiarBloqueo(user.id, bloquear, motivo ?? undefined),
       () =>
         this.users.update((v) =>
-          v.map((u) => (u.id === user.id ? { ...u, bloqueado: !u.bloqueado } : u)),
+          v.map((u) => (u.id === user.id ? { ...u, bloqueado: bloquear } : u)),
         ),
       'Estado del usuario actualizado.',
     );

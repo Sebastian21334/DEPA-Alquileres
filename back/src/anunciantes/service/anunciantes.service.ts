@@ -80,6 +80,11 @@ export class AnunciantesService {
       numero_revision: 1,
     });
     await this.verificacionRepo.guardarSolicitud(solicitud);
+    try {
+      await this.mailService.enviarSolicitudAnunciante(usuario.email);
+    } catch (error) {
+      this.logger.error(`No se pudo confirmar la solicitud de anunciante a ${usuario.email}`, error as Error);
+    }
     return anunciante;
   }
 
@@ -120,7 +125,14 @@ export class AnunciantesService {
     solicitud.motivo_rechazo = null;
     solicitud.actualizada_en = new Date();
 
-    return this.verificacionRepo.guardarSolicitud(solicitud);
+    const guardada = await this.verificacionRepo.guardarSolicitud(solicitud);
+    try {
+      const administradores = await this.usuariosService.emailsAdministradores();
+      await this.mailService.enviarSolicitudParaRevision(administradores, `${solicitud.anunciante.usuario.nombre} ${solicitud.anunciante.usuario.apellido}`.trim(), solicitud.anunciante.usuario.email);
+    } catch (error) {
+      this.logger.error('No se pudo avisar al equipo administrador sobre la solicitud', error as Error);
+    }
+    return guardada;
   }
 
   /** Marca una solicitud completa como verificada y habilita publicaciones. */

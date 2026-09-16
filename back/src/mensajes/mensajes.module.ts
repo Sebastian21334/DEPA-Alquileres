@@ -8,10 +8,12 @@ import { MensajeRepository } from './repository/mensajes.repository';
 import { MENSAJE_REPOSITORY } from './repository/mensaje.repository.interface';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { AuthModule } from '../auth/auth.module';
+import { UsuariosModule } from '../usuarios/usuarios.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   // Los mensajes pertenecen a una publicación y siempre requieren identidad JWT.
-  imports: [TypeOrmModule.forFeature([Mensaje]), PublicacionesModule, AuthModule],
+  imports: [TypeOrmModule.forFeature([Mensaje]), PublicacionesModule, AuthModule, UsuariosModule, MailModule],
   controllers: [MensajesController],
   providers: [
     MensajesService,

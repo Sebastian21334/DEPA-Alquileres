@@ -10,6 +10,7 @@ import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
 import { AuthModule } from '../auth/auth.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
     AuthModule,
     UsuariosModule,
     PublicacionesModule,
+    MailModule,
   ],
   controllers: [ReservasController],
   providers: [

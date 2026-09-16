@@ -7,6 +7,7 @@ import { UsuariosService } from './service/usuarios.service';
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { UsuariosController } from './contoller/usuarios.controller';
 import { AuthModule } from '../auth/auth.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   // El controller expone únicamente operaciones administrativas de usuarios.
@@ -27,6 +28,7 @@ import { AuthModule } from '../auth/auth.module';
     // Catálogos aporta los roles; Auth y Usuarios tienen una dependencia circular.
     forwardRef(() => CatalogosModule),
     forwardRef(() => AuthModule),
+    MailModule,
   ],
 }) 
 export class UsuariosModule {}

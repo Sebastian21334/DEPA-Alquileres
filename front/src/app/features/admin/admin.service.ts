@@ -55,8 +55,8 @@ export class AdminService {
   listarPendientes() {
     return this.http.get<VerificationRequest[]>(`${this.api}/anunciantes/pendientes`);
   }
-  cambiarBloqueo(id: number, bloquear: boolean) {
-    return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, {});
+  cambiarBloqueo(id: number, bloquear: boolean, motivo?: string) {
+    return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo });
   }
   cambiarRol(id: number, nombreRol: string) {
     return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });
