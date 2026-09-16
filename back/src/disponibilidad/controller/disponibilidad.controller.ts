@@ -16,6 +16,12 @@ export class DisponibilidadController {
     return this.disponibilidadService.crear(dto);
   }
 
+  @UseGuards(JwtAuthGuard, PropietarioPublicacionGuard)
+  @Get('publicacion/:idPublicacion/administracion')
+  listarPorPublicacionParaAdministracion(@Param('idPublicacion', ParseIntPipe) id: number) {
+    return this.disponibilidadService.listarPorPublicacionParaAdministracion(id);
+  }
+
   @Get('publicacion/:id')
   // El calendario es público para que un visitante pueda elegir fechas.
   listarPorPublicacion(@Param('id', ParseIntPipe) id: number) {

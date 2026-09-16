@@ -4,6 +4,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/ro
 import { filter } from 'rxjs';
 import {
   LucideBadgeCheck,
+  LucideCalendarDays,
   LucideChevronDown,
   LucideHouse,
   LucideLayoutList,
@@ -33,6 +34,7 @@ import { AvatarComponent } from '../avatar/avatar.component';
     RouterLinkActive,
     AvatarComponent,
     LucideBadgeCheck,
+    LucideCalendarDays,
     LucideChevronDown,
     LucideHouse,
     LucideLayoutList,

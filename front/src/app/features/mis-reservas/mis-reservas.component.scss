@@ -1,0 +1,9 @@
+.reservation-section { margin-top: 1.75rem; }
+.reservation-section h2 { margin-bottom: .75rem; }
+.reservation { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.reservation h3 { margin: .5rem 0 .25rem; font-size: 1.05rem; }
+.reservation p { margin: .2rem 0; }
+.reservation__actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.muted { color: var(--color-text-muted); font-size: .9rem; }
+.empty { color: var(--color-text-muted); }
+@media (max-width: 600px) { .reservation { align-items: flex-start; flex-direction: column; } }

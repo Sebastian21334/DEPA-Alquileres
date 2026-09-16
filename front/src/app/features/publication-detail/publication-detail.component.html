@@ -11,7 +11,9 @@
     <div class="gallery">
       <div class="gallery__main">
         @for (image of currentImage() ? [currentImage()!] : []; track image.id) {
-          <img [src]="image.url" [alt]="item.titulo" [class]="'gallery__img gallery__img--' + direction()" />
+          <button type="button" class="gallery__preview" (click)="openImagePreview()" [attr.aria-label]="'Ampliar imagen de ' + item.titulo">
+            <img [src]="image.url" [alt]="item.titulo" [class]="'gallery__img gallery__img--' + direction()" />
+          </button>
         } @empty {
           <div class="gallery__empty">Sin imágenes disponibles</div>
         }
@@ -159,6 +161,15 @@
             <div class="payment-total"><span>Total simulado</span><strong>{{ item.tipoMoneda?.nombre ?? '$' }} {{ formatAmount(bookingTotal()) }}</strong></div>
             <button class="button button--reserve" type="submit" [disabled]="processingPayment()">{{ processingPayment() ? 'Procesando simulación…' : 'Simular pago y reservar' }}</button>
           </form>
+        </section>
+      </div>
+    }
+
+    @if (imagePreviewOpen() && currentImage(); as image) {
+      <div class="image-modal-backdrop" (click)="closeImagePreview()">
+        <section class="image-modal" role="dialog" aria-modal="true" aria-label="Imagen ampliada" (click)="$event.stopPropagation()">
+          <button class="image-modal__close" type="button" (click)="closeImagePreview()" aria-label="Cerrar imagen ampliada">×</button>
+          <img [src]="image.url" [alt]="item.titulo" />
         </section>
       </div>
     }

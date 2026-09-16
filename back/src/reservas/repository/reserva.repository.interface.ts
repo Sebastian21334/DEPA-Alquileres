@@ -9,4 +9,5 @@ export interface IReservaRepository {
   buscarPorId(id: number): Promise<Reserva | null>;
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]>;
   buscarPorPublicacion(idPublicacion: number): Promise<Reserva[]>;
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]>;
 }

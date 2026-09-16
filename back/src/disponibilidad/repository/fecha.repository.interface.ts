@@ -6,7 +6,10 @@ export interface IFechaRepository {
   guardarVarias(fechas: Fecha[]): Promise<Fecha[]>;
   buscarPorId(id: number): Promise<Fecha | null>;
   buscarPorPublicacion(idPublicacion: number): Promise<Fecha[]>;
+  buscarPorPublicacionParaAdministracion(idPublicacion: number): Promise<Fecha[]>;
+  buscarPorReserva(idReserva: number): Promise<Fecha[]>;
   buscarPorRango(idPublicacion: number, fechaInicio: Date, fechaFin: Date): Promise<Fecha[]>;
+  buscarPorRangoConReserva(idPublicacion: number, fechaInicio: Date, fechaFin: Date): Promise<Fecha[]>;
   eliminar(id: number): Promise<number>; // devuelve la cantidad de filas afectadas
 }
 

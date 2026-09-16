@@ -33,7 +33,21 @@ export class FechaRepository implements IFechaRepository {
   buscarPorPublicacion(idPublicacion: number): Promise<Fecha[]> {
     return this.repository.find({
       where: { publicacion: { id: idPublicacion } },
+      order: { fecha: 'ASC' },
+    });
+  }
+
+  buscarPorPublicacionParaAdministracion(idPublicacion: number): Promise<Fecha[]> {
+    return this.repository.find({
+      where: { publicacion: { id: idPublicacion } },
       relations: { reserva: true },
+      order: { fecha: 'ASC' },
+    });
+  }
+
+  buscarPorReserva(idReserva: number): Promise<Fecha[]> {
+    return this.repository.find({
+      where: { reserva: { id: idReserva } },
       order: { fecha: 'ASC' },
     });
   }
@@ -45,6 +59,14 @@ export class FechaRepository implements IFechaRepository {
         publicacion: { id: idPublicacion },
         fecha: Between(fechaInicio, fechaFin),
       },
+      order: { fecha: 'ASC' },
+    });
+  }
+
+  buscarPorRangoConReserva(idPublicacion: number, fechaInicio: Date, fechaFin: Date): Promise<Fecha[]> {
+    return this.repository.find({
+      where: { publicacion: { id: idPublicacion }, fecha: Between(fechaInicio, fechaFin) },
+      relations: { reserva: true },
       order: { fecha: 'ASC' },
     });
   }

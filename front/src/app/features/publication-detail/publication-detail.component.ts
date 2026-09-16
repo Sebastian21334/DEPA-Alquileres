@@ -64,6 +64,7 @@ export class PublicationDetailComponent {
   protected readonly error = signal('');
   protected readonly selectedImage = signal(0);
   protected readonly direction = signal<'next' | 'prev'>('next');
+  protected readonly imagePreviewOpen = signal(false);
   protected readonly activeCount = signal<number | null>(null);
   protected readonly availability = signal<FechaDisponible[]>([]);
   protected readonly selectedStart = signal<string | null>(null);
@@ -81,7 +82,10 @@ export class PublicationDetailComponent {
     () => this.publication()?.anunciante?.usuario?.id === Number(this.auth.currentUser()?.sub),
   );
   protected readonly esTemporaria = computed(
-    () => this.publication()?.modalidad?.nombre.toLowerCase().includes('tempor') ?? false,
+    () => {
+      const modalidad = this.publication()?.modalidad;
+      return modalidad?.permite_reservas_por_fecha ?? modalidad?.nombre.toLowerCase().includes('tempor') ?? false;
+    },
   );
   protected readonly advertiserName = computed(() => {
     const user = this.publication()?.anunciante?.usuario;
@@ -117,7 +121,7 @@ export class PublicationDetailComponent {
             next: (items) => this.activeCount.set(items.length),
           });
         }
-        if (publication.modalidad?.nombre.toLowerCase().includes('tempor')) {
+        if (this.esTemporaria()) {
           this.loadAvailability(publication.id);
           this.catalogs.getMetodosPago().subscribe({
             next: (items) => {
@@ -151,6 +155,15 @@ export class PublicationDetailComponent {
   protected selectImage(index: number): void {
     this.direction.set(index < this.selectedImage() ? 'prev' : 'next');
     this.selectedImage.set(index);
+  }
+
+  @HostListener('document:keydown.escape')
+  protected closeImagePreview(): void {
+    this.imagePreviewOpen.set(false);
+  }
+
+  protected openImagePreview(): void {
+    if (this.currentImage()) this.imagePreviewOpen.set(true);
   }
 
   protected chatear(item: Publicacion): void {

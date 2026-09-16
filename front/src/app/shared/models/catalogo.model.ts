@@ -9,7 +9,9 @@ export interface Catalogo {
 }
 
 export type TipoPropiedad = Catalogo;
-export type Modalidad = Catalogo;
+export interface Modalidad extends Catalogo {
+  permite_reservas_por_fecha?: boolean | null;
+}
 export type TipoMoneda = Catalogo;
 export type TipoAnunciante = Catalogo;
 export type MetodoPago = Catalogo;

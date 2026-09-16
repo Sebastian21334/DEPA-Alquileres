@@ -27,7 +27,7 @@ export class ReservaRepository implements IReservaRepository {
   buscarPorId(id: number): Promise<Reserva | null> {
     return this.repository.findOne({
       where: { id },
-      relations: { usuario: true, publicacion: true, metodoPago: true },
+      relations: { usuario: true, publicacion: { anunciante: true }, metodoPago: true },
     });
   }
 
@@ -46,6 +46,14 @@ export class ReservaRepository implements IReservaRepository {
       where: { publicacion: { id: idPublicacion } },
       relations: { usuario: true, metodoPago: true },
       order: { fecha_pago: 'DESC' },
+    });
+  }
+
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
+    return this.repository.find({
+      where: { publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } } },
+      relations: { usuario: true, publicacion: true, metodoPago: true },
+      order: { fecha_inicio: 'ASC' },
     });
   }
 }

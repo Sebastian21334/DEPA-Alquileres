@@ -109,14 +109,17 @@ export class CatalogosController {
   @Post('modalidades')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  crearModalidad(@Body() datos: { nombre: string }) {
+  crearModalidad(@Body() datos: { nombre: string; permite_reservas_por_fecha?: boolean }) {
     return this.catalogosService.crearModalidad(datos);
   }
 
   @Put('modalidades/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  actualizarModalidad(@Param('id', ParseIntPipe) id: number, @Body() datos: { nombre: string }) {
+  actualizarModalidad(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() datos: { nombre: string; permite_reservas_por_fecha?: boolean },
+  ) {
     return this.catalogosService.actualizarModalidad(id, datos);
   }
 

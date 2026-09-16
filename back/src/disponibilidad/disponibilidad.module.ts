@@ -9,12 +9,14 @@ import { PropietarioPublicacionGuard } from '../common/guards/propietario-public
 import { FechaRepository } from './repository/fecha.repository';
 import { FECHA_REPOSITORY } from './repository/fecha.repository.interface';
 import { AuthModule } from '../auth/auth.module';
+import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 
 @Module({
   imports: [
     // Se usan Fecha para el calendario y Publicacion para resolver propiedad.
     TypeOrmModule.forFeature([Fecha, Publicacion]),
     AuthModule,
+    PublicacionesModule,
   ],
   controllers: [DisponibilidadController],
   providers: [

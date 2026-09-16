@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Output, computed, input, signal } from '@angular/core';
-import { FechaDisponible } from '../../services/availability.service';
+import { FechaDisponible, FechaDisponibleAdministracion } from '../../services/availability.service';
 
 export type CalendarMode = 'select' | 'manage' | 'setup';
 
@@ -23,7 +23,7 @@ export class AvailabilityCalendarComponent {
   readonly selectedEnd = input<string | null>(null);
 
   @Output() dateSelected = new EventEmitter<string>();
-  @Output() availabilityToggle = new EventEmitter<FechaDisponible>();
+  @Output() availabilityToggle = new EventEmitter<FechaDisponibleAdministracion>();
 
   private readonly today = this.toIso(new Date());
   protected readonly month = signal(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -57,7 +57,10 @@ export class AvailabilityCalendarComponent {
   protected select(day: CalendarDay): void {
     if (day.past) return;
     if (this.mode() === 'manage') {
-      if (day.record) this.availabilityToggle.emit(day.record);
+      const administrativeRecord = day.record as Partial<FechaDisponibleAdministracion> | null;
+      if (administrativeRecord?.id !== undefined) {
+        this.availabilityToggle.emit(day.record as FechaDisponibleAdministracion);
+      }
       return;
     }
     if (this.mode() === 'select' && !day.record?.disponible) return;

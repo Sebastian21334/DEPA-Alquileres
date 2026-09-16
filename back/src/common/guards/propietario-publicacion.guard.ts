@@ -38,7 +38,10 @@ export class PropietarioPublicacionGuard implements CanActivate {
 
     // Este guard se reutiliza en varios endpoints (crear/actualizar/eliminar),
     // y cada uno trae el dato de la publicación de un lugar distinto:
-    if (req.body?.id_publicacion) {
+    if (req.params?.idPublicacion) {
+      // El endpoint de administración lleva directamente el ID de publicación.
+      idPublicacion = +req.params.idPublicacion;
+    } else if (req.method === 'POST' && req.body?.id_publicacion) {
       // Caso POST /disponibilidad -> el id de publicación viene directo en el body
       idPublicacion = req.body.id_publicacion;
     } else if (req.params?.id) {

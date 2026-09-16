@@ -12,6 +12,12 @@ export class Reserva {
   @Column({ type: 'boolean', default: false })
   finalizada: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  cancelada: boolean;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fecha_cancelacion: Date | null;
+
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   monto_pago: number;
 

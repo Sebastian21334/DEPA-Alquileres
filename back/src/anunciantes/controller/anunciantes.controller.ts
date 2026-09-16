@@ -9,7 +9,6 @@ import {
   UseGuards,
   Req,
   ParseIntPipe,
-  NotFoundException,
   UploadedFiles,
   UseInterceptors,
   BadRequestException,
@@ -100,10 +99,10 @@ export class AnunciantesController {
   @Get('mi-solicitud')
   @UseGuards(JwtAuthGuard)
   async miSolicitud(@Req() req: AuthenticatedRequest) {
-    // La ausencia se transforma en un mensaje claro para el usuario.
-    const solicitud = await this.anunciantesService.buscarSolicitudConHistorial(req.user.id);
-    if (!solicitud) throw new NotFoundException('No solicitaste ser anunciante todavía');
-    return solicitud;
+    // No tener solicitud es un estado normal del perfil, no un recurso que la
+    // interfaz deba tratar como error. Responder 200 evita el 404 transitorio
+    // que se veía al cargar navbar, guards y perfil en paralelo.
+    return this.anunciantesService.buscarSolicitudConHistorial(req.user.id);
   }
 
   @Patch(':id/aprobar')

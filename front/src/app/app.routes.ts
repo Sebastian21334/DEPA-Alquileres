@@ -36,6 +36,12 @@ export const routes: Routes = [
     title: 'Mi perfil — DEPA',
   },
   {
+    path: 'mis-reservas',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/mis-reservas/mis-reservas.component').then((m) => m.MisReservasComponent),
+    title: 'Mis reservas — DEPA',
+  },
+  {
     path: 'mi-perfil/anunciante',
     canActivate: [authGuard],
     loadComponent: () =>

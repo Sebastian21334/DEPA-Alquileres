@@ -6,7 +6,10 @@ import { finalize, forkJoin, map, of, switchMap } from 'rxjs';
 import { ListingService } from '../home/listing.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { UbicacionService } from '../../shared/services/ubicacion.service';
-import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
+import {
+  AvailabilityService,
+  FechaDisponibleAdministracion,
+} from '../../shared/services/availability.service';
 import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
 import { Ciudad, Provincia } from '../../shared/models/ubicacion.model';
 import { PublicacionPayload } from '../../shared/models/publicacion.model';
@@ -43,7 +46,7 @@ export class PublicationFormComponent {
   protected readonly ciudades = signal<Ciudad[]>([]);
   protected readonly selectedProvince = signal<number | null>(null);
   protected readonly selectedModality = signal<number | null>(null);
-  protected readonly availability = signal<FechaDisponible[]>([]);
+  protected readonly availability = signal<FechaDisponibleAdministracion[]>([]);
   protected readonly availabilityStart = signal<string | null>(null);
   protected readonly availabilityEnd = signal<string | null>(null);
   protected readonly provincias = computed<Provincia[]>(() => {
@@ -59,7 +62,7 @@ export class PublicationFormComponent {
   });
   protected readonly isTemporary = computed(() => {
     const selected = this.modalidades().find((item) => item.id === this.selectedModality());
-    return selected?.nombre.toLowerCase().includes('tempor') ?? false;
+    return selected?.permite_reservas_por_fecha ?? selected?.nombre.toLowerCase().includes('tempor') ?? false;
   });
 
   protected readonly form = this.fb.group({
@@ -121,7 +124,7 @@ export class PublicationFormComponent {
     this.availabilityEnd.set(date);
   }
 
-  protected toggleAvailability(item: FechaDisponible): void {
+  protected toggleAvailability(item: FechaDisponibleAdministracion): void {
     if (item.reserva) {
       this.error.set('Ese día pertenece a una reserva confirmada y no puede modificarse.');
       return;
@@ -210,7 +213,7 @@ export class PublicationFormComponent {
         });
         this.selectedProvince.set(item.provincia?.id ?? null);
         this.selectedModality.set(item.modalidad?.id ?? null);
-        this.availabilityApi.getByPublication(id).subscribe({
+        this.availabilityApi.getForAdministration(id).subscribe({
           next: (dates) => this.availability.set(dates),
         });
       },

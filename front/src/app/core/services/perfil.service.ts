@@ -76,8 +76,9 @@ export class PerfilService {
     if (!forzar && this.solicitud$ && this.solicitudDeUsuario === idUsuario) return this.solicitud$;
 
     this.solicitudDeUsuario = idUsuario;
-    this.solicitud$ = this.http.get<SolicitudVerificacion>(`${this.api}/anunciantes/mi-solicitud`).pipe(
-      // El backend responde 404 cuando no existe solicitud: no es un error para la UI.
+    this.solicitud$ = this.http.get<SolicitudVerificacion | null>(`${this.api}/anunciantes/mi-solicitud`).pipe(
+      // El endpoint devuelve null cuando el usuario todavía no inició el alta.
+      // Se conserva el fallback para instalaciones con un backend anterior.
       catchError(() => of(null)),
       tap((solicitud) => this.solicitud.set(solicitud)),
       shareReplay(1),
