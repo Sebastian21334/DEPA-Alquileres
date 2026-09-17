@@ -11,52 +11,26 @@
     @if (publicacion().modalidad?.nombre) {
       <span class="badge badge--modalidad">{{ publicacion().modalidad?.nombre }}</span>
     }
-
-    <button type="button" class="card__save" aria-label="Guardar publicación">
-      <svg lucideBookmark [size]="18"></svg>
-    </button>
-
+    <button type="button" class="card__save" aria-label="Guardar publicación"><svg lucideBookmark [size]="19"></svg></button>
     @if (verificado) {
-      <span class="badge badge--verified">
-        <svg lucideBadgeCheck [size]="14"></svg>
-        Dueño Verificado
-      </span>
+      <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> Dueño verificado</span>
     }
   </div>
 
   <div class="card__body">
-    <div class="card__title-group">
-      <h3 class="card__title">{{ publicacion().titulo }}</h3>
-      @if (ubicacion) {
-        <p class="card__location">
-          <svg lucideMapPin [size]="15"></svg>
-          {{ ubicacion }}
-        </p>
-      }
-    </div>
+    <h3 class="card__title">{{ publicacion().titulo }}</h3>
+    @if (ubicacion) {
+      <p class="card__location"><svg lucideMapPin [size]="16"></svg>{{ ubicacion }}</p>
+    }
 
     <ul class="card__specs">
-      <li [title]="publicacion().cantidad_ambientes + ' ambientes'">
-        <span class="card__spec-value">{{ publicacion().cantidad_ambientes }}</span>
-        <svg lucideLayoutGrid [size]="22" aria-hidden="true"></svg>
-        <span class="sr-only">ambientes</span>
-      </li>
-      <li [title]="publicacion().superficie + ' m²'">
-        <span class="card__spec-value">{{ superficie }}</span>
-        <svg lucideRuler [size]="22" aria-hidden="true"></svg>
-        <span class="sr-only">m² de superficie</span>
-      </li>
+      <li><svg lucideBed [size]="19" aria-hidden="true"></svg>{{ ambientesTexto }}</li>
+      <li><span class="card__divider" aria-hidden="true"></span><svg lucideRuler [size]="18" aria-hidden="true"></svg>{{ superficie }} m²</li>
     </ul>
 
     <div class="card__footer">
-      <span class="card__price">
-        <small>{{ publicacion().tipoMoneda?.nombre }}</small> {{ precioFormateado }}
-      </span>
-
-      <a class="btn btn--primary shine" [routerLink]="['/publicaciones', publicacion().id]">
-        Ver
-        <svg lucideArrowRight [size]="18"></svg>
-      </a>
+      <p class="card__price"><strong>${{ precioFormateado }}</strong><span>/ mes</span></p>
+      <a class="card__cta" [routerLink]="['/publicaciones', publicacion().id]">Ver propiedad <svg lucideArrowRight [size]="17"></svg></a>
     </div>
   </div>
 </article>

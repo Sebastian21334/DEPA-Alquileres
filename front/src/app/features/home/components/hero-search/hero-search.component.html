@@ -6,17 +6,15 @@
     @if (modalidades().length) {
       <div class="hero__modalidades">
         @for (m of modalidadesOrdenadas(); track m.id; let i = $index) {
-          <button
-            type="button"
+          <a
+            [routerLink]="['/publicaciones']"
+            [queryParams]="{ categoria: categoriaDe(m.nombre) }"
             class="modalidad-btn"
             [class.modalidad-btn--primary]="!esTemporaria(m.nombre)"
             [class.modalidad-btn--secondary]="esTemporaria(m.nombre)"
-            [class.modalidad-btn--active]="form().controls['idModalidad'].value === m.id"
-            [attr.aria-pressed]="form().controls['idModalidad'].value === m.id"
-            (click)="toggleModalidad(m.id)"
           >
             {{ m.nombre }}
-          </button>
+          </a>
         }
       </div>
     }

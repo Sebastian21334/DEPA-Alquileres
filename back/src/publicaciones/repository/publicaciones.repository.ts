@@ -66,7 +66,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * Así una petición nunca materializa el catálogo completo en memoria.
    */
   async buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones> {
-    const { pagina, limite, categoria } = consulta;
+    const { pagina, limite, categoria, idsCiudad, idsTipoPropiedad, idsTipoMoneda, precioMin, precioMax, ambientes } = consulta;
     const base = this.repo
       .createQueryBuilder('publicacion')
       .innerJoin('publicacion.imagenes', 'imagen')
@@ -76,6 +76,25 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .distinct(true);
 
     this.aplicarCategoria(base, categoria);
+    if (idsCiudad?.length) base.andWhere('ciudad.id IN (:...idsCiudad)', { idsCiudad });
+    if (idsTipoPropiedad?.length) {
+      base.leftJoin('publicacion.tipoPropiedad', 'tipoPropiedad');
+      base.andWhere('tipoPropiedad.id IN (:...idsTipoPropiedad)', { idsTipoPropiedad });
+    }
+    if (idsTipoMoneda?.length) {
+      base.leftJoin('publicacion.tipoMoneda', 'tipoMoneda');
+      base.andWhere('tipoMoneda.id IN (:...idsTipoMoneda)', { idsTipoMoneda });
+    }
+    if (precioMin != null) base.andWhere('publicacion.precio >= :precioMin', { precioMin });
+    if (precioMax != null) base.andWhere('publicacion.precio <= :precioMax', { precioMax });
+    if (ambientes?.length) {
+      const exactos = ambientes.filter((ambiente) => ambiente !== '4+').map(Number);
+      const condiciones = [
+        ...(exactos.length ? ['publicacion.cantidad_ambientes IN (:...ambientesExactos)'] : []),
+        ...(ambientes.includes('4+') ? ['publicacion.cantidad_ambientes >= 4'] : []),
+      ];
+      base.andWhere(`(${condiciones.join(' OR ')})`, { ambientesExactos: exactos });
+    }
     const total = await base.clone().getCount();
 
     const reservas = this.reservasRepo
@@ -91,7 +110,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .clone()
       .select('publicacion.id', 'id')
       .addSelect('COALESCE(reservas.cantidad, 0)', 'cantidadReservas')
-      .leftJoin(`(${reservas.getQuery()})`, 'reservas', 'reservas.idPublicacion = publicacion.id_publicacion')
+      .addSelect('publicacion.fecha_publicacion', 'fechaPublicacion')
+      .leftJoin(`(${reservas.getQuery()})`, 'reservas', 'reservas."idPublicacion" = publicacion.id_publicacion')
       .setParameters(reservas.getParameters())
       .orderBy(orden, direccion)
       .addOrderBy('publicacion.id', 'DESC')

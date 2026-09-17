@@ -11,8 +11,32 @@ export class PublicacionesController {
 
   @Get()
   // Las publicaciones activas son la vista pública principal del catálogo.
-  async listarActivas(@Query('pagina') pagina?: string, @Query('limite') limite?: string, @Query('categoria') categoria?: any) {
-    return this.publicacionesService.listarActivas(Number(pagina) || 1, Number(limite) || 12, categoria);
+  async listarActivas(
+    @Query('pagina') pagina?: string,
+    @Query('limite') limite?: string,
+    @Query('categoria') categoria?: any,
+    @Query('idsCiudad') idsCiudad?: string,
+    @Query('idsTipoPropiedad') idsTipoPropiedad?: string,
+    @Query('idsTipoMoneda') idsTipoMoneda?: string,
+    @Query('precioMin') precioMin?: string,
+    @Query('precioMax') precioMax?: string,
+    @Query('ambientes') ambientes?: string,
+  ) {
+    const ids = (valor?: string) =>
+      valor?.split(',').map(Number).filter(Number.isInteger) ?? [];
+    const numero = (valor?: string) => {
+      const parsed = Number(valor);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+
+    return this.publicacionesService.listarActivas(Number(pagina) || 1, Number(limite) || 12, categoria, {
+      idsCiudad: ids(idsCiudad),
+      idsTipoPropiedad: ids(idsTipoPropiedad),
+      idsTipoMoneda: ids(idsTipoMoneda),
+      precioMin: numero(precioMin),
+      precioMax: numero(precioMax),
+      ambientes: ambientes?.split(',').filter((ambiente) => ['1', '2', '3', '4+'].includes(ambiente)),
+    });
   }
 
     @Get('anunciante/:idAnunciante')

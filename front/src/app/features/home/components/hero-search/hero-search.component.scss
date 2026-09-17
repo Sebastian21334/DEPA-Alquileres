@@ -60,11 +60,13 @@
   gap: 50px;
 }
 .modalidad-btn {
+  display: inline-block;
   min-width: 240px;
   padding: 18px 26px;
   border: 0;
   border-radius: 7px;
   color: white;
+  text-decoration: none;
   background: var(--color-primary);
   font: inherit;
   font-size: 1.875rem;

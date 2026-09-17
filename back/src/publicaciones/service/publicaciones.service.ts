@@ -68,11 +68,17 @@ export class PublicacionesService {
   }
 
   /** Lista pública paginada; el límite se acota para proteger la base de datos. */
-  async listarActivas(pagina = 1, limite = 12, categoria?: CategoriaInicio) {
+  async listarActivas(
+    pagina = 1,
+    limite = 12,
+    categoria?: CategoriaInicio,
+    filtros: Omit<Partial<ConsultaPublicaciones>, 'pagina' | 'limite' | 'categoria'> = {},
+  ) {
     const consulta: ConsultaPublicaciones = {
       pagina: Math.max(1, pagina),
       limite: Math.min(Math.max(1, limite), 50),
       categoria,
+      ...filtros,
     };
     return this.publicacionesRepo.buscarPaginadas(consulta);
   }

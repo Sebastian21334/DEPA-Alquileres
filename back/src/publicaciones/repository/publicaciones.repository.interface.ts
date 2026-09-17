@@ -6,6 +6,12 @@ export interface ConsultaPublicaciones {
   pagina: number;
   limite: number;
   categoria?: CategoriaInicio;
+  idsCiudad?: number[];
+  idsTipoPropiedad?: number[];
+  idsTipoMoneda?: number[];
+  precioMin?: number;
+  precioMax?: number;
+  ambientes?: string[];
 }
 
 export interface PaginaPublicaciones {

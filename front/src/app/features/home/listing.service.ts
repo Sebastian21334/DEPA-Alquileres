@@ -26,11 +26,27 @@ export class ListingService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/publicaciones`;
 
-  getActivas(opciones: { pagina?: number; limite?: number; categoria?: string } = {}): Observable<PaginaPublicaciones> {
+  getActivas(opciones: {
+    pagina?: number;
+    limite?: number;
+    categoria?: string;
+    idsCiudad?: number[];
+    idsTipoPropiedad?: number[];
+    idsTipoMoneda?: number[];
+    precioMin?: number | null;
+    precioMax?: number | null;
+    ambientes?: string[];
+  } = {}): Observable<PaginaPublicaciones> {
     let params = new HttpParams();
     if (opciones.pagina) params = params.set('pagina', opciones.pagina);
     if (opciones.limite) params = params.set('limite', opciones.limite);
     if (opciones.categoria) params = params.set('categoria', opciones.categoria);
+    if (opciones.idsCiudad?.length) params = params.set('idsCiudad', opciones.idsCiudad.join(','));
+    if (opciones.idsTipoPropiedad?.length) params = params.set('idsTipoPropiedad', opciones.idsTipoPropiedad.join(','));
+    if (opciones.idsTipoMoneda?.length) params = params.set('idsTipoMoneda', opciones.idsTipoMoneda.join(','));
+    if (opciones.precioMin != null) params = params.set('precioMin', opciones.precioMin);
+    if (opciones.precioMax != null) params = params.set('precioMax', opciones.precioMax);
+    if (opciones.ambientes?.length) params = params.set('ambientes', opciones.ambientes.join(','));
     return this.http.get<PaginaPublicaciones>(this.baseUrl, { params });
   }
 

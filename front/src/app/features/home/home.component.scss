@@ -8,8 +8,7 @@
   --color-bg: #303030;
 }
 
-.home-hero { max-width: var(--max-width-page, 1200px); margin: 0 auto; padding: 3rem 1rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; background: linear-gradient(115deg, #fff7ed, #fff); }
-.home-hero p { margin: 0 0 .35rem; color: var(--color-primary); font-weight: 800; text-transform: uppercase; font-size: .78rem; letter-spacing: .08em; }.home-hero h1 { margin: 0 0 .5rem; color: var(--color-text); }.home-hero span { color: var(--color-text-muted); }.home-hero__button { padding: .75rem 1rem; border-radius: 7px; background: var(--color-primary); color: #fff; text-decoration: none; font-weight: 800; white-space: nowrap; }.home-state { padding: 2rem 1rem; text-align: center; }.home-state--error { color: var(--color-danger); }
+.home-state { padding: 2rem 1rem; text-align: center; }.home-state--error { color: var(--color-danger); }
 
 .featured {
   max-width: var(--max-width-page, 1200px);
@@ -28,4 +27,3 @@
 
 @media (max-width: 1050px) { .featured__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 580px) { .featured { padding-top: 2rem; } .featured__grid { display: flex; overflow-x: auto; padding-bottom: .5rem; } .featured__grid app-listing-card { min-width: 280px; } }
-@media (max-width: 650px) { .home-hero { align-items: flex-start; flex-direction: column; } }

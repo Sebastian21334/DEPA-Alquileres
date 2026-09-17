@@ -4,8 +4,8 @@ import { Publicacion } from '../../models/publicacion.model';
 import {
   LucideArrowRight,
   LucideBadgeCheck,
+  LucideBed,
   LucideBookmark,
-  LucideLayoutGrid,
   LucideMapPin,
   LucideRuler,
 } from '@lucide/angular';
@@ -16,7 +16,7 @@ import {
 @Component({
   selector: 'app-listing-card',
   standalone: true,
-  imports: [RouterLink, LucideArrowRight, LucideBadgeCheck, LucideBookmark, LucideLayoutGrid, LucideMapPin, LucideRuler],
+  imports: [RouterLink, LucideArrowRight, LucideBadgeCheck, LucideBed, LucideBookmark, LucideMapPin, LucideRuler],
   templateUrl: './listing-card.component.html',
   styleUrl: './listing-card.component.scss',
 })
@@ -46,5 +46,10 @@ export class ListingCardComponent {
   protected get ubicacion(): string {
     const p = this.publicacion();
     return [p.ciudad?.nombre, p.provincia?.nombre].filter(Boolean).join(', ');
+  }
+
+  protected get ambientesTexto(): string {
+    const cantidad = this.publicacion().cantidad_ambientes;
+    return `${cantidad} ${cantidad === 1 ? 'ambiente' : 'ambientes'}`;
   }
 }

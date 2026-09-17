@@ -1,12 +1,10 @@
-import { Component, computed, effect, signal, input } from '@angular/core';
+import { Component, EventEmitter, Output, computed, effect, signal, input } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import {
   LucideMapPin,
   LucideHome,
-  LucideHexagon,
   LucideCoins,
-  LucidePiggyBank,
-  LucideX,
+  LucideSearch,
 } from '@lucide/angular';
 import { TipoPropiedad, TipoMoneda } from '../../../../shared/models/catalogo.model';
 // Ajustar esta ruta si el modelo de Ciudad vive en otro archivo.
@@ -37,15 +35,14 @@ const PRECIO_MAX = 1_500_000;
     ReactiveFormsModule,
     LucideMapPin,
     LucideHome,
-    LucideHexagon,
     LucideCoins,
-    LucidePiggyBank,
-    LucideX,
+    LucideSearch,
   ],
   templateUrl: './advanced-filters.component.html',
   styleUrl: './advanced-filters.component.scss',
 })
 export class AdvancedFiltersComponent {
+  @Output() search = new EventEmitter<void>();
   readonly form = input.required<FormGroup>();
   readonly tiposPropiedad = input<TipoPropiedad[]>([]);
   readonly ciudades = input<Ciudad[]>([]);
@@ -140,6 +137,29 @@ export class AdvancedFiltersComponent {
     if (!actuales.includes(id)) {
       this.actualizarControl('idsCiudad', [...actuales, id]);
     }
+  }
+
+  protected seleccionarCiudadUnica(idStr: string): void {
+    const id = Number(idStr);
+    this.actualizarControl('idsCiudad', id ? [id] : []);
+  }
+
+  protected seleccionarTipoPropiedadUnica(idStr: string): void {
+    const id = Number(idStr);
+    this.actualizarControl('idsTipoPropiedad', id ? [id] : []);
+  }
+
+  protected onPrecioMinInput(valor: string): void {
+    this.actualizarControl('precioMin', valor ? Number(valor) : null);
+  }
+
+  protected onPrecioMaxInput(valor: string): void {
+    this.actualizarControl('precioMax', valor ? Number(valor) : null);
+  }
+
+  protected aplicar(): void {
+    this.form().updateValueAndValidity();
+    this.search.emit();
   }
 
   protected quitarCiudad(id: number): void {

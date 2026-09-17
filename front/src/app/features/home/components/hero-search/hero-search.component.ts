@@ -1,4 +1,5 @@
 import { Component, computed, input } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Modalidad } from '../../../../shared/models/catalogo.model';
 import { LucideMapPin, LucideSearch } from '@lucide/angular';
@@ -11,7 +12,7 @@ import { LucideMapPin, LucideSearch } from '@lucide/angular';
 @Component({
   selector: 'app-hero-search',
   standalone: true,
-  imports: [ReactiveFormsModule, LucideMapPin, LucideSearch],
+  imports: [ReactiveFormsModule, RouterLink, LucideMapPin, LucideSearch],
   templateUrl: './hero-search.component.html',
   styleUrl: './hero-search.component.scss',
 })
@@ -27,6 +28,10 @@ export class HeroSearchComponent {
 
   protected esTemporaria(nombre: string): boolean {
     return nombre.toLowerCase().includes('tempor');
+  }
+
+  protected categoriaDe(nombre: string): 'temporales' | 'largo-plazo' {
+    return this.esTemporaria(nombre) ? 'temporales' : 'largo-plazo';
   }
 
   protected toggleModalidad(id: number): void {
