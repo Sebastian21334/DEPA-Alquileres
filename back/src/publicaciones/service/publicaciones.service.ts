@@ -79,6 +79,7 @@ export class PublicacionesService {
       limite: Math.min(Math.max(1, limite), 50),
       categoria,
       ...filtros,
+      busqueda: filtros.busqueda?.trim().slice(0, 200) || undefined,
     };
     return this.publicacionesRepo.buscarPaginadas(consulta);
   }

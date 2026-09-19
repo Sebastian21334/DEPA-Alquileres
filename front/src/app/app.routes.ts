@@ -10,6 +10,12 @@ export const routes: Routes = [
     title: 'Panel administrativo — DEPA',
   },
   {
+    path: '403',
+    loadComponent: () =>
+      import('./features/forbidden/forbidden.component').then((m) => m.ForbiddenComponent),
+    title: 'Acceso denegado — DEPA',
+  },
+  {
     path: '',
     loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent),
     title: 'DEPA — Encontrá tu próximo hogar',

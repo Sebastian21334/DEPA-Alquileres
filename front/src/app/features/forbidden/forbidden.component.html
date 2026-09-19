@@ -1,0 +1,22 @@
+<main class="forbidden">
+  <section class="forbidden__card" aria-labelledby="forbidden-title">
+    <div class="forbidden__icon" aria-hidden="true">
+      <svg lucideShieldX [size]="42"></svg>
+    </div>
+    <p class="forbidden__code">Error 403</p>
+    <h1 id="forbidden-title">Acceso denegado</h1>
+    <p class="forbidden__message">
+      Tu cuenta inició sesión correctamente, pero no tiene permisos para acceder al panel administrativo.
+    </p>
+    <div class="forbidden__actions">
+      <button type="button" class="acct-btn acct-btn--ghost" (click)="volver()">
+        <svg lucideArrowLeft [size]="18"></svg>
+        Volver
+      </button>
+      <a routerLink="/" class="acct-btn acct-btn--primary">
+        <svg lucideHouse [size]="18"></svg>
+        Ir al inicio
+      </a>
+    </div>
+  </section>
+</main>

@@ -6,6 +6,7 @@ export interface ConsultaPublicaciones {
   pagina: number;
   limite: number;
   categoria?: CategoriaInicio;
+  busqueda?: string;
   idsCiudad?: number[];
   idsTipoPropiedad?: number[];
   idsTipoMoneda?: number[];

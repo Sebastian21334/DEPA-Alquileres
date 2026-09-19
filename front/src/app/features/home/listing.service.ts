@@ -11,15 +11,8 @@ import { Publicacion, PublicacionPayload } from '../../shared/models/publicacion
  * Devuelve únicamente publicaciones con `activa = true` (RN-10 / RN-21), con las
  * relaciones necesarias para la tarjeta (imágenes, anunciante, catálogos, ubicación).
  *
- * Contrato de filtros esperado (RF8 / RN-22) — pendiente de implementar en el
- * backend: se documenta acá para cuando se agregue soporte de query params:
- *
- *   GET /publicaciones?ciudad=<texto>&idTipoPropiedad=<id>&idModalidad=<id>
- *                      &precioMin=<num>&precioMax=<num>&ambientes=<num>
- *
- * Hasta que el backend soporte esos params, el filtrado (ubicación, tipo,
- * precio, ambientes, modalidad) se resuelve del lado del cliente en
- * HomeComponent sobre el resultado de este mismo endpoint.
+ * Los filtros y la búsqueda textual se resuelven en el backend para conservar
+ * la paginación correcta sin descargar el catálogo completo.
  */
 @Injectable({ providedIn: 'root' })
 export class ListingService {
@@ -30,6 +23,7 @@ export class ListingService {
     pagina?: number;
     limite?: number;
     categoria?: string;
+    busqueda?: string;
     idsCiudad?: number[];
     idsTipoPropiedad?: number[];
     idsTipoMoneda?: number[];
@@ -41,6 +35,7 @@ export class ListingService {
     if (opciones.pagina) params = params.set('pagina', opciones.pagina);
     if (opciones.limite) params = params.set('limite', opciones.limite);
     if (opciones.categoria) params = params.set('categoria', opciones.categoria);
+    if (opciones.busqueda?.trim()) params = params.set('q', opciones.busqueda.trim());
     if (opciones.idsCiudad?.length) params = params.set('idsCiudad', opciones.idsCiudad.join(','));
     if (opciones.idsTipoPropiedad?.length) params = params.set('idsTipoPropiedad', opciones.idsTipoPropiedad.join(','));
     if (opciones.idsTipoMoneda?.length) params = params.set('idsTipoMoneda', opciones.idsTipoMoneda.join(','));

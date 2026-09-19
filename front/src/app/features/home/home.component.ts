@@ -21,8 +21,7 @@ export class HomeComponent {
   protected readonly secciones = signal<SeccionInicio[]>([]);
   protected readonly modalidades = signal<Modalidad[]>([]);
   protected readonly form = this.fb.nonNullable.group({
-    ubicacion: '',
-    idModalidad: null as number | null,
+    busqueda: '',
   });
 
   constructor() {

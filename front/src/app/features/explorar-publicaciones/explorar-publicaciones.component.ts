@@ -1,8 +1,9 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { FormBuilder } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime } from 'rxjs';
+import { LucideSearch } from '@lucide/angular';
 import { AdvancedFiltersComponent } from '../home/components/advanced-filters/advanced-filters.component';
 import { ListingGridComponent } from '../home/components/listing-grid/listing-grid.component';
 import { ListingService, PaginaPublicaciones } from '../home/listing.service';
@@ -11,7 +12,7 @@ import { UbicacionService } from '../../shared/services/ubicacion.service';
 import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
 import { Ciudad } from '../../shared/models/ubicacion.model';
 
-@Component({ selector: 'app-explorar-publicaciones', standalone: true, imports: [RouterLink, AdvancedFiltersComponent, ListingGridComponent], templateUrl: './explorar-publicaciones.component.html', styleUrl: './explorar-publicaciones.component.scss' })
+@Component({ selector: 'app-explorar-publicaciones', standalone: true, imports: [ReactiveFormsModule, RouterLink, LucideSearch, AdvancedFiltersComponent, ListingGridComponent], templateUrl: './explorar-publicaciones.component.html', styleUrl: './explorar-publicaciones.component.scss' })
 export class ExplorarPublicacionesComponent {
   private readonly api = inject(ListingService);
   private readonly catalogos = inject(CatalogoService);
@@ -29,6 +30,7 @@ export class ExplorarPublicacionesComponent {
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
   protected readonly monedas = signal<TipoMoneda[]>([]);
   protected readonly ciudades = signal<Ciudad[]>([]);
+  protected readonly busqueda = this.fb.nonNullable.control('');
   protected readonly form = this.fb.nonNullable.group({
     idModalidad: null as number | null,
     idsCiudad: [[] as number[]],
@@ -45,6 +47,7 @@ export class ExplorarPublicacionesComponent {
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const pagina = Math.max(1, Number(params.get('pagina')) || 1);
       const categoria = params.get('categoria');
+      this.busqueda.setValue(params.get('q') ?? '', { emitEvent: false });
       this.categoria.set(categoria);
       this.sincronizarModalidad(categoria);
       this.cargar(pagina);
@@ -53,20 +56,30 @@ export class ExplorarPublicacionesComponent {
     this.form.valueChanges.pipe(debounceTime(250), takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       this.router.navigate([], {
         relativeTo: this.route,
-        queryParams: { categoria: this.categoria(), pagina: 1 },
+        queryParams: { categoria: this.categoria(), q: this.terminoBusqueda() || null, pagina: 1 },
       });
     });
   }
 
   protected seleccionarCategoria(categoria: 'temporales' | 'largo-plazo'): void {
-    this.router.navigate([], { relativeTo: this.route, queryParams: { categoria, pagina: 1 } });
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { categoria, q: this.terminoBusqueda() || null, pagina: 1 },
+    });
+  }
+
+  protected buscarTexto(): void {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { categoria: this.categoria(), q: this.terminoBusqueda() || null, pagina: 1 },
+    });
   }
 
   protected buscar(): void {
     if (this.resultado().pagina !== 1) {
       this.router.navigate([], {
         relativeTo: this.route,
-        queryParams: { categoria: this.categoria(), pagina: 1 },
+        queryParams: { categoria: this.categoria(), q: this.terminoBusqueda() || null, pagina: 1 },
       });
       return;
     }
@@ -75,7 +88,10 @@ export class ExplorarPublicacionesComponent {
 
   protected irAPagina(pagina: number): void {
     if (pagina < 1 || pagina > this.resultado().totalPaginas) return;
-    this.router.navigate([], { relativeTo: this.route, queryParams: { categoria: this.categoria(), pagina } });
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { categoria: this.categoria(), q: this.terminoBusqueda() || null, pagina },
+    });
   }
 
   protected titulo(): string {
@@ -121,6 +137,7 @@ export class ExplorarPublicacionesComponent {
       pagina,
       limite: 12,
       categoria: this.categoria() ?? undefined,
+      busqueda: this.terminoBusqueda(),
       idsCiudad: filtros.idsCiudad,
       idsTipoPropiedad: filtros.idsTipoPropiedad,
       idsTipoMoneda: filtros.idsTipoMoneda,
@@ -131,5 +148,9 @@ export class ExplorarPublicacionesComponent {
       next: (resultado) => { this.resultado.set(resultado); this.cargando.set(false); },
       error: (error: Error) => { this.error.set(error.message); this.cargando.set(false); },
     });
+  }
+
+  private terminoBusqueda(): string {
+    return this.busqueda.value.trim();
   }
 }

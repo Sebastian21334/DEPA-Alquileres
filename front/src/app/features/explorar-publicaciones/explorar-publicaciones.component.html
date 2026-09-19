@@ -14,6 +14,23 @@
     </div>
   </section>
 
+  <form class="catalog-search" (ngSubmit)="buscarTexto()" role="search">
+    <label for="catalog-search">Buscar publicaciones</label>
+    <div class="catalog-search__field">
+      <input
+        id="catalog-search"
+        type="search"
+        [formControl]="busqueda"
+        placeholder="Título, descripción, ciudad, provincia, modalidad..."
+        autocomplete="off"
+      />
+      <button type="submit">
+        <svg lucideSearch [size]="19" aria-hidden="true"></svg>
+        <span>Buscar</span>
+      </button>
+    </div>
+  </form>
+
   <app-advanced-filters [form]="form" [tiposPropiedad]="tiposPropiedad()" [ciudades]="ciudades()" [monedas]="monedas()" [modalidades]="modalidades()" (search)="buscar()" />
   <app-listing-grid [total]="resultado().total" [listings]="resultado().datos" [loading]="cargando()" [error]="error()" />
   @if (!cargando() && !error() && resultado().totalPaginas > 1) {

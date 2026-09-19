@@ -66,23 +66,39 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * Así una petición nunca materializa el catálogo completo en memoria.
    */
   async buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones> {
-    const { pagina, limite, categoria, idsCiudad, idsTipoPropiedad, idsTipoMoneda, precioMin, precioMax, ambientes } = consulta;
+    const {
+      pagina,
+      limite,
+      categoria,
+      busqueda,
+      idsCiudad,
+      idsTipoPropiedad,
+      idsTipoMoneda,
+      precioMin,
+      precioMax,
+      ambientes,
+    } = consulta;
     const base = this.repo
       .createQueryBuilder('publicacion')
       .innerJoin('publicacion.imagenes', 'imagen')
       .leftJoin('publicacion.modalidad', 'modalidad')
       .leftJoin('publicacion.ciudad', 'ciudad')
+      .leftJoin('publicacion.provincia', 'provincia')
+      .leftJoin('publicacion.tipoPropiedad', 'tipoPropiedad')
+      .leftJoin('publicacion.tipoMoneda', 'tipoMoneda')
+      .leftJoin('publicacion.anunciante', 'anunciante')
+      .leftJoin('anunciante.usuario', 'usuario')
+      .leftJoin('anunciante.tipoAnunciante', 'tipoAnunciante')
       .where('publicacion.activa = :activa', { activa: true })
       .distinct(true);
 
     this.aplicarCategoria(base, categoria);
+    this.aplicarBusqueda(base, busqueda);
     if (idsCiudad?.length) base.andWhere('ciudad.id IN (:...idsCiudad)', { idsCiudad });
     if (idsTipoPropiedad?.length) {
-      base.leftJoin('publicacion.tipoPropiedad', 'tipoPropiedad');
       base.andWhere('tipoPropiedad.id IN (:...idsTipoPropiedad)', { idsTipoPropiedad });
     }
     if (idsTipoMoneda?.length) {
-      base.leftJoin('publicacion.tipoMoneda', 'tipoMoneda');
       base.andWhere('tipoMoneda.id IN (:...idsTipoMoneda)', { idsTipoMoneda });
     }
     if (precioMin != null) base.andWhere('publicacion.precio >= :precioMin', { precioMin });
@@ -142,6 +158,53 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     if (categoria === 'reservadas') {
       query.andWhere(`EXISTS (SELECT 1 FROM reserva reserva_filtro WHERE reserva_filtro.id_publicacion = publicacion.id_publicacion AND reserva_filtro.cancelada = false)`);
     }
+  }
+
+  /**
+   * Búsqueda libre sobre los datos públicos que una persona ve en el
+   * catálogo o el detalle. Cada palabra puede aparecer en un campo distinto;
+   * por ejemplo, "casa villa maria" combina tipo de propiedad y ciudad.
+   */
+  private aplicarBusqueda(query: any, busqueda?: string): void {
+    const terminos = (busqueda ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[%_]/g, ' ')
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 10);
+
+    if (!terminos.length) return;
+
+    const documento = `TRANSLATE(LOWER(CONCAT_WS(' ',
+      publicacion.titulo,
+      publicacion.descripcion,
+      publicacion.direccion,
+      ciudad.nombre,
+      provincia.nombre,
+      tipoPropiedad.nombre,
+      tipoPropiedad.descripcion,
+      modalidad.nombre,
+      modalidad.descripcion,
+      tipoMoneda.nombre,
+      tipoMoneda.descripcion,
+      usuario.nombre,
+      usuario.apellido,
+      tipoAnunciante.nombre,
+      publicacion.precio,
+      publicacion.cantidad_ambientes,
+      publicacion.superficie,
+      publicacion.fecha_publicacion,
+      CONCAT(publicacion.cantidad_ambientes, ' ambientes'),
+      CONCAT(publicacion.superficie, ' m2')
+    )), 'áéíóúüñ', 'aeiouun')`;
+
+    terminos.forEach((termino, indice) => {
+      query.andWhere(`${documento} LIKE :busqueda${indice}`, {
+        [`busqueda${indice}`]: `%${termino}%`,
+      });
+    });
   }
 
   buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]> {
