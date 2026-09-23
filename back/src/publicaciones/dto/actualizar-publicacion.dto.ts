@@ -6,7 +6,9 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 export class ActualizarPublicacionDto {
@@ -31,6 +33,18 @@ export class ActualizarPublicacionDto {
   @IsNotEmpty()
   @MaxLength(255)
   direccion?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitud?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitud?: number;
 
   @IsOptional()
   @IsInt()

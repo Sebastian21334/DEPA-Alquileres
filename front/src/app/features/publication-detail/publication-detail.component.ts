@@ -1,5 +1,6 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { finalize } from 'rxjs';
 import {
   LucideBadgeCheck,
@@ -8,6 +9,7 @@ import {
   LucideChevronLeft,
   LucideChevronRight,
   LucideClock,
+  LucideExternalLink,
   LucideHouse,
   LucideLayoutList,
   LucideMail,
@@ -45,6 +47,7 @@ import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
     LucideChevronLeft,
     LucideChevronRight,
     LucideClock,
+    LucideExternalLink,
     LucideHouse,
     LucideLayoutList,
     LucideMail,
@@ -64,6 +67,7 @@ export class PublicationDetailComponent {
   private readonly reservations = inject(ReservationService);
   private readonly catalogs = inject(CatalogoService);
   private readonly favorites = inject(FavoritesService);
+  private readonly sanitizer = inject(DomSanitizer);
 
   protected readonly publication = signal<Publicacion | null>(null);
   protected readonly loading = signal(true);
@@ -114,6 +118,17 @@ export class PublicationDetailComponent {
   protected readonly isCardPayment = computed(() => {
     const selected = this.paymentMethods().find((item) => item.id === this.paymentMethodId());
     return /d[eé]bito|cr[eé]dito|tarjeta/i.test(selected?.nombre ?? '');
+  });
+  protected readonly mapUrl = computed(() => {
+    const item = this.publication();
+    if (!item) return '';
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(this.mapQuery(item))}`;
+  });
+  protected readonly mapEmbedUrl = computed<SafeResourceUrl | null>(() => {
+    const item = this.publication();
+    if (!item) return null;
+    const query = encodeURIComponent(this.mapQuery(item));
+    return this.sanitizer.bypassSecurityTrustResourceUrl(`https://www.google.com/maps?q=${query}&output=embed`);
   });
 
   constructor() {
@@ -212,6 +227,14 @@ export class PublicationDetailComponent {
 
   protected location(item: Publicacion): string {
     return [item.direccion, item.ciudad?.nombre, item.provincia?.nombre].filter(Boolean).join(', ');
+  }
+
+  private mapQuery(item: Publicacion): string {
+    const latitud = Number(item.latitud);
+    const longitud = Number(item.longitud);
+    return item.latitud != null && item.longitud != null && Number.isFinite(latitud) && Number.isFinite(longitud)
+      ? `${latitud},${longitud}`
+      : this.location(item);
   }
 
   protected city(item: Publicacion): string {

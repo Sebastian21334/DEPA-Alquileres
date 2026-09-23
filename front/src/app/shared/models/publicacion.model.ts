@@ -19,6 +19,8 @@ export interface Publicacion {
 
   // Datos del inmueble, embebidos (ver Propiedad en propiedad.model.ts).
   direccion: string;
+  latitud?: number | null;
+  longitud?: number | null;
   cantidad_ambientes: number;
   superficie: number;
 
@@ -37,6 +39,8 @@ export interface PublicacionPayload {
   descripcion: string;
   precio: number;
   direccion: string;
+  latitud: number;
+  longitud: number;
   cantidad_ambientes: number;
   superficie: number;
   idTipoMoneda: number;

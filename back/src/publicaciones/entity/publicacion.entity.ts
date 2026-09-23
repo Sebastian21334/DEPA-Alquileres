@@ -32,6 +32,14 @@ export class Publicacion {
   @Column({ type: 'varchar', length: 255 })
   direccion: string;
 
+  // Coordenadas confirmadas por el anunciante. Son nullable para conservar
+  // publicaciones creadas antes de incorporar el selector de mapa.
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitud: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitud: number | null;
+
   @Column({ type: 'int' })
   cantidad_ambientes: number;
 

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsNumber, IsPositive, IsInt, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsNumber, IsPositive, IsInt, Max, MaxLength, Min } from 'class-validator';
 
 export class CrearPublicacionDto {
   // Los IDs siguientes representan relaciones con catálogos y ubicación.
@@ -19,6 +19,16 @@ export class CrearPublicacionDto {
   @IsNotEmpty()
   @MaxLength(255)
   direccion: string;
+
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitud: number;
+
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitud: number;
 
   @IsInt()
   @IsPositive()

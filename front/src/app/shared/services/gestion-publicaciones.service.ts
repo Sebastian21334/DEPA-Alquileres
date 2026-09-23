@@ -11,6 +11,8 @@ export interface CrearPublicacionDto {
   descripcion: string;
   precio: number;
   direccion: string;
+  latitud: number;
+  longitud: number;
   cantidad_ambientes: number;
   superficie: number;
   idTipoMoneda: number;

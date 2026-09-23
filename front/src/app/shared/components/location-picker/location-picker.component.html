@@ -1,0 +1,39 @@
+<div class="picker">
+  <div class="picker__intro">
+    <div>
+      <strong>Confirmá la ubicación exacta</strong>
+      <p>Buscá la dirección y, si hace falta, mové el pin o tocá otro punto del mapa.</p>
+    </div>
+    <button type="button" (click)="search()" [disabled]="searching()">
+      {{ searching() ? 'Buscando…' : 'Buscar dirección' }}
+    </button>
+  </div>
+
+  @if (error()) { <p class="picker__message picker__message--error" role="alert">{{ error() }}</p> }
+
+  @if (results().length > 1) {
+    <div class="picker__results" aria-label="Resultados encontrados">
+      <span>¿Cuál corresponde?</span>
+      @for (result of results(); track result.latitud + ',' + result.longitud) {
+        <button type="button" (click)="selectResult(result)">{{ result.nombre }}</button>
+      }
+    </div>
+  }
+
+  <div class="picker__map-wrap">
+    <div #map class="picker__map" aria-label="Mapa para confirmar la ubicación"></div>
+    @if (mapLoadError()) {
+      <p class="picker__map-error">No pudimos cargar el mapa. Recargá la página e intentá nuevamente.</p>
+    }
+  </div>
+
+  <div class="picker__footer">
+    <div>
+      @if (selectedName()) { <small>Resultado encontrado</small><span>{{ selectedName() }}</span> }
+      @else { <span>Buscá la dirección o tocá el mapa para colocar el pin.</span> }
+    </div>
+    <button type="button" class="picker__confirm" (click)="confirm()" [disabled]="!candidate() || confirmed()">
+      {{ confirmed() ? '✓ Ubicación confirmada' : 'Confirmar este punto' }}
+    </button>
+  </div>
+</div>

@@ -33,6 +33,8 @@ export class PublicacionesService {
       descripcion: dto.descripcion,
       precio: dto.precio,
       direccion: dto.direccion,
+      latitud: dto.latitud,
+      longitud: dto.longitud,
       cantidad_ambientes: dto.cantidad_ambientes,
       superficie: dto.superficie,
       fecha_publicacion: new Date(),
@@ -112,6 +114,8 @@ export class PublicacionesService {
     if (dto.descripcion !== undefined) publicacion.descripcion = dto.descripcion;
     if (dto.precio !== undefined) publicacion.precio = dto.precio;
     if (dto.direccion !== undefined) publicacion.direccion = dto.direccion;
+    if (dto.latitud !== undefined) publicacion.latitud = dto.latitud;
+    if (dto.longitud !== undefined) publicacion.longitud = dto.longitud;
     if (dto.cantidad_ambientes !== undefined) publicacion.cantidad_ambientes = dto.cantidad_ambientes;
     if (dto.superficie !== undefined) publicacion.superficie = dto.superficie;
     if (dto.activa !== undefined) publicacion.activa = dto.activa;

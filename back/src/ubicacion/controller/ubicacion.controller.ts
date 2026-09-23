@@ -7,6 +7,7 @@ import {
   Param,
   Body,
   ParseIntPipe,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { UbicacionService } from '../service/ubicacion.service';
@@ -24,6 +25,16 @@ export class UbicacionController {
   // Lecturas públicas usadas para completar formularios y filtros.
   async getProvincias() {
     return this.ubicacionService.getProvincias();
+  }
+
+  @Get('buscar-direccion')
+  @UseGuards(JwtAuthGuard)
+  async buscarDireccion(
+    @Query('direccion') direccion: string,
+    @Query('ciudad') ciudad: string,
+    @Query('provincia') provincia: string,
+  ) {
+    return this.ubicacionService.buscarDireccion(direccion, ciudad, provincia);
   }
 
   @Get('provincias/:id/ciudades')

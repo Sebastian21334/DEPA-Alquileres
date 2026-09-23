@@ -85,6 +85,36 @@
         <p>{{ item.descripcion }}</p>
       </section>
 
+      @if (mapEmbedUrl(); as mapSource) {
+        <section class="map-section" appReveal>
+          <div class="map-section__heading">
+            <div>
+              <span class="map-section__eyebrow">Ubicación</span>
+              <h2>Conocé la zona</h2>
+              <p><svg lucideMapPin [size]="17"></svg>{{ location(item) }}</p>
+            </div>
+            <a class="map-section__external" [href]="mapUrl()" target="_blank" rel="noopener noreferrer">
+              Abrir en Google Maps <svg lucideExternalLink [size]="16"></svg>
+            </a>
+          </div>
+          <div class="map-section__map">
+            <iframe
+              [src]="mapSource"
+              [title]="'Mapa de ' + location(item)"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+            ></iframe>
+            <a
+              class="map-section__overlay"
+              [href]="mapUrl()"
+              target="_blank"
+              rel="noopener noreferrer"
+              [attr.aria-label]="'Abrir la ubicación de ' + item.titulo + ' en Google Maps'"
+            ></a>
+          </div>
+        </section>
+      }
+
       @if (esTemporaria()) {
         <section class="booking-layout" appReveal>
           <div class="booking-calendar">

@@ -12,6 +12,7 @@ import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalo
 import { Ciudad, Provincia } from '../../shared/models/ubicacion.model';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
+import { LocationPickerComponent, UbicacionConfirmada } from '../../shared/components/location-picker/location-picker.component';
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_IMAGEN = 10 * 1024 * 1024;
@@ -32,6 +33,7 @@ interface ImagenSeleccionada {
     RouterLink,
     RevealDirective,
     AvailabilityCalendarComponent,
+    LocationPickerComponent,
     LucideImagePlus,
     LucideX,
   ],
@@ -53,6 +55,7 @@ export class CrearPublicacionComponent {
   protected readonly ciudades = signal<Ciudad[]>([]);
   protected readonly cargandoCiudades = signal(true);
   private readonly provinciaElegida = signal(0);
+  private readonly ciudadElegida = signal(0);
   private readonly modalidadElegida = signal(0);
   protected readonly disponibilidadInicio = signal<string | null>(null);
   protected readonly disponibilidadFin = signal<string | null>(null);
@@ -75,6 +78,14 @@ export class CrearPublicacionComponent {
   protected readonly provinciaSinCiudades = computed(
     () => !!this.provinciaElegida() && !this.cargandoCiudades() && !this.gruposCiudades().length,
   );
+  protected readonly nombreProvincia = computed(
+    () => this.provincias().find((item) => item.id === this.provinciaElegida())?.nombre ?? '',
+  );
+  protected readonly nombreCiudad = computed(
+    () => this.ciudades().find((item) => item.id === this.ciudadElegida())?.nombre ?? '',
+  );
+  protected readonly latitud = signal<number | null>(null);
+  protected readonly longitud = signal<number | null>(null);
   protected readonly imagenes = signal<ImagenSeleccionada[]>([]);
   protected readonly avisoImagenes = signal('');
   protected readonly enviando = signal(false);
@@ -134,12 +145,16 @@ export class CrearPublicacionComponent {
       // Si la ciudad elegida no pertenece a la nueva provincia, se limpia.
       const ciudad = this.ciudades().find((c) => c.id === idCiudad.value);
       if (ciudad && ciudad.provincia?.id !== id) idCiudad.setValue(0);
+      this.limpiarUbicacionConfirmada();
     });
     idCiudad.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
+      this.ciudadElegida.set(id);
       // Elegir una ciudad completa sola la provincia.
       const provincia = this.ciudades().find((c) => c.id === id)?.provincia?.id;
       if (provincia && provincia !== idProvincia.value) idProvincia.setValue(provincia);
+      this.limpiarUbicacionConfirmada();
     });
+    this.form.controls.direccion.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.limpiarUbicacionConfirmada());
 
     inject(DestroyRef).onDestroy(() => this.imagenes().forEach((img) => URL.revokeObjectURL(img.preview)));
   }
@@ -212,6 +227,12 @@ export class CrearPublicacionComponent {
     if (this.error().startsWith('Elegí el período')) this.error.set('');
   }
 
+  protected confirmarUbicacion(ubicacion: UbicacionConfirmada): void {
+    this.latitud.set(ubicacion.latitud);
+    this.longitud.set(ubicacion.longitud);
+    if (this.error().startsWith('Confirmá la ubicación')) this.error.set('');
+  }
+
   protected publicar(): void {
     if (this.enviando()) return;
     // Regla de negocio: no se puede publicar sin al menos una imagen.
@@ -219,16 +240,19 @@ export class CrearPublicacionComponent {
     this.faltanFotos.set(sinFotos);
     const sinDisponibilidad =
       this.esTemporaria() && (!this.disponibilidadInicio() || !this.disponibilidadFin());
-    if (this.form.invalid || sinFotos || sinDisponibilidad) {
+    const sinUbicacion = this.latitud() === null || this.longitud() === null;
+    if (this.form.invalid || sinFotos || sinDisponibilidad || sinUbicacion) {
       this.form.markAllAsTouched();
       this.error.set(
-        sinDisponibilidad && this.form.valid && !sinFotos
+        sinUbicacion && this.form.valid && !sinFotos && !sinDisponibilidad
+          ? 'Confirmá la ubicación exacta en el mapa antes de publicar.'
+          : sinDisponibilidad && this.form.valid && !sinFotos
           ? 'Elegí el período de días disponibles para el alquiler temporal.'
           : sinFotos && this.form.valid
           ? 'Agregá al menos una foto de la propiedad para poder publicarla.'
           : 'Revisá los campos marcados.',
       );
-      const destino = sinDisponibilidad ? 'disponibilidad' : sinFotos ? 'fotos' : null;
+      const destino = sinUbicacion ? 'ubicacion-mapa' : sinDisponibilidad ? 'disponibilidad' : sinFotos ? 'fotos' : null;
       if (destino) document.getElementById(destino)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
@@ -243,6 +267,8 @@ export class CrearPublicacionComponent {
       titulo: v.titulo.trim(),
       descripcion: v.descripcion.trim(),
       direccion: v.direccion.trim(),
+      latitud: this.latitud()!,
+      longitud: this.longitud()!,
       precio: Number(v.precio),
       cantidad_ambientes: Number(v.cantidad_ambientes),
       superficie: Number(v.superficie),
@@ -301,5 +327,10 @@ export class CrearPublicacionComponent {
           this.error.set(err.message);
         },
       });
+  }
+
+  private limpiarUbicacionConfirmada(): void {
+    this.latitud.set(null);
+    this.longitud.set(null);
   }
 }

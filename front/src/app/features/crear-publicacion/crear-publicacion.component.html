@@ -47,7 +47,7 @@
         </section>
 
         <!-- 02 -->
-        <section class="step" appReveal>
+        <section class="step" id="ubicacion-mapa" appReveal>
           <h2><span class="step__num">02</span> Ubicación</h2>
           <div class="acct-grid">
             <div class="acct-field">
@@ -79,6 +79,14 @@
               <input id="direccion" formControlName="direccion" maxlength="255" placeholder="Ej.: José Ingenieros 123" />
               @if (invalido('direccion')) { <span class="acct-hint acct-hint--error">Ingresá la dirección.</span> }
             </div>
+            <app-location-picker
+              [direccion]="form.controls.direccion.value"
+              [ciudad]="nombreCiudad()"
+              [provincia]="nombreProvincia()"
+              [initialLatitude]="latitud()"
+              [initialLongitude]="longitud()"
+              (locationConfirmed)="confirmarUbicacion($event)"
+            />
           </div>
         </section>
 

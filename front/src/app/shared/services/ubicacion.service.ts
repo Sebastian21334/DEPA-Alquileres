@@ -4,6 +4,12 @@ import { Observable, forkJoin, map, switchMap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Ciudad, Provincia } from '../models/ubicacion.model';
 
+export interface ResultadoGeocodificacion {
+  nombre: string;
+  latitud: number;
+  longitud: number;
+}
+
 // Consume el módulo `ubicacion` del backend (back/src/ubicacion). No existe un
 // endpoint que devuelva "todas las ciudades" de una: el backend las expone
 // anidadas por provincia (GET /ubicacion/provincias/:id/ciudades). Para el
@@ -23,6 +29,13 @@ export class UbicacionService {
   /** GET /ubicacion/provincias/:id/ciudades */
   getCiudadesPorProvincia(idProvincia: number): Observable<Ciudad[]> {
     return this.http.get<Ciudad[]>(`${this.baseUrl}/provincias/${idProvincia}/ciudades`);
+  }
+
+  /** Búsqueda puntual; el usuario la inicia con el botón del selector de mapa. */
+  buscarDireccion(direccion: string, ciudad: string, provincia: string): Observable<ResultadoGeocodificacion[]> {
+    return this.http.get<ResultadoGeocodificacion[]>(`${this.baseUrl}/buscar-direccion`, {
+      params: { direccion, ciudad, provincia },
+    });
   }
 
   /**

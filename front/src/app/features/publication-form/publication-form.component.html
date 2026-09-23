@@ -25,6 +25,15 @@
         <div class="field field--full"><label for="address">Dirección *</label><input id="address" formControlName="direccion" placeholder="Calle y número" /></div>
         <div class="field"><label for="province">Provincia *</label><select id="province" formControlName="idProvincia"><option [ngValue]="null">Seleccionar</option>@for (item of provincias(); track item.id) { <option [ngValue]="item.id">{{ item.nombre }}</option> }</select></div>
         <div class="field"><label for="city">Ciudad *</label><select id="city" formControlName="idCiudad"><option [ngValue]="null">Seleccionar</option>@for (item of filteredCities(); track item.id) { <option [ngValue]="item.id">{{ item.nombre }}</option> }</select></div>
+        <app-location-picker
+          id="edit-location-map"
+          [direccion]="form.controls.direccion.value ?? ''"
+          [ciudad]="selectedCityName()"
+          [provincia]="selectedProvinceName()"
+          [initialLatitude]="latitud()"
+          [initialLongitude]="longitud()"
+          (locationConfirmed)="confirmLocation($event)"
+        />
         <div class="field"><label for="rooms">Ambientes *</label><input id="rooms" type="number" min="1" formControlName="cantidad_ambientes" /></div>
         <div class="field"><label for="surface">Superficie (m²) *</label><input id="surface" type="number" min="1" formControlName="superficie" /></div>
       </section>
