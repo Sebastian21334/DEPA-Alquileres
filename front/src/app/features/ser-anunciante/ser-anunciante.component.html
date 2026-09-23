@@ -1,0 +1,128 @@
+<main class="owner-page">
+  <section class="owner-hero">
+    <div class="owner-wrap owner-hero__grid">
+      <div class="owner-hero__content">
+        <span class="eyebrow"><svg lucideHouse [size]="16"></svg> Publicá en DEPA</span>
+        <h1>Todo lo que necesitás para convertirte en anunciante</h1>
+        <p>
+          Si sos propietario particular o representás una inmobiliaria, podés publicar y administrar
+          propiedades desde un solo lugar. Para cuidar a la comunidad, verificamos tu identidad antes
+          de habilitar la primera publicación.
+        </p>
+        <div class="owner-actions">
+          @if (auth.isAuthenticated) {
+            <a routerLink="/mi-perfil/anunciante" class="owner-btn owner-btn--primary">
+              Comenzar verificación <svg lucideArrowRight [size]="18"></svg>
+            </a>
+          } @else {
+            <a routerLink="/registro" class="owner-btn owner-btn--primary">
+              Crear mi cuenta <svg lucideArrowRight [size]="18"></svg>
+            </a>
+            <a routerLink="/login" [queryParams]="{ returnUrl: '/mi-perfil/anunciante' }" class="owner-btn owner-btn--secondary">
+              Ya tengo cuenta
+            </a>
+          }
+        </div>
+        <p class="owner-hero__note"><svg lucideShieldCheck [size]="17"></svg> Tu documentación solo se utiliza para revisar tu identidad.</p>
+      </div>
+
+      <aside class="summary-card" aria-label="Resumen del proceso">
+        <span class="summary-card__icon"><svg lucideBadgeCheck [size]="30"></svg></span>
+        <p class="summary-card__label">Proceso de verificación</p>
+        <strong>Prepará tus datos y documentos</strong>
+        <ul>
+          <li><svg lucideCheck [size]="16"></svg> CUIT o CUIL y teléfono de contacto</li>
+          <li><svg lucideCheck [size]="16"></svg> DNI de frente y dorso</li>
+          <li><svg lucideCheck [size]="16"></svg> Foto o video de tu rostro</li>
+          <li><svg lucideCheck [size]="16"></svg> Revisión manual del equipo</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <section class="owner-section owner-wrap" aria-labelledby="requisitos-title">
+    <div class="section-heading">
+      <span>Antes de empezar</span>
+      <h2 id="requisitos-title">¿Qué necesitás?</h2>
+      <p>Tené a mano estos datos para completar la solicitud sin interrupciones.</p>
+    </div>
+
+    <div class="requirement-grid">
+      <article class="requirement-card">
+        <span class="requirement-card__icon requirement-card__icon--blue"><svg lucideUserRoundCheck [size]="25"></svg></span>
+        <h3>Una cuenta verificada</h3>
+        <p>Nombre, apellido, email único, teléfono y una contraseña segura. Primero deberás confirmar tu correo.</p>
+      </article>
+      <article class="requirement-card">
+        <span class="requirement-card__icon requirement-card__icon--red"><svg lucideBuilding2 [size]="25"></svg></span>
+        <h3>Datos del anunciante</h3>
+        <p>Elegí si sos propietario o inmobiliaria e ingresá tu CUIT/CUIL y un número de contacto.</p>
+      </article>
+      <article class="requirement-card">
+        <span class="requirement-card__icon requirement-card__icon--yellow"><svg lucideIdCard [size]="25"></svg></span>
+        <h3>Documento de identidad</h3>
+        <p>Dos imágenes nítidas de tu DNI: una del frente y otra del dorso, en formato JPG, PNG o WEBP.</p>
+      </article>
+      <article class="requirement-card">
+        <span class="requirement-card__icon requirement-card__icon--blue"><svg lucideCamera [size]="25"></svg></span>
+        <h3>Prueba facial</h3>
+        <p>Una foto de tu rostro o un video breve para validar que la documentación te pertenece.</p>
+      </article>
+    </div>
+
+    <div class="file-note">
+      <svg lucideFileText [size]="22"></svg>
+      <p><strong>Formatos admitidos:</strong> imágenes de hasta 5 MB; para la prueba facial también podés subir video MP4, WEBM o MOV de hasta 20 MB.</p>
+    </div>
+  </section>
+
+  <section class="process-section">
+    <div class="owner-wrap">
+      <div class="section-heading section-heading--light">
+        <span>Simple y transparente</span>
+        <h2>Cómo funciona el registro</h2>
+      </div>
+
+      <ol class="process-list">
+        <li><span>1</span><div><strong>Creá tu cuenta</strong><p>Completá tus datos personales y verificá tu email.</p></div></li>
+        <li><span>2</span><div><strong>Elegí tu perfil</strong><p>Indicá si sos propietario particular o inmobiliaria.</p></div></li>
+        <li><span>3</span><div><strong>Subí la documentación</strong><p>Cargá CUIT/CUIL, contacto, DNI y prueba facial.</p></div></li>
+        <li><span>4</span><div><strong>Esperá la revisión</strong><p>Un administrador revisará la información y te notificaremos por email.</p></div></li>
+        <li><span>5</span><div><strong>Empezá a publicar</strong><p>Una vez aprobado, podrás crear y administrar tus propiedades.</p></div></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="owner-section owner-wrap">
+    <div class="benefit-panel">
+      <div>
+        <span class="eyebrow eyebrow--plain">Tu espacio como anunciante</span>
+        <h2>Gestioná tus alquileres desde DEPA</h2>
+        <p>Publicá propiedades de largo plazo o temporarias y mantené toda la información organizada.</p>
+      </div>
+      <ul>
+        <li><svg lucideCheck [size]="18"></svg> Crear, editar, activar o desactivar publicaciones</li>
+        <li><svg lucideCheck [size]="18"></svg> Administrar imágenes y datos de cada propiedad</li>
+        <li><svg lucideCheck [size]="18"></svg> Gestionar disponibilidad y reservas temporarias</li>
+        <li><svg lucideCheck [size]="18"></svg> Recibir consultas mediante el chat de la plataforma</li>
+      </ul>
+    </div>
+
+    <div class="review-notice">
+      <span><svg lucideClock3 [size]="24"></svg></span>
+      <div>
+        <h3>La aprobación es necesaria antes de publicar</h3>
+        <p>Podés registrarte y enviar la solicitud, pero la función de publicar se habilita después de la revisión manual. Si la documentación es rechazada, vas a recibir el motivo y podrás volver a cargarla.</p>
+      </div>
+    </div>
+
+    <div class="final-cta">
+      <div><span>¿Tenés todo listo?</span><h2>Empezá a publicar con DEPA</h2></div>
+      @if (auth.isAuthenticated) {
+        <a routerLink="/mi-perfil/anunciante" class="owner-btn owner-btn--primary">Iniciar solicitud <svg lucideArrowRight [size]="18"></svg></a>
+      } @else {
+        <a routerLink="/registro" class="owner-btn owner-btn--primary">Crear mi cuenta <svg lucideArrowRight [size]="18"></svg></a>
+      }
+    </div>
+  </section>
+</main>

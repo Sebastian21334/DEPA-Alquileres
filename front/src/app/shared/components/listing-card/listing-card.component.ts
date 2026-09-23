@@ -1,5 +1,6 @@
-import { Component, input } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, EventEmitter, Output, inject, input, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { finalize } from 'rxjs';
 import { Publicacion } from '../../models/publicacion.model';
 import {
   LucideArrowRight,
@@ -9,6 +10,9 @@ import {
   LucideMapPin,
   LucideRuler,
 } from '@lucide/angular';
+import { AuthService } from '../../../core/services/auth.service';
+import { FavoritesService } from '../../services/favorites.service';
+import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 
 // Tarjeta reutilizable de una publicación (prototipo "Card"): foto con badge de
 // modalidad y "Dueño Verificado", título + ubicación, columna de características
@@ -16,12 +20,35 @@ import {
 @Component({
   selector: 'app-listing-card',
   standalone: true,
-  imports: [RouterLink, LucideArrowRight, LucideBadgeCheck, LucideBed, LucideBookmark, LucideMapPin, LucideRuler],
+  imports: [RouterLink, RelativeTimePipe, LucideArrowRight, LucideBadgeCheck, LucideBed, LucideBookmark, LucideMapPin, LucideRuler],
   templateUrl: './listing-card.component.html',
   styleUrl: './listing-card.component.scss',
 })
 export class ListingCardComponent {
+  private readonly auth = inject(AuthService);
+  private readonly favorites = inject(FavoritesService);
+  private readonly router = inject(Router);
+
   readonly publicacion = input.required<Publicacion>();
+  @Output() readonly favoriteChange = new EventEmitter<boolean>();
+  protected readonly savingFavorite = signal(false);
+
+  protected get isFavorite(): boolean {
+    return this.favorites.isFavorite(this.publicacion().id);
+  }
+
+  protected toggleFavorite(): void {
+    if (this.savingFavorite()) return;
+    if (!this.auth.isAuthenticated) {
+      this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });
+      return;
+    }
+
+    this.savingFavorite.set(true);
+    this.favorites.toggle(this.publicacion().id)
+      .pipe(finalize(() => this.savingFavorite.set(false)))
+      .subscribe({ next: (result) => this.favoriteChange.emit(result.favorito) });
+  }
 
   protected get precioFormateado(): string {
     return Number(this.publicacion().precio).toLocaleString('es-AR', { maximumFractionDigits: 0 });

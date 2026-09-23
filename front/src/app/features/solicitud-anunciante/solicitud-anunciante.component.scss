@@ -28,8 +28,8 @@
   background: var(--color-bg);
   font-size: 0.8rem;
 }
-.steps li.is-current { border-color: #ff9800; color: var(--color-text); }
-.steps li.is-current span { background: #ff9800; color: #fff; }
+.steps li.is-current { border-color: var(--color-accent); color: var(--color-text); }
+.steps li.is-current span { background: var(--color-accent); color: #fff; }
 .steps li.is-done span { background: #dcfce7; color: #15803d; }
 
 .form-actions { margin-top: 1.25rem; }
@@ -50,12 +50,12 @@
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.doc:hover, .doc:focus-within { border-color: #ff9800; background: #fffaf2; }
+.doc:hover, .doc:focus-within { border-color: var(--color-accent); background: #fffaf2; }
 .doc.is-ready { border-style: solid; border-color: #86efac; background: #f0fdf4; }
 .doc input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .doc__preview { width: 100%; height: 92px; object-fit: cover; border-radius: 0.45rem; }
 .doc__remove { position: relative; z-index: 2; border: 0; background: transparent; color: #dc2626; font-weight: 700; cursor: pointer; }
-.doc__icon { color: #ff9800; }
+.doc__icon { color: var(--color-accent); }
 .doc.is-ready .doc__icon { color: #15803d; }
 .doc small { font-size: 0.76rem; color: var(--color-text-muted); }
 .doc .doc__name { overflow-wrap: anywhere; color: var(--color-text); }
@@ -72,7 +72,7 @@
   background: #dcfce7;
   color: #15803d;
 }
-.status__icon--wait { background: #fff4e5; color: #ff9800; }
+.status__icon--wait { background: #fff4e5; color: var(--color-accent); }
 
 .history { list-style: none; margin: 0; padding: 0; }
 .history li {

@@ -1,8 +1,12 @@
-<app-navbar />
+@if (!esPantallaAuth()) {
+  <app-navbar />
+}
 
 <main class="app-content">
   <router-outlet />
 </main>
 
-<app-footer />
-<app-chat-dock />
+@if (!esPantallaAuth()) {
+  <app-footer />
+  <app-chat-dock />
+}

@@ -30,7 +30,9 @@
     </a>
 
     <div class="navbar__end">
-      <span class="navbar__owner-hint">¿Sos propietario?</span>
+      <a routerLink="/ser-anunciante" class="navbar__owner-cta">
+        ¿Sos propietario?
+      </a>
       <a routerLink="/publicaciones/nueva" class="btn btn--primary shine">Publicar</a>
     </div>
   </div>
@@ -80,6 +82,11 @@
       <li>
         <a routerLink="/mi-perfil" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" class="drawer__item">
           <svg lucideUser [size]="20"></svg> Mi perfil
+        </a>
+      </li>
+      <li>
+        <a routerLink="/favoritos" routerLinkActive="is-active" class="drawer__item">
+          <svg lucideBookmark [size]="20"></svg> Mis favoritos
         </a>
       </li>
 
@@ -143,7 +150,7 @@
         </li>
       } @else {
         <li>
-          <a routerLink="/mi-perfil/anunciante" routerLinkActive="is-active" class="drawer__item">
+          <a routerLink="/ser-anunciante" routerLinkActive="is-active" class="drawer__item">
             <svg lucideBadgeCheck [size]="20"></svg> Quiero ser anunciante
           </a>
         </li>
@@ -163,6 +170,11 @@
         </button>
       </li>
     } @else {
+      <li>
+        <a routerLink="/ser-anunciante" routerLinkActive="is-active" class="drawer__item">
+          <svg lucideBadgeCheck [size]="20"></svg> ¿Sos propietario?
+        </a>
+      </li>
       <li>
         <a routerLink="/login" routerLinkActive="is-active" class="drawer__item">
           <svg lucideLogIn [size]="20"></svg> Ingresar

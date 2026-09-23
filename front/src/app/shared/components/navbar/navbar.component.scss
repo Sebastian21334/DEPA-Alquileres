@@ -24,14 +24,14 @@
   min-width: 0;
 }
 
-/* Cambios en el menú: Naranja y más grueso */
+/* Menú con el rojo de marca y mayor peso visual. */
 .navbar__menu {
   background: transparent;
   border: none;
   font-size: 2rem;
   font-weight: 800;
   line-height: 1;
-  color: #ff9800; 
+  color: var(--color-primary);
   cursor: pointer;
   padding: 0;
 }
@@ -70,14 +70,31 @@
   min-width: 0;
 }
 
-/* Texto más grande y oscuro */
-.navbar__owner-hint {
+/* Acceso público a la guía para propietarios e inmobiliarias. */
+.navbar__owner-cta {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-secondary);
   font-size: 1rem;
-  font-weight: 500;
-  color: #1a237e; /* Azul oscuro del prototipo */
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease;
 }
 
-/* Avatar: Colores naranjas y tamaño ajustado */
+.navbar__owner-cta:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.navbar__owner-cta:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-secondary) 22%, transparent);
+  outline-offset: 2px;
+}
+
+/* Avatar: versión clara de la paleta de marca. */
 .navbar__avatar {
   display: grid;
   place-items: center;
@@ -85,7 +102,7 @@
   height: 2.75rem;
   border-radius: 50%;
   background: #ffbc59; /* Naranja claro */
-  color: #d84315; /* Naranja oscuro */
+  color: var(--color-primary);
   font-weight: 700;
   text-decoration: none;
   font-size: 1.2rem;
@@ -94,10 +111,10 @@
 
 .navbar__avatar--placeholder {
   background: #ffbc59;
-  color: #d84315;
+  color: var(--color-primary);
 }
 
-/* Ajustes del Botón: Forma cuadrada y naranja intenso */
+/* CTA principal: rojo exacto del logo DEPA. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -113,13 +130,13 @@
 }
 
 .btn--primary {
-  background: #ff9800; /* Naranja del botón */
+  background: var(--color-primary);
   color: #ffffff;
-  box-shadow: 0 4px 10px rgba(255, 152, 0, 0.4);
+  box-shadow: 0 4px 10px color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
 
 .btn--primary:hover {
-  background: #f57c00;
+  background: var(--color-primary-dark);
   transform: translateY(-1px);
 }
 
@@ -209,7 +226,7 @@
   text-align: left;
   cursor: pointer;
 }
-.drawer__item svg { color: #ff9800; flex-shrink: 0; }
+.drawer__item svg { color: var(--color-primary); flex-shrink: 0; }
 .drawer__item:hover, .drawer__item.is-active { background: #fff4e5; }
 .drawer__item--danger, .drawer__item--danger svg { color: var(--color-danger); }
 .drawer__chevron { margin-left: auto; transition: transform 0.2s ease; }
@@ -236,16 +253,16 @@
   flex-shrink: 0;
   border-radius: 50%;
   background: #ffbc59;
-  color: #d84315;
+  color: var(--color-primary);
   font-weight: 700;
 }
-.drawer__chat-text .drawer__chat-title { color: #ff9800; font-weight: 600; }
+.drawer__chat-text .drawer__chat-title { color: var(--color-primary); font-weight: 600; }
 .drawer__unread { display: grid; place-items: center; min-width: 1.35rem; height: 1.35rem; margin-left: auto; padding: 0 .3rem; border-radius: 999px; background: var(--color-accent); color: #fff; font-size: .7rem; font-weight: 800; }
 .drawer__muted { margin: 0.4rem 0.6rem; font-size: 0.82rem; color: var(--color-text-muted); }
 .drawer__muted--error { color: var(--color-danger); }
 
 @media (max-width: 480px) {
-  .navbar__owner-hint {
+  .navbar__owner-cta {
     display: none;
   }
 

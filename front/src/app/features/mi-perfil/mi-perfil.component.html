@@ -113,6 +113,7 @@
               </dl>
               <div class="acct-actions">
                 <a [routerLink]="['/perfil', p.id]" class="acct-btn acct-btn--ghost">Ver perfil público</a>
+                <a routerLink="/favoritos" class="acct-btn acct-btn--ghost">Mis favoritos</a>
                 <a routerLink="/mis-reservas" class="acct-btn acct-btn--ghost">Reservas recibidas</a>
                 <a routerLink="/mis-publicaciones" class="acct-btn acct-btn--ghost">Mis publicaciones</a>
                 <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">Publicar propiedad</a>
@@ -157,7 +158,7 @@
         </section>
       </div>
       @if (solicitud()?.estado !== 'aprobada') {
-        <div class="acct-actions profile-reservations"><a routerLink="/mis-reservas" class="acct-btn acct-btn--ghost">Mis reservas</a></div>
+        <div class="acct-actions profile-reservations"><a routerLink="/favoritos" class="acct-btn acct-btn--ghost">Mis favoritos</a><a routerLink="/mis-reservas" class="acct-btn acct-btn--ghost">Mis reservas</a></div>
       }
     }
   </div>

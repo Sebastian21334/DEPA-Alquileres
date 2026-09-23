@@ -12,6 +12,7 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'mi-perfil/anunciante', renderMode: RenderMode.Client },
   { path: 'mis-publicaciones', renderMode: RenderMode.Client },
   { path: 'mis-reservas', renderMode: RenderMode.Client },
+  { path: 'favoritos', renderMode: RenderMode.Client },
   { path: 'publicaciones/nueva', renderMode: RenderMode.Client },
   {
     path: 'publicaciones/:id',

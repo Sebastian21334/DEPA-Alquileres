@@ -32,7 +32,14 @@
   </form>
 
   <app-advanced-filters [form]="form" [tiposPropiedad]="tiposPropiedad()" [ciudades]="ciudades()" [monedas]="monedas()" [modalidades]="modalidades()" (search)="buscar()" />
-  <app-listing-grid [total]="resultado().total" [listings]="resultado().datos" [loading]="cargando()" [error]="error()" />
+  <app-listing-grid
+    [total]="resultado().total"
+    [listings]="resultado().datos"
+    [loading]="cargando()"
+    [error]="error()"
+    [sortOrder]="orden()"
+    (sortChange)="cambiarOrden($event)"
+  />
   @if (!cargando() && !error() && resultado().totalPaginas > 1) {
     <nav class="pagination" aria-label="Paginación de publicaciones">
       <button type="button" (click)="irAPagina(resultado().pagina - 1)" [disabled]="resultado().pagina === 1">Anterior</button>

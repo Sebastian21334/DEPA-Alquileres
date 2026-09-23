@@ -4,6 +4,8 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Publicacion, PublicacionPayload } from '../../shared/models/publicacion.model';
 
+export type OrdenPublicaciones = 'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
+
 /**
  * Consume el módulo `publicaciones` del backend (back/src/publicaciones).
  *
@@ -23,6 +25,7 @@ export class ListingService {
     pagina?: number;
     limite?: number;
     categoria?: string;
+    orden?: OrdenPublicaciones;
     busqueda?: string;
     idsCiudad?: number[];
     idsTipoPropiedad?: number[];
@@ -35,6 +38,7 @@ export class ListingService {
     if (opciones.pagina) params = params.set('pagina', opciones.pagina);
     if (opciones.limite) params = params.set('limite', opciones.limite);
     if (opciones.categoria) params = params.set('categoria', opciones.categoria);
+    if (opciones.orden) params = params.set('orden', opciones.orden);
     if (opciones.busqueda?.trim()) params = params.set('q', opciones.busqueda.trim());
     if (opciones.idsCiudad?.length) params = params.set('idsCiudad', opciones.idsCiudad.join(','));
     if (opciones.idsTipoPropiedad?.length) params = params.set('idsTipoPropiedad', opciones.idsTipoPropiedad.join(','));

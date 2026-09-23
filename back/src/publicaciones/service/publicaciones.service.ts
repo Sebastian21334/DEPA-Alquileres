@@ -1,6 +1,6 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PUBLICACIONES_REPOSITORY } from '../repository/publicaciones.repository.interface';
-import type { CategoriaInicio, ConsultaPublicaciones, IPublicacionesRepository } from '../repository/publicaciones.repository.interface';
+import type { CategoriaInicio, ConsultaPublicaciones, IPublicacionesRepository, OrdenPublicaciones } from '../repository/publicaciones.repository.interface';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
@@ -74,11 +74,15 @@ export class PublicacionesService {
     categoria?: CategoriaInicio,
     filtros: Omit<Partial<ConsultaPublicaciones>, 'pagina' | 'limite' | 'categoria'> = {},
   ) {
+    const ordenesValidos: OrdenPublicaciones[] = ['recientes', 'antiguas', 'precio-menor', 'precio-mayor', 'titulo'];
     const consulta: ConsultaPublicaciones = {
       pagina: Math.max(1, pagina),
       limite: Math.min(Math.max(1, limite), 50),
       categoria,
       ...filtros,
+      orden: ordenesValidos.includes(filtros.orden as OrdenPublicaciones)
+        ? filtros.orden as OrdenPublicaciones
+        : undefined,
       busqueda: filtros.busqueda?.trim().slice(0, 200) || undefined,
     };
     return this.publicacionesRepo.buscarPaginadas(consulta);

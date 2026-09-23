@@ -1,0 +1,17 @@
+:host { display: block; min-height: 70vh; }
+.favorites-page { min-height: 70vh; padding: 3rem 1.25rem 4.5rem; background: #f5f7fb; }
+.favorites-wrap { width: min(1180px, 100%); margin: 0 auto; }
+.favorites-header { padding-bottom: 1.6rem; border-bottom: 1px solid var(--color-border); }
+.favorites-header > span { color: var(--color-secondary); font-size: .75rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.favorites-header h1 { margin: .35rem 0 .45rem; color: #101f3a; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -.035em; }
+.favorites-header p { max-width: 620px; margin: 0; color: var(--color-text-muted); line-height: 1.6; }
+.favorites-summary { margin: 1.5rem 0 1rem; color: #53627a; font-size: .86rem; font-weight: 750; }
+.favorites-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.35rem; }
+.favorites-state { display: grid; min-height: 330px; place-items: center; align-content: center; padding: 2rem; text-align: center; color: var(--color-text-muted); }
+.favorites-state h2 { margin: .6rem 0 .25rem; color: #172640; }
+.favorites-state p { margin: 0; }
+.favorites-state a { margin-top: 1.25rem; padding: .75rem 1rem; border-radius: 8px; background: var(--color-primary); color: white; font-weight: 800; text-decoration: none; }
+.favorites-state--error { color: var(--color-secondary); }
+.empty-bookmark { display: grid; width: 4rem; height: 4rem; place-items: center; border-radius: 50%; background: #fff0ed; color: var(--color-secondary); font-size: 2.25rem; }
+@media (max-width: 900px) { .favorites-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 580px) { .favorites-page { padding: 2rem 1rem 3rem; } .favorites-grid { grid-template-columns: 1fr; } }

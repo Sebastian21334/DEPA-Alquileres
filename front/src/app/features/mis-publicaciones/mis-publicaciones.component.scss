@@ -22,7 +22,7 @@
 .item__badges { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 .item__badges small { color: var(--color-text-muted); font-size: 0.78rem; }
 .item__location { display: flex; align-items: center; gap: 0.3rem; margin: 0; color: var(--color-text-muted); font-size: 0.88rem; }
-.item__location svg { color: #ff9800; flex-shrink: 0; }
+.item__location svg { color: var(--color-accent); flex-shrink: 0; }
 .item__specs { margin: 0.35rem 0 0; font-size: 0.9rem; }
 
 .item__actions { display: flex; flex-direction: column; align-items: stretch; gap: 0.45rem; }
@@ -70,7 +70,7 @@
   bottom: 5px;
   padding: 1px 7px;
   border-radius: 999px;
-  background: #ff9800;
+  background: var(--color-accent);
   color: #fff;
   font-size: 0.68rem;
   font-weight: 700;
@@ -82,12 +82,12 @@
   justify-content: center;
   gap: 0.2rem;
   border: 2px dashed var(--color-border);
-  color: #ff9800;
+  color: var(--color-accent);
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
 }
-.gallery__add:hover { border-color: #ff9800; background: #fffaf2; }
+.gallery__add:hover { border-color: var(--color-accent); background: #fffaf2; }
 .gallery__add input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 @media (max-width: 760px) {

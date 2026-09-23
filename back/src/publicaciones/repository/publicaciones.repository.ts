@@ -70,6 +70,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       pagina,
       limite,
       categoria,
+      orden,
       busqueda,
       idsCiudad,
       idsTipoPropiedad,
@@ -120,16 +121,28 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .where('reserva.cancelada = :cancelada', { cancelada: false })
       .groupBy('reserva.id_publicacion');
 
-    const orden = categoria === 'reservadas' ? 'COALESCE(reservas.cantidad, 0)' : 'publicacion.fecha_publicacion';
-    const direccion = categoria === 'reservadas' ? 'DESC' : 'DESC';
+    const ordenes = {
+      recientes: { columna: 'publicacion.fecha_publicacion', direccion: 'DESC' },
+      antiguas: { columna: 'publicacion.fecha_publicacion', direccion: 'ASC' },
+      'precio-menor': { columna: 'publicacion.precio', direccion: 'ASC' },
+      'precio-mayor': { columna: 'publicacion.precio', direccion: 'DESC' },
+      titulo: { columna: 'LOWER(publicacion.titulo)', direccion: 'ASC' },
+    } as const;
+    const ordenSeleccionado = orden
+      ? ordenes[orden]
+      : categoria === 'reservadas'
+        ? { columna: 'COALESCE(reservas.cantidad, 0)', direccion: 'DESC' as const }
+        : ordenes.recientes;
     const filas = await base
       .clone()
       .select('publicacion.id', 'id')
       .addSelect('COALESCE(reservas.cantidad, 0)', 'cantidadReservas')
       .addSelect('publicacion.fecha_publicacion', 'fechaPublicacion')
+      .addSelect('publicacion.precio', 'precioOrden')
+      .addSelect('LOWER(publicacion.titulo)', 'tituloOrden')
       .leftJoin(`(${reservas.getQuery()})`, 'reservas', 'reservas."idPublicacion" = publicacion.id_publicacion')
       .setParameters(reservas.getParameters())
-      .orderBy(orden, direccion)
+      .orderBy(ordenSeleccionado.columna, ordenSeleccionado.direccion)
       .addOrderBy('publicacion.id', 'DESC')
       .offset((pagina - 1) * limite)
       .limit(limite)

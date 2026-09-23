@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import {
   LucideBadgeCheck,
+  LucideBookmark,
   LucideBuilding2,
   LucideChevronLeft,
   LucideChevronRight,
@@ -25,6 +26,8 @@ import { AvailabilityService, FechaDisponible } from '../../shared/services/avai
 import { ReservationService } from '../../shared/services/reservation.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { MetodoPago } from '../../shared/models/catalogo.model';
+import { FavoritesService } from '../../shared/services/favorites.service';
+import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 
 @Component({
   selector: 'app-publication-detail',
@@ -35,7 +38,9 @@ import { MetodoPago } from '../../shared/models/catalogo.model';
     RevealDirective,
     AvatarComponent,
     AvailabilityCalendarComponent,
+    RelativeTimePipe,
     LucideBadgeCheck,
+    LucideBookmark,
     LucideBuilding2,
     LucideChevronLeft,
     LucideChevronRight,
@@ -58,6 +63,7 @@ export class PublicationDetailComponent {
   private readonly availabilityApi = inject(AvailabilityService);
   private readonly reservations = inject(ReservationService);
   private readonly catalogs = inject(CatalogoService);
+  private readonly favorites = inject(FavoritesService);
 
   protected readonly publication = signal<Publicacion | null>(null);
   protected readonly loading = signal(true);
@@ -75,12 +81,17 @@ export class PublicationDetailComponent {
   protected readonly paymentMethods = signal<MetodoPago[]>([]);
   protected readonly paymentMethodId = signal<number | null>(null);
   protected readonly processingPayment = signal(false);
+  protected readonly savingFavorite = signal(false);
 
   protected readonly images = computed(() => this.publication()?.imagenes ?? []);
   protected readonly currentImage = computed(() => this.images()[this.selectedImage()] ?? null);
   protected readonly esMiPublicacion = computed(
     () => this.publication()?.anunciante?.usuario?.id === Number(this.auth.currentUser()?.sub),
   );
+  protected readonly isFavorite = computed(() => {
+    const id = this.publication()?.id;
+    return id ? this.favorites.isFavorite(id) : false;
+  });
   protected readonly esTemporaria = computed(
     () => {
       const modalidad = this.publication()?.modalidad;
@@ -180,6 +191,18 @@ export class PublicationDetailComponent {
       nombreOtro: this.advertiserName(),
       fotoOtro: usuario.foto_url ?? null,
     });
+  }
+
+  protected toggleFavorite(item: Publicacion): void {
+    if (this.savingFavorite()) return;
+    if (!this.auth.isAuthenticated) {
+      this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });
+      return;
+    }
+    this.savingFavorite.set(true);
+    this.favorites.toggle(item.id)
+      .pipe(finalize(() => this.savingFavorite.set(false)))
+      .subscribe();
   }
 
   protected price(item: Publicacion): string {

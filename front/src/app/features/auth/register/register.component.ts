@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { LucideEye, LucideEyeOff } from '@lucide/angular';
+import { LucideArrowLeft, LucideEye, LucideEyeOff } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../shared/validators/password.validators';
 
@@ -20,7 +20,7 @@ import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, LucideEye, LucideEyeOff],
+  imports: [ReactiveFormsModule, RouterLink, LucideArrowLeft, LucideEye, LucideEyeOff],
   templateUrl: './register.component.html',
   styleUrl: './register.component.scss',
 })

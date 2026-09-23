@@ -2,25 +2,25 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens (paleta de marca SIAlquileres):
- * Naranja/rojo como color principal (CTAs, badges de "Largo Plazo"), azul como
- * color secundario (badges de "Temporario", acentos) y ámbar como color de
- * apoyo (precios, calificaciones). Todo queda centralizado acá como custom
+ * Design tokens (paleta del logo DEPA):
+ * Rojo como color principal (CTAs, badges de "Largo Plazo"), azul como color
+ * secundario (badges de "Temporario") y amarillo como color de apoyo (precios,
+ * calificaciones). Todo queda centralizado acá como custom
  * properties de CSS para no tocar los componentes (que solo referencian
  * var(--...)) si la paleta cambia más adelante.
  */
 :root {
   /* Marca */
-  --color-primary: #d8471e;
-  --color-primary-dark: #b83913;
-  --color-primary-light: #fbeee8;
+  --color-primary: #d94217;
+  --color-primary-dark: #b53613;
+  --color-primary-light: #fcece7;
   --color-primary-contrast: #ffffff;
 
-  --color-secondary: #0e46a1;
+  --color-secondary: #0e47a1;
   --color-secondary-dark: #0b3780;
   --color-secondary-light: #e8eefb;
 
-  --color-accent: #ff9f1c;
+  --color-accent: #ff9702;
 
   /* Superficie / texto */
   --color-bg: #f7f7f9;
@@ -131,8 +131,8 @@ button {
 .acct-field select:focus,
 .acct-field textarea:focus {
   outline: none;
-  border-color: #ff9800;
-  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 20%, transparent);
 }
 .acct-hint { font-size: 0.78rem; color: var(--color-text-muted); }
 .acct-hint--error { color: var(--color-danger); }
@@ -159,8 +159,8 @@ button {
   transition: background 0.15s ease, transform 0.15s ease;
 }
 .acct-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.acct-btn--primary { background: #ff9800; color: #fff; box-shadow: 0 4px 10px rgba(255, 152, 0, 0.35); }
-.acct-btn--primary:hover:not(:disabled) { background: #f57c00; transform: translateY(-1px); }
+.acct-btn--primary { background: var(--color-primary); color: #fff; box-shadow: 0 4px 10px color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.acct-btn--primary:hover:not(:disabled) { background: var(--color-primary-dark); transform: translateY(-1px); }
 .acct-btn--ghost { background: #fff; border-color: var(--color-border); color: var(--color-text); }
 .acct-btn--ghost:hover:not(:disabled) { background: var(--color-bg); }
 .acct-btn--danger { background: #fff; border-color: #fecaca; color: var(--color-danger); }

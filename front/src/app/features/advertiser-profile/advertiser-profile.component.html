@@ -20,9 +20,6 @@
 
         <section class="public-data" appReveal="left" [revealDelay]="120">
           <h2>Datos públicos</h2>
-          @if (owner.usuario?.email) {
-            <span>Email de contacto</span><a [href]="'mailto:' + owner.usuario?.email">{{ owner.usuario?.email }}</a>
-          }
           @if (owner.numero_contacto) { <span>Teléfono</span><p>{{ owner.numero_contacto }}</p> }
           <span>Propiedades publicadas</span>
           <p>{{ publications().length }} {{ publications().length === 1 ? 'activa' : 'activas' }}</p>

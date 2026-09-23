@@ -11,7 +11,7 @@
   flex-shrink: 0;
   border-radius: 50%;
   background: #ffbc59;
-  color: #d84315;
+  color: var(--color-primary);
   font-size: 2.3rem;
   font-weight: 800;
 }
@@ -19,7 +19,7 @@
 .photo { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex-shrink: 0; }
 .photo__picker { position: relative; display: block; border-radius: 50%; cursor: pointer; }
 .photo__picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 2; }
-.photo__picker .profile-hero__avatar { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #ff9800; transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.photo__picker .profile-hero__avatar { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--color-accent); transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
 .photo__picker:hover .profile-hero__avatar { transform: scale(1.05); }
 .photo__overlay {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -53,7 +53,7 @@
 }
 .data-list > div:last-child { border-bottom: 0; }
 .data-list dt { display: flex; align-items: center; gap: 0.4rem; color: var(--color-text-muted); font-size: 0.88rem; }
-.data-list dt svg { color: #ff9800; }
+.data-list dt svg { color: var(--color-accent); }
 .data-list dd { margin: 0; font-weight: 600; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; overflow-wrap: anywhere; }
 .data-list--compact { margin-bottom: 1rem; }
 

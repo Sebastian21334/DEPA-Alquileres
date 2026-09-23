@@ -48,7 +48,22 @@
           }
         </div>
         <h1>{{ item.titulo }}</h1>
-        <p class="location"><svg lucideMapPin [size]="16"></svg> {{ location(item) }}</p>
+        <div class="intro__meta">
+          <div>
+            <p class="location"><svg lucideMapPin [size]="16"></svg> {{ location(item) }}</p>
+            <p class="published-date">{{ item.fecha_publicacion | relativeTime }}</p>
+          </div>
+          @if (!esMiPublicacion()) {
+            <button
+              type="button"
+              class="favorite-button"
+              [class.is-active]="isFavorite()"
+              [disabled]="savingFavorite()"
+              [attr.aria-pressed]="isFavorite()"
+              (click)="toggleFavorite(item)"
+            ><svg lucideBookmark [size]="19" [attr.fill]="isFavorite() ? 'currentColor' : 'none'"></svg>{{ isFavorite() ? 'Guardada' : 'Guardar' }}</button>
+          }
+        </div>
       </div>
 
       <section class="features" appReveal>

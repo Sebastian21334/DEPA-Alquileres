@@ -56,6 +56,20 @@ export const routes: Routes = [
     title: 'Mis reservas — DEPA',
   },
   {
+    path: 'favoritos',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/favorites/favorites.component').then((m) => m.FavoritesComponent),
+    title: 'Mis favoritos — DEPA',
+  },
+  {
+    path: 'ser-anunciante',
+    loadComponent: () =>
+      import('./features/ser-anunciante/ser-anunciante.component').then(
+        (m) => m.SerAnuncianteComponent,
+      ),
+    title: 'Publicá tu propiedad — DEPA',
+  },
+  {
     path: 'mi-perfil/anunciante',
     canActivate: [authGuard],
     loadComponent: () =>

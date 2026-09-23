@@ -11,7 +11,15 @@
     @if (publicacion().modalidad?.nombre) {
       <span class="badge badge--modalidad">{{ publicacion().modalidad?.nombre }}</span>
     }
-    <button type="button" class="card__save" aria-label="Guardar publicación"><svg lucideBookmark [size]="19"></svg></button>
+    <button
+      type="button"
+      class="card__save"
+      [class.is-active]="isFavorite"
+      [disabled]="savingFavorite()"
+      [attr.aria-label]="isFavorite ? 'Quitar de favoritos' : 'Guardar en favoritos'"
+      [attr.aria-pressed]="isFavorite"
+      (click)="toggleFavorite()"
+    ><svg lucideBookmark [size]="19" [attr.fill]="isFavorite ? 'currentColor' : 'none'"></svg></button>
     @if (verificado) {
       <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> Dueño verificado</span>
     }
@@ -19,6 +27,7 @@
 
   <div class="card__body">
     <h3 class="card__title">{{ publicacion().titulo }}</h3>
+    <p class="card__published">{{ publicacion().fecha_publicacion | relativeTime }}</p>
     @if (ubicacion) {
       <p class="card__location"><svg lucideMapPin [size]="16"></svg>{{ ubicacion }}</p>
     }

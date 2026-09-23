@@ -1,11 +1,13 @@
 import { Publicacion } from '../entity/publicacion.entity';
 
 export type CategoriaInicio = 'recientes' | 'temporales' | 'largo-plazo' | 'villa-maria' | 'reservadas';
+export type OrdenPublicaciones = 'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
 
 export interface ConsultaPublicaciones {
   pagina: number;
   limite: number;
   categoria?: CategoriaInicio;
+  orden?: OrdenPublicaciones;
   busqueda?: string;
   idsCiudad?: number[];
   idsTipoPropiedad?: number[];

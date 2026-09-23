@@ -15,6 +15,7 @@ import { ReservasModule } from './reservas/reservas.module';
 import { MensajesModule } from './mensajes/mensajes.module';
 import { CatalogosModule } from './catalogos/catalogos.module';
 import { MailModule } from './mail/mail.module';
+import { FavoritosModule } from './favoritos/favoritos.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -53,6 +54,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     MensajesModule,
     CatalogosModule,
     MailModule,
+    FavoritosModule,
   ],
   controllers: [AppController],
   providers: [AppService],

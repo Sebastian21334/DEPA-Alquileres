@@ -15,6 +15,7 @@ export class PublicacionesController {
     @Query('pagina') pagina?: string,
     @Query('limite') limite?: string,
     @Query('categoria') categoria?: any,
+    @Query('orden') orden?: any,
     @Query('q') busqueda?: string,
     @Query('idsCiudad') idsCiudad?: string,
     @Query('idsTipoPropiedad') idsTipoPropiedad?: string,
@@ -31,6 +32,7 @@ export class PublicacionesController {
     };
 
     return this.publicacionesService.listarActivas(Number(pagina) || 1, Number(limite) || 12, categoria, {
+      orden,
       busqueda,
       idsCiudad: ids(idsCiudad),
       idsTipoPropiedad: ids(idsTipoPropiedad),

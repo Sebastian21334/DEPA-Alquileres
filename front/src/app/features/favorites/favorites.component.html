@@ -1,0 +1,29 @@
+<section class="favorites-page">
+  <div class="favorites-wrap">
+    <header class="favorites-header">
+      <span>Tu selección</span>
+      <h1>Mis favoritos</h1>
+      <p>Guardá las propiedades que te interesan para encontrarlas rápidamente más tarde.</p>
+    </header>
+
+    @if (loading()) {
+      <div class="favorites-state"><app-spinner /><p>Cargando tus favoritos…</p></div>
+    } @else if (error()) {
+      <div class="favorites-state favorites-state--error"><h2>No pudimos cargar la sección</h2><p>{{ error() }}</p></div>
+    } @else if (!favorites().length) {
+      <div class="favorites-state favorites-state--empty">
+        <span class="empty-bookmark" aria-hidden="true">♡</span>
+        <h2>Todavía no guardaste publicaciones</h2>
+        <p>Usá el marcador de cada propiedad para armar tu lista de favoritos.</p>
+        <a routerLink="/publicaciones">Explorar publicaciones</a>
+      </div>
+    } @else {
+      <div class="favorites-summary">{{ favorites().length }} {{ favorites().length === 1 ? 'propiedad guardada' : 'propiedades guardadas' }}</div>
+      <div class="favorites-grid">
+        @for (item of favorites(); track item.id) {
+          <app-listing-card [publicacion]="item" (favoriteChange)="favoriteChanged(item.id, $event)" />
+        }
+      </div>
+    }
+  </div>
+</section>
