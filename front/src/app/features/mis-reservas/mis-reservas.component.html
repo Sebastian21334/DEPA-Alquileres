@@ -1,38 +1,82 @@
 <section class="acct-page">
   <div class="acct-wrap">
-    <div class="acct-heading"><div><h1>Reservas</h1><p>Consultá tus estadías y las reservas recibidas en tus publicaciones.</p></div></div>
+    <div class="acct-heading">
+      <div>
+        <h1>Mis reservas</h1>
+        <p>Gestioná las estadías que reservaste y las que recibiste en tus propiedades.</p>
+      </div>
+    </div>
+
     @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
+
     @if (cargando()) {
       <div class="acct-state"><app-spinner /><p>Cargando reservas…</p></div>
     } @else {
-      <section class="reservation-section">
-        <h2>Mis reservas</h2>
-        @for (reserva of propias(); track reserva.id) {
-          <article class="acct-card reservation">
-            <div><span class="acct-badge" [class.acct-badge--error]="reserva.cancelada" [class.acct-badge--ok]="!reserva.cancelada && !reserva.finalizada">{{ estado(reserva) }}</span>
-              <h3>{{ reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</h3>
-              <p>{{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }} · {{ monto(reserva.monto_pago) }}</p></div>
-            <div class="reservation__actions">
-              @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
-              @if (!reserva.cancelada && !reserva.finalizada) { <button class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar</button> }
-            </div>
-          </article>
-        } @empty { <div class="acct-card empty">Todavía no realizaste reservas.</div> }
-      </section>
-      <section class="reservation-section">
-        <h2>Reservas recibidas</h2>
-        @for (reserva of recibidas(); track reserva.id) {
-          <article class="acct-card reservation">
-            <div><span class="acct-badge" [class.acct-badge--error]="reserva.cancelada" [class.acct-badge--ok]="!reserva.cancelada && !reserva.finalizada">{{ estado(reserva) }}</span>
-              <h3>{{ reserva.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
-              <p><strong>{{ inquilino(reserva) }}</strong> · {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}</p>
-              <p class="muted">{{ reserva.usuario_email ?? reserva.usuario?.email ?? 'Sin email' }} · {{ reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'Sin teléfono' }}</p></div>
-            <div class="reservation__actions">
-              @if (!reserva.cancelada && !reserva.finalizada) { <button class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="finalizar(reserva)">Finalizar estadía</button> }
-            </div>
-          </article>
-        } @empty { <div class="acct-card empty">No recibiste reservas todavía.</div> }
-      </section>
+      <div class="reservation-summary" aria-label="Resumen de reservas">
+        <div class="acct-card">
+          <strong>{{ propias().length }}</strong><span>Realizadas</span><small>{{ activas(propias()) }} activas</small>
+        </div>
+        <div class="acct-card">
+          <strong>{{ recibidas().length }}</strong><span>Recibidas</span><small>{{ activas(recibidas()) }} activas</small>
+        </div>
+      </div>
+
+      <div class="reservation-tabs" role="tablist" aria-label="Tipo de reservas">
+        <button type="button" role="tab" [attr.aria-selected]="vista() === 'realizadas'" [class.is-active]="vista() === 'realizadas'" (click)="vista.set('realizadas')">
+          Reservas realizadas <span>{{ propias().length }}</span>
+        </button>
+        <button type="button" role="tab" [attr.aria-selected]="vista() === 'recibidas'" [class.is-active]="vista() === 'recibidas'" (click)="vista.set('recibidas')">
+          Reservas recibidas <span>{{ recibidas().length }}</span>
+        </button>
+      </div>
+
+      @if (vista() === 'realizadas') {
+        <section class="reservation-section" role="tabpanel">
+          <div class="section-heading">
+            <h2>Reservas realizadas</h2>
+            <p>Estadías que reservaste en propiedades temporales.</p>
+          </div>
+          @for (reserva of propias(); track reserva.id) {
+            <article class="acct-card reservation">
+              <div>
+                <span class="acct-badge" [class.acct-badge--error]="reserva.cancelada" [class.acct-badge--ok]="!reserva.cancelada && !reserva.finalizada">{{ estado(reserva) }}</span>
+                <h3>{{ reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</h3>
+                <p>{{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }} · {{ monto(reserva.monto_pago) }}</p>
+              </div>
+              <div class="reservation__actions">
+                @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
+                @if (!reserva.cancelada && !reserva.finalizada) { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
+              </div>
+            </article>
+          } @empty {
+            <div class="acct-card empty">Todavía no realizaste reservas.</div>
+          }
+        </section>
+      } @else {
+        <section class="reservation-section" role="tabpanel">
+          <div class="section-heading">
+            <h2>Reservas recibidas</h2>
+            <p>Estadías confirmadas sobre tus propiedades publicadas.</p>
+          </div>
+          @for (reserva of recibidas(); track reserva.id) {
+            <article class="acct-card reservation">
+              <div>
+                <span class="acct-badge" [class.acct-badge--error]="reserva.cancelada" [class.acct-badge--ok]="!reserva.cancelada && !reserva.finalizada">{{ estado(reserva) }}</span>
+                <h3>{{ reserva.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
+                <p><strong>{{ inquilino(reserva) }}</strong> · {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}</p>
+                <p class="muted">{{ reserva.usuario_email ?? reserva.usuario?.email ?? 'Sin email' }} · {{ reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'Sin teléfono' }}</p>
+              </div>
+              <div class="reservation__actions">
+                @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
+                @if (!reserva.cancelada && !reserva.finalizada) { <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="finalizar(reserva)">Finalizar estadía</button> }
+                @if (!reserva.cancelada && !reserva.finalizada) { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
+              </div>
+            </article>
+          } @empty {
+            <div class="acct-card empty">No recibiste reservas todavía.</div>
+          }
+        </section>
+      }
     }
   </div>
 </section>

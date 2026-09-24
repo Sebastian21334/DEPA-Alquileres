@@ -30,9 +30,11 @@
     </a>
 
     <div class="navbar__end">
-      <a routerLink="/ser-anunciante" class="navbar__owner-cta">
-        ¿Sos propietario?
-      </a>
+      @if (auth.isAuthenticated) {
+        <a routerLink="/mis-reservas" class="navbar__owner-cta">Mis reservas</a>
+      } @else {
+        <a routerLink="/ser-anunciante" class="navbar__owner-cta">¿Sos propietario?</a>
+      }
       <a routerLink="/publicaciones/nueva" class="btn btn--primary shine">Publicar</a>
     </div>
   </div>
@@ -122,14 +124,11 @@
         }
       </li>
 
-      @if (esInquilino()) {
-        <li class="drawer__section">Inquilino</li>
-        <li>
-          <a routerLink="/mis-reservas" routerLinkActive="is-active" class="drawer__item">
-            <svg lucideCalendarDays [size]="20"></svg> Mis reservas
-          </a>
-        </li>
-      }
+      <li>
+        <a routerLink="/mis-reservas" routerLinkActive="is-active" class="drawer__item">
+          <svg lucideCalendarDays [size]="20"></svg> Mis reservas
+        </a>
+      </li>
 
       @if (perfil.esAnuncianteVerificado()) {
         <li class="drawer__section">Anunciante</li>
@@ -141,11 +140,6 @@
         <li>
           <a routerLink="/mis-publicaciones" routerLinkActive="is-active" class="drawer__item">
             <svg lucideLayoutList [size]="20"></svg> Mis publicaciones
-          </a>
-        </li>
-        <li>
-          <a routerLink="/mis-reservas" routerLinkActive="is-active" class="drawer__item">
-            <svg lucideCalendarDays [size]="20"></svg> Reservas recibidas
           </a>
         </li>
       } @else {

@@ -19,6 +19,7 @@ export class MisReservasComponent {
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
   protected readonly ocupada = signal<number | null>(null);
+  protected readonly vista = signal<'realizadas' | 'recibidas'>('realizadas');
 
   constructor() {
     forkJoin({ propias: this.reservasApi.mine(), recibidas: this.reservasApi.received() }).subscribe({
@@ -73,6 +74,10 @@ export class MisReservasComponent {
     return [reserva.usuario_nombre ?? reserva.usuario?.nombre, reserva.usuario_apellido ?? reserva.usuario?.apellido]
       .filter(Boolean)
       .join(' ') || 'Inquilino eliminado';
+  }
+
+  protected activas(reservas: Reserva[]): number {
+    return reservas.filter((reserva) => !reserva.cancelada && !reserva.finalizada).length;
   }
 
   private reemplazar(actualizada: Reserva): void {

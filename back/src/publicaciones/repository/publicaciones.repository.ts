@@ -32,7 +32,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     return this.repo.findOne({
       where: { id },
       relations: {
-        anunciante: { usuario: true },
+        anunciante: { usuario: true, tipoAnunciante: true },
         tipoMoneda: true,
         modalidad: true,
         provincia: true,
@@ -55,7 +55,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         modalidad: true,
         tipoMoneda: true,
         imagenes: true,
-        anunciante: { usuario: true },
+        anunciante: { usuario: true, tipoAnunciante: true },
       },
     });
   }
@@ -152,7 +152,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const publicaciones = ids.length
       ? await this.repo.find({
           where: ids.map((id) => ({ id, activa: true })),
-          relations: { tipoPropiedad: true, ciudad: true, provincia: true, modalidad: true, tipoMoneda: true, imagenes: true, anunciante: { usuario: true } },
+          relations: { tipoPropiedad: true, ciudad: true, provincia: true, modalidad: true, tipoMoneda: true, imagenes: true, anunciante: { usuario: true, tipoAnunciante: true } },
         })
       : [];
     const porId = new Map(publicaciones.map((publicacion) => [publicacion.id, publicacion]));

@@ -4,6 +4,7 @@ import { CanActivateFn, Router } from '@angular/router';
 import { map } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { PerfilService } from '../services/perfil.service';
+import { ToastService } from '../services/toast.service';
 
 /** Exige sesión activa; si no, manda a /login y vuelve a la ruta pedida al ingresar. */
 export const authGuard: CanActivateFn = (_route, state) => {
@@ -21,10 +22,16 @@ export const authGuard: CanActivateFn = (_route, state) => {
 export const anuncianteGuard: CanActivateFn = (route, state) => {
   if (!isPlatformBrowser(inject(PLATFORM_ID))) return true;
   const router = inject(Router);
+  const toast = inject(ToastService);
   if (!inject(AuthService).isAuthenticated) {
+    toast.mostrar('Para publicar una propiedad necesitás iniciar sesión o registrarte.');
     return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
   }
   return inject(PerfilService)
     .esAnunciante()
-    .pipe(map((ok) => (ok ? true : router.createUrlTree(['/mi-perfil/anunciante']))));
+    .pipe(map((ok) => {
+      if (ok) return true;
+      toast.mostrar('Para publicar una propiedad primero debés solicitar ser anunciante.');
+      return router.createUrlTree(['/mi-perfil/anunciante']);
+    }));
 };

@@ -21,7 +21,7 @@
       (click)="toggleFavorite()"
     ><svg lucideBookmark [size]="19" [attr.fill]="isFavorite ? 'currentColor' : 'none'"></svg></button>
     @if (verificado) {
-      <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> Dueño verificado</span>
+      <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> {{ tipoAnuncianteTexto }}</span>
     }
   </div>
 
@@ -34,11 +34,15 @@
 
     <ul class="card__specs">
       <li><svg lucideBed [size]="19" aria-hidden="true"></svg>{{ ambientesTexto }}</li>
-      <li><span class="card__divider" aria-hidden="true"></span><svg lucideRuler [size]="18" aria-hidden="true"></svg>{{ superficie }} m²</li>
+      @if (esTemporaria) {
+        <li><span class="card__divider" aria-hidden="true"></span><svg lucideHouse [size]="18" aria-hidden="true"></svg>{{ tipoPropiedadTexto }}</li>
+      } @else {
+        <li><span class="card__divider" aria-hidden="true"></span><svg lucideRuler [size]="18" aria-hidden="true"></svg>{{ superficie }} m²</li>
+      }
     </ul>
 
     <div class="card__footer">
-      <p class="card__price"><strong>${{ precioFormateado }}</strong><span>/ mes</span></p>
+      <p class="card__price"><strong>${{ precioFormateado }}</strong><span>/ {{ esTemporaria ? 'día' : 'mes' }}</span></p>
       <a class="card__cta" [routerLink]="['/publicaciones', publicacion().id]">Ver propiedad <svg lucideArrowRight [size]="17"></svg></a>
     </div>
   </div>

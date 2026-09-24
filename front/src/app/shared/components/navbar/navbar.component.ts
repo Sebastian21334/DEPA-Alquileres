@@ -70,11 +70,6 @@ export class NavbarComponent {
     const u = this.perfil.usuario();
     return u ? `${u.nombre} ${u.apellido}`.trim() : (this.auth.currentUser()?.email ?? '');
   });
-  protected readonly esInquilino = computed(() => {
-    const rol = this.auth.currentUser()?.rol?.toLowerCase();
-    return rol === 'usuario' || rol === 'inquilino';
-  });
-
   @HostListener('window:scroll')
   protected onScroll(): void {
     this.scrolled.set(window.scrollY > 8);

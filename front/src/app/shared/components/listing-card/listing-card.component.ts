@@ -7,6 +7,7 @@ import {
   LucideBadgeCheck,
   LucideBed,
   LucideBookmark,
+  LucideHouse,
   LucideMapPin,
   LucideRuler,
 } from '@lucide/angular';
@@ -15,12 +16,12 @@ import { FavoritesService } from '../../services/favorites.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 
 // Tarjeta reutilizable de una publicación (prototipo "Card"): foto con badge de
-// modalidad y "Dueño Verificado", título + ubicación, columna de características
+// modalidad y tipo de anunciante, título + ubicación, columna de características
 // (ambientes y m², que son las que existen en la entidad) y precio con botón "Ver".
 @Component({
   selector: 'app-listing-card',
   standalone: true,
-  imports: [RouterLink, RelativeTimePipe, LucideArrowRight, LucideBadgeCheck, LucideBed, LucideBookmark, LucideMapPin, LucideRuler],
+  imports: [RouterLink, RelativeTimePipe, LucideArrowRight, LucideBadgeCheck, LucideBed, LucideBookmark, LucideHouse, LucideMapPin, LucideRuler],
   templateUrl: './listing-card.component.html',
   styleUrl: './listing-card.component.scss',
 })
@@ -70,6 +71,10 @@ export class ListingCardComponent {
     return this.publicacion().anunciante?.verificado ?? false;
   }
 
+  protected get tipoAnuncianteTexto(): string {
+    return this.publicacion().anunciante?.tipoAnunciante?.nombre ?? 'Anunciante';
+  }
+
   protected get ubicacion(): string {
     const p = this.publicacion();
     return [p.ciudad?.nombre, p.provincia?.nombre].filter(Boolean).join(', ');
@@ -78,5 +83,9 @@ export class ListingCardComponent {
   protected get ambientesTexto(): string {
     const cantidad = this.publicacion().cantidad_ambientes;
     return `${cantidad} ${cantidad === 1 ? 'ambiente' : 'ambientes'}`;
+  }
+
+  protected get tipoPropiedadTexto(): string {
+    return this.publicacion().tipoPropiedad?.nombre ?? 'Estadía temporal';
   }
 }

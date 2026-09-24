@@ -5,11 +5,12 @@ import { filter, map, startWith } from 'rxjs';
 import { NavbarComponent } from './shared/components/navbar/navbar.component';
 import { FooterComponent } from './shared/components/footer/footer.component';
 import { ChatDockComponent } from './shared/components/chat-dock/chat-dock.component';
+import { ToastComponent } from './shared/components/toast/toast.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, NavbarComponent, FooterComponent, ChatDockComponent],
+  imports: [RouterOutlet, NavbarComponent, FooterComponent, ChatDockComponent, ToastComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
