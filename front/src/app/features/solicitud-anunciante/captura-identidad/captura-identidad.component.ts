@@ -72,6 +72,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   protected readonly cameraReady = signal(false);
   protected readonly cameraAspectRatio = signal('4 / 3');
   protected readonly procesando = signal(false);
+  protected readonly cambiandoDesafio = signal(false);
   protected readonly mensaje = signal('Colocá el frente del DNI dentro del recuadro.');
   protected readonly error = signal('');
   protected readonly frentePreview = signal('');
@@ -82,9 +83,21 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     () => this.instrucciones()[this.indiceInstruccion()] ?? null,
   );
   protected readonly progresoCapturaFinal = signal(0);
+  protected readonly fotoPendientePreview = signal('');
+  protected readonly puedeCambiarCamara = signal(false);
+  protected readonly ayudaGesto = computed(() => {
+    switch (this.instruccionActual()?.type) {
+      case 'TURN_LEFT': return 'Girá la nariz hacia tu hombro izquierdo, sin mover el celular.';
+      case 'TURN_RIGHT': return 'Girá la nariz hacia tu hombro derecho, sin mover el celular.';
+      case 'TILT_HEAD': return 'Acercá una oreja al hombro, manteniendo la mirada hacia adelante.';
+      case 'OPEN_MOUTH': return 'Mantené la cabeza de frente y abrí bien la boca.';
+      default: return '';
+    }
+  });
 
   private frente: File | null = null;
   private dorso: File | null = null;
+  private fotoPendiente: File | null = null;
   private neutralPhoto: File | null = null;
   private livePhoto: File | null = null;
   private actionPhotos: File[] = [];
@@ -100,6 +113,8 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   private calibrationYaw = 0;
   private calibrationRoll = 0;
   private calibrationCount = 0;
+  private camarasTraseras: MediaDeviceInfo[] = [];
+  private indiceCamaraTrasera = 0;
 
   ngAfterViewInit(): void {
     void this.startCamera('environment').catch(() => undefined);
@@ -113,25 +128,19 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     this.faceLandmarker?.close();
     this.revokePreview(this.frentePreview());
     this.revokePreview(this.dorsoPreview());
+    this.revokePreview(this.fotoPendientePreview());
   }
 
   protected async capturarDocumento(): Promise<void> {
-    if (!this.cameraReady() || this.procesando()) return;
+    if (!this.cameraReady() || this.procesando() || this.fotoPendiente) return;
     this.procesando.set(true);
     this.error.set('');
     try {
       const campo = this.paso();
       const foto = await this.captureFrame(`${campo}-${Date.now()}.jpg`);
-      if (campo === 'dni_frente') {
-        this.frente = foto;
-        this.setPreview(this.frentePreview, foto);
-        this.paso.set('dni_dorso');
-        this.mensaje.set('Ahora colocá el dorso del DNI dentro del recuadro.');
-      } else if (campo === 'dni_dorso') {
-        this.dorso = foto;
-        this.setPreview(this.dorsoPreview, foto);
-        await this.iniciarPruebaFacial();
-      }
+      this.fotoPendiente = foto;
+      this.setPreview(this.fotoPendientePreview, foto);
+      this.mensaje.set(`Revisá que el ${campo === 'dni_frente' ? 'frente' : 'dorso'} se vea completo, nítido y sin reflejos.`);
     } catch (error: unknown) {
       this.showError(this.errorText(error));
     } finally {
@@ -139,9 +148,83 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  protected async confirmarDocumento(): Promise<void> {
+    if (!this.fotoPendiente || this.procesando()) return;
+    const foto = this.fotoPendiente;
+    this.limpiarFotoPendiente();
+    if (this.paso() === 'dni_frente') {
+      this.frente = foto;
+      this.setPreview(this.frentePreview, foto);
+      this.paso.set('dni_dorso');
+      this.mensaje.set('Ahora colocá el dorso del DNI dentro del recuadro.');
+      return;
+    }
+    if (this.paso() === 'dni_dorso') {
+      this.dorso = foto;
+      this.setPreview(this.dorsoPreview, foto);
+      this.procesando.set(true);
+      try {
+        await this.iniciarPruebaFacial();
+      } catch (error: unknown) {
+        this.showError(this.errorText(error));
+      } finally {
+        this.procesando.set(false);
+      }
+    }
+  }
+
+  protected repetirDocumento(): void {
+    this.limpiarFotoPendiente();
+    this.mensaje.set(
+      this.paso() === 'dni_frente'
+        ? 'Colocá el frente del DNI dentro del recuadro.'
+        : 'Colocá el dorso del DNI dentro del recuadro.',
+    );
+  }
+
+  protected async cambiarCamara(): Promise<void> {
+    if (this.camarasTraseras.length < 2 || this.procesando()) return;
+    this.indiceCamaraTrasera = (this.indiceCamaraTrasera + 1) % this.camarasTraseras.length;
+    this.procesando.set(true);
+    try {
+      await this.startCamera('environment', this.camarasTraseras[this.indiceCamaraTrasera].deviceId);
+    } catch {
+      // startCamera ya muestra un mensaje accionable.
+    } finally {
+      this.procesando.set(false);
+    }
+  }
+
+  protected async cambiarGestos(): Promise<void> {
+    if (!this.challengeToken || this.cambiandoDesafio() || ['capturing', 'validating', 'complete'].includes(this.fase())) return;
+    this.cambiandoDesafio.set(true);
+    this.error.set('');
+    try {
+      const challenge = await firstValueFrom(this.facialService.cambiarDesafio(this.challengeToken));
+      this.challengeToken = challenge.challengeToken;
+      this.instrucciones.set(challenge.instructions);
+      this.indiceInstruccion.set(0);
+      this.actionPhotos = [];
+      this.neutralPhoto = null;
+      this.neutralPose = null;
+      this.matchingFrames = 0;
+      this.calibrationYaw = 0;
+      this.calibrationRoll = 0;
+      this.calibrationCount = 0;
+      this.progresoCapturaFinal.set(0);
+      this.fase.set('calibrating');
+      this.mensaje.set('Gestos cambiados. Mirá de frente para volver a calibrar.');
+    } catch (error: unknown) {
+      this.showError(this.errorText(error));
+    } finally {
+      this.cambiandoDesafio.set(false);
+    }
+  }
+
   protected async reiniciar(): Promise<void> {
     this.frente = null;
     this.dorso = null;
+    this.limpiarFotoPendiente();
     this.neutralPhoto = null;
     this.livePhoto = null;
     this.actionPhotos = [];
@@ -190,7 +273,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     });
   }
 
-  private async startCamera(facingMode: 'user' | 'environment'): Promise<void> {
+  private async startCamera(facingMode: 'user' | 'environment', deviceId?: string): Promise<void> {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Este navegador no permite acceder a la cámara.');
     this.stopCamera();
     this.cameraReady.set(false);
@@ -198,8 +281,14 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facingMode } }),
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
       });
+      if (facingMode === 'environment' && !deviceId) await this.seleccionarCamaraTraseraNormal();
+      await this.normalizarZoom();
       const video = this.videoRef.nativeElement;
       video.srcObject = this.stream;
       await video.play();
@@ -213,6 +302,44 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       this.showError(message);
       throw error;
     }
+  }
+
+  private async seleccionarCamaraTraseraNormal(): Promise<void> {
+    if (typeof navigator.mediaDevices.enumerateDevices !== 'function') return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    this.camarasTraseras = devices.filter(({ kind, label }) =>
+      kind === 'videoinput' && /back|rear|environment|trasera|posterior/i.test(label),
+    );
+    this.puedeCambiarCamara.set(this.camarasTraseras.length > 1);
+    if (this.camarasTraseras.length < 2) return;
+
+    const esLenteSecundaria = (label: string) => /ultra[ -]?wide|0[.,]5|telephoto|teleobjetivo|macro/i.test(label);
+    const preferida = this.camarasTraseras.find(({ label }) => !esLenteSecundaria(label));
+    const actualId = this.stream?.getVideoTracks()[0]?.getSettings().deviceId;
+    if (!preferida || preferida.deviceId === actualId) {
+      this.indiceCamaraTrasera = Math.max(0, this.camarasTraseras.findIndex(({ deviceId: id }) => id === actualId));
+      return;
+    }
+    try {
+      const reemplazo = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { deviceId: { exact: preferida.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      this.stream?.getTracks().forEach((track) => track.stop());
+      this.stream = reemplazo;
+      this.indiceCamaraTrasera = this.camarasTraseras.findIndex(({ deviceId: id }) => id === preferida.deviceId);
+    } catch {
+      // Algunos navegadores listan las lentes pero no permiten elegirlas por ID.
+      // En ese caso se conserva el stream trasero que ya estaba funcionando.
+    }
+  }
+
+  private async normalizarZoom(): Promise<void> {
+    const track = this.stream?.getVideoTracks()[0];
+    if (!track || typeof track.getCapabilities !== 'function') return;
+    const capabilities = track.getCapabilities() as MediaTrackCapabilities & { zoom?: { min: number; max: number } };
+    if (!capabilities.zoom || capabilities.zoom.min > 1 || capabilities.zoom.max < 1) return;
+    await track.applyConstraints({ advanced: [{ zoom: 1 } as MediaTrackConstraintSet] }).catch(() => undefined);
   }
 
   private stopCamera(): void {
@@ -406,7 +533,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       ? 'MIRÁ DE FRENTE'
       : this.instruccionActual()?.label.toUpperCase() ?? 'UBICÁ TU CARA';
     this.drawLabel(context, label);
-    if (detected && this.fase() === 'actions') this.drawActionArrow(context, this.instruccionActual()?.type ?? null);
+    if (this.fase() === 'actions') this.drawActionArrow(context, this.instruccionActual()?.type ?? null, detected);
   }
 
   private drawLabel(context: CanvasRenderingContext2D, text: string): void {
@@ -420,27 +547,27 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     context.fillText(text, width / 2, height * 0.1, width * 0.78);
   }
 
-  private drawActionArrow(context: CanvasRenderingContext2D, action: AccionVitalidad | null): void {
+  private drawActionArrow(context: CanvasRenderingContext2D, action: AccionVitalidad | null, detected: boolean): void {
     const { width, height } = context.canvas;
     const centerX = width / 2;
     const centerY = height / 2;
     if (action === 'OPEN_MOUTH') {
-      context.strokeStyle = '#22c55e';
+      context.strokeStyle = detected ? '#22c55e' : '#ff9800';
       context.lineWidth = Math.max(5, width / 110);
       context.beginPath();
       context.ellipse(centerX, centerY + height * 0.18, width * 0.045, height * 0.055, 0, 0, Math.PI * 2);
       context.stroke();
       return;
     }
-    if (action === 'TURN_LEFT') this.arrow(context, centerX + width * 0.2, centerY, centerX - width * 0.2, centerY);
-    if (action === 'TURN_RIGHT') this.arrow(context, centerX - width * 0.2, centerY, centerX + width * 0.2, centerY);
-    if (action === 'TILT_HEAD') this.arrow(context, centerX - width * 0.15, centerY + height * 0.14, centerX + width * 0.15, centerY - height * 0.14);
+    if (action === 'TURN_LEFT') this.arrow(context, centerX + width * 0.2, centerY, centerX - width * 0.2, centerY, detected);
+    if (action === 'TURN_RIGHT') this.arrow(context, centerX - width * 0.2, centerY, centerX + width * 0.2, centerY, detected);
+    if (action === 'TILT_HEAD') this.arrow(context, centerX - width * 0.15, centerY + height * 0.14, centerX + width * 0.15, centerY - height * 0.14, detected);
   }
 
-  private arrow(context: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number): void {
+  private arrow(context: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, detected: boolean): void {
     const angle = Math.atan2(y2 - y1, x2 - x1);
     const head = Math.max(18, context.canvas.width / 23);
-    context.strokeStyle = '#22c55e';
+    context.strokeStyle = detected ? '#22c55e' : '#ff9800';
     context.lineWidth = Math.max(5, context.canvas.width / 100);
     context.lineCap = 'round';
     context.beginPath();
@@ -482,6 +609,12 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
 
   private revokePreview(url: string): void {
     if (url) URL.revokeObjectURL(url);
+  }
+
+  private limpiarFotoPendiente(): void {
+    this.fotoPendiente = null;
+    this.revokePreview(this.fotoPendientePreview());
+    this.fotoPendientePreview.set('');
   }
 
   private showError(message: string): void {

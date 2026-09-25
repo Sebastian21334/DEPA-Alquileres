@@ -16,17 +16,40 @@
 
   <div
     class="camera-shell"
-    [hidden]="paso() === 'complete'"
+    [hidden]="paso() === 'complete' || fotoPendientePreview()"
     [style.aspect-ratio]="cameraAspectRatio()"
   >
     <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
     <canvas #overlay></canvas>
   </div>
+  @if (fotoPendientePreview(); as preview) {
+    <figure class="photo-review">
+      <img [src]="preview" [alt]="paso() === 'dni_frente' ? 'Frente del DNI para revisar' : 'Dorso del DNI para revisar'" />
+      <figcaption>¿La foto se ve completa, enfocada y sin reflejos?</figcaption>
+    </figure>
+  }
   <canvas #capture hidden></canvas>
 
   <p class="capture-message" aria-live="polite">{{ mensaje() }}</p>
 
   @if (paso() === 'liveness' && instrucciones().length) {
+    @if (fase() === 'actions' && instruccionActual(); as instruction) {
+      <div class="gesture-guide" [attr.data-gesture]="instruction.type">
+        <div class="gesture-guide__visual" aria-hidden="true">
+          <span class="gesture-guide__head">●</span>
+          @switch (instruction.type) {
+            @case ('TURN_LEFT') { <span class="gesture-guide__arrow">←</span> }
+            @case ('TURN_RIGHT') { <span class="gesture-guide__arrow">→</span> }
+            @case ('TILT_HEAD') { <span class="gesture-guide__arrow gesture-guide__arrow--tilt">↷</span> }
+            @case ('OPEN_MOUTH') { <span class="gesture-guide__mouth">○</span> }
+          }
+        </div>
+        <div>
+          <strong>{{ instruction.label }}</strong>
+          <p>{{ ayudaGesto() }}</p>
+        </div>
+      </div>
+    }
     <ol class="challenge-list">
       @for (instruction of instrucciones(); track instruction.type; let index = $index) {
         <li
@@ -39,6 +62,14 @@
         [class.current]="fase() === 'centering' || fase() === 'capturing'"
       >Mirar a la cámara para la foto final</li>
     </ol>
+    @if (fase() !== 'capturing' && fase() !== 'validating' && fase() !== 'complete') {
+      <button
+        type="button"
+        class="change-challenge"
+        (click)="cambiarGestos()"
+        [disabled]="cambiandoDesafio() || procesando()"
+      >{{ cambiandoDesafio() ? 'Buscando otros gestos…' : 'Cambiar estos gestos' }}</button>
+    }
   }
 
   @if (fase() === 'centering' || fase() === 'capturing') {
@@ -66,10 +97,19 @@
   }
 
   <div class="capture-actions">
-    @if (paso() === 'dni_frente' || paso() === 'dni_dorso') {
+    @if ((paso() === 'dni_frente' || paso() === 'dni_dorso') && !fotoPendientePreview()) {
       <button type="button" class="acct-btn acct-btn--primary" (click)="capturarDocumento()" [disabled]="!cameraReady() || procesando()">
         {{ procesando() ? 'Capturando…' : (paso() === 'dni_frente' ? 'Sacar foto del frente' : 'Sacar foto del dorso') }}
       </button>
+      @if (puedeCambiarCamara()) {
+        <button type="button" class="acct-btn acct-btn--ghost" (click)="cambiarCamara()" [disabled]="procesando()">Cambiar cámara</button>
+      }
+    }
+    @if (fotoPendientePreview()) {
+      <button type="button" class="acct-btn acct-btn--primary" (click)="confirmarDocumento()" [disabled]="procesando()">
+        {{ procesando() ? 'Preparando…' : 'Usar esta foto' }}
+      </button>
+      <button type="button" class="acct-btn acct-btn--ghost" (click)="repetirDocumento()" [disabled]="procesando()">Repetir foto</button>
     }
     @if (frentePreview() || dorsoPreview() || error()) {
       <button type="button" class="acct-btn acct-btn--ghost" (click)="reiniciar()" [disabled]="procesando()">Reiniciar capturas</button>

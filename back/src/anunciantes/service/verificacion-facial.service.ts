@@ -80,13 +80,21 @@ export class VerificacionFacialService implements OnModuleInit {
     this.logger.log(`Modelos faciales cargados desde ${resolvedPath}`);
   }
 
-  async crearDesafio(idUsuario: number) {
-    const acciones = ACCIONES.map((accion) => ({ ...accion }));
-    for (let index = acciones.length - 1; index > 0; index--) {
-      const randomIndex = Math.floor(Math.random() * (index + 1));
-      [acciones[index], acciones[randomIndex]] = [acciones[randomIndex], acciones[index]];
-    }
-    const instructions = acciones.slice(0, 3);
+  async crearDesafio(idUsuario: number, accionesAnteriores: AccionVitalidad[] = []) {
+    let instructions: Array<{ type: AccionVitalidad; label: string }> = [];
+    // Si el usuario pidió otros gestos, se entrega una secuencia distinta. El
+    // backend sigue eligiéndola y firmándola: el cliente no puede inventarla.
+    do {
+      const acciones = ACCIONES.map((accion) => ({ ...accion }));
+      for (let index = acciones.length - 1; index > 0; index--) {
+        const randomIndex = Math.floor(Math.random() * (index + 1));
+        [acciones[index], acciones[randomIndex]] = [acciones[randomIndex], acciones[index]];
+      }
+      instructions = acciones.slice(0, 3);
+    } while (
+      accionesAnteriores.length === instructions.length &&
+      instructions.every(({ type }, index) => type === accionesAnteriores[index])
+    );
     const challengeToken = await this.jwtService.signAsync(
       {
         sub: idUsuario,
@@ -97,6 +105,15 @@ export class VerificacionFacialService implements OnModuleInit {
       { expiresIn: '5m' },
     );
     return { challengeToken, instructions, expiresInSeconds: 300 };
+  }
+
+  async cambiarDesafio(idUsuario: number, challengeToken: string) {
+    const anterior = await this.verificarToken<DesafioPayload>(
+      challengeToken,
+      'face-liveness-challenge',
+      idUsuario,
+    );
+    return this.crearDesafio(idUsuario, anterior.actions);
   }
 
   async validarVitalidad(

@@ -80,6 +80,15 @@ export class AnunciantesController {
     return this.verificacionFacialService.crearDesafio(req.user.id);
   }
 
+  @Post('verificacion-facial/desafio/cambiar')
+  @UseGuards(JwtAuthGuard)
+  cambiarDesafioFacial(
+    @Req() req: AuthenticatedRequest,
+    @Body('challengeToken') challengeToken: string,
+  ) {
+    return this.verificacionFacialService.cambiarDesafio(req.user.id, challengeToken);
+  }
+
   @Post('verificacion-facial/validar')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(EVIDENCIAS_VITALIDAD_INTERCEPTOR)

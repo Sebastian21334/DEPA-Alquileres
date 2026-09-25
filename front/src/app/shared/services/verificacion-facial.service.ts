@@ -29,6 +29,10 @@ export class VerificacionFacialService {
     return this.http.get<DesafioVitalidad>(`${this.api}/desafio`);
   }
 
+  cambiarDesafio(challengeToken: string) {
+    return this.http.post<DesafioVitalidad>(`${this.api}/desafio/cambiar`, { challengeToken });
+  }
+
   validarVitalidad(
     challengeToken: string,
     neutralPhoto: File,
