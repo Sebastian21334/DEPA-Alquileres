@@ -26,7 +26,7 @@
   line-height: 0;
   aspect-ratio: 4 / 3;
 }
-.camera-shell video { width: 100%; height: 100%; object-fit: cover; }
+.camera-shell video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .camera-shell video.mirrored { transform: scaleX(-1); }
 .camera-shell canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .capture-message { margin: 0; text-align: center; font-weight: 700; }
@@ -34,6 +34,22 @@
 .challenge-list li { padding: 0.2rem 0; }
 .challenge-list li.current { color: var(--color-text); font-weight: 800; }
 .challenge-list li.done { color: #15803d; text-decoration: line-through; }
+.capture-meter {
+  width: min(100%, 420px);
+  height: 0.55rem;
+  margin: -0.25rem auto 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--color-border);
+}
+.capture-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #22c55e;
+  transition: width 120ms linear;
+}
+.capture-meter__label { margin-top: -0.65rem; text-align: center; color: var(--color-text-muted); }
 .capture-error { padding: 0.9rem 1rem; border: 1px solid #fecaca; border-radius: var(--radius-sm); background: #fef2f2; color: #991b1b; }
 .capture-error p { margin: 0.35rem 0 0; }
 .capture-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.65rem; }

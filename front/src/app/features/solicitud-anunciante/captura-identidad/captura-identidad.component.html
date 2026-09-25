@@ -14,7 +14,11 @@
     </article>
   </div>
 
-  <div class="camera-shell" [hidden]="paso() === 'complete'">
+  <div
+    class="camera-shell"
+    [hidden]="paso() === 'complete'"
+    [style.aspect-ratio]="cameraAspectRatio()"
+  >
     <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
     <canvas #overlay></canvas>
   </div>
@@ -30,7 +34,27 @@
           [class.current]="fase() === 'actions' && index === indiceInstruccion()"
         >{{ instruction.label }}</li>
       }
+      <li
+        [class.done]="fase() === 'capturing' || fase() === 'validating' || fase() === 'complete'"
+        [class.current]="fase() === 'centering' || fase() === 'capturing'"
+      >Mirar a la cámara para la foto final</li>
     </ol>
+  }
+
+  @if (fase() === 'centering' || fase() === 'capturing') {
+    <div
+      class="capture-meter"
+      role="progressbar"
+      aria-label="Preparación de la captura final"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      [attr.aria-valuenow]="progresoCapturaFinal()"
+    >
+      <span [style.width.%]="progresoCapturaFinal()"></span>
+    </div>
+    <small class="capture-meter__label">
+      {{ fase() === 'capturing' ? 'Capturando foto…' : 'Mantené la posición' }}
+    </small>
   }
 
   @if (error()) {

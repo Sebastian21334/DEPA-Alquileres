@@ -31,7 +31,14 @@ export interface IdentidadCapturada {
 }
 
 type PasoCaptura = 'dni_frente' | 'dni_dorso' | 'liveness' | 'complete';
-type FaseVitalidad = 'idle' | 'calibrating' | 'actions' | 'centering' | 'validating' | 'complete';
+type FaseVitalidad =
+  | 'idle'
+  | 'calibrating'
+  | 'actions'
+  | 'centering'
+  | 'capturing'
+  | 'validating'
+  | 'complete';
 
 interface HeadPose {
   yaw: number;
@@ -39,7 +46,9 @@ interface HeadPose {
 }
 
 const REQUIRED_FRAMES = 8;
+const FINAL_CAPTURE_FRAMES = 24;
 const CALIBRATION_FRAMES = 12;
+const CAPTURE_NOTICE_MS = 900;
 
 @Component({
   selector: 'app-captura-identidad',
@@ -61,6 +70,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   protected readonly paso = signal<PasoCaptura>('dni_frente');
   protected readonly fase = signal<FaseVitalidad>('idle');
   protected readonly cameraReady = signal(false);
+  protected readonly cameraAspectRatio = signal('4 / 3');
   protected readonly procesando = signal(false);
   protected readonly mensaje = signal('Colocá el frente del DNI dentro del recuadro.');
   protected readonly error = signal('');
@@ -71,6 +81,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   protected readonly instruccionActual = computed(
     () => this.instrucciones()[this.indiceInstruccion()] ?? null,
   );
+  protected readonly progresoCapturaFinal = signal(0);
 
   private frente: File | null = null;
   private dorso: File | null = null;
@@ -140,6 +151,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     this.calibrationYaw = 0;
     this.calibrationRoll = 0;
     this.calibrationCount = 0;
+    this.progresoCapturaFinal.set(0);
     this.indiceInstruccion.set(0);
     this.instrucciones.set([]);
     this.fase.set('idle');
@@ -191,6 +203,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       const video = this.videoRef.nativeElement;
       video.srcObject = this.stream;
       await video.play();
+      this.cameraAspectRatio.set(`${video.videoWidth} / ${video.videoHeight}`);
       this.resizeOverlay();
       this.cameraReady.set(true);
     } catch (error: unknown) {
@@ -232,11 +245,12 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   };
 
   private async processLiveness(result: FaceLandmarkerResult): Promise<void> {
-    if (this.busyFrame || ['idle', 'validating', 'complete'].includes(this.fase())) return;
+    if (this.busyFrame || ['idle', 'capturing', 'validating', 'complete'].includes(this.fase())) return;
     const landmarks = result.faceLandmarks[0];
     const blendshapes = result.faceBlendshapes[0];
     if (!landmarks || !blendshapes) {
       this.matchingFrames = 0;
+      this.progresoCapturaFinal.set(0);
       this.mensaje.set('Ubicá una sola cara dentro del óvalo.');
       return;
     }
@@ -269,8 +283,15 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
         Math.abs(pose.yaw - this.neutralPose.yaw) <= 0.045 &&
         Math.abs(pose.roll - this.neutralPose.roll) <= 0.1;
       this.matchingFrames = centered ? this.matchingFrames + 1 : 0;
-      this.mensaje.set(centered ? 'Perfecto, mantenete quieto…' : 'Volvé a mirar de frente y centrá la cara.');
-      if (this.matchingFrames >= REQUIRED_FRAMES) await this.finalizeLiveness();
+      this.progresoCapturaFinal.set(
+        centered ? Math.min(100, Math.round((this.matchingFrames / FINAL_CAPTURE_FRAMES) * 100)) : 0,
+      );
+      this.mensaje.set(
+        centered
+          ? 'Mirá a la cámara y mantenete quieto hasta que te avisemos.'
+          : 'Volvé a mirar de frente y centrá la cara dentro del óvalo.',
+      );
+      if (this.matchingFrames >= FINAL_CAPTURE_FRAMES) await this.finalizeLiveness();
       return;
     }
 
@@ -289,7 +310,8 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       this.matchingFrames = 0;
       if (this.indiceInstruccion() === this.instrucciones().length - 1) {
         this.fase.set('centering');
-        this.mensaje.set('Movimientos completos. Volvé a mirar de frente.');
+        this.progresoCapturaFinal.set(0);
+        this.mensaje.set('Movimientos completos. Ahora mirá a la cámara para la foto final.');
       } else {
         this.indiceInstruccion.update((index) => index + 1);
         this.mensaje.set(this.instruccionActual()?.label ?? 'Seguí la nueva instrucción.');
@@ -302,11 +324,16 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   private async finalizeLiveness(): Promise<void> {
     if (this.busyFrame || !this.frente || !this.dorso || !this.neutralPhoto) return;
     this.busyFrame = true;
-    this.fase.set('validating');
+    this.fase.set('capturing');
     this.procesando.set(true);
-    this.mensaje.set('Validando movimientos y rostro…');
+    this.progresoCapturaFinal.set(100);
+    this.mensaje.set('¡Perfecto! Vamos a sacar la foto. Mantené la mirada en la cámara…');
     try {
+      // Da tiempo a que el aviso se vea antes de congelar el fotograma final.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, CAPTURE_NOTICE_MS));
       this.livePhoto = await this.captureFrame(`rostro-en-vivo-${Date.now()}.jpg`);
+      this.fase.set('validating');
+      this.mensaje.set('Foto tomada. Estamos validando tu identidad…');
       const response = await firstValueFrom(
         this.facialService.validarVitalidad(this.challengeToken, this.neutralPhoto, this.actionPhotos, this.livePhoto),
       );
@@ -375,7 +402,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     context.ellipse(width / 2, height * 0.53, width * 0.2, height * 0.36, 0, 0, Math.PI * 2);
     context.stroke();
     context.setLineDash([]);
-    const label = this.fase() === 'centering'
+    const label = this.fase() === 'centering' || this.fase() === 'capturing'
       ? 'MIRÁ DE FRENTE'
       : this.instruccionActual()?.label.toUpperCase() ?? 'UBICÁ TU CARA';
     this.drawLabel(context, label);
