@@ -59,7 +59,7 @@
         }
 
         @case ('documentos') {
-          <form class="acct-card" (submit)="enviarDocumentos($event)">
+          <section class="acct-card">
             <h2>Documentación de identidad</h2>
             @if (solicitud()?.estado === 'rechazada') {
               <div class="acct-alert acct-alert--error spaced">
@@ -67,41 +67,19 @@
                 @if (solicitud()?.motivo_rechazo) { <br />Motivo: {{ solicitud()?.motivo_rechazo }} }
               </div>
             }
-            <p class="intro">Subí fotos nítidas y sin reflejos. Solo las ve el equipo que revisa la solicitud.</p>
+            <p class="intro">
+              Por seguridad, las tres fotos se toman ahora desde la cámara. Después vas a completar una prueba breve de movimientos; si el rostro coincide con el DNI, la documentación se envía automáticamente.
+            </p>
 
-            <div class="docs">
-              @for (doc of documentos; track doc.campo) {
-                @let archivo = archivos()[doc.campo];
-                <label class="doc" [class.is-ready]="archivo">
-                  <input type="file" [accept]="doc.accept" (change)="seleccionarArchivo(doc.campo, $event)" />
-                  <span class="doc__icon">
-                    @if (archivo) { <svg lucideFileCheck [size]="26"></svg> } @else { <svg lucideUpload [size]="26"></svg> }
-                  </span>
-                  @if (archivo) {
-                    @if (vistasPrevias()[doc.campo]; as vista) {
-                      <img class="doc__preview" [src]="vista" [alt]="'Vista previa de ' + doc.titulo" />
-                    }
-                    <button type="button" class="doc__remove" (click)="quitarArchivo(doc.campo, $event)">
-                      <svg lucideX [size]="15"></svg> Quitar
-                    </button>
-                  }
-                  <strong>{{ doc.titulo }}</strong>
-                  @if (archivo) {
-                    <small class="doc__name">{{ archivo.name }} · {{ tamanio(archivo) }}</small>
-                  } @else {
-                    <small>{{ doc.ayuda }}</small>
-                  }
-                  @if (erroresArchivo()[doc.campo]; as msg) { <small class="acct-hint--error">{{ msg }}</small> }
-                </label>
-              }
-            </div>
-
-            <div class="acct-actions form-actions">
-              <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviando()">
-                {{ enviando() ? 'Subiendo documentación…' : (solicitud()?.estado === 'rechazada' ? 'Reenviar documentación' : 'Enviar documentación') }}
-              </button>
-            </div>
-          </form>
+            @if (enviando()) {
+              <div class="acct-state"><app-spinner /><p>Comparando el rostro y enviando la documentación…</p></div>
+            } @else {
+              <app-captura-identidad
+                (identidadValidada)="enviarDocumentos($event)"
+                (fallo)="mostrarErrorCaptura($event)"
+              />
+            }
+          </section>
         }
 
         @case ('revision') {

@@ -28,7 +28,7 @@ export interface ActualizarPerfilDto {
   telefono: string;
 }
 
-export type EstadoVerificacion = 'pendiente' | 'aprobada' | 'rechazada' | 'reenviada';
+export type EstadoVerificacion = 'borrador' | 'pendiente' | 'aprobada' | 'rechazada' | 'reenviada';
 
 export interface RevisionVerificacion {
   id: number;

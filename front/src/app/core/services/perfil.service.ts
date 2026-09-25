@@ -16,6 +16,7 @@ export interface DocumentosVerificacion {
   dni_frente: File;
   dni_dorso: File;
   rostro: File;
+  verificationToken: string;
 }
 
 // Estado de la cuenta del usuario logueado: datos personales (GET /usuarios/me)
@@ -108,6 +109,7 @@ export class PerfilService {
     body.append('dni_frente', docs.dni_frente);
     body.append('dni_dorso', docs.dni_dorso);
     body.append('rostro', docs.rostro);
+    body.append('verificationToken', docs.verificationToken);
     const accion = reenvio ? 'reenviar' : 'documentos';
     return this.http.post<SolicitudVerificacion>(`${this.api}/anunciantes/mi-solicitud/${accion}`, body);
   }

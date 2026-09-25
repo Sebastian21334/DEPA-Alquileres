@@ -2,6 +2,8 @@ import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 't
 import { Anunciante } from './anunciante.entity';
 
 export enum EstadoVerificacion {
+  // El usuario guardó sus datos, pero todavía no superó la verificación facial.
+  BORRADOR = 'borrador',
   // La documentación todavía no fue enviada o está lista para revisión.
   PENDIENTE = 'pendiente',
   // Un administrador aprobó los documentos y habilitó al anunciante.
@@ -25,7 +27,7 @@ export class SolicitudVerificacion {
     // Aumenta cada vez que el anunciante vuelve a enviar documentos.
     // Fechas de auditoría para ordenar solicitudes y conocer su última modificación.
     // Si se elimina el anunciante, su solicitud deja de tener sentido y se elimina en cascada.
-  @Column({ type: 'enum', enum: EstadoVerificacion, default: EstadoVerificacion.PENDIENTE })
+  @Column({ type: 'enum', enum: EstadoVerificacion, default: EstadoVerificacion.BORRADOR })
   estado: EstadoVerificacion;
 
   @Column({ type: 'varchar', length: 500, nullable: true })

@@ -26,6 +26,11 @@
               {
                 "glob": "**/*",
                 "input": "public"
+              },
+              {
+                "glob": "**/*",
+                "input": "node_modules/@mediapipe/tasks-vision/wasm",
+                "output": "assets/wasm"
               }
             ],
             "styles": [

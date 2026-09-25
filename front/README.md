@@ -57,3 +57,8 @@ Angular CLI does not come with an end-to-end testing framework by default. You c
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+# Captura de identidad
+
+El alta de anunciante no acepta archivos elegidos desde el dispositivo. En el paso de documentación se abre la cámara para tomar en el momento el frente y dorso del DNI. Luego cambia a la cámara frontal, ejecuta un desafío aleatorio de movimientos con MediaPipe y toma automáticamente una foto al volver a centrar el rostro.
+
+La documentación se envía automáticamente solo después de que el backend valida las evidencias de vitalidad. El backend compara además la foto final contra el frente del DNI antes de guardar los archivos.

@@ -21,15 +21,11 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
+import { VerificacionFacialService } from '../service/verificacion-facial.service';
 
 const TIPOS_DOCUMENTO = [
-  // Los documentos pueden ser imágenes; el video solo se acepta para el rostro.
+  // Las tres fotos proceden de la captura de cámara del flujo de identidad.
   'image/jpeg',
-  'image/png',
-  'image/webp',
-  'video/mp4',
-  'video/webm',
-  'video/quicktime',
 ];
 
 const DOCUMENTOS_INTERCEPTOR = FileFieldsInterceptor(
@@ -52,9 +48,52 @@ const DOCUMENTOS_INTERCEPTOR = FileFieldsInterceptor(
   },
 );
 
+const EVIDENCIAS_VITALIDAD_INTERCEPTOR = FileFieldsInterceptor(
+  [
+    { name: 'neutralPhoto', maxCount: 1 },
+    { name: 'action0', maxCount: 1 },
+    { name: 'action1', maxCount: 1 },
+    { name: 'action2', maxCount: 1 },
+    { name: 'livePhoto', maxCount: 1 },
+  ],
+  {
+    limits: { fileSize: 5 * 1024 * 1024, files: 5 },
+    fileFilter: (_req, file, callback) => {
+      if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
+        return callback(new BadRequestException('Las evidencias faciales deben ser imágenes JPG o PNG'), false);
+      }
+      callback(null, true);
+    },
+  },
+);
+
 @Controller('anunciantes')
 export class AnunciantesController {
-  constructor(private readonly anunciantesService: AnunciantesService) {}
+  constructor(
+    private readonly anunciantesService: AnunciantesService,
+    private readonly verificacionFacialService: VerificacionFacialService,
+  ) {}
+
+  @Get('verificacion-facial/desafio')
+  @UseGuards(JwtAuthGuard)
+  crearDesafioFacial(@Req() req: AuthenticatedRequest) {
+    return this.verificacionFacialService.crearDesafio(req.user.id);
+  }
+
+  @Post('verificacion-facial/validar')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(EVIDENCIAS_VITALIDAD_INTERCEPTOR)
+  validarVitalidad(
+    @Req() req: AuthenticatedRequest,
+    @Body('challengeToken') challengeToken: string,
+    @UploadedFiles() archivos: any,
+  ) {
+    return this.verificacionFacialService.validarVitalidad(
+      req.user.id,
+      challengeToken,
+      archivos,
+    );
+  }
 
   @Post('solicitar')
   @UseGuards(JwtAuthGuard)
@@ -71,10 +110,15 @@ export class AnunciantesController {
   @UseInterceptors(DOCUMENTOS_INTERCEPTOR)
   async subirDocumentos(
     @Req() req: AuthenticatedRequest,
+    @Body('verificationToken') verificationToken: string,
     @UploadedFiles() archivos: any,
   ) {
     // El usuario autenticado se obtiene del JWT; nunca se recibe un ID manipulable.
-    return this.anunciantesService.subirDocumentos(req.user.id, archivos);
+    return this.anunciantesService.subirDocumentos(
+      req.user.id,
+      archivos,
+      verificationToken,
+    );
   }
 
   @Post('mi-solicitud/reenviar')
@@ -82,10 +126,16 @@ export class AnunciantesController {
   @UseInterceptors(DOCUMENTOS_INTERCEPTOR)
   async reenviarDocumentos(
     @Req() req: AuthenticatedRequest,
+    @Body('verificationToken') verificationToken: string,
     @UploadedFiles() archivos: any,
   ) {
     // El servicio solo permite este endpoint si la solicitud anterior fue rechazada.
-    return this.anunciantesService.subirDocumentos(req.user.id, archivos, true);
+    return this.anunciantesService.subirDocumentos(
+      req.user.id,
+      archivos,
+      verificationToken,
+      true,
+    );
   }
 
   @Get('pendientes')

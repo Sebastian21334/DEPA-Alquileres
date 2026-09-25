@@ -84,7 +84,7 @@ export class MailService implements IMailService {
   }
 
   async enviarSolicitudAnunciante(destinatario: string): Promise<void> {
-    await this.enviar(destinatario, 'Recibimos tu solicitud de anunciante', `<p>Recibimos tu solicitud para ser anunciante.</p><p>Cuando completes la documentación, nuestro equipo la revisará y te avisaremos el resultado por este medio.</p>`);
+    await this.enviar(destinatario, 'Guardamos tus datos de anunciante', `<p>Guardamos tus datos iniciales.</p><p>La solicitud se enviará al equipo de revisión cuando completes la captura del DNI, la prueba de vida y la comparación facial.</p>`);
   }
 
   async enviarSolicitudParaRevision(destinatarios: string[], nombreSolicitante: string, emailSolicitante: string): Promise<void> {

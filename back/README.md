@@ -112,3 +112,10 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+# Verificación facial para solicitudes de anunciante
+
+El flujo `anunciantes` emite un desafío aleatorio de movimientos con una vigencia de cinco minutos. El frontend valida la experiencia en tiempo real con MediaPipe y el backend vuelve a comprobar las capturas con face-api.js antes de autorizar el envío. La autorización queda ligada al hash de la foto facial final: esa imagen no puede reemplazarse al subir los documentos.
+
+El endpoint existente de documentación compara la captura en vivo contra el frente del DNI antes de almacenar archivos en Azure y antes de notificar a administradores. Si la vitalidad o la coincidencia fallan, no se persiste la documentación.
+
+Los modelos de `src/models` corresponden a los modelos oficiales usados por `@vladmandic/face-api`. El modelo del frontend `face_landmarker.task` se distribuye desde el paquete/CDN oficial de [MediaPipe Tasks Vision](https://developers.google.com/mediapipe/solutions/vision/face_landmarker/web_js).

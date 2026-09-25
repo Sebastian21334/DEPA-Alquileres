@@ -13,6 +13,7 @@ import { AuthModule } from '../auth/auth.module'; // <- agregar
 import { MailModule } from '../mail/mail.module';
 import { VERIFICACION_REPOSITORY } from './repository/verificacion.repository.interface';
 import { VerificacionRepository } from './repository/verificacion.repository';
+import { VerificacionFacialService } from './service/verificacion-facial.service';
 
 @Module({
   // Agrupa endpoints, reglas de negocio y persistencia de solicitudes de anunciante.
@@ -24,6 +25,7 @@ import { VerificacionRepository } from './repository/verificacion.repository';
       useExisting: AnunciantesRepository,
     },
     AnunciantesService,
+    VerificacionFacialService,
     VerificacionRepository,
     {
       provide: VERIFICACION_REPOSITORY,

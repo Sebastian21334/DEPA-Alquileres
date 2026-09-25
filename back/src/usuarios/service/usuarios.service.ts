@@ -241,22 +241,7 @@ export class UsuariosService {
     const cantidadUsuarios = await this.usuariosRepo.contarUsuarios();
     const nombreRol = cantidadUsuarios === 0 ? 'Administrador' : 'Inquilino';
 
-    let rol = await this.catalogosService.getRolPorNombre(nombreRol);
-
-    // El primer intento cubre el caso habitual. El segundo bloque conserva la
-    // posibilidad de crear el rol inicial si la base estaba completamente vacia.
-    if (!rol) {
-      rol = await this.catalogosService.crearRol({ nombre: nombreRol });
-    }
-    
-    if (!rol) {
-      if (cantidadUsuarios === 0) {
-        rol = await this.catalogosService.crearRol({ nombre: nombreRol });
-        
-      } else {
-        throw new ConflictException(`No existe el rol '${nombreRol}'`);
-      }
-    }
+  const rol = (await this.catalogosService.getRolPorNombre(nombreRol)) ?? (await this.catalogosService.crearRol({ nombre: nombreRol }));
 
     // Se quita la contrasenia original para que solo el hash llegue a la entidad.
     const { contrasenia, ...resto } = datos;

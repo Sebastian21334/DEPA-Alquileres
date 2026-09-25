@@ -22,6 +22,7 @@ import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.inter
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
+import { VerificacionFacialService } from './verificacion-facial.service';
 
 @Injectable()
 export class AnunciantesService {
@@ -37,6 +38,7 @@ export class AnunciantesService {
     @Inject(MAIL_SERVICE)
     private readonly mailService: IMailService,
     private readonly configService: ConfigService,
+    private readonly verificacionFacialService: VerificacionFacialService,
   ) {
     // El servicio usa el mismo almacenamiento de Azure que las imágenes,
     // pero separa los documentos de identidad en otro contenedor.
@@ -49,7 +51,7 @@ export class AnunciantesService {
   private readonly blobServiceClient: BlobServiceClient;
   private readonly containerName: string;
 
-  /** Crea una solicitud pendiente y evita que un usuario tenga dos solicitudes. */
+  /** Guarda los datos como borrador y evita que un usuario tenga dos solicitudes. */
   async solicitarAlta(idUsuario: number, dto: SolicitarAnuncianteDto) {
     const usuario = await this.usuariosService.buscarPorId(idUsuario);
     if (!usuario) throw new NotFoundException('Usuario no encontrado');
@@ -73,10 +75,11 @@ export class AnunciantesService {
     });
 
     const anunciante = await this.anunciantesRepo.guardar(nuevoAnunciante);
-    // La solicitud comienza pendiente; aprobarla es lo que habilita publicar.
+    // Todavía no llega a administración: queda como borrador hasta que la
+    // vitalidad, la coincidencia facial y la carga documental sean exitosas.
     const solicitud = this.verificacionRepo.crearSolicitud({
       anunciante,
-      estado: EstadoVerificacion.PENDIENTE,
+      estado: EstadoVerificacion.BORRADOR,
       numero_revision: 1,
     });
     await this.verificacionRepo.guardarSolicitud(solicitud);
@@ -96,6 +99,7 @@ export class AnunciantesService {
       dni_dorso?: ArchivoSubido[];
       rostro?: ArchivoSubido[];
     },
+    verificationToken: string,
     reenvio = false,
   ) {
     // Se recupera la solicitud vigente y se impide modificar una ya aprobada.
@@ -112,10 +116,33 @@ export class AnunciantesService {
     const dorso = archivos.dni_dorso?.[0];
     const rostro = archivos.rostro?.[0];
     if (!frente || !dorso || !rostro) {
-      throw new BadRequestException('Se requieren DNI frente, DNI dorso y foto o video facial');
+      throw new BadRequestException('Se requieren las capturas de DNI frente, DNI dorso y rostro');
     }
 
-    // Los tres archivos se validan y se suben antes de cambiar el estado.
+    if ([frente, dorso, rostro].some((archivo) => archivo.mimetype !== 'image/jpeg')) {
+      throw new BadRequestException(
+        'Las tres fotos deben capturarse en el momento desde la cámara.',
+      );
+    }
+
+    // La autorización está firmada y ligada al hash exacto de la captura final:
+    // no se puede reemplazar por un archivo elegido después de superar la prueba.
+    await this.verificacionFacialService.verificarCapturaAutorizada(
+      idUsuario,
+      verificationToken,
+      rostro.buffer,
+    );
+    const comparacion = await this.verificacionFacialService.compararConDocumento(
+      frente.buffer,
+      rostro.buffer,
+    );
+    if (!comparacion.match) {
+      throw new BadRequestException(
+        `El rostro no coincide con la foto del DNI. Posibles causas: el documento no pertenece a la persona frente a la cámara, la foto está borrosa, tiene reflejos o hay poca luz. Distancia: ${comparacion.distance.toFixed(3)}.`,
+      );
+    }
+
+    // Recién después de validar vitalidad y coincidencia se persisten los archivos.
     solicitud.dni_frente_url = await this.subirDocumento(frente, idUsuario, 'dni-frente');
     solicitud.dni_dorso_url = await this.subirDocumento(dorso, idUsuario, 'dni-dorso');
     solicitud.rostro_url = await this.subirDocumento(rostro, idUsuario, 'rostro');

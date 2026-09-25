@@ -1,0 +1,56 @@
+<section class="capture-flow" aria-label="Captura de identidad">
+  <div class="capture-progress">
+    <article [class.done]="frentePreview()">
+      <span>1</span><strong>DNI frente</strong>
+      @if (frentePreview(); as preview) { <img [src]="preview" alt="Frente del DNI capturado" /> }
+    </article>
+    <article [class.done]="dorsoPreview()">
+      <span>2</span><strong>DNI dorso</strong>
+      @if (dorsoPreview(); as preview) { <img [src]="preview" alt="Dorso del DNI capturado" /> }
+    </article>
+    <article [class.done]="fase() === 'complete'">
+      <span>3</span><strong>Prueba facial</strong>
+      <small>{{ fase() === 'complete' ? 'Validada' : 'Pendiente' }}</small>
+    </article>
+  </div>
+
+  @if (paso() !== 'complete') {
+    <div class="camera-shell">
+      <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
+      <canvas #overlay></canvas>
+    </div>
+  }
+  <canvas #capture hidden></canvas>
+
+  <p class="capture-message" aria-live="polite">{{ mensaje() }}</p>
+
+  @if (paso() === 'liveness' && instrucciones().length) {
+    <ol class="challenge-list">
+      @for (instruction of instrucciones(); track instruction.type; let index = $index) {
+        <li
+          [class.done]="index < indiceInstruccion() || fase() === 'centering' || fase() === 'validating' || fase() === 'complete'"
+          [class.current]="fase() === 'actions' && index === indiceInstruccion()"
+        >{{ instruction.label }}</li>
+      }
+    </ol>
+  }
+
+  @if (error()) {
+    <div class="capture-error" role="alert">
+      <strong>No pudimos validar la identidad.</strong>
+      <p>{{ error() }}</p>
+      <p>Revisá la luz, evitá reflejos en el DNI y asegurate de que aparezca una sola persona.</p>
+    </div>
+  }
+
+  <div class="capture-actions">
+    @if (paso() === 'dni_frente' || paso() === 'dni_dorso') {
+      <button type="button" class="acct-btn acct-btn--primary" (click)="capturarDocumento()" [disabled]="!cameraReady() || procesando()">
+        {{ procesando() ? 'Capturando…' : (paso() === 'dni_frente' ? 'Sacar foto del frente' : 'Sacar foto del dorso') }}
+      </button>
+    }
+    @if (frentePreview() || dorsoPreview() || error()) {
+      <button type="button" class="acct-btn acct-btn--ghost" (click)="reiniciar()" [disabled]="procesando()">Reiniciar capturas</button>
+    }
+  </div>
+</section>
