@@ -53,6 +53,10 @@ export class ListingService {
     return this.http.get<Publicacion>(`${this.baseUrl}/${id}`);
   }
 
+  registerView(id: number): Observable<{ visualizaciones: number }> {
+    return this.http.post<{ visualizaciones: number }>(`${this.baseUrl}/${id}/visualizacion`, {});
+  }
+
   getByAdvertiser(id: number): Observable<Publicacion[]> {
     return this.http.get<Publicacion[]>(`${this.baseUrl}/anunciante/${id}`, {
       params: { activa: 'true' },

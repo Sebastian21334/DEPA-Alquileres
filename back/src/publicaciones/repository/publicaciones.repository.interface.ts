@@ -29,10 +29,11 @@ export interface IPublicacionesRepository {
   crear(datos: Partial<Publicacion>): Publicacion;
   guardar(publicacion: Publicacion): Promise<Publicacion>;
   marcarActiva(id: number): Promise<void>;
+  incrementarVisualizaciones(id: number): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
   buscarTodasActivas(): Promise<Publicacion[]>;
   buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones>;
- buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]>; 
+  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]>;
   eliminar(publicacion: Publicacion): Promise<Publicacion>;
 }
 

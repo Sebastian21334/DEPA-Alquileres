@@ -28,6 +28,9 @@ export class Publicacion {
   @Column({ type: 'boolean', default: false })
   activa: boolean;
 
+  @Column({ type: 'int', default: 0 })
+  visualizaciones: number;
+
   // Datos propios del inmueble, consolidados para consultarlos desde el anuncio.
   @Column({ type: 'varchar', length: 255 })
   direccion: string;

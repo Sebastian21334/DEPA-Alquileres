@@ -10,6 +10,7 @@ export const serverRoutes: ServerRoute[] = [
   // Páginas de cuenta: dependen del JWT en localStorage, igual que el panel admin.
   { path: 'mi-perfil', renderMode: RenderMode.Client },
   { path: 'mi-perfil/anunciante', renderMode: RenderMode.Client },
+  { path: 'dashboard', renderMode: RenderMode.Client },
   { path: 'mis-publicaciones', renderMode: RenderMode.Client },
   { path: 'mis-reservas', renderMode: RenderMode.Client },
   { path: 'favoritos', renderMode: RenderMode.Client },

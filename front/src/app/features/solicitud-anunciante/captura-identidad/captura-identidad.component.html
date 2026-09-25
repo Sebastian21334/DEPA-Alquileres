@@ -16,7 +16,7 @@
 
   <div
     class="camera-shell"
-    [hidden]="paso() === 'complete' || fotoPendientePreview()"
+    [hidden]="paso() === 'complete' || fotoPendientePreview() || !cameraReady()"
     [style.aspect-ratio]="cameraAspectRatio()"
   >
     <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
@@ -50,10 +50,19 @@
         </div>
       </div>
     }
+    @if (fase() === 'recentering') {
+      <div class="gesture-guide gesture-guide--validated" role="status">
+        <div class="gesture-guide__check" aria-hidden="true">✓</div>
+        <div>
+          <strong>¡Gesto validado!</strong>
+          <p>Volvé a mirar al centro para continuar.</p>
+        </div>
+      </div>
+    }
     <ol class="challenge-list">
       @for (instruction of instrucciones(); track instruction.type; let index = $index) {
         <li
-          [class.done]="index < indiceInstruccion() || fase() === 'centering' || fase() === 'validating' || fase() === 'complete'"
+          [class.done]="index < indiceInstruccion() || (fase() === 'recentering' && index === indiceInstruccion()) || fase() === 'centering' || fase() === 'validating' || fase() === 'complete'"
           [class.current]="fase() === 'actions' && index === indiceInstruccion()"
         >{{ instruction.label }}</li>
       }
@@ -70,6 +79,16 @@
         [disabled]="cambiandoDesafio() || procesando()"
       >{{ cambiandoDesafio() ? 'Buscando otros gestos…' : 'Cambiar estos gestos' }}</button>
     }
+  }
+
+  @if (fase() === 'validating') {
+    <div class="identity-validation" role="status" aria-live="assertive">
+      <span class="identity-validation__spinner" aria-hidden="true"></span>
+      <div>
+        <strong>Estamos validando tu identidad</strong>
+        <p>La foto ya fue tomada y la cámara está cerrada. Esto puede demorar unos segundos.</p>
+      </div>
+    </div>
   }
 
   @if (fase() === 'centering' || fase() === 'capturing') {

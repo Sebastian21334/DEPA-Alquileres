@@ -1,0 +1,124 @@
+<section class="dashboard-page">
+  <div class="dashboard-wrap">
+    <header class="dashboard-heading">
+      <div>
+        <span class="dashboard-eyebrow">Panel del anunciante</span>
+        <h1>Resumen de tu actividad</h1>
+        <p>Conocé el rendimiento de tus publicaciones y reservas.</p>
+      </div>
+      <div class="dashboard-heading__actions">
+        <a routerLink="/mis-publicaciones" class="acct-btn acct-btn--ghost">Administrar publicaciones</a>
+        <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">+ Nueva publicación</a>
+      </div>
+    </header>
+
+    @if (cargando()) {
+      <div class="dashboard-state"><app-spinner /><p>Preparando tus métricas…</p></div>
+    } @else if (error()) {
+      <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
+    } @else {
+      <div class="kpi-grid">
+        <article class="kpi-card">
+          <span class="kpi-card__icon kpi-card__icon--orange" aria-hidden="true">◉</span>
+          <div><small>Visualizaciones</small><strong>{{ numero(totalVisualizaciones()) }}</strong><p>Aperturas de tus publicaciones</p></div>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-card__icon kpi-card__icon--blue" aria-hidden="true">⌂</span>
+          <div><small>Publicaciones activas</small><strong>{{ publicacionesActivas() }}</strong><p>de {{ publicaciones().length }} en total</p></div>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-card__icon kpi-card__icon--green" aria-hidden="true">✓</span>
+          <div><small>Reservas recibidas</small><strong>{{ reservasValidas().length }}</strong><p>{{ pendientes() }} pendientes o en curso</p></div>
+        </article>
+        <article class="kpi-card">
+          <span class="kpi-card__icon kpi-card__icon--yellow" aria-hidden="true">$</span>
+          <div><small>Ingresos por reservas</small><strong>{{ moneda(ingresos()) }}</strong><p>Sin contar cancelaciones</p></div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid dashboard-grid--main">
+        <article class="dashboard-card revenue-card">
+          <div class="card-heading">
+            <div><span>Evolución</span><h2>Ingresos de los últimos 6 meses</h2></div>
+            <strong>{{ moneda(ingresos()) }}</strong>
+          </div>
+          <div class="chart" role="img" aria-label="Gráfico de ingresos mensuales">
+            <svg viewBox="0 0 600 220" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="dashboard-area" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stop-color="#d94217" stop-opacity=".22" />
+                  <stop offset="1" stop-color="#d94217" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+              <line x1="20" y1="40" x2="580" y2="40" class="chart__grid" />
+              <line x1="20" y1="90" x2="580" y2="90" class="chart__grid" />
+              <line x1="20" y1="140" x2="580" y2="140" class="chart__grid" />
+              <line x1="20" y1="190" x2="580" y2="190" class="chart__grid" />
+              <path [attr.d]="areaPath()" fill="url(#dashboard-area)" />
+              <polyline [attr.points]="linePoints()" class="chart__line" />
+              @for (month of serieMensual(); track month.key; let index = $index) {
+                <circle [attr.cx]="20 + index * 112" [attr.cy]="linePoints().split(' ')[index].split(',')[1]" r="5" class="chart__dot"><title>{{ month.label }}: {{ moneda(month.ingresos) }}</title></circle>
+              }
+            </svg>
+            <div class="chart__labels">
+              @for (month of serieMensual(); track month.key) {
+                <span><strong>{{ month.label }}</strong><small>{{ month.reservas }} res.</small></span>
+              }
+            </div>
+          </div>
+        </article>
+
+        <article class="dashboard-card activity-card">
+          <div class="card-heading"><div><span>Actividad</span><h2>Reservas por día</h2></div></div>
+          <div class="bars" aria-label="Distribución semanal de reservas">
+            @for (day of actividadSemanal(); track day.day) {
+              <div class="bar">
+                <strong>{{ day.value }}</strong>
+                <span><i [style.height.%]="alturaBarra(day.value)"></i></span>
+                <small>{{ day.label }}</small>
+              </div>
+            }
+          </div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid dashboard-grid--bottom">
+        <article class="dashboard-card performance-card">
+          <div class="card-heading">
+            <div><span>Rendimiento</span><h2>Tus publicaciones destacadas</h2></div>
+            <a routerLink="/mis-publicaciones">Ver todas →</a>
+          </div>
+          <div class="performance-table">
+            <div class="performance-table__head"><span>Publicación</span><span>Vistas</span><span>Reservas</span><span>Ingresos</span><span></span></div>
+            @for (item of rendimiento(); track item.publicacion.id) {
+              <div class="performance-row">
+                <div class="property-cell">
+                  @if (item.publicacion.imagenes?.[0]?.url; as image) { <img [src]="image" [alt]="item.publicacion.titulo" /> }
+                  @else { <span class="property-cell__empty">⌂</span> }
+                  <div><strong>{{ item.publicacion.titulo }}</strong><small>{{ item.publicacion.activa ? 'Activa' : 'Inactiva' }}</small></div>
+                </div>
+                <span data-label="Vistas">{{ numero(item.visualizaciones) }}</span>
+                <span data-label="Reservas">{{ item.reservas }}</span>
+                <strong data-label="Ingresos">{{ moneda(item.ingresos) }}</strong>
+                <a [routerLink]="['/publicaciones', item.publicacion.id]" aria-label="Ver publicación">↗</a>
+              </div>
+            } @empty {
+              <div class="performance-empty">Todavía no hay publicaciones para analizar.</div>
+            }
+          </div>
+        </article>
+
+        <article class="dashboard-card conversion-card">
+          <div class="card-heading"><div><span>Conversión</span><h2>Vistas que reservan</h2></div></div>
+          <div class="conversion-ring" [style.--conversion]="conversion() + '%'">
+            <div><strong>{{ porcentaje(conversion()) }}</strong><small>conversión</small></div>
+          </div>
+          <p>Relación entre las visualizaciones registradas y las reservas confirmadas.</p>
+          @if (!totalVisualizaciones()) {
+            <small class="conversion-card__hint">La métrica comenzará a calcularse cuando tus anuncios reciban visitas.</small>
+          }
+        </article>
+      </div>
+    }
+  </div>
+</section>

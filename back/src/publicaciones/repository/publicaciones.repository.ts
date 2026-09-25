@@ -27,6 +27,10 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     await this.repo.update({ id }, { activa: true });
   }
 
+  async incrementarVisualizaciones(id: number): Promise<void> {
+    await this.repo.increment({ id }, 'visualizaciones', 1);
+  }
+
   buscarPorId(id: number): Promise<Publicacion | null> {
     // Esta consulta carga todas las relaciones necesarias para detalle, propiedad y galería.
     return this.repo.findOne({

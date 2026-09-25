@@ -141,6 +141,7 @@ export class PublicationDetailComponent {
     this.listings.getById(id).pipe(finalize(() => this.loading.set(false))).subscribe({
       next: (publication) => {
         this.publication.set(publication);
+        this.registerView(publication);
         const idAnunciante = publication.anunciante?.idUsuario;
         if (idAnunciante) {
           this.listings.getByAdvertiser(idAnunciante).subscribe({
@@ -160,6 +161,19 @@ export class PublicationDetailComponent {
       },
       error: () => this.error.set('No pudimos encontrar esta publicación.'),
     });
+  }
+
+  private registerView(publication: Publicacion): void {
+    const ownerId = publication.anunciante?.usuario?.id ?? publication.anunciante?.idUsuario;
+    if (ownerId === Number(this.auth.currentUser()?.sub)) return;
+    const key = `depa:viewed:${publication.id}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch {
+      // El contador sigue funcionando aunque el navegador bloquee sessionStorage.
+    }
+    this.listings.registerView(publication.id).subscribe({ error: () => undefined });
   }
 
   @HostListener('document:keydown.arrowleft')

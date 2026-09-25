@@ -59,6 +59,14 @@ export class PublicacionesService {
     return publicacion;
   }
 
+  /** Registra una apertura real del detalle; el cliente evita repetirla durante la misma sesión. */
+  async registrarVisualizacion(id: number) {
+    const publicacion = await this.publicacionesRepo.buscarPorId(id);
+    if (!publicacion || !publicacion.activa) throw new NotFoundException('Publicación no encontrada');
+    await this.publicacionesRepo.incrementarVisualizaciones(id);
+    return { visualizaciones: Number(publicacion.visualizaciones ?? 0) + 1 };
+  }
+
   /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
   async activar(publicacion: Publicacion) {
     if (publicacion.activa) return;

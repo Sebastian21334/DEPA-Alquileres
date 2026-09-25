@@ -53,7 +53,10 @@ export class PublicacionesController {
     return this.publicacionesService.listarPorAnunciante(idAnunciante, soloActivas);
     }
 
-    
+    @Post(':id/visualizacion')
+    async registrarVisualizacion(@Param('id', ParseIntPipe) id: number) {
+      return this.publicacionesService.registrarVisualizacion(id);
+    }
 
     @Get(':id')
     async buscarPorId(@Param('id', ParseIntPipe) id: number) {

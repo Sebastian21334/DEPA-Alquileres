@@ -35,6 +35,7 @@ type FaseVitalidad =
   | 'idle'
   | 'calibrating'
   | 'actions'
+  | 'recentering'
   | 'centering'
   | 'capturing'
   | 'validating'
@@ -46,9 +47,26 @@ interface HeadPose {
 }
 
 const REQUIRED_FRAMES = 8;
-const FINAL_CAPTURE_FRAMES = 24;
+const RECENTERING_FRAMES = 5;
+const FINAL_CAPTURE_FRAMES = 10;
 const CALIBRATION_FRAMES = 12;
-const CAPTURE_NOTICE_MS = 900;
+const CAPTURE_NOTICE_MS = 250;
+
+const puntuarCamaraTrasera = (label: string): number => {
+  const nombre = label.toLocaleLowerCase();
+
+  // En varios teléfonos `facingMode: environment` abre la lente ultra gran angular.
+  // Priorizamos las etiquetas que identifican la cámara principal/1x y dejamos las
+  // lentes especiales al final, sin depender del orden que entrega el navegador.
+  if (/ultra[ -]?(wide|gran angular)|0[.,]5\s?x/.test(nombre)) return -300;
+  if (/macro/.test(nombre)) return -250;
+  if (/tele(photo|objetivo)?|\b[2-9](?:[.,]\d+)?\s?x\b/.test(nombre)) return -200;
+  if (/\b1(?:[.,]0)?\s?x\b|main|principal|standard|normal/.test(nombre)) return 300;
+  if (/^(back|rear|environment|trasera|posterior) camera$/.test(nombre)) return 250;
+  if (/wide|gran angular/.test(nombre)) return 200;
+  if (/dual|triple|fusion/.test(nombre)) return 100;
+  return 0;
+};
 
 @Component({
   selector: 'app-captura-identidad',
@@ -307,14 +325,15 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   private async seleccionarCamaraTraseraNormal(): Promise<void> {
     if (typeof navigator.mediaDevices.enumerateDevices !== 'function') return;
     const devices = await navigator.mediaDevices.enumerateDevices();
-    this.camarasTraseras = devices.filter(({ kind, label }) =>
-      kind === 'videoinput' && /back|rear|environment|trasera|posterior/i.test(label),
-    );
+    this.camarasTraseras = devices
+      .filter(({ kind, label }) =>
+        kind === 'videoinput' && /back|rear|environment|trasera|posterior/i.test(label),
+      )
+      .sort((a, b) => puntuarCamaraTrasera(b.label) - puntuarCamaraTrasera(a.label));
     this.puedeCambiarCamara.set(this.camarasTraseras.length > 1);
     if (this.camarasTraseras.length < 2) return;
 
-    const esLenteSecundaria = (label: string) => /ultra[ -]?wide|0[.,]5|telephoto|teleobjetivo|macro/i.test(label);
-    const preferida = this.camarasTraseras.find(({ label }) => !esLenteSecundaria(label));
+    const preferida = this.camarasTraseras.find(({ label }) => puntuarCamaraTrasera(label) >= 0);
     const actualId = this.stream?.getVideoTracks()[0]?.getSettings().deviceId;
     if (!preferida || preferida.deviceId === actualId) {
       this.indiceCamaraTrasera = Math.max(0, this.camarasTraseras.findIndex(({ deviceId: id }) => id === actualId));
@@ -345,6 +364,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   private stopCamera(): void {
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
+    if (this.videoRef?.nativeElement) this.videoRef.nativeElement.srcObject = null;
   }
 
   private readonly renderLoop = (): void => {
@@ -405,10 +425,25 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
+    if (this.fase() === 'recentering') {
+      const centered = this.isCentered(pose);
+      this.matchingFrames = centered ? this.matchingFrames + 1 : 0;
+      this.mensaje.set(
+        centered
+          ? 'Perfecto, ya estás al centro. Preparando el siguiente gesto…'
+          : '¡Gesto validado! Volvé a mirar al centro.',
+      );
+      if (this.matchingFrames >= RECENTERING_FRAMES) {
+        this.matchingFrames = 0;
+        this.indiceInstruccion.update((index) => index + 1);
+        this.fase.set('actions');
+        this.mensaje.set(this.instruccionActual()?.label ?? 'Seguí la nueva instrucción.');
+      }
+      return;
+    }
+
     if (this.fase() === 'centering') {
-      const centered = this.neutralPose &&
-        Math.abs(pose.yaw - this.neutralPose.yaw) <= 0.045 &&
-        Math.abs(pose.roll - this.neutralPose.roll) <= 0.1;
+      const centered = this.isCentered(pose);
       this.matchingFrames = centered ? this.matchingFrames + 1 : 0;
       this.progresoCapturaFinal.set(
         centered ? Math.min(100, Math.round((this.matchingFrames / FINAL_CAPTURE_FRAMES) * 100)) : 0,
@@ -438,10 +473,10 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       if (this.indiceInstruccion() === this.instrucciones().length - 1) {
         this.fase.set('centering');
         this.progresoCapturaFinal.set(0);
-        this.mensaje.set('Movimientos completos. Ahora mirá a la cámara para la foto final.');
+        this.mensaje.set('¡Último gesto validado! Volvé a mirar al centro para la foto final.');
       } else {
-        this.indiceInstruccion.update((index) => index + 1);
-        this.mensaje.set(this.instruccionActual()?.label ?? 'Seguí la nueva instrucción.');
+        this.fase.set('recentering');
+        this.mensaje.set('¡Gesto validado! Volvé a mirar al centro.');
       }
     } finally {
       this.busyFrame = false;
@@ -456,9 +491,11 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     this.progresoCapturaFinal.set(100);
     this.mensaje.set('¡Perfecto! Vamos a sacar la foto. Mantené la mirada en la cámara…');
     try {
-      // Da tiempo a que el aviso se vea antes de congelar el fotograma final.
+      // Breve aviso visual sin hacer esperar innecesariamente a la persona.
       await new Promise<void>((resolve) => window.setTimeout(resolve, CAPTURE_NOTICE_MS));
       this.livePhoto = await this.captureFrame(`rostro-en-vivo-${Date.now()}.jpg`);
+      this.stopCamera();
+      this.cameraReady.set(false);
       this.fase.set('validating');
       this.mensaje.set('Foto tomada. Estamos validando tu identidad…');
       const response = await firstValueFrom(
@@ -491,6 +528,12 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     if (action === 'TURN_RIGHT') return yaw <= -0.07;
     if (action === 'TILT_HEAD') return Math.abs(roll) >= 0.18;
     return (scores.get('jawOpen') ?? 0) >= 0.45;
+  }
+
+  private isCentered(pose: HeadPose): boolean {
+    return !!this.neutralPose &&
+      Math.abs(pose.yaw - this.neutralPose.yaw) <= 0.045 &&
+      Math.abs(pose.roll - this.neutralPose.roll) <= 0.1;
   }
 
   private calculateHeadPose(landmarks: NormalizedLandmark[]): HeadPose | null {
@@ -529,7 +572,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     context.ellipse(width / 2, height * 0.53, width * 0.2, height * 0.36, 0, 0, Math.PI * 2);
     context.stroke();
     context.setLineDash([]);
-    const label = this.fase() === 'centering' || this.fase() === 'capturing'
+    const label = ['recentering', 'centering', 'capturing'].includes(this.fase())
       ? 'MIRÁ DE FRENTE'
       : this.instruccionActual()?.label.toUpperCase() ?? 'UBICÁ TU CARA';
     this.drawLabel(context, label);

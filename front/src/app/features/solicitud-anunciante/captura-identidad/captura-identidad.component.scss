@@ -70,6 +70,19 @@
 .gesture-guide__mouth { position: absolute; left: 34px; top: 27px; z-index: 1; font-size: 1.4rem; font-weight: 900; }
 .gesture-guide strong { display: block; color: #9a3412; }
 .gesture-guide p { margin: 0.25rem 0 0; color: var(--color-text); line-height: 1.35; }
+.gesture-guide--validated { border-color: #86efac; background: #f0fdf4; }
+.gesture-guide--validated strong { color: #15803d; }
+.gesture-guide__check {
+  display: grid;
+  flex: 0 0 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 900;
+}
 .challenge-list { margin: 0 auto; width: min(100%, 560px); color: var(--color-text-muted); }
 .challenge-list li { padding: 0.2rem 0; }
 .challenge-list li.current { color: var(--color-text); font-weight: 800; }
@@ -101,6 +114,29 @@
   transition: width 120ms linear;
 }
 .capture-meter__label { margin-top: -0.65rem; text-align: center; color: var(--color-text-muted); }
+.identity-validation {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 1rem 1.1rem;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+.identity-validation strong { display: block; font-size: 1.05rem; }
+.identity-validation p { margin: 0.25rem 0 0; color: #334155; line-height: 1.4; }
+.identity-validation__spinner {
+  flex: 0 0 42px;
+  height: 42px;
+  border: 4px solid #bfdbfe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: identity-validation-spin 800ms linear infinite;
+}
+@keyframes identity-validation-spin { to { transform: rotate(360deg); } }
 .capture-error { padding: 0.9rem 1rem; border: 1px solid #fecaca; border-radius: var(--radius-sm); background: #fef2f2; color: #991b1b; }
 .capture-error p { margin: 0.35rem 0 0; }
 .capture-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.65rem; }

@@ -133,6 +133,11 @@
       @if (perfil.esAnuncianteVerificado()) {
         <li class="drawer__section">Anunciante</li>
         <li>
+          <a routerLink="/dashboard" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideTrendingUp [size]="20"></svg> Dashboard
+          </a>
+        </li>
+        <li>
           <a routerLink="/publicaciones/nueva" routerLinkActive="is-active" class="drawer__item">
             <svg lucideSquarePlus [size]="20"></svg> Publicar propiedad
           </a>

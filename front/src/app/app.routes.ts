@@ -37,6 +37,12 @@ export const routes: Routes = [
     title: 'Publicar propiedad — DEPA',
   },
   {
+    path: 'dashboard',
+    canActivate: [anuncianteGuard],
+    loadComponent: () => import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+    title: 'Panel del anunciante — DEPA',
+  },
+  {
     path: 'mis-publicaciones',
     canActivate: [anuncianteGuard],
     loadComponent: () =>

@@ -23,6 +23,7 @@ export interface Reserva {
   cancelada: boolean;
   fecha_cancelacion: string | null;
   monto_pago: number;
+  fecha_pago: string;
   fecha_inicio: string | null;
   fecha_fin: string | null;
   publicacion?: { id: number; titulo: string; direccion?: string } | null;
