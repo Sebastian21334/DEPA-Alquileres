@@ -14,12 +14,10 @@
     </article>
   </div>
 
-  @if (paso() !== 'complete') {
-    <div class="camera-shell">
-      <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
-      <canvas #overlay></canvas>
-    </div>
-  }
+  <div class="camera-shell" [hidden]="paso() === 'complete'">
+    <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
+    <canvas #overlay></canvas>
+  </div>
   <canvas #capture hidden></canvas>
 
   <p class="capture-message" aria-live="polite">{{ mensaje() }}</p>
