@@ -40,9 +40,9 @@ describe('MailService', () => {
 
   it('reintenta cuando Azure devuelve Failed y acepta el segundo envío exitoso', async () => {
     const beginSend = jest
-      .fn()
+      .fn<() => Promise<any>>()
       .mockResolvedValueOnce({
-        pollUntilDone: jest.fn().mockResolvedValue({
+        pollUntilDone: jest.fn<() => Promise<any>>().mockResolvedValue({
           id: 'fallido',
           status: 'Failed',
           error: { code: 'ServiceUnavailable', message: 'Error temporal' },
@@ -50,7 +50,7 @@ describe('MailService', () => {
       })
       .mockResolvedValueOnce({
         pollUntilDone: jest
-          .fn()
+          .fn<() => Promise<any>>()
           .mockResolvedValue({ id: 'enviado', status: 'Succeeded' }),
       });
     const service = new MailService();
@@ -64,8 +64,8 @@ describe('MailService', () => {
   });
 
   it('informa el error cuando Azure rechaza ambos intentos', async () => {
-    const beginSend = jest.fn().mockResolvedValue({
-      pollUntilDone: jest.fn().mockResolvedValue({
+    const beginSend = jest.fn<() => Promise<any>>().mockResolvedValue({
+      pollUntilDone: jest.fn<() => Promise<any>>().mockResolvedValue({
         id: 'fallido',
         status: 'Failed',
         error: { code: 'InvalidRecipient', message: 'Destinatario rechazado' },

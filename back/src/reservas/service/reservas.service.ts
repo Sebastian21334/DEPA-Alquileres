@@ -6,6 +6,7 @@ import {
   ConflictException,
   ForbiddenException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { EstadoPagoReserva, Reserva } from '../entity/reserva.entity';
 import { CrearReservaDto } from '../dto/crear-reserva.dto';
@@ -18,6 +19,7 @@ import { PublicacionesService } from '../../publicaciones/service/publicaciones.
 import { Modalidad } from '../../catalogos/entity/modalidad.entity';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
+import { normalizarFechaReserva } from './reservas.utils';
 
 @Injectable()
 export class ReservasService {
@@ -136,17 +138,22 @@ export class ReservasService {
   async confirmarPago(id: number, fechaPago: Date): Promise<Reserva> {
     const reserva = await this.reservaRepository.buscarPorId(id);
     if (!reserva) throw new NotFoundException(`No se encontró la reserva ${id}`);
-    if (reserva.estado_pago === EstadoPagoReserva.APROBADO) return reserva;
     if (reserva.cancelada) throw new ConflictException('La reserva ya fue cancelada');
 
-    reserva.estado_pago = EstadoPagoReserva.APROBADO;
-    reserva.fecha_pago = fechaPago;
-    reserva.pago_vencimiento = null;
-    const guardada = await this.reservaRepository.guardar(reserva);
+    let guardada = reserva;
+    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+      reserva.estado_pago = EstadoPagoReserva.APROBADO;
+      reserva.fecha_pago = fechaPago;
+      reserva.pago_vencimiento = null;
+      guardada = await this.reservaRepository.guardar(reserva);
+    }
 
     const titulo = reserva.publicacion?.titulo ?? 'Alojamiento';
-    const inicio = reserva.fecha_inicio ?? new Date();
-    const fin = reserva.fecha_fin ?? inicio;
+    // PostgreSQL/TypeORM entrega las columnas `date` como strings aunque la
+    // entidad las declare Date. Normalizarlas evita que falle el armado del
+    // correo después de que el pago ya quedó aprobado.
+    const inicio = normalizarFechaReserva(reserva.fecha_inicio);
+    const fin = reserva.fecha_fin ? normalizarFechaReserva(reserva.fecha_fin) : inicio;
     const cantidadDias = Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const nombreInquilino = `${reserva.usuario_nombre ?? ''} ${reserva.usuario_apellido ?? ''}`.trim();
     const anunciante = reserva.publicacion?.anunciante;
@@ -168,30 +175,48 @@ export class ReservasService {
       monto: Number(reserva.monto_pago),
       moneda: reserva.publicacion?.tipoMoneda?.nombre ?? 'ARS',
     };
-    await Promise.allSettled([
-      ...(reserva.usuario_email
-        ? [this.mailService.enviarReservaConfirmada(reserva.usuario_email, {
+    const notificaciones = [
+      ...(reserva.usuario_email && !reserva.email_confirmacion_inquilino_enviado
+        ? [{ tipo: 'inquilino', enviar: () => this.mailService.enviarReservaConfirmada(reserva.usuario_email!, {
           ...datosComunes,
           nombreDestinatario: nombreInquilino || 'Huésped',
           nombreContraparte: nombreAnunciante,
           emailContraparte: usuarioAnunciante?.email,
           telefonoContraparte: anunciante?.numero_contacto ?? usuarioAnunciante?.telefono,
-        })]
+        }) }]
         : []),
-      ...(emailAnunciante
-        ? [this.mailService.enviarNuevaReserva(emailAnunciante, {
+      ...(emailAnunciante && !reserva.email_nueva_reserva_anunciante_enviado
+        ? [{ tipo: 'anunciante', enviar: () => this.mailService.enviarNuevaReserva(emailAnunciante, {
           ...datosComunes,
           nombreDestinatario: nombreAnunciante,
           nombreContraparte: nombreInquilino || 'Huésped',
           emailContraparte: reserva.usuario_email,
           telefonoContraparte: reserva.usuario_telefono,
-        })]
+        }) }]
         : []),
-    ]).then((resultados) => resultados.forEach((resultado) => {
+    ];
+    const resultados = await Promise.allSettled(notificaciones.map((notificacion) => notificacion.enviar()));
+    let huboCambios = false;
+    let huboErrores = false;
+    resultados.forEach((resultado, indice) => {
       if (resultado.status === 'rejected') {
-        this.logger.error('No se pudo enviar una notificación de reserva', resultado.reason);
+        huboErrores = true;
+        this.logger.error(`No se pudo enviar la notificación de reserva al ${notificaciones[indice].tipo}`, resultado.reason);
+        return;
       }
-    }));
+      huboCambios = true;
+      if (notificaciones[indice].tipo === 'inquilino') {
+        reserva.email_confirmacion_inquilino_enviado = true;
+      } else {
+        reserva.email_nueva_reserva_anunciante_enviado = true;
+      }
+    });
+    if (huboCambios) guardada = await this.reservaRepository.guardar(reserva);
+    if (huboErrores) {
+      // Un 5xx hace que Mercado Pago vuelva a notificar. Como los éxitos quedan
+      // registrados, el próximo intento envía únicamente los correos pendientes.
+      throw new ServiceUnavailableException('El pago fue aprobado, pero quedó una notificación por correo pendiente');
+    }
 
     return guardada;
   }

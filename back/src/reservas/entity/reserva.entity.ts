@@ -63,6 +63,13 @@ export class Reserva {
 
   @Column({ type: 'varchar', length: 20, nullable: true })
   usuario_telefono: string | null;
+
+  // Permiten reintentar correos fallidos sin duplicar los ya entregados.
+  @Column({ type: 'boolean', default: false })
+  email_confirmacion_inquilino_enviado: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  email_nueva_reserva_anunciante_enviado: boolean;
   
   // Usuario que realiza la reserva (Inquilino)
   @ManyToOne(() => Usuario, { nullable: true, onDelete: 'SET NULL' })
