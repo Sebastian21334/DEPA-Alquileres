@@ -1,20 +1,12 @@
 // reservas/controlador/reservas.controller.ts
-import { Controller, Get, Post, Patch, Body, Param, ParseIntPipe, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Patch, Body, Param, ParseIntPipe, UseGuards, Req } from '@nestjs/common';
 import { ReservasService } from '../service/reservas.service';
-import { CrearReservaDto } from '../dto/crear-reserva.dto';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Controller('reservas')
 export class ReservasController {
   constructor(private readonly reservasService: ReservasService) {}
-
-  @UseGuards(JwtAuthGuard)
-  @Post()
-  // El usuario que reserva sale del token, no de un campo manipulable del DTO.
-  crear(@Body() dto: CrearReservaDto, @Req() req: any) {
-    return this.reservasService.crear(dto, req.user.id);
-  }
 
   @UseGuards(JwtAuthGuard)
   @Get('mis-reservas')

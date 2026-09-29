@@ -38,6 +38,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "jpeg-js": "^0.4.4",
+    "mercadopago": "^3.6.1",
     "multer": "^2.3.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

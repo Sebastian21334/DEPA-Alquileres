@@ -26,8 +26,6 @@ import { AvatarComponent } from '../../shared/components/avatar/avatar.component
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
 import { ReservationService } from '../../shared/services/reservation.service';
-import { CatalogoService } from '../../shared/services/catalogo.service';
-import { MetodoPago } from '../../shared/models/catalogo.model';
 import { FavoritesService } from '../../shared/services/favorites.service';
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 
@@ -65,7 +63,6 @@ export class PublicationDetailComponent {
   private readonly chat = inject(ChatService);
   private readonly availabilityApi = inject(AvailabilityService);
   private readonly reservations = inject(ReservationService);
-  private readonly catalogs = inject(CatalogoService);
   private readonly favorites = inject(FavoritesService);
   private readonly sanitizer = inject(DomSanitizer);
 
@@ -82,8 +79,6 @@ export class PublicationDetailComponent {
   protected readonly bookingError = signal('');
   protected readonly bookingSuccess = signal('');
   protected readonly paymentOpen = signal(false);
-  protected readonly paymentMethods = signal<MetodoPago[]>([]);
-  protected readonly paymentMethodId = signal<number | null>(null);
   protected readonly processingPayment = signal(false);
   protected readonly savingFavorite = signal(false);
 
@@ -115,10 +110,6 @@ export class PublicationDetailComponent {
   protected readonly bookingTotal = computed(
     () => this.bookingDays() * Number(this.publication()?.precio ?? 0),
   );
-  protected readonly isCardPayment = computed(() => {
-    const selected = this.paymentMethods().find((item) => item.id === this.paymentMethodId());
-    return /d[eé]bito|cr[eé]dito|tarjeta/i.test(selected?.nombre ?? '');
-  });
   protected readonly mapUrl = computed(() => {
     const item = this.publication();
     if (!item) return '';
@@ -150,13 +141,6 @@ export class PublicationDetailComponent {
         }
         if (this.esTemporaria()) {
           this.loadAvailability(publication.id);
-          this.catalogs.getMetodosPago().subscribe({
-            next: (items) => {
-              this.paymentMethods.set(items);
-              const card = items.find((item) => /d[eé]bito|cr[eé]dito|tarjeta/i.test(item.nombre));
-              this.paymentMethodId.set(card?.id ?? items[0]?.id ?? null);
-            },
-          });
         }
       },
       error: () => this.error.set('No pudimos encontrar esta publicación.'),
@@ -289,10 +273,6 @@ export class PublicationDetailComponent {
       this.bookingError.set('Elegí la fecha de ingreso y la fecha de salida para continuar.');
       return;
     }
-    if (!this.paymentMethodId()) {
-      this.bookingError.set('No hay un medio de pago disponible para simular la reserva.');
-      return;
-    }
     this.paymentOpen.set(true);
   }
 
@@ -300,36 +280,26 @@ export class PublicationDetailComponent {
     if (!this.processingPayment()) this.paymentOpen.set(false);
   }
 
-  protected choosePaymentMethod(value: string): void {
-    this.paymentMethodId.set(Number(value));
-  }
-
   protected confirmPayment(event: Event): void {
     event.preventDefault();
     const item = this.publication();
     const start = this.selectedStart();
     const end = this.selectedEnd();
-    const method = this.paymentMethodId();
-    if (!item || !start || !end || !method || this.processingPayment()) return;
+    if (!item || !start || !end || this.processingPayment()) return;
 
     this.processingPayment.set(true);
     this.bookingError.set('');
-    this.reservations.create({
+    this.reservations.createCheckout({
       id_publicacion: item.id,
-      id_metodo_pago: method,
       fecha_inicio: start,
       fecha_fin: end,
     }).pipe(finalize(() => this.processingPayment.set(false))).subscribe({
-      next: (reservation) => {
-        this.paymentOpen.set(false);
-        this.bookingSuccess.set(`Reserva #${reservation.id} confirmada. El pago fue simulado y no se realizó ningún cargo.`);
-        this.selectedStart.set(null);
-        this.selectedEnd.set(null);
-        this.loadAvailability(item.id);
+      next: (checkout) => {
+        window.location.assign(checkout.checkout_url);
       },
       error: (err) => {
         this.paymentOpen.set(false);
-        this.bookingError.set(err?.error?.message ?? 'No se pudo completar la reserva simulada.');
+        this.bookingError.set(err?.error?.message ?? 'No se pudo iniciar el pago con Mercado Pago.');
         this.loadAvailability(item.id);
       },
     });

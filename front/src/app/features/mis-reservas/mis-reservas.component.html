@@ -8,6 +8,7 @@
     </div>
 
     @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
+    @if (paymentNotice()) { <div class="acct-alert" role="status">{{ paymentNotice() }}</div> }
 
     @if (cargando()) {
       <div class="acct-state"><app-spinner /><p>Cargando reservas…</p></div>
@@ -45,7 +46,7 @@
               </div>
               <div class="reservation__actions">
                 @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
-                @if (!reserva.cancelada && !reserva.finalizada) { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
+                @if (!reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE') { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
               </div>
             </article>
           } @empty {
@@ -69,7 +70,6 @@
               <div class="reservation__actions">
                 @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
                 @if (!reserva.cancelada && !reserva.finalizada) { <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="finalizar(reserva)">Finalizar estadía</button> }
-                @if (!reserva.cancelada && !reserva.finalizada) { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
               </div>
             </article>
           } @empty {

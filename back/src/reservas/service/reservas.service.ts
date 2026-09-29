@@ -7,7 +7,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { Reserva } from '../entity/reserva.entity';
+import { EstadoPagoReserva, Reserva } from '../entity/reserva.entity';
 import { CrearReservaDto } from '../dto/crear-reserva.dto';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
@@ -44,7 +44,7 @@ export class ReservasService {
    *   3) recién ahí crear la Reserva
    *   4) y por último, marcar esas Fechas como ocupadas
    */
-  async crear(dto: CrearReservaDto, idUsuario: number): Promise<Reserva> {
+  async crearPendiente(dto: CrearReservaDto, idUsuario: number): Promise<Reserva> {
     // El DTO trae el rango; Reserva conserva el periodo y Fecha mantiene
     // cada dia para bloquearlo en el calendario.
     const inicio = new Date(dto.fecha_inicio);
@@ -77,6 +77,9 @@ export class ReservasService {
       throw new BadRequestException('No se pudo calcular el monto de la reserva');
     }
 
+    // Una preferencia vencida no debe dejar bloqueado el calendario para siempre.
+    await this.liberarPendientesVencidas();
+
     // Delegamos la pregunta "¿está libre este rango?" al módulo que es
     // dueño de esa lógica (Disponibilidad), en vez de duplicarla acá
     const disponible = await this.disponibilidadService.verificarDisponibilidad(
@@ -100,7 +103,9 @@ export class ReservasService {
       cancelada: false,
       fecha_cancelacion: null,
       monto_pago: montoCalculado,
-      fecha_pago: new Date(), // fecha en que se efectúa el pago, no del alojamiento
+      fecha_pago: null,
+      estado_pago: EstadoPagoReserva.PENDIENTE,
+      pago_vencimiento: new Date(Date.now() + 15 * 60 * 1000),
       fecha_inicio: inicio,
       fecha_fin: fin,
       usuario_nombre: usuario.nombre,
@@ -109,7 +114,8 @@ export class ReservasService {
       usuario_telefono: usuario.telefono,
       usuario,
       publicacion,
-      metodoPago: { id: dto.id_metodo_pago } as any,
+      // Checkout Pro permite que el comprador elija el medio dentro de Mercado Pago.
+      metodoPago: null,
     });
 
     // Persistimos la reserva primero para obtener su ID antes de asociarlo a las fechas.
@@ -123,18 +129,59 @@ export class ReservasService {
       reservaGuardada.id,
     );
 
-    // Los avisos son posteriores a la persistencia: un problema con el proveedor
-    // de correo nunca revierte una reserva que ya fue confirmada.
-    const nombreInquilino = `${usuario.nombre} ${usuario.apellido}`.trim();
-    const emailAnunciante = publicacion.anunciante?.usuario?.email;
+    return reservaGuardada;
+  }
+
+  /** Confirma la reserva únicamente después de verificar el pago con Mercado Pago. */
+  async confirmarPago(id: number, fechaPago: Date): Promise<Reserva> {
+    const reserva = await this.reservaRepository.buscarPorId(id);
+    if (!reserva) throw new NotFoundException(`No se encontró la reserva ${id}`);
+    if (reserva.estado_pago === EstadoPagoReserva.APROBADO) return reserva;
+    if (reserva.cancelada) throw new ConflictException('La reserva ya fue cancelada');
+
+    reserva.estado_pago = EstadoPagoReserva.APROBADO;
+    reserva.fecha_pago = fechaPago;
+    reserva.pago_vencimiento = null;
+    const guardada = await this.reservaRepository.guardar(reserva);
+
+    const titulo = reserva.publicacion?.titulo ?? 'Alojamiento';
+    const inicio = reserva.fecha_inicio ?? new Date();
+    const fin = reserva.fecha_fin ?? inicio;
+    const nombreInquilino = `${reserva.usuario_nombre ?? ''} ${reserva.usuario_apellido ?? ''}`.trim();
+    const emailAnunciante = reserva.publicacion?.anunciante?.usuario?.email;
     await Promise.allSettled([
-      this.mailService.enviarReservaConfirmada(usuario.email, publicacion.titulo, inicio, fin),
-      ...(emailAnunciante ? [this.mailService.enviarNuevaReserva(emailAnunciante, publicacion.titulo, nombreInquilino, inicio, fin)] : []),
+      ...(reserva.usuario_email
+        ? [this.mailService.enviarReservaConfirmada(reserva.usuario_email, titulo, inicio, fin)]
+        : []),
+      ...(emailAnunciante
+        ? [this.mailService.enviarNuevaReserva(emailAnunciante, titulo, nombreInquilino, inicio, fin)]
+        : []),
     ]).then((resultados) => resultados.forEach((resultado) => {
-      if (resultado.status === 'rejected') this.logger.error('No se pudo enviar una notificación de reserva', resultado.reason);
+      if (resultado.status === 'rejected') {
+        this.logger.error('No se pudo enviar una notificación de reserva', resultado.reason);
+      }
     }));
 
-    return reservaGuardada;
+    return guardada;
+  }
+
+  /** Cierra una reserva cuyo pago falló o cuya preferencia no pudo crearse. */
+  async rechazarPago(
+    id: number,
+    estado: EstadoPagoReserva = EstadoPagoReserva.RECHAZADO,
+  ): Promise<Reserva> {
+    const reserva = await this.reservaRepository.buscarPorId(id);
+    if (!reserva) throw new NotFoundException(`No se encontró la reserva ${id}`);
+    if (reserva.estado_pago === EstadoPagoReserva.APROBADO) return reserva;
+    if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
+
+    reserva.estado_pago = estado;
+    reserva.cancelada = true;
+    reserva.fecha_cancelacion = new Date();
+    reserva.pago_vencimiento = null;
+    const guardada = await this.reservaRepository.guardar(reserva);
+    await this.disponibilidadService.liberarReserva(id);
+    return guardada;
   }
 
   /**
@@ -187,6 +234,9 @@ export class ReservasService {
       throw new ForbiddenException('Solo el anunciante de la publicación puede finalizar la reserva');
     }
     if (reserva.cancelada) throw new BadRequestException('No se puede finalizar una reserva cancelada');
+    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+      throw new BadRequestException('No se puede finalizar una reserva cuyo pago no fue aprobado');
+    }
     reserva.finalizada = true;
     return this.reservaRepository.guardar(reserva);
   }
@@ -198,6 +248,11 @@ export class ReservasService {
     this.verificarParticipanteOPropietario(reserva, idUsuarioQueOpera);
     if (reserva.finalizada) throw new BadRequestException('No se puede cancelar una reserva finalizada');
     if (reserva.cancelada) return reserva;
+    if (reserva.estado_pago === EstadoPagoReserva.APROBADO) {
+      throw new BadRequestException(
+        'La reserva está pagada. Primero debe implementarse y procesarse su devolución en Mercado Pago.',
+      );
+    }
 
     reserva.cancelada = true;
     reserva.fecha_cancelacion = new Date();
@@ -219,6 +274,9 @@ export class ReservasService {
     }
     if (reserva.cancelada || reserva.finalizada) {
       throw new BadRequestException('No se pueden modificar las fechas de una reserva cerrada');
+    }
+    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+      throw new BadRequestException('No se pueden modificar las fechas hasta que el pago esté aprobado');
     }
     if (!reserva.publicacion) throw new BadRequestException('La publicación de la reserva ya no está disponible');
 
@@ -252,5 +310,12 @@ export class ReservasService {
       return modalidad.permite_reservas_por_fecha;
     }
     return /tempor|diari/i.test(modalidad?.nombre ?? '');
+  }
+
+  private async liberarPendientesVencidas(): Promise<void> {
+    const vencidas = await this.reservaRepository.buscarPendientesVencidas(new Date());
+    for (const reserva of vencidas) {
+      await this.rechazarPago(reserva.id, EstadoPagoReserva.CANCELADO);
+    }
   }
 }

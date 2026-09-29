@@ -1,8 +1,8 @@
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Reserva } from '../entity/reserva.entity';
+import { LessThan, Repository } from 'typeorm';
+import { EstadoPagoReserva, Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 
 @Injectable()
@@ -27,7 +27,7 @@ export class ReservaRepository implements IReservaRepository {
   buscarPorId(id: number): Promise<Reserva | null> {
     return this.repository.findOne({
       where: { id },
-      relations: { usuario: true, publicacion: { anunciante: true }, metodoPago: true },
+      relations: { usuario: true, publicacion: { anunciante: { usuario: true } }, metodoPago: true },
     });
   }
 
@@ -36,7 +36,7 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.find({
       where: { usuario: { id: idUsuario } },
       relations: { publicacion: true, metodoPago: true },
-      order: { fecha_pago: 'DESC' },
+      order: { id: 'DESC' },
     });
   }
 
@@ -45,15 +45,27 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.find({
       where: { publicacion: { id: idPublicacion } },
       relations: { usuario: true, metodoPago: true },
-      order: { fecha_pago: 'DESC' },
+      order: { id: 'DESC' },
     });
   }
 
   buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
     return this.repository.find({
-      where: { publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } } },
+      where: {
+        publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
+        estado_pago: EstadoPagoReserva.APROBADO,
+      },
       relations: { usuario: true, publicacion: true, metodoPago: true },
       order: { fecha_inicio: 'ASC' },
+    });
+  }
+
+  buscarPendientesVencidas(fecha: Date): Promise<Reserva[]> {
+    return this.repository.find({
+      where: {
+        estado_pago: EstadoPagoReserva.PENDIENTE,
+        pago_vencimiento: LessThan(fecha),
+      },
     });
   }
 }

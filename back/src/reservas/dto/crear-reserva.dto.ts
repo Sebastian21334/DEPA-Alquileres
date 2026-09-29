@@ -6,9 +6,6 @@ export class CrearReservaDto {
   @IsInt()
   id_publicacion: number;
 
-  @IsInt()
-  id_metodo_pago: number;
-
   @IsDateString()
   fecha_inicio: string;
 

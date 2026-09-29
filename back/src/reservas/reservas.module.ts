@@ -32,5 +32,6 @@ import { MailModule } from '../mail/mail.module';
       useExisting: ReservaRepository, // el token apunta a la misma instancia de ReservaRepository
     },
   ],
+  exports: [ReservasService],
 })
 export class ReservasModule {}

@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ReservationService, Reserva } from '../../shared/services/reservation.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 
@@ -13,15 +13,26 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 })
 export class MisReservasComponent {
   private readonly reservasApi = inject(ReservationService);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
+  protected readonly paymentNotice = signal('');
   protected readonly ocupada = signal<number | null>(null);
   protected readonly vista = signal<'realizadas' | 'recibidas'>('realizadas');
 
   constructor() {
+    const paymentResult = this.route.snapshot.queryParamMap.get('payment');
+    if (paymentResult === 'success') {
+      this.paymentNotice.set('Mercado Pago recibió el pago. La reserva se confirmará cuando llegue la validación segura.');
+    } else if (paymentResult === 'pending') {
+      this.paymentNotice.set('El pago está pendiente. Mercado Pago informará el resultado cuando termine de procesarlo.');
+    } else if (paymentResult === 'failure') {
+      this.error.set('El pago no pudo completarse. Las fechas se liberarán cuando Mercado Pago informe el rechazo.');
+    }
+
     forkJoin({ propias: this.reservasApi.mine(), recibidas: this.reservasApi.received() }).subscribe({
       next: ({ propias, recibidas }) => {
         this.propias.set(propias);
@@ -59,6 +70,9 @@ export class MisReservasComponent {
 
   protected estado(reserva: Reserva): string {
     if (reserva.cancelada) return 'Cancelada';
+    if (reserva.estado_pago === 'PENDIENTE') return 'Pendiente de pago';
+    if (reserva.estado_pago === 'REEMBOLSADO') return 'Reembolsada';
+    if (reserva.estado_pago === 'RECHAZADO') return 'Pago rechazado';
     return reserva.finalizada ? 'Finalizada' : 'Confirmada';
   }
 
@@ -77,7 +91,9 @@ export class MisReservasComponent {
   }
 
   protected activas(reservas: Reserva[]): number {
-    return reservas.filter((reserva) => !reserva.cancelada && !reserva.finalizada).length;
+    return reservas.filter((reserva) =>
+      !reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'APROBADO',
+    ).length;
   }
 
   private reemplazar(actualizada: Reserva): void {

@@ -5,16 +5,15 @@ import { environment } from '../../../environments/environment';
 
 export interface CrearReservaPayload {
   id_publicacion: number;
-  id_metodo_pago: number;
   fecha_inicio: string;
   fecha_fin: string;
 }
 
-export interface ReservaCreada {
-  id: number;
-  monto_pago: number;
-  fecha_inicio: string;
-  fecha_fin: string;
+export interface CheckoutCreado {
+  reserva_id: number;
+  preference_id: string;
+  checkout_url: string;
+  expires_at: string;
 }
 
 export interface Reserva {
@@ -22,6 +21,7 @@ export interface Reserva {
   finalizada: boolean;
   cancelada: boolean;
   fecha_cancelacion: string | null;
+  estado_pago: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'CANCELADO' | 'REEMBOLSADO';
   monto_pago: number;
   fecha_pago: string;
   fecha_inicio: string | null;
@@ -38,9 +38,10 @@ export interface Reserva {
 export class ReservationService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/reservas`;
+  private readonly paymentUrl = `${environment.apiUrl}/pagos`;
 
-  create(payload: CrearReservaPayload): Observable<ReservaCreada> {
-    return this.http.post<ReservaCreada>(this.baseUrl, payload);
+  createCheckout(payload: CrearReservaPayload): Observable<CheckoutCreado> {
+    return this.http.post<CheckoutCreado>(`${this.paymentUrl}/checkout`, payload);
   }
 
   mine(): Observable<Reserva[]> {

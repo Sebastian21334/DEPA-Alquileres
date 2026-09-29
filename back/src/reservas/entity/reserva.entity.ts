@@ -3,6 +3,14 @@ import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { MetodoPago } from '../../catalogos/entity/metodo-pago.entity';
 
+export enum EstadoPagoReserva {
+  PENDIENTE = 'PENDIENTE',
+  APROBADO = 'APROBADO',
+  RECHAZADO = 'RECHAZADO',
+  CANCELADO = 'CANCELADO',
+  REEMBOLSADO = 'REEMBOLSADO',
+}
+
 @Entity('reserva')
 export class Reserva {
   // La reserva registra el pago y vincula al inquilino con una publicación.
@@ -21,8 +29,18 @@ export class Reserva {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   monto_pago: number;
 
-  @Column({ type: 'date' })
-  fecha_pago: Date;
+  @Column({ type: 'timestamp', nullable: true })
+  fecha_pago: Date | null;
+
+  @Column({
+    type: 'enum',
+    enum: EstadoPagoReserva,
+    default: EstadoPagoReserva.APROBADO,
+  })
+  estado_pago: EstadoPagoReserva;
+
+  @Column({ type: 'timestamp', nullable: true })
+  pago_vencimiento: Date | null;
 
   // Se conserva una copia del periodo para mantener el historial aunque
   // posteriormente se elimine la publicación o su calendario.
@@ -57,7 +75,7 @@ export class Reserva {
   publicacion: Publicacion | null;
 
   // Método de pago utilizado (Crédito, Débito, QR)
-  @ManyToOne(() => MetodoPago)
+  @ManyToOne(() => MetodoPago, { nullable: true })
   @JoinColumn({ name: 'id_metodo_pago' })
-  metodoPago: MetodoPago;
+  metodoPago: MetodoPago | null;
 }

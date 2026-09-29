@@ -133,7 +133,7 @@
               <div class="total-row total-row--strong"><strong>Total</strong><strong>{{ item.tipoMoneda?.nombre ?? '$' }} {{ formatAmount(bookingTotal()) }}</strong></div>
             }
             <button type="button" class="button button--reserve shine" (click)="openPayment()" [disabled]="esMiPublicacion()">{{ esMiPublicacion() ? 'No podés reservar tu publicación' : 'Reservar ahora' }}</button>
-            <small class="simulation-note">Simulación de pago: no se realizará ningún cobro real.</small>
+            <small class="simulation-note">El pago se realiza de forma segura en Mercado Pago.</small>
             @if (bookingError()) { <p class="booking-message booking-message--error">{{ bookingError() }}</p> }
             @if (bookingSuccess()) { <p class="booking-message booking-message--success">{{ bookingSuccess() }}</p> }
             <div class="booking-actions">
@@ -189,22 +189,13 @@
       <div class="modal-backdrop" (click)="closePayment()">
         <section class="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title" (click)="$event.stopPropagation()">
           <button class="payment-modal__close" type="button" (click)="closePayment()" aria-label="Cerrar">×</button>
-          <span class="payment-modal__eyebrow">Entorno de prueba</span>
-          <h2 id="payment-title">Simular pago de la reserva</h2>
-          <p>No ingreses datos reales. Esta pantalla solo simula la experiencia de pago.</p>
+          <span class="payment-modal__eyebrow">Checkout Pro</span>
+          <h2 id="payment-title">Continuar a Mercado Pago</h2>
+          <p>Vas a elegir el medio de pago e ingresar los datos directamente en Mercado Pago. DEPA no almacena los datos de tu tarjeta.</p>
           <form (submit)="confirmPayment($event)">
-            <label>Medio de pago<select required [value]="paymentMethodId() ?? ''" (change)="choosePaymentMethod($any($event.target).value)">
-              @for (method of paymentMethods(); track method.id) { <option [value]="method.id">{{ method.nombre }}</option> }
-            </select></label>
-            @if (isCardPayment()) {
-              <label>Número de tarjeta<input required inputmode="numeric" pattern="[0-9 ]{16,19}" placeholder="4242 4242 4242 4242" /></label>
-              <label>Nombre del titular<input required placeholder="Nombre de prueba" /></label>
-              <div class="payment-grid"><label>Vencimiento<input required placeholder="MM/AA" pattern="[0-9]{2}/[0-9]{2}" /></label><label>CVV<input required inputmode="numeric" maxlength="4" pattern="[0-9]{3,4}" placeholder="123" /></label></div>
-            } @else {
-              <div class="payment-placeholder">Este medio de pago se aprobará automáticamente en la simulación.</div>
-            }
-            <div class="payment-total"><span>Total simulado</span><strong>{{ item.tipoMoneda?.nombre ?? '$' }} {{ formatAmount(bookingTotal()) }}</strong></div>
-            <button class="button button--reserve" type="submit" [disabled]="processingPayment()">{{ processingPayment() ? 'Procesando simulación…' : 'Simular pago y reservar' }}</button>
+            <div class="payment-placeholder">La disponibilidad quedará reservada durante 15 minutos mientras completás el pago.</div>
+            <div class="payment-total"><span>Total</span><strong>{{ item.tipoMoneda?.nombre ?? '$' }} {{ formatAmount(bookingTotal()) }}</strong></div>
+            <button class="button button--reserve" type="submit" [disabled]="processingPayment()">{{ processingPayment() ? 'Conectando…' : 'Pagar con Mercado Pago' }}</button>
           </form>
         </section>
       </div>
