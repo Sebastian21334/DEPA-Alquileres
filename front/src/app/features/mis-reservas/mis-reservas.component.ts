@@ -25,14 +25,37 @@ export class MisReservasComponent {
 
   constructor() {
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
+    const paymentId = this.route.snapshot.queryParamMap.get('payment_id')
+      ?? this.route.snapshot.queryParamMap.get('collection_id');
+
     if (paymentResult === 'success') {
-      this.paymentNotice.set('Mercado Pago recibió el pago. La reserva se confirmará cuando llegue la validación segura.');
+      if (paymentId) {
+        this.paymentNotice.set('Mercado Pago recibió el pago. Estamos validándolo…');
+        this.reservasApi.reconcilePayment(paymentId).subscribe({
+          next: ({ estado_pago }) => {
+            this.paymentNotice.set(estado_pago === 'APROBADO'
+              ? 'Pago acreditado. La reserva quedó confirmada.'
+              : 'Mercado Pago todavía está procesando el pago.');
+            this.cargarReservas();
+          },
+          error: () => {
+            this.paymentNotice.set('Mercado Pago recibió el pago. La confirmación automática continúa en proceso.');
+            this.cargarReservas();
+          },
+        });
+        return;
+      }
+      this.paymentNotice.set('Mercado Pago recibió el pago. La confirmación automática continúa en proceso.');
     } else if (paymentResult === 'pending') {
       this.paymentNotice.set('El pago está pendiente. Mercado Pago informará el resultado cuando termine de procesarlo.');
     } else if (paymentResult === 'failure') {
       this.error.set('El pago no pudo completarse. Las fechas se liberarán cuando Mercado Pago informe el rechazo.');
     }
 
+    this.cargarReservas();
+  }
+
+  private cargarReservas(): void {
     forkJoin({ propias: this.reservasApi.mine(), recibidas: this.reservasApi.received() }).subscribe({
       next: ({ propias, recibidas }) => {
         this.propias.set(propias);

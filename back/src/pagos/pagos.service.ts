@@ -138,6 +138,44 @@ export class PagosService {
     }
 
     const payment = await new Payment(this.crearCliente()).get({ id: entrada.dataId });
+    await this.aplicarPago(payment);
+
+    return { received: true };
+  }
+
+  /**
+   * Segunda vía de confirmación para el regreso desde Checkout Pro.
+   * El navegador solo aporta el ID: el estado, importe y referencia siempre
+   * se consultan nuevamente a Mercado Pago antes de modificar la reserva.
+   */
+  async reconciliarPago(paymentId: string, idUsuario: number) {
+    const payment = await new Payment(this.crearCliente()).get({ id: paymentId });
+    const externalReference = payment.external_reference;
+    if (!externalReference?.startsWith('reserva:')) {
+      throw new BadRequestException('El pago no corresponde a una reserva');
+    }
+
+    const idReserva = Number(externalReference.slice('reserva:'.length));
+    if (!Number.isInteger(idReserva)) {
+      throw new BadRequestException('La referencia del pago es inválida');
+    }
+
+    const reserva = await this.reservasService.buscarPorId(idReserva, idUsuario);
+    if (reserva.usuario?.id !== idUsuario) {
+      throw new ForbiddenException('Solo el inquilino puede validar este pago');
+    }
+
+    const pago = await this.aplicarPago(payment);
+    const reservaActualizada = await this.reservasService.buscarPorId(idReserva, idUsuario);
+    return {
+      reserva_id: pago.reserva.id,
+      estado_pago: reservaActualizada.estado_pago,
+      mercado_pago_status: pago.status,
+      mercado_pago_status_detail: pago.status_detail,
+    };
+  }
+
+  private async aplicarPago(payment: any): Promise<Pago> {
     const externalReference = payment.external_reference;
     if (!externalReference?.startsWith('reserva:')) {
       throw new BadRequestException('El pago no corresponde a una reserva');
@@ -172,7 +210,7 @@ export class PagosService {
       await this.reservasService.rechazarPago(pago.reserva.id, this.mapearEstado(payment.status));
     }
 
-    return { received: true };
+    return pago;
   }
 
   async consultarEstado(idReserva: number, idUsuario: number) {

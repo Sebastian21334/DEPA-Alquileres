@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CrearCheckoutDto } from './dto/crear-checkout.dto';
+import { ReconciliarPagoDto } from './dto/reconciliar-pago.dto';
 import { PagosService } from './pagos.service';
 
 @Controller('pagos')
@@ -22,6 +23,12 @@ export class PagosController {
   @Post('checkout')
   crearCheckout(@Body() dto: CrearCheckoutDto, @Req() req: any) {
     return this.pagosService.crearCheckout(dto, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('reconciliar')
+  reconciliarPago(@Body() dto: ReconciliarPagoDto, @Req() req: any) {
+    return this.pagosService.reconciliarPago(dto.payment_id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)

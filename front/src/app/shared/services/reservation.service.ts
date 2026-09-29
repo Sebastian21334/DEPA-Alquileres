@@ -16,6 +16,13 @@ export interface CheckoutCreado {
   expires_at: string;
 }
 
+export interface EstadoPago {
+  reserva_id: number;
+  estado_pago: Reserva['estado_pago'];
+  mercado_pago_status: string | null;
+  mercado_pago_status_detail: string | null;
+}
+
 export interface Reserva {
   id: number;
   finalizada: boolean;
@@ -42,6 +49,10 @@ export class ReservationService {
 
   createCheckout(payload: CrearReservaPayload): Observable<CheckoutCreado> {
     return this.http.post<CheckoutCreado>(`${this.paymentUrl}/checkout`, payload);
+  }
+
+  reconcilePayment(paymentId: string): Observable<EstadoPago> {
+    return this.http.post<EstadoPago>(`${this.paymentUrl}/reconciliar`, { payment_id: paymentId });
   }
 
   mine(): Observable<Reserva[]> {
