@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EmailClient } from '@azure/communication-email';
 import { IMailService, ReservaEmailDetalle } from './mail.interface';
 
 @Injectable()
 export class MailService implements IMailService {
+  private readonly logger = new Logger(MailService.name);
   private readonly client: EmailClient;
   private readonly remitente: string;
   private readonly frontendUrl: string;
@@ -185,8 +186,7 @@ export class MailService implements IMailService {
 
   // Método privado compartido para no repetir la lógica de envío en cada método público
   private async enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.'): Promise<void> {
-    // Azure devuelve un poller porque el envío es asíncrono; se espera hasta su estado final.
-    const poller = await this.client.beginSend({
+    const mensaje = {
       senderAddress: this.remitente,
       content: {
         subject: asunto,
@@ -195,8 +195,28 @@ export class MailService implements IMailService {
       recipients: {
         to: [{ address: destinatario }],
       },
-    });
+    };
+    let ultimoError: unknown;
 
-    await poller.pollUntilDone();
+    // Azure resuelve el poller aun cuando la operación termina en "Failed".
+    // Validar el estado evita registrar silenciosamente como enviado un correo rechazado.
+    for (let intento = 1; intento <= 2; intento += 1) {
+      try {
+        const poller = await this.client.beginSend(mensaje);
+        const resultado = await poller.pollUntilDone();
+        if (resultado.status === 'Succeeded') return;
+
+        const detalle = [resultado.error?.code, resultado.error?.message].filter(Boolean).join(': ');
+        ultimoError = new Error(`Azure Communication Services finalizó el envío con estado ${resultado.status}${detalle ? ` (${detalle})` : ''}`);
+      } catch (error) {
+        ultimoError = error;
+      }
+
+      if (intento === 1) {
+        this.logger.warn(`Reintentando el correo a ${destinatario} después de un envío fallido`);
+      }
+    }
+
+    throw ultimoError instanceof Error ? ultimoError : new Error('No se pudo completar el envío del correo');
   }
 }
