@@ -67,7 +67,8 @@ export class DashboardComponent {
     });
     const byMonth = new Map(months.map((month) => [month.key, month]));
     for (const reserva of this.reservasValidas()) {
-      const month = byMonth.get(reserva.fecha_pago?.slice(0, 7));
+      if (!reserva.fecha_pago) continue;
+      const month = byMonth.get(reserva.fecha_pago.slice(0, 7));
       if (!month) continue;
       month.reservas += 1;
       month.ingresos += Number(reserva.monto_pago ?? 0);

@@ -19,9 +19,9 @@ Abrí `back/.env` y agregá al final:
 ```env
 MP_ACCESS_TOKEN=TEST-PEGAR_ACA_EL_ACCESS_TOKEN_DE_PRUEBA
 MP_CURRENCY_ID=ARS
-MP_SUCCESS_URL=http://localhost:4200/mis-reservas?payment=success
-MP_FAILURE_URL=http://localhost:4200/mis-reservas?payment=failure
-MP_PENDING_URL=http://localhost:4200/mis-reservas?payment=pending
+MP_SUCCESS_URL=http://localhost:4200/reserva/resultado?payment=success
+MP_FAILURE_URL=http://localhost:4200/reserva/resultado?payment=failure
+MP_PENDING_URL=http://localhost:4200/reserva/resultado?payment=pending
 MP_WEBHOOK_URL=
 MP_WEBHOOK_SECRET=
 ```
@@ -35,6 +35,8 @@ Las publicaciones cobradas por esta integración deben tener sus precios expresa
 3. Iniciá sesión en DEPA con un usuario que no sea el dueño de la publicación.
 4. Elegí fechas disponibles, presioná **Reservar ahora** y después **Pagar con Mercado Pago**.
 5. Para una prueba completa usá un comprador de prueba y los datos de tarjeta de prueba que muestra Mercado Pago. No uses la misma cuenta vendedora como compradora.
+
+Al regresar de Mercado Pago, DEPA muestra un resumen con el estado de la reserva, los datos de la estadía y la operación. Cuando el pago está aprobado, tanto el huésped como el anunciante pueden iniciar una conversación interna desde ese resumen. También pueden continuar por WhatsApp después de aceptar el aviso de que DEPA no puede revisar ni respaldar acuerdos realizados fuera de la plataforma.
 
 Sin webhook público, la redirección funciona pero DEPA no debe marcar el pago como aprobado. La confirmación real llega por webhook.
 

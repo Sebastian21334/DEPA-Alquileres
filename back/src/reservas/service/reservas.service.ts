@@ -147,14 +147,45 @@ export class ReservasService {
     const titulo = reserva.publicacion?.titulo ?? 'Alojamiento';
     const inicio = reserva.fecha_inicio ?? new Date();
     const fin = reserva.fecha_fin ?? inicio;
+    const cantidadDias = Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     const nombreInquilino = `${reserva.usuario_nombre ?? ''} ${reserva.usuario_apellido ?? ''}`.trim();
-    const emailAnunciante = reserva.publicacion?.anunciante?.usuario?.email;
+    const anunciante = reserva.publicacion?.anunciante;
+    const usuarioAnunciante = anunciante?.usuario;
+    const emailAnunciante = usuarioAnunciante?.email;
+    const nombreAnunciante = `${usuarioAnunciante?.nombre ?? ''} ${usuarioAnunciante?.apellido ?? ''}`.trim() || 'Anfitrión';
+    const direccion = [
+      reserva.publicacion?.direccion,
+      reserva.publicacion?.ciudad?.nombre,
+      reserva.publicacion?.provincia?.nombre,
+    ].filter(Boolean).join(', ');
+    const datosComunes = {
+      idReserva: reserva.id,
+      titulo,
+      direccion,
+      fechaInicio: inicio,
+      fechaFin: fin,
+      cantidadDias,
+      monto: Number(reserva.monto_pago),
+      moneda: reserva.publicacion?.tipoMoneda?.nombre ?? 'ARS',
+    };
     await Promise.allSettled([
       ...(reserva.usuario_email
-        ? [this.mailService.enviarReservaConfirmada(reserva.usuario_email, titulo, inicio, fin)]
+        ? [this.mailService.enviarReservaConfirmada(reserva.usuario_email, {
+          ...datosComunes,
+          nombreDestinatario: nombreInquilino || 'Huésped',
+          nombreContraparte: nombreAnunciante,
+          emailContraparte: usuarioAnunciante?.email,
+          telefonoContraparte: anunciante?.numero_contacto ?? usuarioAnunciante?.telefono,
+        })]
         : []),
       ...(emailAnunciante
-        ? [this.mailService.enviarNuevaReserva(emailAnunciante, titulo, nombreInquilino, inicio, fin)]
+        ? [this.mailService.enviarNuevaReserva(emailAnunciante, {
+          ...datosComunes,
+          nombreDestinatario: nombreAnunciante,
+          nombreContraparte: nombreInquilino || 'Huésped',
+          emailContraparte: reserva.usuario_email,
+          telefonoContraparte: reserva.usuario_telefono,
+        })]
         : []),
     ]).then((resultados) => resultados.forEach((resultado) => {
       if (resultado.status === 'rejected') {
@@ -206,6 +237,10 @@ export class ReservasService {
   /** Todas las reservas recibidas por publicaciones del anunciante autenticado. */
   async listarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
     return this.reservaRepository.buscarRecibidasPorAnunciante(idUsuarioAnunciante);
+  }
+
+  async existeReservaAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
+    return this.reservaRepository.existeAprobada(idPublicacion, idUsuarioInquilino);
   }
 
   /**

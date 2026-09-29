@@ -138,12 +138,13 @@
             @if (bookingSuccess()) { <p class="booking-message booking-message--success">{{ bookingSuccess() }}</p> }
             <div class="booking-actions">
               @if (whatsappUrl(item); as whatsapp) {
-                <a class="button button--whatsapp button--outline" [href]="whatsapp" target="_blank" rel="noopener">Contactar por WhatsApp</a>
+                <a class="button button--whatsapp button--outline" [href]="whatsapp" target="_blank" rel="noopener" (click)="confirmarWhatsapp($event)">Contactar por WhatsApp</a>
               }
               @if (!esMiPublicacion()) {
                 <button type="button" class="button button--secondary" (click)="chatear(item)"><svg lucideMail [size]="18"></svg> Enviar mensaje</button>
               }
             </div>
+            <small class="external-warning">Si continuás por WhatsApp, la conversación ocurre fuera de DEPA y no podremos intervenir ante inconvenientes.</small>
           </aside>
         </section>
       } @else {
@@ -154,7 +155,7 @@
           </div>
           <div class="actions">
             @if (whatsappUrl(item); as whatsapp) {
-              <a class="button button--whatsapp shine" [href]="whatsapp" target="_blank" rel="noopener">Contactar por WhatsApp</a>
+              <a class="button button--whatsapp shine" [href]="whatsapp" target="_blank" rel="noopener" (click)="confirmarWhatsapp($event)">Contactar por WhatsApp</a>
             } @else {
               <span class="button button--whatsapp is-disabled" aria-disabled="true">Contactar por WhatsApp</span>
             }
@@ -164,6 +165,7 @@
               <button type="button" class="button button--primary shine" (click)="chatear(item)"><svg lucideMail [size]="18"></svg> Enviar Mensaje</button>
             }
           </div>
+          <small class="external-warning">Si continuás por WhatsApp, la conversación ocurre fuera de DEPA y no podremos intervenir ante inconvenientes.</small>
         </section>
       }
 

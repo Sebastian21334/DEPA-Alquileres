@@ -62,6 +62,12 @@ export const routes: Routes = [
     title: 'Mis reservas — DEPA',
   },
   {
+    path: 'reserva/resultado',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/reserva-resultado/reserva-resultado.component').then((m) => m.ReservaResultadoComponent),
+    title: 'Resumen de la reserva — DEPA',
+  },
+  {
     path: 'favoritos',
     canActivate: [authGuard],
     loadComponent: () => import('./features/favorites/favorites.component').then((m) => m.FavoritesComponent),

@@ -27,7 +27,16 @@ export class ReservaRepository implements IReservaRepository {
   buscarPorId(id: number): Promise<Reserva | null> {
     return this.repository.findOne({
       where: { id },
-      relations: { usuario: true, publicacion: { anunciante: { usuario: true } }, metodoPago: true },
+      relations: {
+        usuario: true,
+        publicacion: {
+          anunciante: { usuario: true },
+          ciudad: true,
+          provincia: true,
+          tipoMoneda: true,
+        },
+        metodoPago: true,
+      },
     });
   }
 
@@ -35,7 +44,7 @@ export class ReservaRepository implements IReservaRepository {
     // El orden descendente permite mostrar primero las reservas más recientes.
     return this.repository.find({
       where: { usuario: { id: idUsuario } },
-      relations: { publicacion: true, metodoPago: true },
+      relations: { publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true }, metodoPago: true },
       order: { id: 'DESC' },
     });
   }
@@ -55,7 +64,7 @@ export class ReservaRepository implements IReservaRepository {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
         estado_pago: EstadoPagoReserva.APROBADO,
       },
-      relations: { usuario: true, publicacion: true, metodoPago: true },
+      relations: { usuario: true, publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true }, metodoPago: true },
       order: { fecha_inicio: 'ASC' },
     });
   }
@@ -65,6 +74,17 @@ export class ReservaRepository implements IReservaRepository {
       where: {
         estado_pago: EstadoPagoReserva.PENDIENTE,
         pago_vencimiento: LessThan(fecha),
+      },
+    });
+  }
+
+  existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
+    return this.repository.exists({
+      where: {
+        publicacion: { id: idPublicacion },
+        usuario: { id: idUsuarioInquilino },
+        estado_pago: EstadoPagoReserva.APROBADO,
+        cancelada: false,
       },
     });
   }

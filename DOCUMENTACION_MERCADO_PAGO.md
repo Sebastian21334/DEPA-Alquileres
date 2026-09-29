@@ -302,9 +302,9 @@ El archivo real `.env` no se versiona. `.env.example` solo muestra nombres y eje
 MP_ACCESS_TOKEN=ACCESS_TOKEN_DE_PRUEBA
 MP_CURRENCY_ID=ARS
 
-MP_SUCCESS_URL=https://depa-alquileres.vercel.app/mis-reservas?payment=success
-MP_FAILURE_URL=https://depa-alquileres.vercel.app/mis-reservas?payment=failure
-MP_PENDING_URL=https://depa-alquileres.vercel.app/mis-reservas?payment=pending
+MP_SUCCESS_URL=https://depa-alquileres.vercel.app/reserva/resultado?payment=success
+MP_FAILURE_URL=https://depa-alquileres.vercel.app/reserva/resultado?payment=failure
+MP_PENDING_URL=https://depa-alquileres.vercel.app/reserva/resultado?payment=pending
 
 MP_WEBHOOK_URL=https://seminario-integrador.onrender.com/pagos/webhook
 MP_WEBHOOK_SECRET=FIRMA_SECRETA_GENERADA_POR_MERCADO_PAGO
@@ -313,6 +313,10 @@ FRONTEND_URLS=https://depa-alquileres.vercel.app
 ```
 
 Aunque el sistema esté desplegado, el Access Token continuará siendo de prueba para esta entrega.
+
+El frontend conserva temporalmente el número de la última reserva y Mercado Pago devuelve también la referencia externa del pago. Con cualquiera de esos datos, la ruta `/reserva/resultado` carga un comprobante accesible únicamente para el huésped o el anunciante participantes. Allí se muestran el estado, las fechas, el importe, el identificador de pago y los canales de contacto habilitados después de la acreditación.
+
+La opción de WhatsApp exige aceptar un aviso: al salir de la mensajería interna, DEPA no puede revisar la conversación ni intervenir ante acuerdos o inconvenientes ocurridos fuera de la plataforma.
 
 ## 9. Configuración en Mercado Pago Developers
 

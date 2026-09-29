@@ -1,0 +1,82 @@
+<main class="receipt-page">
+  <div class="receipt-wrap">
+    @if (cargando()) {
+      <div class="receipt-state"><app-spinner /><p>Estamos verificando tu reserva…</p></div>
+    } @else if (error()) {
+      <section class="receipt-card receipt-error">
+        <span class="status-icon">!</span>
+        <h1>No pudimos mostrar la reserva</h1>
+        <p>{{ error() }}</p>
+        <a class="acct-btn acct-btn--primary" routerLink="/mis-reservas">Ir a Mis reservas</a>
+      </section>
+    } @else if (reserva(); as item) {
+      <header class="receipt-hero" [class.is-approved]="item.estado_pago === 'APROBADO'" [class.is-pending]="item.estado_pago === 'PENDIENTE'">
+        <div class="status-icon">{{ item.estado_pago === 'APROBADO' ? '✓' : item.estado_pago === 'PENDIENTE' ? '…' : '!' }}</div>
+        <div>
+          <span class="eyebrow">Reserva #{{ item.id }}</span>
+          <h1>{{ tituloEstado(item) }}</h1>
+          <p>{{ descripcionEstado(item) }}</p>
+        </div>
+        <a class="acct-btn acct-btn--ghost" routerLink="/mis-reservas">Ver todas mis reservas</a>
+      </header>
+
+      <div class="receipt-grid">
+        <section class="receipt-card stay-card">
+          <div class="section-title"><span>Datos de la estadía</span><strong>{{ cantidadDias(item) }} {{ cantidadDias(item) === 1 ? 'día' : 'días' }}</strong></div>
+          <h2>{{ item.publicacion?.titulo ?? 'Publicación no disponible' }}</h2>
+          <p class="address">{{ direccion(item) }}</p>
+          <div class="date-grid">
+            <div><span>Ingreso</span><strong>{{ fecha(item.fecha_inicio) }}</strong><small>Desde las 14:00</small></div>
+            <div><span>Salida</span><strong>{{ fecha(item.fecha_fin) }}</strong><small>Hasta las 10:00</small></div>
+          </div>
+          @if (item.publicacion) {
+            <a class="text-link" [routerLink]="['/publicaciones', item.publicacion.id]">Ver publicación</a>
+          }
+        </section>
+
+        <aside class="receipt-card payment-card">
+          <div class="section-title"><span>Datos del pago</span><strong class="payment-status">{{ estadoPagoMercado() }}</strong></div>
+          <dl>
+            <div><dt>Total</dt><dd class="total">{{ monto(pago()?.amount ?? item.monto_pago, pago()?.currency ?? 'ARS') }}</dd></div>
+            <div><dt>Medio</dt><dd>{{ medioPago() }}</dd></div>
+            <div><dt>Operación</dt><dd>{{ pago()?.payment_id ?? 'Pendiente de asignación' }}</dd></div>
+            <div><dt>Fecha</dt><dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd></div>
+          </dl>
+          <p class="secure-note">El estado fue verificado directamente con Mercado Pago. DEPA no almacena los datos de tu tarjeta.</p>
+        </aside>
+      </div>
+
+      @if (item.estado_pago === 'APROBADO') {
+        <section class="receipt-card contact-card">
+          <div>
+            <span class="eyebrow">Comunicación de la reserva</span>
+            <h2>Contactá a {{ nombreContacto() }}</h2>
+            <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
+          </div>
+          <div class="contact-actions">
+            <button type="button" class="acct-btn acct-btn--primary" [disabled]="!contactoDisponible()" (click)="abrirChat()">Mensaje por DEPA</button>
+            <button type="button" class="acct-btn whatsapp-btn" [disabled]="!whatsappUrl()" (click)="abrirConfirmacionWhatsapp()">Continuar por WhatsApp</button>
+          </div>
+          <div class="safety-notice">
+            <strong>Te recomendamos conversar dentro de DEPA.</strong>
+            <span>Si continuás por WhatsApp, la conversación ocurre fuera de la plataforma. DEPA no podrá revisar esos mensajes ni ayudarte con acuerdos o inconvenientes surgidos allí.</span>
+          </div>
+        </section>
+      }
+    }
+  </div>
+
+  @if (confirmarSalida()) {
+    <div class="modal-backdrop" (click)="confirmarSalida.set(false)">
+      <section class="exit-modal" role="dialog" aria-modal="true" aria-labelledby="exit-title" (click)="$event.stopPropagation()">
+        <span class="exit-icon">↗</span>
+        <h2 id="exit-title">Vas a salir de DEPA</h2>
+        <p>La conversación continuará en WhatsApp. DEPA no podrá acceder a esos mensajes ni intervenir si surge un problema.</p>
+        <div class="exit-actions">
+          <button type="button" class="acct-btn acct-btn--ghost" (click)="confirmarSalida.set(false)">Quedarme en DEPA</button>
+          <button type="button" class="acct-btn whatsapp-btn" (click)="continuarWhatsapp()">Abrir WhatsApp</button>
+        </div>
+      </section>
+    </div>
+  }
+</main>

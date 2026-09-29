@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { Anunciante } from '../models/anunciante.model';
+import { Usuario } from '../models/usuario.model';
 
 export interface CrearReservaPayload {
   id_publicacion: number;
@@ -30,15 +32,39 @@ export interface Reserva {
   fecha_cancelacion: string | null;
   estado_pago: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'CANCELADO' | 'REEMBOLSADO';
   monto_pago: number;
-  fecha_pago: string;
+  fecha_pago: string | null;
   fecha_inicio: string | null;
   fecha_fin: string | null;
-  publicacion?: { id: number; titulo: string; direccion?: string } | null;
+  publicacion?: {
+    id: number;
+    titulo: string;
+    direccion?: string;
+    ciudad?: { id?: number; nombre: string };
+    provincia?: { id?: number; nombre: string };
+    anunciante?: Anunciante;
+  } | null;
   usuario_nombre?: string | null;
   usuario_apellido?: string | null;
   usuario_email?: string | null;
   usuario_telefono?: string | null;
-  usuario?: { id: number; nombre: string; apellido: string; email: string; telefono?: string } | null;
+  usuario?: Usuario | null;
+}
+
+export interface PagoResumen {
+  preference_id: string | null;
+  payment_id: string | null;
+  status: string;
+  status_detail: string | null;
+  amount: number;
+  currency: string;
+  payment_method_id: string | null;
+  approved_at: string | null;
+  created_at: string;
+}
+
+export interface ResumenReserva {
+  reserva: Reserva;
+  pago: PagoResumen | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -53,6 +79,10 @@ export class ReservationService {
 
   reconcilePayment(paymentId: string): Observable<EstadoPago> {
     return this.http.post<EstadoPago>(`${this.paymentUrl}/reconciliar`, { payment_id: paymentId });
+  }
+
+  summary(idReserva: number): Observable<ResumenReserva> {
+    return this.http.get<ResumenReserva>(`${this.paymentUrl}/reservas/${idReserva}/resumen`);
   }
 
   mine(): Observable<Reserva[]> {

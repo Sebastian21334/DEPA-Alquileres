@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { forkJoin } from 'rxjs';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ReservationService, Reserva } from '../../shared/services/reservation.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 
@@ -14,42 +14,23 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 export class MisReservasComponent {
   private readonly reservasApi = inject(ReservationService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
-  protected readonly paymentNotice = signal('');
   protected readonly ocupada = signal<number | null>(null);
   protected readonly vista = signal<'realizadas' | 'recibidas'>('realizadas');
 
   constructor() {
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
-    const paymentId = this.route.snapshot.queryParamMap.get('payment_id')
-      ?? this.route.snapshot.queryParamMap.get('collection_id');
-
-    if (paymentResult === 'success') {
-      if (paymentId) {
-        this.paymentNotice.set('Mercado Pago recibió el pago. Estamos validándolo…');
-        this.reservasApi.reconcilePayment(paymentId).subscribe({
-          next: ({ estado_pago }) => {
-            this.paymentNotice.set(estado_pago === 'APROBADO'
-              ? 'Pago acreditado. La reserva quedó confirmada.'
-              : 'Mercado Pago todavía está procesando el pago.');
-            this.cargarReservas();
-          },
-          error: () => {
-            this.paymentNotice.set('Mercado Pago recibió el pago. La confirmación automática continúa en proceso.');
-            this.cargarReservas();
-          },
-        });
-        return;
-      }
-      this.paymentNotice.set('Mercado Pago recibió el pago. La confirmación automática continúa en proceso.');
-    } else if (paymentResult === 'pending') {
-      this.paymentNotice.set('El pago está pendiente. Mercado Pago informará el resultado cuando termine de procesarlo.');
-    } else if (paymentResult === 'failure') {
-      this.error.set('El pago no pudo completarse. Las fechas se liberarán cuando Mercado Pago informe el rechazo.');
+    if (paymentResult) {
+      const queryParams = Object.fromEntries(
+        this.route.snapshot.queryParamMap.keys.map((key) => [key, this.route.snapshot.queryParamMap.get(key)]),
+      );
+      this.router.navigate(['/reserva/resultado'], { queryParams, replaceUrl: true });
+      return;
     }
 
     this.cargarReservas();
@@ -117,6 +98,10 @@ export class MisReservasComponent {
     return reservas.filter((reserva) =>
       !reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'APROBADO',
     ).length;
+  }
+
+  protected detalleReserva(reserva: Reserva): { reserva_id: number } {
+    return { reserva_id: reserva.id };
   }
 
   private reemplazar(actualizada: Reserva): void {

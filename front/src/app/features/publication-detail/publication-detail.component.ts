@@ -295,6 +295,11 @@ export class PublicationDetailComponent {
       fecha_fin: end,
     }).pipe(finalize(() => this.processingPayment.set(false))).subscribe({
       next: (checkout) => {
+        try {
+          sessionStorage.setItem('depa:ultima-reserva', String(checkout.reserva_id));
+        } catch {
+          // El retorno también incluye external_reference; sessionStorage es solo respaldo.
+        }
         window.location.assign(checkout.checkout_url);
       },
       error: (err) => {
@@ -312,6 +317,13 @@ export class PublicationDetailComponent {
 
   protected formatAmount(value: number): string {
     return value.toLocaleString('es-AR', { maximumFractionDigits: 0 });
+  }
+
+  protected confirmarWhatsapp(event: Event): void {
+    const continuar = window.confirm(
+      'Vas a continuar la conversación por WhatsApp. DEPA no podrá revisar esos mensajes ni ayudarte con acuerdos realizados fuera de la plataforma. ¿Querés continuar?',
+    );
+    if (!continuar) event.preventDefault();
   }
 
   private loadAvailability(idPublication: number): void {

@@ -13,6 +13,7 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'dashboard', renderMode: RenderMode.Client },
   { path: 'mis-publicaciones', renderMode: RenderMode.Client },
   { path: 'mis-reservas', renderMode: RenderMode.Client },
+  { path: 'reserva/resultado', renderMode: RenderMode.Client },
   { path: 'favoritos', renderMode: RenderMode.Client },
   { path: 'publicaciones/nueva', renderMode: RenderMode.Client },
   {

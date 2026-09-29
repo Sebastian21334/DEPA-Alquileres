@@ -227,6 +227,25 @@ export class PagosService {
     };
   }
 
+  async consultarResumen(idReserva: number, idUsuario: number) {
+    const reserva = await this.reservasService.buscarPorId(idReserva, idUsuario);
+    const pago = await this.pagos.findOne({ where: { reserva: { id: idReserva } } });
+    return {
+      reserva,
+      pago: pago ? {
+        preference_id: pago.preference_id,
+        payment_id: pago.payment_id,
+        status: pago.status,
+        status_detail: pago.status_detail,
+        amount: Number(pago.amount),
+        currency: pago.currency,
+        payment_method_id: pago.payment_method_id,
+        approved_at: pago.approved_at,
+        created_at: pago.created_at,
+      } : null,
+    };
+  }
+
   private crearCliente(): MercadoPagoConfig {
     const accessToken = this.config.get<string>('MP_ACCESS_TOKEN');
     if (!accessToken) {

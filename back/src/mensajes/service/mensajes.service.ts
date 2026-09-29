@@ -8,6 +8,7 @@ import { PublicacionesService } from '../../publicaciones/service/publicaciones.
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
+import { ReservasService } from '../../reservas/service/reservas.service';
 
 // Forma que le devolvemos al front para la lista de conversaciones (bandeja de entrada)
 export interface ConversacionResumen {
@@ -26,6 +27,7 @@ export class MensajesService {
     // Se comunica con el service de Publicaciones, nunca con su repositorio directo
     private readonly publicacionesService: PublicacionesService,
     private readonly usuariosService: UsuariosService,
+    private readonly reservasService: ReservasService,
     @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
   ) {}
 
@@ -39,25 +41,27 @@ export class MensajesService {
       throw new BadRequestException('No podés enviarte un mensaje a vos mismo');
     }
 
-    // El destino debe ser el anunciante dueño de la publicacion; de ese modo
-    // el endpoint no permite iniciar conversaciones arbitrarias entre usuarios.
+    // El inquilino puede escribirle al anunciante de la publicación. El anunciante
+    // solo puede iniciar el chat con un huésped que tenga una reserva aprobada, o
+    // continuar una conversación que ese huésped ya hubiera iniciado.
     const publicacion = await this.publicacionesService.buscarPorId(dto.id_publicacion);
 
     const idAnunciante = publicacion.anunciante.usuario.id;
     if (idAnunciante !== dto.id_destino_usuario) {
-      // Única excepción: el anunciante respondiendo a alguien que ya le escribió
-      // por esta publicación. Así puede contestar, pero no abrir chats arbitrarios.
-      const esRespuestaDelAnunciante =
-        idUsuarioOrigen === idAnunciante &&
-        (
-          await this.mensajeRepository.buscarConversacion(
+      const esAnunciante = idUsuarioOrigen === idAnunciante;
+      const [hayConversacion, hayReservaAprobada] = esAnunciante
+        ? await Promise.all([
+          this.mensajeRepository.buscarConversacion(
             dto.id_publicacion,
             idUsuarioOrigen,
             dto.id_destino_usuario,
-          )
-        ).length > 0;
+          ).then((mensajes) => mensajes.length > 0),
+          this.reservasService.existeReservaAprobada(dto.id_publicacion, dto.id_destino_usuario),
+        ])
+        : [false, false];
+      const puedeContactarHuesped = esAnunciante && (hayConversacion || hayReservaAprobada);
 
-      if (!esRespuestaDelAnunciante) {
+      if (!puedeContactarHuesped) {
         throw new ForbiddenException('El destinatario no es el anunciante de esta publicación');
       }
     }
@@ -79,7 +83,13 @@ export class MensajesService {
     ]);
     if (destinatario && remitente) {
       try {
-        await this.mailService.enviarMensajeNuevo(destinatario.email, `${remitente.nombre} ${remitente.apellido}`.trim(), publicacion.titulo);
+        await this.mailService.enviarMensajeNuevo(
+          destinatario.email,
+          `${destinatario.nombre} ${destinatario.apellido}`.trim(),
+          `${remitente.nombre} ${remitente.apellido}`.trim(),
+          publicacion.titulo,
+          publicacion.id,
+        );
       } catch (error) {
         this.logger.error(`No se pudo enviar el aviso de chat a ${destinatario.email}`, error as Error);
       }

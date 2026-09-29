@@ -37,6 +37,12 @@ export class PagosController {
     return this.pagosService.consultarEstado(id, req.user.id);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('reservas/:id/resumen')
+  consultarResumen(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.pagosService.consultarResumen(id, req.user.id);
+  }
+
   @Post('webhook')
   recibirWebhook(
     @Body() body: any,
