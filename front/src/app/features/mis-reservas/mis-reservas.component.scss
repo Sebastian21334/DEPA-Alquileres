@@ -21,6 +21,15 @@
 .reservation__actions { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
 .muted { color: var(--color-text-muted); font-size: .9rem; }
 .empty { color: var(--color-text-muted); }
+.settlement-state { color: var(--color-primary); font-size: .88rem; font-weight: 750; }
+.lodging-code { display: grid; width: fit-content; gap: .2rem; margin-top: .75rem; padding: .8rem 1rem; border: 1px dashed var(--color-primary); border-radius: 9px; background: #fffaf2; }
+.lodging-code small, .lodging-code span { color: var(--color-text-muted); }
+.lodging-code strong { color: var(--color-primary); font-size: 1.6rem; letter-spacing: .18em; }
+.lodging-code span { max-width: 360px; font-size: .78rem; }
+.code-entry { display: grid; gap: .35rem; margin-top: .75rem; }
+.code-entry label { font-size: .82rem; font-weight: 750; }
+.code-entry > div { display: flex; gap: .5rem; flex-wrap: wrap; }
+.code-entry input { width: 170px; padding: .65rem .75rem; border: 1px solid var(--color-border); border-radius: 7px; text-transform: uppercase; font-weight: 800; letter-spacing: .12em; }
 
 @media (max-width: 600px) {
   .reservation-summary { grid-template-columns: 1fr; }

@@ -32,7 +32,7 @@ Los mayores pendientes no están en las pantallas principales, sino en la consis
 | Prioridad | Tema | Estado | Motivo |
 |---|---|---|---|
 | P0 | Actualizar documentación académica | Pendiente | Las secciones de implementación, testing, gestión, conclusión y bibliografía están incompletas. |
-| P0 | Definir el alcance real del pago al anunciante | Pendiente | La inspección exige retener el dinero hasta validar un código de alojamiento, pero el flujo actual cobra directamente en una sola cuenta. |
+| P0 | Código de alojamiento y resolución manual | Resuelto para el seminario | Se genera un código privado, el anunciante lo valida y el administrador registra manualmente pago, devolución o revisión. No mueve dinero real. |
 | P0 | Transacciones y concurrencia en reservas | Pendiente | La reserva y el bloqueo de fechas se guardan en operaciones separadas. |
 | P0 | Pruebas del flujo principal | Pendiente | No existen pruebas de reservas, pagos, webhooks, concurrencia ni permisos. |
 | P1 | Reembolsos y cancelaciones pagadas | Pendiente | Las reservas aprobadas no pueden cancelarse hasta implementar la devolución. |
@@ -120,28 +120,21 @@ Los mayores pendientes no están en las pantallas principales, sino en la consis
 
 ### 4.1 Código de alojamiento y liberación del dinero
 
-**Estado: pendiente crítico.**
+**Estado: resuelto para el alcance académico.**
 
-La inspección propone generar un código único para el inquilino y liberar el dinero al anunciante cuando este código sea ingresado al comenzar la estadía. Ese proceso no está implementado.
+Al aprobarse el pago se genera un código único de ocho caracteres. Solo el inquilino puede consultarlo; el anunciante lo ingresa al momento del alojamiento y dispone de cinco intentos. La validación correcta crea una liquidación pendiente para el panel administrativo.
 
-La integración actual utiliza una única cuenta de Mercado Pago. El cobro se acredita según las reglas normales de Mercado Pago; DEPA no actúa como escrow ni retiene fondos hasta el check-in.
+El inquilino puede abrir un reclamo antes de la resolución. En ese caso, o después de cinco códigos incorrectos, la liquidación queda en revisión. El administrador puede registrar el pago manual al propietario, una devolución manual al inquilino o devolver la reserva a su circuito normal.
 
-Se debe tomar una decisión explícita:
+Para mantener el alcance teórico del seminario, estas operaciones solo actualizan estados, referencias y observaciones. No ejecutan transferencias ni devoluciones en Mercado Pago.
 
-1. Dejar el código fuera del alcance y documentar que el pago se confirma al reservar.
-2. Implementar una seña al reservar y cobrar el saldo cerca del ingreso.
-3. Implementar cuentas de anunciantes conectadas por OAuth y Split Payments, sujeto a las capacidades y condiciones de Mercado Pago.
-4. Investigar un acuerdo comercial específico si se requiere retención y liberación posterior.
-
-La autorización manual de tarjetas no resuelve reservas realizadas con semanas de anticipación, porque su ventana de captura es limitada.
-
-**Criterio de cierre:** la documentación, el caso de uso y la demostración deben describir exactamente el mismo comportamiento financiero.
+**Criterio de cierre alcanzado:** código privado, validación de un solo uso, reclamos, límite de intentos, cola administrativa y registro manual de la resolución.
 
 ### 4.2 Reembolsos y cancelaciones
 
 **Estado: pendiente crítico.**
 
-El sistema detecta pagos reembolsados informados por Mercado Pago, pero no inicia devoluciones. Actualmente se bloquea la cancelación de una reserva pagada para evitar liberar las fechas sin devolver el dinero.
+El sistema detecta pagos reembolsados informados por Mercado Pago y permite que el administrador registre una devolución manual académica, cancelando la reserva y liberando las fechas. Todavía no inicia una devolución real mediante la API de Mercado Pago.
 
 Falta definir:
 
@@ -149,9 +142,9 @@ Falta definir:
 - Plazos y porcentajes de devolución.
 - Quién puede cancelar.
 - Endpoint para ejecutar el reembolso.
-- Registro de devolución y motivo.
+- Integración real de la devolución con Mercado Pago.
 - Tratamiento de reembolsos parciales.
-- Interfaz para usuario y administrador.
+- Confirmación externa de que la devolución manual efectivamente se realizó.
 - Notificaciones por correo.
 
 **Criterio de cierre:** cancelar una reserva pagada debe mantener sincronizados Mercado Pago, la tabla `pago`, la reserva y las fechas.
@@ -449,7 +442,7 @@ La documentación afirma que el backend se hospeda en Azure. El frontend product
 - Actualizar el caso de reserva: el sistema crea primero una reserva pendiente y la confirma mediante webhook.
 - Indicar que el medio de pago se elige dentro de Mercado Pago, no en DEPA.
 - Aclarar que el entorno de Mercado Pago permanecerá en modo prueba para la entrega.
-- Eliminar el mecanismo de código de alojamiento si no se implementará, o marcarlo como trabajo futuro.
+- Documentar el código de alojamiento, el reclamo y la resolución administrativa manual ya implementados.
 
 ### 8.4 Diagramas
 
@@ -495,7 +488,7 @@ Las capturas existentes ya no representan la interfaz actual. Deben reemplazarse
 1. Actualizar casos de uso, DER y arquitectura.
 2. Completar implementación, testing, gestión y conclusión.
 3. Definir por escrito que Mercado Pago se utiliza en modo prueba.
-4. Definir si el código de alojamiento queda fuera de alcance.
+4. Incorporar capturas del código de alojamiento y de la liquidación administrativa.
 5. Actualizar capturas.
 
 ### Etapa 2 - Asegurar el flujo crítico

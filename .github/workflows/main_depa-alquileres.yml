@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'back/**'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
@@ -14,26 +17,31 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read #This is required for actions/checkout
+    defaults:
+      run:
+        working-directory: back
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Node.js version
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '24.x'
+          cache: 'npm'
+          cache-dependency-path: back/package-lock.json
 
-      - name: npm install, build, and test
+      - name: Instalar y compilar
         run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+          npm ci
+          npm run build
+          npm prune --omit=dev
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: back
 
   deploy:
     runs-on: ubuntu-latest
@@ -47,7 +55,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-      
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -62,4 +70,3 @@ jobs:
           app-name: 'depa-alquileres'
           slot-name: 'Production'
           package: .
-          

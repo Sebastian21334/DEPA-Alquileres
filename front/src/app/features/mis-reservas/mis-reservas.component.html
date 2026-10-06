@@ -41,11 +41,27 @@
                 <span class="acct-badge" [class.acct-badge--error]="reserva.cancelada" [class.acct-badge--ok]="!reserva.cancelada && !reserva.finalizada">{{ estado(reserva) }}</span>
                 <h3>{{ reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</h3>
                 <p>{{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }} · {{ monto(reserva.monto_pago) }}</p>
+                @if (reserva.estado_pago === 'APROBADO') {
+                  <p class="settlement-state">{{ estadoLiquidacion(reserva) }}</p>
+                  @if (codigos()[reserva.id]; as codigo) {
+                    <div class="lodging-code" role="status">
+                      <small>Código personal de ingreso</small>
+                      <strong>{{ codigo }}</strong>
+                      <span>No lo compartas hasta estar físicamente en la propiedad.</span>
+                    </div>
+                  }
+                }
               </div>
               <div class="reservation__actions">
                 <a class="acct-btn acct-btn--primary acct-btn--sm" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">Ver detalle</a>
                 @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
                 @if (!reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE') { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
+                @if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' && !reserva.codigo_validado_en) {
+                  <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
+                }
+                @if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION') {
+                  <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="reportarProblema(reserva)">Reportar un problema</button>
+                }
               </div>
             </article>
           } @empty {
@@ -65,11 +81,21 @@
                 <h3>{{ reserva.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
                 <p><strong>{{ inquilino(reserva) }}</strong> · {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}</p>
                 <p class="muted">{{ reserva.usuario_email ?? reserva.usuario?.email ?? 'Sin email' }} · {{ reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'Sin teléfono' }}</p>
+                <p class="settlement-state">{{ estadoLiquidacion(reserva) }}</p>
+                @if (!reserva.codigo_validado_en && reserva.estado_liquidacion !== 'EN_REVISION') {
+                  <form class="code-entry" (ngSubmit)="validarCodigo(reserva)">
+                    <label [for]="'code-' + reserva.id">Código entregado por el inquilino</label>
+                    <div>
+                      <input [id]="'code-' + reserva.id" [name]="'code-' + reserva.id" [(ngModel)]="codigoIngresado[reserva.id]" maxlength="8" autocomplete="off" placeholder="Ej.: K7M4P9Q2" />
+                      <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id">Validar ingreso</button>
+                    </div>
+                  </form>
+                }
               </div>
               <div class="reservation__actions">
                 <a class="acct-btn acct-btn--primary acct-btn--sm" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">Ver detalle y contactar</a>
                 @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
-                @if (!reserva.cancelada && !reserva.finalizada) { <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="finalizar(reserva)">Finalizar estadía</button> }
+                @if (!reserva.cancelada && !reserva.finalizada && reserva.codigo_validado_en) { <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="finalizar(reserva)">Finalizar estadía</button> }
               </div>
             </article>
           } @empty {

@@ -2,6 +2,8 @@
 
 La aplicación ya utiliza Checkout Pro: DEPA crea una reserva pendiente, Mercado Pago cobra y el webhook confirma la reserva. No ingreses números de tarjeta dentro de DEPA.
 
+Para la demostración del seminario, un pago aprobado genera además un código de alojamiento privado. El inquilino lo entrega al anunciante al ingresar; después de validarlo, el administrador registra manualmente el pago al propietario o una devolución. Este registro no ejecuta transferencias reales.
+
 ## 1. Crear una aplicación de prueba
 
 1. Ingresá en `https://www.mercadopago.com.ar/developers/panel/app` con la cuenta que recibirá el dinero.

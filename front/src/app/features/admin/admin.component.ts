@@ -12,6 +12,7 @@ import {
 } from '@lucide/angular';
 import {
   AdminCatalogItem,
+  AdminSettlement,
   AdminCity,
   AdminProvince,
   AdminService,
@@ -46,6 +47,7 @@ export class AdminComponent {
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   protected readonly users = signal<AdminUser[]>([]);
   protected readonly requests = signal<VerificationRequest[]>([]);
+  protected readonly settlements = signal<AdminSettlement[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
@@ -89,7 +91,7 @@ export class AdminComponent {
   protected reload(): void {
     this.loading.set(true);
     this.error.set(null);
-    let pending = 2;
+    let pending = 3;
     const done = () => {
       if (--pending === 0) this.loading.set(false);
     };
@@ -113,6 +115,63 @@ export class AdminComponent {
         done();
       },
     });
+    this.api.listarLiquidaciones().subscribe({
+      next: (v) => {
+        this.settlements.set(v);
+        done();
+      },
+      error: (e: Error) => {
+        this.error.set(e.message);
+        done();
+      },
+    });
+  }
+
+  protected registrarPago(settlement: AdminSettlement): void {
+    const referencia = window.prompt('Referencia o comprobante de la transferencia manual:')?.trim();
+    if (referencia === undefined) return;
+    this.resolverSettlement(settlement, 'PAGADO_PROPIETARIO', referencia, 'Transferencia manual al propietario registrada');
+  }
+
+  protected registrarDevolucion(settlement: AdminSettlement): void {
+    const referencia = window.prompt('Referencia o comprobante de la devolución manual al inquilino:')?.trim();
+    if (referencia === undefined) return;
+    this.resolverSettlement(settlement, 'DEVUELTO_INQUILINO', referencia, 'Devolución manual al inquilino registrada');
+  }
+
+  protected resolverReclamo(settlement: AdminSettlement): void {
+    const observacion = window.prompt('Conclusión de la revisión administrativa:')?.trim();
+    if (!observacion) return;
+    const siguiente = settlement.codigo_validado_en ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
+    this.run(
+      `settlement-${settlement.id}`,
+      () => this.api.resolverLiquidacion(settlement.id, siguiente, undefined, observacion),
+      () => this.settlements.update((items) => items.filter((item) => item.id !== settlement.id)),
+      'Reclamo resuelto. La reserva volvió a su circuito normal.',
+    );
+  }
+
+  protected nombreInquilino(settlement: AdminSettlement): string {
+    return [settlement.usuario_nombre ?? settlement.usuario?.nombre, settlement.usuario_apellido ?? settlement.usuario?.apellido]
+      .filter(Boolean).join(' ') || 'Inquilino eliminado';
+  }
+
+  protected montoLiquidacion(settlement: AdminSettlement): string {
+    return Number(settlement.monto_pago).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
+  }
+
+  private resolverSettlement(
+    settlement: AdminSettlement,
+    estado: 'PAGADO_PROPIETARIO' | 'DEVUELTO_INQUILINO',
+    referencia: string,
+    observacion: string,
+  ): void {
+    this.run(
+      `settlement-${settlement.id}`,
+      () => this.api.resolverLiquidacion(settlement.id, estado, referencia, observacion),
+      () => this.settlements.update((items) => items.filter((item) => item.id !== settlement.id)),
+      estado === 'PAGADO_PROPIETARIO' ? 'Pago manual registrado.' : 'Devolución manual registrada.',
+    );
   }
   protected toggleUser(user: AdminUser): void {
     const bloquear = !user.bloqueado;

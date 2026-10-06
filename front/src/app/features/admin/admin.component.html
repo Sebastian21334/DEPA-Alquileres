@@ -32,7 +32,56 @@
         ><span>Solicitudes pendientes</span>
       </div>
     </article>
+    <article>
+      <svg lucideCheck [size]="25"></svg>
+      <div>
+        <strong>{{ settlements().length }}</strong><span>Liquidaciones por resolver</span>
+      </div>
+    </article>
   </div>
+
+  <section class="panel">
+    <div class="panel__title">
+      <div>
+        <h2>Liquidación manual de reservas</h2>
+        <p>Registro académico de pagos y devoluciones. Estas acciones no mueven dinero real.</p>
+      </div>
+      <span class="counter">{{ settlements().length }}</span>
+    </div>
+    @if (loading()) {
+      <p class="empty">Cargando liquidaciones…</p>
+    } @else if (!settlements().length) {
+      <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
+    } @else {
+      <div class="settlement-list">
+        @for (settlement of settlements(); track settlement.id) {
+          <article class="settlement-card">
+            <div>
+              <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
+                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : 'Código validado' }}
+              </span>
+              <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
+              <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
+              <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
+              <p><strong>Importe:</strong> {{ montoLiquidacion(settlement) }}</p>
+              @if (settlement.observacion_liquidacion) {
+                <p class="settlement-note">{{ settlement.observacion_liquidacion }}</p>
+              }
+            </div>
+            <div class="actions">
+              @if (settlement.estado_liquidacion === 'EN_REVISION') {
+                <button type="button" class="button button--ghost" [disabled]="busy() === 'settlement-' + settlement.id" (click)="resolverReclamo(settlement)">Resolver reclamo</button>
+              }
+              <button type="button" class="button button--danger-outline" [disabled]="busy() === 'settlement-' + settlement.id" (click)="registrarDevolucion(settlement)">Registrar devolución</button>
+              @if (settlement.codigo_validado_en) {
+                <button type="button" class="button button--success" [disabled]="busy() === 'settlement-' + settlement.id || settlement.estado_liquidacion === 'EN_REVISION'" (click)="registrarPago(settlement)">Registrar pago al propietario</button>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
 
   <section class="panel">
     <div class="panel__title">

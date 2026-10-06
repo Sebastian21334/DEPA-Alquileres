@@ -108,6 +108,11 @@ No se guardan número de tarjeta, CVV ni vencimiento.
 | `POST /pagos/reconciliar` | JWT | Verifica en Mercado Pago el pago informado al regresar del checkout. |
 | `POST /pagos/webhook` | Firma de Mercado Pago | Recibe cambios del pago. |
 | `GET /pagos/reservas/:id/estado` | JWT | Consulta el estado de una reserva propia. |
+| `GET /reservas/:id/codigo-alojamiento` | JWT del inquilino | Consulta el código privado de una reserva aprobada. |
+| `PATCH /reservas/:id/validar-codigo` | JWT del anunciante | Valida el código entregado y solicita la liquidación manual. |
+| `PATCH /reservas/:id/reportar-problema` | JWT del inquilino | Congela la liquidación y abre una revisión administrativa. |
+| `GET /reservas/liquidaciones/administracion` | Administrador | Lista pagos manuales y reclamos por resolver. |
+| `PATCH /reservas/:id/liquidacion` | Administrador | Registra pago, devolución o resolución manual. |
 
 ### Solicitud para iniciar el checkout
 
@@ -408,9 +413,11 @@ El sistema no llama todavía a la API de reembolsos. Por seguridad, una reserva 
 
 Todo el flujo corresponde a una sola cuenta. Los anunciantes no conectan su propia cuenta mediante OAuth y la plataforma no cobra comisión automática.
 
-### No existe retención hasta el check-in
+### Confirmación académica del alojamiento
 
-El código de alojamiento definido durante la inspección no está implementado. Mercado Pago no se utiliza como escrow.
+El sistema genera un código privado de ocho caracteres cuando Mercado Pago aprueba la reserva. El inquilino lo consulta desde “Mis reservas” y lo entrega físicamente al anunciante. Al validarlo, la reserva queda pendiente de liquidación administrativa.
+
+Este circuito no constituye un escrow ni realiza transferencias reales. Para la demostración académica, el administrador registra manualmente que el dinero fue pagado al propietario o devuelto al inquilino. También puede revisar reclamos antes de resolver la liquidación.
 
 ### Expiración parcial
 
@@ -434,8 +441,8 @@ Si `MP_WEBHOOK_SECRET` está vacío, el código no ejecuta la validación cripto
 2. Procesamiento idempotente de eventos repetidos con auditoría de notificaciones.
 3. Tarea programada para reservas vencidas.
 4. Transacciones y bloqueo de fechas a nivel de base de datos.
-5. Reembolsos completos y parciales.
-6. Panel de conciliación administrativa.
+5. Reembolsos reales completos y parciales mediante la API de Mercado Pago.
+6. Conciliación automática de transferencias; el panel actual registra decisiones manuales académicas.
 7. Comprobantes y detalles del pago para el usuario.
 8. OAuth y Split Payments si cada anunciante debe cobrar directamente.
 9. Alertas para pagos aprobados sin reserva confirmada.

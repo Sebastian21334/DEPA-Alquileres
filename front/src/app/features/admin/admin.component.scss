@@ -434,6 +434,25 @@ select {
   text-align: center;
   color: #71818a;
 }
+.settlement-list {
+  display: grid;
+  gap: 14px;
+  padding: 20px 24px 24px;
+}
+.settlement-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid #e3e9ec;
+  border-radius: 10px;
+  background: #fff;
+}
+.settlement-card h3 { margin: 10px 0 7px; }
+.settlement-card p { margin: 4px 0; color: #52636c; }
+.settlement-card .actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }
 .alert {
   margin: 18px 0;
   padding: 12px 16px;
@@ -478,4 +497,7 @@ select {
   .admin__header .button {
     width: 100%;
   }
+  .settlement-card { align-items: stretch; flex-direction: column; }
+  .settlement-card .actions { justify-content: stretch; }
+  .settlement-card .actions .button { flex: 1; }
 }

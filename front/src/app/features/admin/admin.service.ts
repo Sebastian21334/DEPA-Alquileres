@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
+import { Reserva } from '../../shared/services/reservation.service';
 
 export interface AdminUser {
   id: number;
@@ -37,6 +38,7 @@ export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
+export type AdminSettlement = Reserva;
 export type CatalogKey =
   | 'roles'
   | 'tipos-anunciante'
@@ -54,6 +56,21 @@ export class AdminService {
   }
   listarPendientes() {
     return this.http.get<VerificationRequest[]>(`${this.api}/anunciantes/pendientes`);
+  }
+  listarLiquidaciones() {
+    return this.http.get<AdminSettlement[]>(`${this.api}/reservas/liquidaciones/administracion`);
+  }
+  resolverLiquidacion(
+    id: number,
+    estado: Reserva['estado_liquidacion'],
+    referencia?: string,
+    observacion?: string,
+  ) {
+    return this.http.patch<AdminSettlement>(`${this.api}/reservas/${id}/liquidacion`, {
+      estado,
+      referencia,
+      observacion,
+    });
   }
   cambiarBloqueo(id: number, bloquear: boolean, motivo?: string) {
     return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo });
