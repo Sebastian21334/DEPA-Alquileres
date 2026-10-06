@@ -1,8 +1,8 @@
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository } from 'typeorm';
-import { EstadoPagoReserva, Reserva } from '../entity/reserva.entity';
+import { In, LessThan, Repository } from 'typeorm';
+import { EstadoLiquidacionReserva, EstadoPagoReserva, Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 
 @Injectable()
@@ -38,6 +38,20 @@ export class ReservaRepository implements IReservaRepository {
         metodoPago: true,
       },
     });
+  }
+
+  buscarPorIdConCodigo(id: number): Promise<Reserva | null> {
+    return this.repository
+      .createQueryBuilder('reserva')
+      .addSelect('reserva.codigo_alojamiento')
+      .leftJoinAndSelect('reserva.usuario', 'usuario')
+      .leftJoinAndSelect('reserva.publicacion', 'publicacion')
+      .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
+      .leftJoinAndSelect('anunciante.usuario', 'usuarioAnunciante')
+      .leftJoinAndSelect('publicacion.ciudad', 'ciudad')
+      .leftJoinAndSelect('publicacion.provincia', 'provincia')
+      .where('reserva.id = :id', { id })
+      .getOne();
   }
 
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]> {
@@ -86,6 +100,23 @@ export class ReservaRepository implements IReservaRepository {
         estado_pago: EstadoPagoReserva.APROBADO,
         cancelada: false,
       },
+    });
+  }
+
+
+  buscarLiquidacionesAdministracion(): Promise<Reserva[]> {
+    return this.repository.find({
+      where: {
+        estado_liquidacion: In([
+          EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
+          EstadoLiquidacionReserva.EN_REVISION,
+        ]),
+      },
+      relations: {
+        usuario: true,
+        publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true },
+      },
+      order: { codigo_validado_en: 'ASC', id: 'DESC' },
     });
   }
 }

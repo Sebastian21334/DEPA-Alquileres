@@ -11,6 +11,15 @@ export enum EstadoPagoReserva {
   REEMBOLSADO = 'REEMBOLSADO',
 }
 
+export enum EstadoLiquidacionReserva {
+  NO_APLICA = 'NO_APLICA',
+  RETENIDO = 'RETENIDO',
+  PENDIENTE_PAGO_PROPIETARIO = 'PENDIENTE_PAGO_PROPIETARIO',
+  EN_REVISION = 'EN_REVISION',
+  PAGADO_PROPIETARIO = 'PAGADO_PROPIETARIO',
+  DEVUELTO_INQUILINO = 'DEVUELTO_INQUILINO',
+}
+
 @Entity('reserva')
 export class Reserva {
   // La reserva registra el pago y vincula al inquilino con una publicación.
@@ -41,6 +50,36 @@ export class Reserva {
 
   @Column({ type: 'timestamp', nullable: true })
   pago_vencimiento: Date | null;
+
+  // El código se excluye de todas las consultas normales. Solo puede
+  // recuperarlo el inquilino mediante el endpoint protegido específico.
+  @Column({ type: 'varchar', length: 8, nullable: true, select: false })
+  codigo_alojamiento: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  codigo_generado_en: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  codigo_validado_en: Date | null;
+
+  @Column({ type: 'int', default: 0 })
+  intentos_codigo: number;
+
+  @Column({
+    type: 'enum',
+    enum: EstadoLiquidacionReserva,
+    default: EstadoLiquidacionReserva.NO_APLICA,
+  })
+  estado_liquidacion: EstadoLiquidacionReserva;
+
+  @Column({ type: 'timestamp', nullable: true })
+  fecha_resolucion_liquidacion: Date | null;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  referencia_liquidacion: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  observacion_liquidacion: string | null;
 
   // Se conserva una copia del periodo para mantener el historial aunque
   // posteriormente se elimine la publicación o su calendario.

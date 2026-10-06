@@ -7,9 +7,11 @@ export interface IReservaRepository {
   guardar(reserva: Reserva): Promise<Reserva>;
   guardarVarias(reservas: Reserva[]): Promise<Reserva[]>;
   buscarPorId(id: number): Promise<Reserva | null>;
+  buscarPorIdConCodigo(id: number): Promise<Reserva | null>;
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]>;
   buscarPorPublicacion(idPublicacion: number): Promise<Reserva[]>;
   buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]>;
   buscarPendientesVencidas(fecha: Date): Promise<Reserva[]>;
   existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean>;
+  buscarLiquidacionesAdministracion(): Promise<Reserva[]>;
 }

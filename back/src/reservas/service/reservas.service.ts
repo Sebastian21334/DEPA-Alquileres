@@ -20,6 +20,9 @@ import { Modalidad } from '../../catalogos/entity/modalidad.entity';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import { normalizarFechaReserva } from './reservas.utils';
+import { randomBytes, timingSafeEqual } from 'crypto';
+import { EstadoLiquidacionReserva } from '../entity/reserva.entity';
+import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 
 @Injectable()
 export class ReservasService {
@@ -107,6 +110,14 @@ export class ReservasService {
       monto_pago: montoCalculado,
       fecha_pago: null,
       estado_pago: EstadoPagoReserva.PENDIENTE,
+      estado_liquidacion: EstadoLiquidacionReserva.NO_APLICA,
+      codigo_alojamiento: null,
+      codigo_generado_en: null,
+      codigo_validado_en: null,
+      intentos_codigo: 0,
+      fecha_resolucion_liquidacion: null,
+      referencia_liquidacion: null,
+      observacion_liquidacion: null,
       pago_vencimiento: new Date(Date.now() + 15 * 60 * 1000),
       fecha_inicio: inicio,
       fecha_fin: fin,
@@ -145,6 +156,11 @@ export class ReservasService {
       reserva.estado_pago = EstadoPagoReserva.APROBADO;
       reserva.fecha_pago = fechaPago;
       reserva.pago_vencimiento = null;
+      reserva.codigo_alojamiento = this.generarCodigoAlojamiento();
+      reserva.codigo_generado_en = new Date();
+      reserva.codigo_validado_en = null;
+      reserva.intentos_codigo = 0;
+      reserva.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
       guardada = await this.reservaRepository.guardar(reserva);
     }
 
@@ -232,6 +248,9 @@ export class ReservasService {
     if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
 
     reserva.estado_pago = estado;
+    reserva.estado_liquidacion = estado === EstadoPagoReserva.REEMBOLSADO
+      ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
+      : EstadoLiquidacionReserva.NO_APLICA;
     reserva.cancelada = true;
     reserva.fecha_cancelacion = new Date();
     reserva.pago_vencimiento = null;
@@ -279,6 +298,136 @@ export class ReservasService {
     return reserva;
   }
 
+  /** Devuelve el código únicamente al inquilino que realizó la reserva. */
+  async consultarCodigoAlojamiento(id: number, idUsuario: number) {
+    const reserva = await this.reservaRepository.buscarPorIdConCodigo(id);
+    if (!reserva) throw new NotFoundException(`No se encontró la reserva ${id}`);
+    if (reserva.usuario?.id !== idUsuario) {
+      throw new ForbiddenException('Solo el inquilino puede consultar el código de alojamiento');
+    }
+    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO || reserva.cancelada) {
+      throw new ConflictException('El código estará disponible cuando el pago se encuentre aprobado');
+    }
+    if (!reserva.codigo_alojamiento) {
+      // Compatibilidad con reservas aprobadas antes de incorporar RF21.
+      reserva.codigo_alojamiento = this.generarCodigoAlojamiento();
+      reserva.codigo_generado_en = new Date();
+      reserva.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
+      await this.reservaRepository.guardar(reserva);
+    }
+    return {
+      reserva_id: reserva.id,
+      codigo: reserva.codigo_alojamiento,
+      generado_en: reserva.codigo_generado_en,
+      validado_en: reserva.codigo_validado_en,
+      estado_liquidacion: reserva.estado_liquidacion,
+    };
+  }
+
+  /** El anunciante presenta el código entregado físicamente por el huésped. */
+  async validarCodigoAlojamiento(id: number, codigo: string, idUsuarioAnunciante: number): Promise<Reserva> {
+    const reserva = await this.reservaRepository.buscarPorIdConCodigo(id);
+    if (!reserva) throw new NotFoundException(`No se encontró la reserva ${id}`);
+    if (reserva.publicacion?.anunciante?.idUsuario !== idUsuarioAnunciante) {
+      throw new ForbiddenException('Solo el anunciante de la publicación puede validar el código');
+    }
+    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO || reserva.cancelada) {
+      throw new ConflictException('La reserva no se encuentra confirmada');
+    }
+    if (reserva.codigo_validado_en) {
+      throw new ConflictException('El código de esta reserva ya fue utilizado');
+    }
+    if (reserva.estado_liquidacion === EstadoLiquidacionReserva.EN_REVISION) {
+      throw new ConflictException('La reserva tiene un reclamo abierto y debe revisarla un administrador');
+    }
+    if (reserva.intentos_codigo >= 5) {
+      throw new ConflictException('Se alcanzó el límite de intentos. Contactá a un administrador');
+    }
+
+    const recibido = codigo.trim().toUpperCase();
+    const esperado = reserva.codigo_alojamiento ?? '';
+    const coincide = recibido.length === esperado.length
+      && timingSafeEqual(Buffer.from(recibido), Buffer.from(esperado));
+    if (!coincide) {
+      reserva.intentos_codigo += 1;
+      if (reserva.intentos_codigo >= 5) {
+        reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+        reserva.observacion_liquidacion = 'Código bloqueado después de cinco intentos incorrectos';
+      }
+      await this.reservaRepository.guardar(reserva);
+      throw new BadRequestException(`Código incorrecto. Quedan ${5 - reserva.intentos_codigo} intentos`);
+    }
+
+    reserva.codigo_validado_en = new Date();
+    reserva.estado_liquidacion = EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO;
+    reserva.observacion_liquidacion = 'Código de alojamiento validado por el anunciante';
+    await this.reservaRepository.guardar(reserva);
+    return (await this.reservaRepository.buscarPorId(id))!;
+  }
+
+  /** El reclamo del inquilino congela cualquier liquidación manual pendiente. */
+  async reportarProblema(id: number, motivo: string, idUsuario: number): Promise<Reserva> {
+    const reserva = await this.reservaRepository.buscarPorId(id);
+    if (!reserva) throw new NotFoundException(`No se encontró la reserva ${id}`);
+    if (reserva.usuario?.id !== idUsuario) {
+      throw new ForbiddenException('Solo el inquilino de la reserva puede reportar un problema');
+    }
+    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO || reserva.cancelada) {
+      throw new ConflictException('Solo se pueden reportar problemas sobre reservas confirmadas');
+    }
+    if (reserva.estado_liquidacion === EstadoLiquidacionReserva.PAGADO_PROPIETARIO
+      || reserva.estado_liquidacion === EstadoLiquidacionReserva.DEVUELTO_INQUILINO) {
+      throw new ConflictException('La liquidación de esta reserva ya fue resuelta');
+    }
+    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+    reserva.observacion_liquidacion = `Reclamo del inquilino: ${motivo.trim()}`;
+    reserva.fecha_resolucion_liquidacion = null;
+    return this.reservaRepository.guardar(reserva);
+  }
+
+  listarLiquidacionesAdministracion(): Promise<Reserva[]> {
+    return this.reservaRepository.buscarLiquidacionesAdministracion();
+  }
+
+  /** Registra una decisión administrativa; no ejecuta movimientos de dinero reales. */
+  async resolverLiquidacion(id: number, dto: ResolverLiquidacionDto): Promise<Reserva> {
+    const permitidos = [
+      EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+      EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+      EstadoLiquidacionReserva.EN_REVISION,
+      EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
+      EstadoLiquidacionReserva.RETENIDO,
+    ];
+    if (!permitidos.includes(dto.estado)) {
+      throw new BadRequestException('El estado solicitado no es una resolución administrativa válida');
+    }
+    const reserva = await this.reservaRepository.buscarPorId(id);
+    if (!reserva) throw new NotFoundException(`No se encontró la reserva ${id}`);
+    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+      throw new ConflictException('La reserva no posee un pago aprobado para liquidar');
+    }
+    if (dto.estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO && !reserva.codigo_validado_en) {
+      throw new ConflictException('No se puede registrar el pago al propietario sin validar el código');
+    }
+    reserva.estado_liquidacion = dto.estado;
+    reserva.referencia_liquidacion = dto.referencia?.trim() || null;
+    reserva.observacion_liquidacion = dto.observacion?.trim() || reserva.observacion_liquidacion;
+    reserva.fecha_resolucion_liquidacion = [
+      EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+      EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+    ].includes(dto.estado) ? new Date() : null;
+    if (dto.estado === EstadoLiquidacionReserva.RETENIDO) {
+      reserva.intentos_codigo = 0;
+    }
+    if (dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO) {
+      reserva.estado_pago = EstadoPagoReserva.REEMBOLSADO;
+      reserva.cancelada = true;
+      reserva.fecha_cancelacion = new Date();
+      await this.disponibilidadService.liberarReserva(reserva.id);
+    }
+    return this.reservaRepository.guardar(reserva);
+  }
+
   /**
    * Marca la reserva como finalizada (ej: terminó la estadía).
    * No libera las fechas: quedan como historial de que ese período
@@ -296,6 +445,9 @@ export class ReservasService {
     if (reserva.cancelada) throw new BadRequestException('No se puede finalizar una reserva cancelada');
     if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
       throw new BadRequestException('No se puede finalizar una reserva cuyo pago no fue aprobado');
+    }
+    if (!reserva.codigo_validado_en) {
+      throw new BadRequestException('No se puede finalizar la estadía antes de validar el código de alojamiento');
     }
     reserva.finalizada = true;
     return this.reservaRepository.guardar(reserva);
@@ -370,6 +522,12 @@ export class ReservasService {
       return modalidad.permite_reservas_por_fecha;
     }
     return /tempor|diari/i.test(modalidad?.nombre ?? '');
+  }
+
+  private generarCodigoAlojamiento(): string {
+    const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = randomBytes(8);
+    return Array.from(bytes, (byte) => alfabeto[byte % alfabeto.length]).join('');
   }
 
   private async liberarPendientesVencidas(): Promise<void> {
