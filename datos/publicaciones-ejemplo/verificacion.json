@@ -1,0 +1,56 @@
+{
+  "publicaciones": [
+    {
+      "id": 26,
+      "titulo": "PH luminoso con terraza y parrilla",
+      "modalidad": "Largo Plazo",
+      "fotos": 7,
+      "dias": 0
+    },
+    {
+      "id": 28,
+      "titulo": "Monoambiente con balcón en Villa María",
+      "modalidad": "Largo Plazo",
+      "fotos": 4,
+      "dias": 0
+    },
+    {
+      "id": 29,
+      "titulo": "Dúplex amoblado con pileta y vistas a las sierras",
+      "modalidad": "Temporal",
+      "fotos": 5,
+      "dias": 114
+    },
+    {
+      "id": 31,
+      "titulo": "Departamento con pileta, parrillas y SUM",
+      "modalidad": "Temporal",
+      "fotos": 4,
+      "dias": 114
+    },
+    {
+      "id": 33,
+      "titulo": "Casa con pileta y jardín en Mina Clavero",
+      "modalidad": "Temporal",
+      "fotos": 4,
+      "dias": 114
+    },
+    {
+      "id": 36,
+      "titulo": "Tres ambientes con parquet en Palermo",
+      "modalidad": "Largo Plazo",
+      "fotos": 5,
+      "dias": 0
+    }
+  ],
+  "imagenesUnicas": 29,
+  "duplicadosRetirados": [
+    25,
+    27,
+    30,
+    32,
+    34,
+    35
+  ],
+  "verificadoEn": "2026-10-09T17:15:59.059Z"
+}

@@ -1,7 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
-import { MetodoPago } from '../../catalogos/entity/metodo-pago.entity';
 
 export enum EstadoPagoReserva {
   PENDIENTE = 'PENDIENTE',
@@ -120,8 +119,4 @@ export class Reserva {
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Publicacion | null;
 
-  // Método de pago utilizado (Crédito, Débito, QR)
-  @ManyToOne(() => MetodoPago, { nullable: true })
-  @JoinColumn({ name: 'id_metodo_pago' })
-  metodoPago: MetodoPago | null;
 }

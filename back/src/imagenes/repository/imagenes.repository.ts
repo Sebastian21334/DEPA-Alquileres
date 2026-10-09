@@ -30,6 +30,7 @@ export class ImagenesRepository implements IImagenesRepository {
   buscarPorPublicacion(idPublicacion: number): Promise<Imagen[]> {
     return this.repo.find({
       where: { publicacion: { id: idPublicacion } },
+      order: { id: 'ASC' },
     });
   }
 

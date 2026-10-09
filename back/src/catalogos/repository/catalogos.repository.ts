@@ -5,7 +5,6 @@ import { Rol } from '../entity/rol.entity';
 import { TipoAnunciante } from '../entity/tipo-anunciante.entity';
 import { TipoPropiedad } from '../entity/tipo-propiedad.entity';
 import { Modalidad } from '../entity/modalidad.entity';
-import { MetodoPago } from '../entity/metodo-pago.entity';
 import { TipoMoneda } from '../entity/tipo-moneda.entity';
 import { ICatalogosRepository } from './catalogos.repository.interface';
 
@@ -16,7 +15,6 @@ export class CatalogosRepository implements ICatalogosRepository {
     @InjectRepository(TipoAnunciante) private tipoAnuncianteRepo: Repository<TipoAnunciante>,
     @InjectRepository(TipoPropiedad) private tipoPropiedadRepo: Repository<TipoPropiedad>,
     @InjectRepository(Modalidad) private modalidadRepo: Repository<Modalidad>,
-    @InjectRepository(MetodoPago) private metodoPagoRepo: Repository<MetodoPago>,
     @InjectRepository(TipoMoneda) private tipoMonedaRepo: Repository<TipoMoneda>,
   ) {}
 
@@ -102,27 +100,6 @@ export class CatalogosRepository implements ICatalogosRepository {
   }
   async eliminarModalidad(id: number): Promise<void> {
     await this.modalidadRepo.delete(id);
-  }
-
-  // --- MÉTODOS DE PAGO ---
-  buscarTodosMetodosPago(): Promise<MetodoPago[]> {
-    return this.metodoPagoRepo.find();
-  }
-  buscarMetodoPagoPorNombre(nombre: string): Promise<MetodoPago | null> {
-    return this.metodoPagoRepo.findOneBy({ nombre });
-  }
-  buscarMetodoPagoPorId(id: number): Promise<MetodoPago | null> {
-    return this.metodoPagoRepo.findOneBy({ id });
-  }
-  async crearMetodoPago(datos: Partial<MetodoPago>): Promise<MetodoPago> {
-    return this.metodoPagoRepo.save(this.metodoPagoRepo.create(datos));
-  }
-  async actualizarMetodoPago(id: number, datos: Partial<MetodoPago>): Promise<MetodoPago> {
-    await this.metodoPagoRepo.update(id, datos);
-    return this.buscarMetodoPagoPorId(id) as Promise<MetodoPago>;
-  }
-  async eliminarMetodoPago(id: number): Promise<void> {
-    await this.metodoPagoRepo.delete(id);
   }
 
   // --- TIPOS MONEDA ---

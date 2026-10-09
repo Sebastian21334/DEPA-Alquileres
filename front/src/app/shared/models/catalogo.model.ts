@@ -1,6 +1,6 @@
 // Interfaces que reflejan los catálogos del módulo `catalogos` del backend.
 // Todas comparten la misma forma (id, nombre, descripción opcional).
-// GET /catalogos/tipos-propiedad | /modalidades | /tipos-moneda | /tipos-anunciante | /metodos-pago | /roles
+// GET /catalogos/tipos-propiedad | /modalidades | /tipos-moneda | /tipos-anunciante | /roles
 
 export interface Catalogo {
   id: number;
@@ -14,5 +14,4 @@ export interface Modalidad extends Catalogo {
 }
 export type TipoMoneda = Catalogo;
 export type TipoAnunciante = Catalogo;
-export type MetodoPago = Catalogo;
 export type Rol = Catalogo;

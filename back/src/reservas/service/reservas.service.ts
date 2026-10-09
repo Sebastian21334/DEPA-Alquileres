@@ -127,8 +127,6 @@ export class ReservasService {
       usuario_telefono: usuario.telefono,
       usuario,
       publicacion,
-      // Checkout Pro permite que el comprador elija el medio dentro de Mercado Pago.
-      metodoPago: null,
     });
 
     // Persistimos la reserva primero para obtener su ID antes de asociarlo a las fechas.

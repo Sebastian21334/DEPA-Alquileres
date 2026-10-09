@@ -1,4 +1,3 @@
-import { MetodoPago } from '../entity/metodo-pago.entity';
 import { Modalidad } from '../entity/modalidad.entity';
 import { Rol } from '../entity/rol.entity';
 import { TipoAnunciante } from '../entity/tipo-anunciante.entity';
@@ -35,13 +34,6 @@ export interface ICatalogosRepository {
   crearModalidad(datos: Partial<Modalidad>): Promise<Modalidad>;
   actualizarModalidad(id: number, datos: Partial<Modalidad>): Promise<Modalidad>;
   eliminarModalidad(id: number): Promise<void>;
-
-  buscarTodosMetodosPago(): Promise<MetodoPago[]>;
-  buscarMetodoPagoPorId(id: number): Promise<MetodoPago | null>;
-  buscarMetodoPagoPorNombre(nombre: string): Promise<MetodoPago | null>;
-  crearMetodoPago(datos: Partial<MetodoPago>): Promise<MetodoPago>;
-  actualizarMetodoPago(id: number, datos: Partial<MetodoPago>): Promise<MetodoPago>;
-  eliminarMetodoPago(id: number): Promise<void>;
 
   buscarTodosTiposMoneda(): Promise<TipoMoneda[]>;
   buscarTipoMonedaPorId(id: number): Promise<TipoMoneda | null>;

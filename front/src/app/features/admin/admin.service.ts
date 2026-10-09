@@ -44,7 +44,6 @@ export type CatalogKey =
   | 'tipos-anunciante'
   | 'tipos-propiedad'
   | 'modalidades'
-  | 'metodos-pago'
   | 'tipos-moneda';
 
 @Injectable({ providedIn: 'root' })

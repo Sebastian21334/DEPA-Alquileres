@@ -1,0 +1,111 @@
+[
+  {
+    "clave": "duplex-la-paz",
+    "direccion": "San Martín 1240",
+    "ciudad": "La Paz",
+    "provincia": "Entre Ríos",
+    "puntos": [
+      {
+        "nombre": "1240, San Martín, La Paz, Distrito Estacas, Departamento La Paz, Entre Ríos, E3190, Argentina",
+        "latitud": -30.7440879,
+        "longitud": -59.6445023
+      }
+    ]
+  },
+  {
+    "clave": "depto-cocina-integrada-villa-maria",
+    "direccion": "Buenos Aires 424",
+    "ciudad": "Villa María",
+    "provincia": "Córdoba",
+    "puntos": [
+      {
+        "nombre": "424, Buenos Aires, Centro, Villa María, Municipio de Villa María, Pedanía Villa María, Departamento General San Martín, Córdoba, 5900, Argentina",
+        "latitud": -32.4156537,
+        "longitud": -63.2503177
+      }
+    ]
+  },
+  {
+    "clave": "depto-terraza-hidromasaje",
+    "direccion": "Mendoza 760",
+    "ciudad": "Villa María",
+    "provincia": "Córdoba",
+    "puntos": [
+      {
+        "nombre": "760, Mendoza, Centro Sur, Villa María, Municipio de Villa María, Pedanía Villa María, Departamento General San Martín, Córdoba, 5900, Argentina",
+        "latitud": -32.4161157,
+        "longitud": -63.244123
+      },
+      {
+        "nombre": "760, Martínez Mendoza, Lamadrid, Villa María, Municipio de Villa María, Pedanía Villa María, Departamento General San Martín, Córdoba, 5900, Argentina",
+        "latitud": -32.4139264,
+        "longitud": -63.2298178
+      }
+    ]
+  },
+  {
+    "clave": "duplex-parquet-la-paz",
+    "direccion": "Italia 1043",
+    "ciudad": "La Paz",
+    "provincia": "Entre Ríos",
+    "puntos": [
+      {
+        "nombre": "1043, Italia, La Paz, Distrito Estacas, Departamento La Paz, Entre Ríos, E3190, Argentina",
+        "latitud": -30.7411525,
+        "longitud": -59.6434757
+      }
+    ]
+  },
+  {
+    "clave": "casa-moderna-villa-nueva",
+    "direccion": "Los Ceibos 350",
+    "ciudad": "Villa Nueva",
+    "provincia": "Córdoba",
+    "puntos": [
+      {
+        "nombre": "350, Avenida Los Ceibos, Ctalamochita, Villa Nueva, Municipio de Villa Nueva, Pedanía Villa Nueva, Departamento General San Martín, Córdoba, X5900, Argentina",
+        "latitud": -32.4413559,
+        "longitud": -63.2237401
+      }
+    ]
+  },
+  {
+    "clave": "depto-balcon-verde-la-paz",
+    "direccion": "España 820",
+    "ciudad": "La Paz",
+    "provincia": "Entre Ríos",
+    "puntos": [
+      {
+        "nombre": "820, España, La Paz, Distrito Estacas, Departamento La Paz, Entre Ríos, E3190, Argentina",
+        "latitud": -30.7405228,
+        "longitud": -59.6427012
+      }
+    ]
+  },
+  {
+    "clave": "galpon-entrepiso-tio-pujio",
+    "direccion": "Belgrano 420",
+    "ciudad": "Tío Pujio",
+    "provincia": "Córdoba",
+    "puntos": [
+      {
+        "nombre": "420, Belgrano, Tío Pujio, Municipio de Tío Pujio, Pedanía Yucat, Departamento General San Martín, Córdoba, 5936, Argentina",
+        "latitud": -32.2914221,
+        "longitud": -63.3526097
+      }
+    ]
+  },
+  {
+    "clave": "depto-renovado-villa-maria",
+    "direccion": "Santa Fe 1180",
+    "ciudad": "Villa María",
+    "provincia": "Córdoba",
+    "puntos": [
+      {
+        "nombre": "1180, Santa Fe, Centro, Villa María, Municipio de Villa María, Pedanía Villa María, Departamento General San Martín, Córdoba, X5900, Argentina",
+        "latitud": -32.409815,
+        "longitud": -63.243572
+      }
+    ]
+  }
+]

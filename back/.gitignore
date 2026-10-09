@@ -3,6 +3,9 @@
 /node_modules
 /build
 
+# Respaldos locales de migraciones
+/backups/
+
 # Logs
 logs
 *.log

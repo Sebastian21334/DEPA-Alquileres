@@ -1,0 +1,509 @@
+{
+  "usuarioId": 53,
+  "publicaciones": [
+    {
+      "clave": "ph-terraza-temporal",
+      "id": 25,
+      "titulo": "PH luminoso con terraza y parrilla — Temporal (Ejemplo)",
+      "modalidad": "Temporal",
+      "ciudad": "Córdoba",
+      "precio": 48000,
+      "imagenes": [
+        {
+          "id": 26,
+          "archivo": "2e50a855-3b0a-4750-8771-ceca4f2eb09f_u_large.webp",
+          "sha256": "e66c12186095c3d8cc0b0785d03e7d916503ae85d11fef72a8e8ec6b39a99c55",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/25-1791565225965.jpg"
+        },
+        {
+          "id": 27,
+          "archivo": "f84fe86f-7d1d-4098-8495-f2b5473de63c_u_large.webp",
+          "sha256": "cb42e8b956eef4241a087196f2addf8cd20599bb8494a707f00436c214b340d8",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/25-1791565228052.jpg"
+        },
+        {
+          "id": 28,
+          "archivo": "ec09fb05-9a82-4996-9dfe-618cb0061970_u_large.webp",
+          "sha256": "874821d5b462c9d8913ddbadaa802949775382c71cde1f4aaae621cd7269b3db",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/25-1791565229397.jpg"
+        },
+        {
+          "id": 29,
+          "archivo": "1d9f3273-7245-41cc-bb77-38f70cd96408_u_large.webp",
+          "sha256": "592a9da77c08c4235c03fa048eeecf9b04286649f9a3801eab6b9503d2b5a555",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/25-1791565230739.jpg"
+        },
+        {
+          "id": 30,
+          "archivo": "be3e9257-986e-4019-9570-77fc6470357f_u_large.webp",
+          "sha256": "73a7b225651332c405b2b12fa85a0eb9a70033b3c2cae3a45da1ec0fdf398ae2",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/25-1791565232024.jpg"
+        },
+        {
+          "id": 31,
+          "archivo": "5d7f15d6-f655-466a-a3cb-ccbc027c2a38_u_large.webp",
+          "sha256": "7afcc2dd91ff3a994ad3754af97dc3267b7df65c47d68d5fe0bf8cce1e9181db",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/25-1791565233271.jpg"
+        },
+        {
+          "id": 32,
+          "archivo": "afa971ad-5a3c-4a90-80c6-a213e4675866_u_large.webp",
+          "sha256": "abccaa8ff20f3a533a93aa25598a542fcbe85735fef5f3f1813211cb14448099",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/25-1791565234509.jpg"
+        }
+      ],
+      "disponibilidad": {
+        "desde": "2026-10-10",
+        "hasta": "2027-01-31"
+      },
+      "verificada": true
+    },
+    {
+      "clave": "ph-terraza-largo-plazo",
+      "id": 26,
+      "titulo": "PH luminoso con terraza y parrilla — Largo Plazo (Ejemplo)",
+      "modalidad": "Largo Plazo",
+      "ciudad": "Córdoba",
+      "precio": 680000,
+      "imagenes": [
+        {
+          "id": 33,
+          "archivo": "2e50a855-3b0a-4750-8771-ceca4f2eb09f_u_large.webp",
+          "sha256": "e66c12186095c3d8cc0b0785d03e7d916503ae85d11fef72a8e8ec6b39a99c55",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565240958.jpg"
+        },
+        {
+          "id": 34,
+          "archivo": "f84fe86f-7d1d-4098-8495-f2b5473de63c_u_large.webp",
+          "sha256": "cb42e8b956eef4241a087196f2addf8cd20599bb8494a707f00436c214b340d8",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565242870.jpg"
+        },
+        {
+          "id": 35,
+          "archivo": "ec09fb05-9a82-4996-9dfe-618cb0061970_u_large.webp",
+          "sha256": "874821d5b462c9d8913ddbadaa802949775382c71cde1f4aaae621cd7269b3db",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565244234.jpg"
+        },
+        {
+          "id": 36,
+          "archivo": "1d9f3273-7245-41cc-bb77-38f70cd96408_u_large.webp",
+          "sha256": "592a9da77c08c4235c03fa048eeecf9b04286649f9a3801eab6b9503d2b5a555",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565245505.jpg"
+        },
+        {
+          "id": 37,
+          "archivo": "be3e9257-986e-4019-9570-77fc6470357f_u_large.webp",
+          "sha256": "73a7b225651332c405b2b12fa85a0eb9a70033b3c2cae3a45da1ec0fdf398ae2",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565246792.jpg"
+        },
+        {
+          "id": 38,
+          "archivo": "5d7f15d6-f655-466a-a3cb-ccbc027c2a38_u_large.webp",
+          "sha256": "7afcc2dd91ff3a994ad3754af97dc3267b7df65c47d68d5fe0bf8cce1e9181db",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565248035.jpg"
+        },
+        {
+          "id": 39,
+          "archivo": "afa971ad-5a3c-4a90-80c6-a213e4675866_u_large.webp",
+          "sha256": "abccaa8ff20f3a533a93aa25598a542fcbe85735fef5f3f1813211cb14448099",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565249322.jpg"
+        }
+      ],
+      "verificada": true
+    },
+    {
+      "clave": "depto-balcon-temporal",
+      "id": 27,
+      "titulo": "Departamento con balcón y cocina integrada — Temporal (Ejemplo)",
+      "modalidad": "Temporal",
+      "ciudad": "Villa María",
+      "precio": 32000,
+      "imagenes": [
+        {
+          "id": 40,
+          "archivo": "f531df20-629d-41ba-a5f4-694172d96646_u_large.webp",
+          "sha256": "95e958ca5949f87b5ddd9ca36925ed78cdddc5249c2ef16b40cc7b726e5119ca",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/27-1791565253919.jpg"
+        },
+        {
+          "id": 41,
+          "archivo": "bf90bad5-1a16-42f4-a4b7-6b78d9fc746d_u_large.webp",
+          "sha256": "0c2d7424666b42a8a744130e1b44e761b4f02b6f2aef8cf1b095c49737b79aa9",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/27-1791565255830.jpg"
+        },
+        {
+          "id": 42,
+          "archivo": "7e25d422-e6e9-4796-9f63-204207645e59_u_large.webp",
+          "sha256": "9a184b09fbf0c51f4bb2b7143df4eacc1512354b077122df792551d500ec97b3",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/27-1791565257132.jpg"
+        },
+        {
+          "id": 43,
+          "archivo": "7b730b68-00f2-4dc2-9d3c-66631d507007_u_large.webp",
+          "sha256": "7f52aa0ef3650257006deefa98efc239f74452e291fed11932764b11a21885b2",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/27-1791565259613.jpg"
+        }
+      ],
+      "disponibilidad": {
+        "desde": "2026-10-10",
+        "hasta": "2027-01-31"
+      },
+      "verificada": true
+    },
+    {
+      "clave": "depto-balcon-largo-plazo",
+      "id": 28,
+      "titulo": "Departamento con balcón y cocina integrada — Largo Plazo (Ejemplo)",
+      "modalidad": "Largo Plazo",
+      "ciudad": "Villa María",
+      "precio": 390000,
+      "imagenes": [
+        {
+          "id": 44,
+          "archivo": "f531df20-629d-41ba-a5f4-694172d96646_u_large.webp",
+          "sha256": "95e958ca5949f87b5ddd9ca36925ed78cdddc5249c2ef16b40cc7b726e5119ca",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565267616.jpg"
+        },
+        {
+          "id": 45,
+          "archivo": "bf90bad5-1a16-42f4-a4b7-6b78d9fc746d_u_large.webp",
+          "sha256": "0c2d7424666b42a8a744130e1b44e761b4f02b6f2aef8cf1b095c49737b79aa9",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565269145.jpg"
+        },
+        {
+          "id": 46,
+          "archivo": "7e25d422-e6e9-4796-9f63-204207645e59_u_large.webp",
+          "sha256": "9a184b09fbf0c51f4bb2b7143df4eacc1512354b077122df792551d500ec97b3",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565270416.jpg"
+        },
+        {
+          "id": 47,
+          "archivo": "7b730b68-00f2-4dc2-9d3c-66631d507007_u_large.webp",
+          "sha256": "7f52aa0ef3650257006deefa98efc239f74452e291fed11932764b11a21885b2",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565272486.jpg"
+        }
+      ],
+      "verificada": true
+    },
+    {
+      "clave": "duplex-pileta-temporal",
+      "id": 29,
+      "titulo": "Dúplex amoblado con pileta en la terraza — Temporal (Ejemplo)",
+      "modalidad": "Temporal",
+      "ciudad": "Villa Carlos Paz",
+      "precio": 72000,
+      "imagenes": [
+        {
+          "id": 48,
+          "archivo": "57n2_Departamento_N6038DER.webp",
+          "sha256": "d4e1b1b1982b3a22d06fe47b562f1173fcd901e349d03e6a9e8dc79ae65c246b",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565278235.jpg"
+        },
+        {
+          "id": 49,
+          "archivo": "57n2-Departamento-MUNJLKFL (1).webp",
+          "sha256": "3fc3bc59c893a4baa607929448fe6a1b74f64b7f46ca58da89b31ecca140bd53",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565280352.jpg"
+        },
+        {
+          "id": 50,
+          "archivo": "57n2-Departamento-WGDI5C2A.webp",
+          "sha256": "ade64bd712e4087da7ee3a5a34263e7cf1b61c3b5c53c2a0430a836382fd71f6",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565282234.jpg"
+        },
+        {
+          "id": 51,
+          "archivo": "57n2-Departamento-QLU24RSX.webp",
+          "sha256": "f197390a95576a148425ccaf0f1271b57990fad40187c7399a9a0f438fe5f0f1",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565283640.jpg"
+        },
+        {
+          "id": 52,
+          "archivo": "57n2-Departamento-MUNJLKFL.webp",
+          "sha256": "8fa3619c6396ee960ae95dc7c99b1969681ec548fa9a1557d48afe10bb18f7bd",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565286683.jpg"
+        }
+      ],
+      "disponibilidad": {
+        "desde": "2026-10-10",
+        "hasta": "2027-01-31"
+      },
+      "verificada": true
+    },
+    {
+      "clave": "duplex-pileta-largo-plazo",
+      "id": 30,
+      "titulo": "Dúplex amoblado con pileta en la terraza — Largo Plazo (Ejemplo)",
+      "modalidad": "Largo Plazo",
+      "ciudad": "Villa Carlos Paz",
+      "precio": 890000,
+      "imagenes": [
+        {
+          "id": 53,
+          "archivo": "57n2_Departamento_N6038DER.webp",
+          "sha256": "d4e1b1b1982b3a22d06fe47b562f1173fcd901e349d03e6a9e8dc79ae65c246b",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/30-1791565298574.jpg"
+        },
+        {
+          "id": 54,
+          "archivo": "57n2-Departamento-MUNJLKFL (1).webp",
+          "sha256": "3fc3bc59c893a4baa607929448fe6a1b74f64b7f46ca58da89b31ecca140bd53",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/30-1791565301638.jpg"
+        },
+        {
+          "id": 55,
+          "archivo": "57n2-Departamento-WGDI5C2A.webp",
+          "sha256": "ade64bd712e4087da7ee3a5a34263e7cf1b61c3b5c53c2a0430a836382fd71f6",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/30-1791565303483.jpg"
+        },
+        {
+          "id": 56,
+          "archivo": "57n2-Departamento-QLU24RSX.webp",
+          "sha256": "f197390a95576a148425ccaf0f1271b57990fad40187c7399a9a0f438fe5f0f1",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/30-1791565305595.jpg"
+        },
+        {
+          "id": 57,
+          "archivo": "57n2-Departamento-MUNJLKFL.webp",
+          "sha256": "8fa3619c6396ee960ae95dc7c99b1969681ec548fa9a1557d48afe10bb18f7bd",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/30-1791565307169.jpg"
+        }
+      ],
+      "verificada": true
+    },
+    {
+      "clave": "depto-amenities-temporal",
+      "id": 31,
+      "titulo": "Departamento en edificio con pileta y SUM — Temporal (Ejemplo)",
+      "modalidad": "Temporal",
+      "ciudad": "Villa Carlos Paz",
+      "precio": 58000,
+      "imagenes": [
+        {
+          "id": 58,
+          "archivo": "we23-Departamento-8985MRTM.webp",
+          "sha256": "5a6ff6da8e70ad5ff4b325c6c6b95d926fb6c64732ed2d5e6fe91380e7f2138b",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565312857.jpg"
+        },
+        {
+          "id": 59,
+          "archivo": "we23-Departamento-MRT9RKNB.webp",
+          "sha256": "7bbe5d60ea30d76df5c1f639bfb3ab2931f98239e1855d30f6a1a21b421f1d77",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565314966.jpg"
+        },
+        {
+          "id": 60,
+          "archivo": "we23-Departamento-1MT5QDP6.webp",
+          "sha256": "a00939eee103225135fe7dc97a075c3f7139d28f71fcb42210dd7d5acb8c1f24",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565316542.jpg"
+        },
+        {
+          "id": 61,
+          "archivo": "we23-Departamento-7IIJ6138.webp",
+          "sha256": "ce86361c73488faca8c4ae673a1e1abde32b04349b7fdd6e6dcae5c890b271ec",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565318208.jpg"
+        }
+      ],
+      "disponibilidad": {
+        "desde": "2026-10-10",
+        "hasta": "2027-01-31"
+      },
+      "verificada": true
+    },
+    {
+      "clave": "depto-amenities-largo-plazo",
+      "id": 32,
+      "titulo": "Departamento en edificio con pileta y SUM — Largo Plazo (Ejemplo)",
+      "modalidad": "Largo Plazo",
+      "ciudad": "Villa Carlos Paz",
+      "precio": 740000,
+      "imagenes": [
+        {
+          "id": 62,
+          "archivo": "we23-Departamento-8985MRTM.webp",
+          "sha256": "5a6ff6da8e70ad5ff4b325c6c6b95d926fb6c64732ed2d5e6fe91380e7f2138b",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/32-1791565328485.jpg"
+        },
+        {
+          "id": 63,
+          "archivo": "we23-Departamento-MRT9RKNB.webp",
+          "sha256": "7bbe5d60ea30d76df5c1f639bfb3ab2931f98239e1855d30f6a1a21b421f1d77",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/32-1791565331324.jpg"
+        },
+        {
+          "id": 64,
+          "archivo": "we23-Departamento-1MT5QDP6.webp",
+          "sha256": "a00939eee103225135fe7dc97a075c3f7139d28f71fcb42210dd7d5acb8c1f24",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/32-1791565333389.jpg"
+        },
+        {
+          "id": 65,
+          "archivo": "we23-Departamento-7IIJ6138.webp",
+          "sha256": "ce86361c73488faca8c4ae673a1e1abde32b04349b7fdd6e6dcae5c890b271ec",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/32-1791565335736.jpg"
+        }
+      ],
+      "verificada": true
+    },
+    {
+      "clave": "casa-jardin-temporal",
+      "id": 33,
+      "titulo": "Casa con jardín y pileta en las sierras — Temporal (Ejemplo)",
+      "modalidad": "Temporal",
+      "ciudad": "Mina Clavero",
+      "precio": 95000,
+      "imagenes": [
+        {
+          "id": 66,
+          "archivo": "sv75-Casa-Y71PPLSO.webp",
+          "sha256": "e218dd6aa38cf6d7f54fcb2db5aee32b0e2180c52ab2d258bf918c2968e186d3",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/33-1791565341039.jpg"
+        },
+        {
+          "id": 67,
+          "archivo": "sv75-Casa-J2M5A5M6.webp",
+          "sha256": "a3af95a3793e58411378abb4862bfb864083e21c38c4da97c7a507ae00db0524",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/33-1791565343066.jpg"
+        },
+        {
+          "id": 68,
+          "archivo": "sv75-Casa-4O452Z9I.webp",
+          "sha256": "611184694e94744528adc3117e1aaf27afca7e8e4ee0b450a2dec440198a0314",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/33-1791565345122.jpg"
+        },
+        {
+          "id": 69,
+          "archivo": "sv75-Casa-RRSFK1SY.webp",
+          "sha256": "fc8d9b17af9f34218d7b1e2be4a95d142dc4fec7fd218dc8b71e36d870f70e31",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/33-1791565346848.jpg"
+        }
+      ],
+      "disponibilidad": {
+        "desde": "2026-10-10",
+        "hasta": "2027-01-31"
+      },
+      "verificada": true
+    },
+    {
+      "clave": "casa-jardin-largo-plazo",
+      "id": 34,
+      "titulo": "Casa con jardín y pileta en las sierras — Largo Plazo (Ejemplo)",
+      "modalidad": "Largo Plazo",
+      "ciudad": "Mina Clavero",
+      "precio": 1100000,
+      "imagenes": [
+        {
+          "id": 70,
+          "archivo": "sv75-Casa-Y71PPLSO.webp",
+          "sha256": "e218dd6aa38cf6d7f54fcb2db5aee32b0e2180c52ab2d258bf918c2968e186d3",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/34-1791565358168.jpg"
+        },
+        {
+          "id": 71,
+          "archivo": "sv75-Casa-J2M5A5M6.webp",
+          "sha256": "a3af95a3793e58411378abb4862bfb864083e21c38c4da97c7a507ae00db0524",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/34-1791565360553.jpg"
+        },
+        {
+          "id": 72,
+          "archivo": "sv75-Casa-4O452Z9I.webp",
+          "sha256": "611184694e94744528adc3117e1aaf27afca7e8e4ee0b450a2dec440198a0314",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/34-1791565363564.jpg"
+        },
+        {
+          "id": 73,
+          "archivo": "sv75-Casa-RRSFK1SY.webp",
+          "sha256": "fc8d9b17af9f34218d7b1e2be4a95d142dc4fec7fd218dc8b71e36d870f70e31",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/34-1791565365640.jpg"
+        }
+      ],
+      "verificada": true
+    },
+    {
+      "clave": "depto-parquet-temporal",
+      "id": 35,
+      "titulo": "Departamento clásico con parquet y living comedor — Temporal (Ejemplo)",
+      "modalidad": "Temporal",
+      "ciudad": "Palermo",
+      "precio": 55000,
+      "imagenes": [
+        {
+          "id": 74,
+          "archivo": "Captura de pantalla 2026-10-09 133204.png",
+          "sha256": "5b5ab951a89a8b1b17e37a28d7e1f38be2027d7ebb8003ee544c966ec0bcc686",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/35-1791565370493.jpg"
+        },
+        {
+          "id": 75,
+          "archivo": "Captura de pantalla 2026-10-09 133138.png",
+          "sha256": "d84389789245fda728b5e003c6c90ee26db73435b49dfd9cc17738ce030ad36b",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/35-1791565373467.jpg"
+        },
+        {
+          "id": 76,
+          "archivo": "Captura de pantalla 2026-10-09 133124.png",
+          "sha256": "8984ca96fb90c53228f50d6b1cd0ea7cdf5219f5c52759c9af952448adff3ec6",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/35-1791565376172.jpg"
+        },
+        {
+          "id": 77,
+          "archivo": "Captura de pantalla 2026-10-09 133112.png",
+          "sha256": "16d8bff9249d714bd274211ddcf6e2911c345eb4a53bcb577d14263df2ceaedc",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/35-1791565378718.jpg"
+        },
+        {
+          "id": 78,
+          "archivo": "Captura de pantalla 2026-10-09 133102.png",
+          "sha256": "8fff5ed704d55be6734a32ae8fa6fa3fad728024b056d43467860937692a37a5",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/35-1791565380963.jpg"
+        }
+      ],
+      "disponibilidad": {
+        "desde": "2026-10-10",
+        "hasta": "2027-01-31"
+      },
+      "verificada": true
+    },
+    {
+      "clave": "depto-parquet-largo-plazo",
+      "id": 36,
+      "titulo": "Departamento clásico con parquet y living comedor — Largo Plazo (Ejemplo)",
+      "modalidad": "Largo Plazo",
+      "ciudad": "Palermo",
+      "precio": 820000,
+      "imagenes": [
+        {
+          "id": 79,
+          "archivo": "Captura de pantalla 2026-10-09 133204.png",
+          "sha256": "5b5ab951a89a8b1b17e37a28d7e1f38be2027d7ebb8003ee544c966ec0bcc686",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565392419.jpg"
+        },
+        {
+          "id": 80,
+          "archivo": "Captura de pantalla 2026-10-09 133138.png",
+          "sha256": "d84389789245fda728b5e003c6c90ee26db73435b49dfd9cc17738ce030ad36b",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565394755.jpg"
+        },
+        {
+          "id": 81,
+          "archivo": "Captura de pantalla 2026-10-09 133124.png",
+          "sha256": "8984ca96fb90c53228f50d6b1cd0ea7cdf5219f5c52759c9af952448adff3ec6",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565396590.jpg"
+        },
+        {
+          "id": 82,
+          "archivo": "Captura de pantalla 2026-10-09 133112.png",
+          "sha256": "16d8bff9249d714bd274211ddcf6e2911c345eb4a53bcb577d14263df2ceaedc",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565398757.jpg"
+        },
+        {
+          "id": 83,
+          "archivo": "Captura de pantalla 2026-10-09 133102.png",
+          "sha256": "8fff5ed704d55be6734a32ae8fa6fa3fad728024b056d43467860937692a37a5",
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565401247.jpg"
+        }
+      ],
+      "verificada": true
+    }
+  ]
+}

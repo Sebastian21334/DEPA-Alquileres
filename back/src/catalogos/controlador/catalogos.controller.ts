@@ -131,35 +131,6 @@ export class CatalogosController {
   }
 
   // ==========================================
-  // MÉTODOS DE PAGO
-  // ==========================================
-  @Get('metodos-pago')
-  getMetodosPago() {
-    return this.catalogosService.getMetodosPago();
-  }
-
-  @Post('metodos-pago')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  crearMetodoPago(@Body() datos: { nombre: string }) {
-    return this.catalogosService.crearMetodoPago(datos);
-  }
-
-  @Put('metodos-pago/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  actualizarMetodoPago(@Param('id', ParseIntPipe) id: number, @Body() datos: { nombre: string }) {
-    return this.catalogosService.actualizarMetodoPago(id, datos);
-  }
-
-  @Delete('metodos-pago/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  eliminarMetodoPago(@Param('id', ParseIntPipe) id: number) {
-    return this.catalogosService.eliminarMetodoPago(id);
-  }
-
-  // ==========================================
   // TIPOS MONEDA
   // ==========================================
   @Get('tipos-moneda')

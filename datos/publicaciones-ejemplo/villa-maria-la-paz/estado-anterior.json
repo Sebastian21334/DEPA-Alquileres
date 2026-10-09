@@ -1,0 +1,1626 @@
+{
+  "total": 6,
+  "publicaciones": [
+    {
+      "id": 26,
+      "titulo": "PH luminoso con terraza y parrilla",
+      "descripcion": "PH luminoso con cocina integrada, living en desnivel y baño renovado. Terraza propia con parrilla, ideal para disfrutar al aire libre. Alquiler mensual en Córdoba.",
+      "precio": 680000,
+      "activa": true,
+      "direccion": "Obispo Trejo 850",
+      "latitud": "-31.4256302",
+      "longitud": "-64.1896859",
+      "ambientes": 2,
+      "superficie": 65,
+      "modalidad": "Largo Plazo",
+      "tipo": "PH",
+      "ciudad": "Córdoba",
+      "provincia": "Córdoba",
+      "idCiudad": 2059,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 33,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565240958.jpg"
+        },
+        {
+          "id": 34,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565242870.jpg"
+        },
+        {
+          "id": 35,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565244234.jpg"
+        },
+        {
+          "id": 36,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565245505.jpg"
+        },
+        {
+          "id": 37,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565246792.jpg"
+        },
+        {
+          "id": 38,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565248035.jpg"
+        },
+        {
+          "id": 39,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/26-1791565249322.jpg"
+        }
+      ],
+      "fechas": []
+    },
+    {
+      "id": 28,
+      "titulo": "Monoambiente con balcón en Villa María",
+      "descripcion": "Monoambiente luminoso con balcón, aire acondicionado, pisos símil madera y cocina integrada con horno. Se entrega sin muebles. Una opción cómoda para vivir en Villa María.",
+      "precio": 390000,
+      "activa": true,
+      "direccion": "General Paz 480",
+      "latitud": "-32.4135042",
+      "longitud": "-63.2483290",
+      "ambientes": 1,
+      "superficie": 38,
+      "modalidad": "Largo Plazo",
+      "tipo": "Departamento",
+      "ciudad": "Villa María",
+      "provincia": "Córdoba",
+      "idCiudad": 6,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 44,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565267616.jpg"
+        },
+        {
+          "id": 45,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565269145.jpg"
+        },
+        {
+          "id": 46,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565270416.jpg"
+        },
+        {
+          "id": 47,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/28-1791565272486.jpg"
+        }
+      ],
+      "fechas": []
+    },
+    {
+      "id": 29,
+      "titulo": "Dúplex amoblado con pileta y vistas a las sierras",
+      "descripcion": "Dúplex amoblado para disfrutar de Carlos Paz. Comedor, dormitorio con cama doble y aire acondicionado. Pileta en la terraza con vistas abiertas a las sierras. Consultá el calendario y reservá tu estadía.",
+      "precio": 72000,
+      "activa": true,
+      "direccion": "San Martín 620",
+      "latitud": "-31.4179169",
+      "longitud": "-64.4940292",
+      "ambientes": 3,
+      "superficie": 78,
+      "modalidad": "Temporal",
+      "tipo": "Dúplex",
+      "ciudad": "Villa Carlos Paz",
+      "provincia": "Córdoba",
+      "idCiudad": 267,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 48,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565278235.jpg"
+        },
+        {
+          "id": 49,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565280352.jpg"
+        },
+        {
+          "id": 50,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565282234.jpg"
+        },
+        {
+          "id": 51,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565283640.jpg"
+        },
+        {
+          "id": 52,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/29-1791565286683.jpg"
+        }
+      ],
+      "fechas": [
+        {
+          "fecha": "2026-10-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-31",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-31",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-31",
+          "disponible": true
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "titulo": "Departamento con pileta, parrillas y SUM",
+      "descripcion": "Departamento en edificio moderno de Carlos Paz, con pileta en terraza, vistas a las sierras, SUM y sector de parrillas. La galería muestra los espacios comunes del complejo. Disponible para estadías cortas.",
+      "precio": 58000,
+      "activa": true,
+      "direccion": "9 de Julio 360",
+      "latitud": "-31.4201500",
+      "longitud": "-64.5039902",
+      "ambientes": 2,
+      "superficie": 52,
+      "modalidad": "Temporal",
+      "tipo": "Departamento",
+      "ciudad": "Villa Carlos Paz",
+      "provincia": "Córdoba",
+      "idCiudad": 267,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 58,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565312857.jpg"
+        },
+        {
+          "id": 59,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565314966.jpg"
+        },
+        {
+          "id": 60,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565316542.jpg"
+        },
+        {
+          "id": 61,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/31-1791565318208.jpg"
+        }
+      ],
+      "fechas": [
+        {
+          "fecha": "2026-10-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-31",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-31",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-31",
+          "disponible": true
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "titulo": "Casa con pileta y jardín en Mina Clavero",
+      "descripcion": "Casa con jardín, pileta y solárium para disfrutar de las sierras. Espacios al aire libre y un entorno tranquilo en Mina Clavero. La galería incluye la propiedad y paisajes de la zona en distintas estaciones.",
+      "precio": 95000,
+      "activa": true,
+      "direccion": "Los Aromos 1450",
+      "latitud": "-31.7288886",
+      "longitud": "-65.0062611",
+      "ambientes": 4,
+      "superficie": 120,
+      "modalidad": "Temporal",
+      "tipo": "Casa",
+      "ciudad": "Mina Clavero",
+      "provincia": "Córdoba",
+      "idCiudad": 2020,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 66,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/33-1791565341039.jpg"
+        },
+        {
+          "id": 67,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/33-1791565343066.jpg"
+        },
+        {
+          "id": 68,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/33-1791565345122.jpg"
+        }
+      ],
+      "fechas": [
+        {
+          "fecha": "2026-10-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-10-31",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-11-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2026-12-31",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-01",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-02",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-03",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-04",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-05",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-06",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-07",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-08",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-09",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-10",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-11",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-12",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-13",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-14",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-15",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-16",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-17",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-18",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-19",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-20",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-21",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-22",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-23",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-24",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-25",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-26",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-27",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-28",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-29",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-30",
+          "disponible": true
+        },
+        {
+          "fecha": "2027-01-31",
+          "disponible": true
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "titulo": "Tres ambientes con parquet en Palermo",
+      "descripcion": "Departamento de tres ambientes con living comedor, cocina separada y pisos de parquet. Ambientes con luz natural y acceso al edificio cuidado. Alquiler mensual en Palermo.",
+      "precio": 820000,
+      "activa": true,
+      "direccion": "Guatemala 4350",
+      "latitud": "-34.5888710",
+      "longitud": "-58.4209662",
+      "ambientes": 3,
+      "superficie": 70,
+      "modalidad": "Largo Plazo",
+      "tipo": "Departamento",
+      "ciudad": "Palermo",
+      "provincia": "Ciudad Autónoma de Buenos Aires",
+      "idCiudad": 3881,
+      "idProvincia": 14,
+      "imagenes": [
+        {
+          "id": 79,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565392419.jpg"
+        },
+        {
+          "id": 80,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565394755.jpg"
+        },
+        {
+          "id": 81,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565396590.jpg"
+        },
+        {
+          "id": 82,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565398757.jpg"
+        },
+        {
+          "id": 83,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/36-1791565401247.jpg"
+        }
+      ],
+      "fechas": []
+    }
+  ]
+}

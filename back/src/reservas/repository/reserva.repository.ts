@@ -35,7 +35,6 @@ export class ReservaRepository implements IReservaRepository {
           provincia: true,
           tipoMoneda: true,
         },
-        metodoPago: true,
       },
     });
   }
@@ -58,7 +57,7 @@ export class ReservaRepository implements IReservaRepository {
     // El orden descendente permite mostrar primero las reservas más recientes.
     return this.repository.find({
       where: { usuario: { id: idUsuario } },
-      relations: { publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true }, metodoPago: true },
+      relations: { publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true } },
       order: { id: 'DESC' },
     });
   }
@@ -67,7 +66,7 @@ export class ReservaRepository implements IReservaRepository {
     // Se carga el usuario para que el anunciante pueda identificar al inquilino.
     return this.repository.find({
       where: { publicacion: { id: idPublicacion } },
-      relations: { usuario: true, metodoPago: true },
+      relations: { usuario: true },
       order: { id: 'DESC' },
     });
   }
@@ -78,7 +77,7 @@ export class ReservaRepository implements IReservaRepository {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
         estado_pago: EstadoPagoReserva.APROBADO,
       },
-      relations: { usuario: true, publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true }, metodoPago: true },
+      relations: { usuario: true, publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true } },
       order: { fecha_inicio: 'ASC' },
     });
   }

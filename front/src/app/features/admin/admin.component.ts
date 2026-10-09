@@ -59,7 +59,6 @@ export class AdminComponent {
     { key: 'tipos-anunciante', label: 'Tipos de anunciante', items: [] },
     { key: 'tipos-propiedad', label: 'Tipos de propiedad', items: [] },
     { key: 'modalidades', label: 'Modalidades', items: [] },
-    { key: 'metodos-pago', label: 'Métodos de pago', items: [] },
     { key: 'tipos-moneda', label: 'Monedas', items: [] },
   ]);
   protected readonly provinces = signal<AdminProvince[]>([]);

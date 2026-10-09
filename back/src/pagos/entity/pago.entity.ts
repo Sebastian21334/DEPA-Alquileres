@@ -39,6 +39,7 @@ export class Pago {
   @Column({ type: 'varchar', length: 3, default: 'ARS' })
   currency: string;
 
+  // Medio confirmado por Mercado Pago; no depende de un catálogo local.
   @Column({ type: 'varchar', length: 100, nullable: true })
   payment_method_id: string | null;
 

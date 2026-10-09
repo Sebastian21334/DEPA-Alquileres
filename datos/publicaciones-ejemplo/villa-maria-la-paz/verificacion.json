@@ -1,0 +1,316 @@
+{
+  "totalActivas": 14,
+  "nuevas": 8,
+  "fotos": 34,
+  "temporales": 3,
+  "largoPlazo": 5,
+  "anunciosAnterioresConservados": 6,
+  "imagenesAccesibles": 34,
+  "ubicacionesConfirmadasEnLeaflet": 8,
+  "publicaciones": [
+    {
+      "id": 37,
+      "titulo": "Dúplex con cocina separada en La Paz",
+      "descripcion": "Dúplex con acceso independiente, living comedor y cocina separada con muebles de madera. Escalera interior y ambientes distribuidos en dos plantas. Alquiler mensual en La Paz, Entre Ríos.",
+      "precio": 590000,
+      "activa": true,
+      "direccion": "San Martín 1240",
+      "latitud": "-30.7440879",
+      "longitud": "-59.6445023",
+      "ambientes": 3,
+      "superficie": 82,
+      "modalidad": "Largo Plazo",
+      "tipo": "Dúplex",
+      "ciudad": "La Paz",
+      "provincia": "Entre Ríos",
+      "idCiudad": 9,
+      "idProvincia": 8,
+      "imagenes": [
+        {
+          "id": 84,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/37-1791567671680.jpg"
+        },
+        {
+          "id": 85,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/37-1791567673693.jpg"
+        },
+        {
+          "id": 86,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/37-1791567675545.jpg"
+        },
+        {
+          "id": 87,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/37-1791567676740.jpg"
+        },
+        {
+          "id": 88,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/37-1791567677917.jpg"
+        }
+      ],
+      "diasDisponibles": 0
+    },
+    {
+      "id": 38,
+      "titulo": "Departamento con cocina integrada en Villa María",
+      "descripcion": "Departamento sin muebles, con cocina integrada, barra y mesada de granito. Muebles bajo mesada y alacenas en gris, pisos claros y salida al balcón. Alquiler mensual en Villa María.",
+      "precio": 520000,
+      "activa": true,
+      "direccion": "Buenos Aires 424",
+      "latitud": "-32.4156537",
+      "longitud": "-63.2503177",
+      "ambientes": 2,
+      "superficie": 54,
+      "modalidad": "Largo Plazo",
+      "tipo": "Departamento",
+      "ciudad": "Villa María",
+      "provincia": "Córdoba",
+      "idCiudad": 6,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 89,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/38-1791567682105.jpg"
+        },
+        {
+          "id": 90,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/38-1791567684927.jpg"
+        },
+        {
+          "id": 91,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/38-1791567687286.jpg"
+        }
+      ],
+      "diasDisponibles": 0
+    },
+    {
+      "id": 39,
+      "titulo": "Departamento con terraza, hidromasaje y parrilla",
+      "descripcion": "Departamento amoblado con dormitorio doble, cocina equipada y aire acondicionado. Terraza propia con hidromasaje, sector de parrilla y mesa al aire libre. Un espacio cómodo para disfrutar tu estadía en Villa María.",
+      "precio": 85000,
+      "activa": true,
+      "direccion": "Mendoza 760",
+      "latitud": "-32.4161157",
+      "longitud": "-63.2441230",
+      "ambientes": 2,
+      "superficie": 92,
+      "modalidad": "Temporal",
+      "tipo": "Departamento",
+      "ciudad": "Villa María",
+      "provincia": "Córdoba",
+      "idCiudad": 6,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 92,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/39-1791567691431.jpg"
+        },
+        {
+          "id": 93,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/39-1791567700654.jpg"
+        },
+        {
+          "id": 94,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/39-1791567704206.jpg"
+        },
+        {
+          "id": 95,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/39-1791567705812.jpg"
+        },
+        {
+          "id": 96,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/39-1791567707047.jpg"
+        },
+        {
+          "id": 97,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/39-1791567708715.jpg"
+        }
+      ],
+      "diasDisponibles": 114
+    },
+    {
+      "id": 40,
+      "titulo": "Dúplex amoblado con pisos de parquet",
+      "descripcion": "Dúplex amoblado en La Paz, Entre Ríos. Living comedor con pisos de parquet, cocina separada con mesada de madera y dormitorio con cama doble. Aire acondicionado y espacios con luz natural para una estadía confortable.",
+      "precio": 48000,
+      "activa": true,
+      "direccion": "Italia 1043",
+      "latitud": "-30.7411525",
+      "longitud": "-59.6434757",
+      "ambientes": 2,
+      "superficie": 72,
+      "modalidad": "Temporal",
+      "tipo": "Dúplex",
+      "ciudad": "La Paz",
+      "provincia": "Entre Ríos",
+      "idCiudad": 9,
+      "idProvincia": 8,
+      "imagenes": [
+        {
+          "id": 98,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/40-1791567714762.jpg"
+        },
+        {
+          "id": 99,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/40-1791567717053.jpg"
+        },
+        {
+          "id": 100,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/40-1791567719504.jpg"
+        },
+        {
+          "id": 101,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/40-1791567722541.jpg"
+        }
+      ],
+      "diasDisponibles": 114
+    },
+    {
+      "id": 41,
+      "titulo": "Casa moderna con cochera en Villa Nueva",
+      "descripcion": "Casa en dos plantas con cochera cubierta y jardín al frente. Amplio living comedor integrado a la cocina, ventanales y pisos de porcelanato. Muebles de cocina en gris e iluminación empotrada. Alquiler mensual en Villa Nueva.",
+      "precio": 980000,
+      "activa": true,
+      "direccion": "Los Ceibos 350",
+      "latitud": "-32.4413559",
+      "longitud": "-63.2237401",
+      "ambientes": 4,
+      "superficie": 165,
+      "modalidad": "Largo Plazo",
+      "tipo": "Casa",
+      "ciudad": "Villa Nueva",
+      "provincia": "Córdoba",
+      "idCiudad": 169,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 102,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/41-1791567737243.jpg"
+        },
+        {
+          "id": 103,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/41-1791567741003.jpg"
+        },
+        {
+          "id": 104,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/41-1791567749054.jpg"
+        },
+        {
+          "id": 105,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/41-1791567751865.jpg"
+        }
+      ],
+      "diasDisponibles": 0
+    },
+    {
+      "id": 42,
+      "titulo": "Departamento con balcón verde en La Paz",
+      "descripcion": "Departamento amoblado con living luminoso, cocina integrada y balcón con plantas y deck de madera. Decoración con cuadros, libros y muebles cálidos. Ideal para disfrutar unos días en La Paz, Entre Ríos.",
+      "precio": 42000,
+      "activa": true,
+      "direccion": "España 820",
+      "latitud": "-30.7405228",
+      "longitud": "-59.6427012",
+      "ambientes": 2,
+      "superficie": 46,
+      "modalidad": "Temporal",
+      "tipo": "Departamento",
+      "ciudad": "La Paz",
+      "provincia": "Entre Ríos",
+      "idCiudad": 9,
+      "idProvincia": 8,
+      "imagenes": [
+        {
+          "id": 106,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/42-1791567757723.jpg"
+        },
+        {
+          "id": 107,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/42-1791567759998.jpg"
+        },
+        {
+          "id": 108,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/42-1791567761597.jpg"
+        },
+        {
+          "id": 109,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/42-1791567763271.jpg"
+        }
+      ],
+      "diasDisponibles": 114
+    },
+    {
+      "id": 43,
+      "titulo": "Galpón con entrepiso y portón en Tío Pujio",
+      "descripcion": "Galpón con nave de doble altura, estructura metálica y entrepiso. Portón enrollable, acceso peatonal independiente y ventanas altas con luz natural. Espacio para depósito o taller en Tío Pujio. Alquiler mensual.",
+      "precio": 1150000,
+      "activa": true,
+      "direccion": "Belgrano 420",
+      "latitud": "-32.2914221",
+      "longitud": "-63.3526097",
+      "ambientes": 1,
+      "superficie": 280,
+      "modalidad": "Largo Plazo",
+      "tipo": "Galpón",
+      "ciudad": "Tío Pujio",
+      "provincia": "Córdoba",
+      "idCiudad": 168,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 110,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/43-1791567768760.jpg"
+        },
+        {
+          "id": 111,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/43-1791567770541.jpg"
+        },
+        {
+          "id": 112,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/43-1791567772016.jpg"
+        },
+        {
+          "id": 113,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/43-1791567773803.jpg"
+        }
+      ],
+      "diasDisponibles": 0
+    },
+    {
+      "id": 44,
+      "titulo": "Dos ambientes renovado con balcón en Villa María",
+      "descripcion": "Departamento de dos ambientes sin muebles, con living luminoso, balcón y aire acondicionado. Cocina separada con muebles blancos, mesada de granito y grifería negra. Dormitorio con ventana amplia. Alquiler mensual en Villa María.",
+      "precio": 470000,
+      "activa": true,
+      "direccion": "Santa Fe 1180",
+      "latitud": "-32.4098150",
+      "longitud": "-63.2435720",
+      "ambientes": 2,
+      "superficie": 48,
+      "modalidad": "Largo Plazo",
+      "tipo": "Departamento",
+      "ciudad": "Villa María",
+      "provincia": "Córdoba",
+      "idCiudad": 6,
+      "idProvincia": 7,
+      "imagenes": [
+        {
+          "id": 114,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/44-1791567778661.jpg"
+        },
+        {
+          "id": 115,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/44-1791567780181.jpg"
+        },
+        {
+          "id": 116,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/44-1791567781475.jpg"
+        },
+        {
+          "id": 117,
+          "url": "https://seminario1integrador.blob.core.windows.net/imagenes/publicaciones/44-1791567782734.jpg"
+        }
+      ],
+      "diasDisponibles": 0
+    }
+  ]
+}

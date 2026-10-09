@@ -1,0 +1,148 @@
+{
+  "provincia": [
+    {
+      "id_provincia": 7,
+      "nombre": "Cordoba"
+    },
+    {
+      "id_provincia": 8,
+      "nombre": "Entre Rios"
+    }
+  ],
+  "ciudad": [
+    {
+      "id_ciudad": 6,
+      "nombre": "Villa Maria",
+      "id_provincia": 7
+    },
+    {
+      "id_ciudad": 9,
+      "nombre": "La Paz",
+      "id_provincia": 8
+    }
+  ],
+  "rol": [
+    {
+      "id_rol": 1,
+      "nombre": "Administrador",
+      "descripcion": null
+    },
+    {
+      "id_rol": 2,
+      "nombre": "Inquilino",
+      "descripcion": null
+    }
+  ],
+  "tipo_anunciante": [
+    {
+      "id_tipo_anunciante": 1,
+      "nombre": "Inmobiliaria",
+      "descripcion": null
+    },
+    {
+      "id_tipo_anunciante": 17,
+      "nombre": "Particular",
+      "descripcion": null
+    }
+  ],
+  "tipo_propiedad": [
+    {
+      "id_tipo_propiedad": 10,
+      "nombre": "Departamento",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 11,
+      "nombre": "Casa",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 12,
+      "nombre": "PH",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 13,
+      "nombre": "Dúplex",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 14,
+      "nombre": "Cabaña",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 15,
+      "nombre": "Quinta",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 16,
+      "nombre": "Local comercial",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 17,
+      "nombre": "Oficina",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 18,
+      "nombre": "Galpón",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 19,
+      "nombre": "Cochera",
+      "descripcion": null
+    },
+    {
+      "id_tipo_propiedad": 20,
+      "nombre": "Terreno",
+      "descripcion": null
+    }
+  ],
+  "modalidad": [
+    {
+      "id_modalidad": 11,
+      "nombre": "Temporal",
+      "descripcion": null,
+      "permite_reservas_por_fecha": null
+    },
+    {
+      "id_modalidad": 1,
+      "nombre": "Largo Plazo",
+      "descripcion": null,
+      "permite_reservas_por_fecha": null
+    }
+  ],
+  "metodo_pago": [
+    {
+      "id_metodo_pago": 7,
+      "nombre": "Efectivo",
+      "descripcion": null
+    },
+    {
+      "id_metodo_pago": 8,
+      "nombre": "Transferencia",
+      "descripcion": null
+    },
+    {
+      "id_metodo_pago": 9,
+      "nombre": "Debito",
+      "descripcion": null
+    }
+  ],
+  "tipo_moneda": [
+    {
+      "id_tipo_moneda": 10,
+      "nombre": "Peso (ARS)",
+      "descripcion": null
+    },
+    {
+      "id_tipo_moneda": 11,
+      "nombre": "Dolar (USD)",
+      "descripcion": null
+    }
+  ]
+}

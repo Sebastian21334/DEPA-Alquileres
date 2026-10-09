@@ -4,7 +4,6 @@ import { Rol } from './entity/rol.entity';
 import { TipoAnunciante } from './entity/tipo-anunciante.entity';
 import { TipoPropiedad } from './entity/tipo-propiedad.entity';
 import { Modalidad } from './entity/modalidad.entity';
-import { MetodoPago } from './entity/metodo-pago.entity';
 import { TipoMoneda } from './entity/tipo-moneda.entity';
 import { CatalogosRepository } from './repository/catalogos.repository';
 import { CATALOGOS_REPOSITORY } from './repository/catalogos.repository.interface';
@@ -15,7 +14,7 @@ import {AuthModule} from "../auth/auth.module";
 @Module({
   // Centraliza las tablas maestras que son referenciadas por otros módulos.
   imports: [
-    TypeOrmModule.forFeature([Rol, TipoAnunciante, TipoPropiedad, Modalidad, MetodoPago, TipoMoneda]),
+    TypeOrmModule.forFeature([Rol, TipoAnunciante, TipoPropiedad, Modalidad, TipoMoneda]),
     forwardRef(() => AuthModule),
   ],
   controllers: [CatalogosController],

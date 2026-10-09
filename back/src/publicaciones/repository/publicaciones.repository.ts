@@ -44,6 +44,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         tipoPropiedad: true,
         imagenes: true, // <- agregado
       },
+      // La primera foto cargada es la portada; sin orden SQL el join puede invertir la galería.
+      order: { imagenes: { id: 'ASC' } },
     });
   }
 
@@ -61,6 +63,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         imagenes: true,
         anunciante: { usuario: true, tipoAnunciante: true },
       },
+      order: { imagenes: { id: 'ASC' } },
     });
   }
 
@@ -157,6 +160,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       ? await this.repo.find({
           where: ids.map((id) => ({ id, activa: true })),
           relations: { tipoPropiedad: true, ciudad: true, provincia: true, modalidad: true, tipoMoneda: true, imagenes: true, anunciante: { usuario: true, tipoAnunciante: true } },
+          order: { imagenes: { id: 'ASC' } },
         })
       : [];
     const porId = new Map(publicaciones.map((publicacion) => [publicacion.id, publicacion]));
@@ -240,7 +244,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         imagenes: true,
         anunciante: { usuario: true, tipoAnunciante: true },
       },
-      order: { fecha_publicacion: 'DESC' },
+      order: { fecha_publicacion: 'DESC', imagenes: { id: 'ASC' } },
     });
   }
 

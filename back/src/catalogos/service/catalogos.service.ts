@@ -5,7 +5,6 @@ import { Rol } from '../entity/rol.entity';
 import { TipoAnunciante } from '../entity/tipo-anunciante.entity';
 import { TipoPropiedad } from '../entity/tipo-propiedad.entity';
 import { Modalidad } from '../entity/modalidad.entity';
-import { MetodoPago } from '../entity/metodo-pago.entity';
 import { TipoMoneda } from '../entity/tipo-moneda.entity';
 
 @Injectable()
@@ -144,33 +143,6 @@ export class CatalogosService {
     const item = await this.catalogosRepo.buscarModalidadPorId(id);
     if (!item) throw new NotFoundException(`La modalidad con ID ${id} no existe`);
     return item;
-  }
-
-  // --- MÉTODOS DE PAGO ---
-  /** Lista los medios de pago habilitados para las reservas. */
-  getMetodosPago() {
-    return this.catalogosRepo.buscarTodosMetodosPago();
-  }
-  /** Crea un medio de pago sin permitir nombres duplicados. */
-  async crearMetodoPago(datos: Partial<MetodoPago>) {
-    const existente = await this.catalogosRepo.buscarMetodoPagoPorNombre(datos.nombre!);
-    if (existente) {
-      throw new ConflictException(`Ya existe el método de pago '${datos.nombre}'`);
-    }
-    return this.catalogosRepo.crearMetodoPago(datos);
-  }
-  /** Actualiza un medio de pago existente. */
-  async actualizarMetodoPago(id: number, datos: Partial<MetodoPago>) {
-    const item = await this.catalogosRepo.buscarMetodoPagoPorId(id);
-    if (!item) throw new NotFoundException(`El método de pago con ID ${id} no existe`);
-    return this.catalogosRepo.actualizarMetodoPago(id, datos);
-  }
-  /** Elimina un medio de pago despues de verificar que exista. */
-  async eliminarMetodoPago(id: number) {
-    const item = await this.catalogosRepo.buscarMetodoPagoPorId(id);
-    if (!item) throw new NotFoundException(`El método de pago con ID ${id} no existe`);
-    await this.eliminarSeguro(() => this.catalogosRepo.eliminarMetodoPago(id), 'método de pago');
-    return { mensaje: `Método de pago con ID ${id} eliminado correctamente` };
   }
 
   // --- TIPOS MONEDA ---

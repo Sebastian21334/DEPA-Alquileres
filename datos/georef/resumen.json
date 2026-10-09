@@ -1,0 +1,135 @@
+{
+  "fuente": "https://apis.datos.gob.ar/georef/api/v2.0/localidades.json",
+  "fecha": "2026-10-09T16:41:43.427Z",
+  "registrosFuente": 4028,
+  "provincias": 24,
+  "ciudades": 3923,
+  "provinciasNuevas": 22,
+  "ciudadesNuevas": 3921,
+  "nombresActualizados": 3,
+  "entradasAgrupadas": 105,
+  "cambiosCatalogos": {
+    "rol": {
+      "creados": 0,
+      "completados": 2
+    },
+    "tipo_anunciante": {
+      "creados": 0,
+      "completados": 2
+    },
+    "tipo_propiedad": {
+      "creados": 0,
+      "completados": 11
+    },
+    "modalidad": {
+      "creados": 0,
+      "completados": 2
+    },
+    "metodo_pago": {
+      "creados": 2,
+      "completados": 3
+    },
+    "tipo_moneda": {
+      "creados": 0,
+      "completados": 2
+    }
+  },
+  "porProvincia": [
+    {
+      "nombre": "Buenos Aires",
+      "localidades": 850
+    },
+    {
+      "nombre": "Catamarca",
+      "localidades": 161
+    },
+    {
+      "nombre": "Chaco",
+      "localidades": 91
+    },
+    {
+      "nombre": "Chubut",
+      "localidades": 90
+    },
+    {
+      "nombre": "Ciudad Autónoma de Buenos Aires",
+      "localidades": 49
+    },
+    {
+      "nombre": "Corrientes",
+      "localidades": 76
+    },
+    {
+      "nombre": "Córdoba",
+      "localidades": 503
+    },
+    {
+      "nombre": "Entre Ríos",
+      "localidades": 177
+    },
+    {
+      "nombre": "Formosa",
+      "localidades": 62
+    },
+    {
+      "nombre": "Jujuy",
+      "localidades": 155
+    },
+    {
+      "nombre": "La Pampa",
+      "localidades": 89
+    },
+    {
+      "nombre": "La Rioja",
+      "localidades": 91
+    },
+    {
+      "nombre": "Mendoza",
+      "localidades": 202
+    },
+    {
+      "nombre": "Misiones",
+      "localidades": 140
+    },
+    {
+      "nombre": "Neuquén",
+      "localidades": 58
+    },
+    {
+      "nombre": "Río Negro",
+      "localidades": 145
+    },
+    {
+      "nombre": "Salta",
+      "localidades": 127
+    },
+    {
+      "nombre": "San Juan",
+      "localidades": 91
+    },
+    {
+      "nombre": "San Luis",
+      "localidades": 90
+    },
+    {
+      "nombre": "Santa Cruz",
+      "localidades": 26
+    },
+    {
+      "nombre": "Santa Fe",
+      "localidades": 383
+    },
+    {
+      "nombre": "Santiago del Estero",
+      "localidades": 160
+    },
+    {
+      "nombre": "Tierra del Fuego, Antártida e Islas del Atlántico Sur",
+      "localidades": 4
+    },
+    {
+      "nombre": "Tucumán",
+      "localidades": 103
+    }
+  ]
+}
