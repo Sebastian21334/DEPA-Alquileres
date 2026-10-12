@@ -15,7 +15,7 @@
   z-index: -1;
 }
 .hero::before {
-  background: url('/images/hero-mydepa.jpg') center / cover no-repeat;
+  background: url('/images/hero-mydepa.png') center / cover no-repeat;
   animation: hero-zoom 22s ease-in-out infinite alternate;
 }
 .hero::after {
