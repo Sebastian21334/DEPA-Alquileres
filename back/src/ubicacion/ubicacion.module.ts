@@ -1,3 +1,5 @@
+import { GEOCODIFICACION_REPOSITORY } from './repository/geocodificacion.repository.interface';
+import { NominatimGeocodificacionRepository } from './repository/nominatim-geocodificacion.repository';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Provincia } from './entity/provincia.entity';
@@ -12,6 +14,11 @@ import { AuthModule } from '../auth/auth.module';
   // Expone la jerarquía Provincia -> Ciudad usada por las publicaciones.
   controllers: [UbicacionController],
   providers: [
+    NominatimGeocodificacionRepository,
+    {
+      provide: GEOCODIFICACION_REPOSITORY,
+      useExisting: NominatimGeocodificacionRepository,
+    },
     UbicacionRepository,
     {
       provide: UBICACION_REPOSITORY,

@@ -24,6 +24,7 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
+import { RentalDateRange, isRentalRangeAvailable, rentalDays } from '../../shared/utils/rental-dates';
 import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
 import { ReservationService } from '../../shared/services/reservation.service';
 import { FavoritesService } from '../../shared/services/favorites.service';
@@ -74,6 +75,7 @@ export class PublicationDetailComponent {
   protected readonly imagePreviewOpen = signal(false);
   protected readonly activeCount = signal<number | null>(null);
   protected readonly availability = signal<FechaDisponible[]>([]);
+  protected readonly availabilityLoading = signal(false);
   protected readonly selectedStart = signal<string | null>(null);
   protected readonly selectedEnd = signal<string | null>(null);
   protected readonly bookingError = signal('');
@@ -101,12 +103,7 @@ export class PublicationDetailComponent {
     const user = this.publication()?.anunciante?.usuario;
     return user ? `${user.nombre} ${user.apellido}`.trim() : 'Anunciante';
   });
-  protected readonly bookingDays = computed(() => {
-    const start = this.selectedStart();
-    const end = this.selectedEnd();
-    if (!start || !end) return 0;
-    return Math.floor((this.parseDate(end).getTime() - this.parseDate(start).getTime()) / 86400000) + 1;
-  });
+  protected readonly bookingDays = computed(() => rentalDays(this.selectedStart(), this.selectedEnd()));
   protected readonly bookingTotal = computed(
     () => this.bookingDays() * Number(this.publication()?.precio ?? 0),
   );
@@ -245,22 +242,11 @@ export class PublicationDetailComponent {
     return digits ? `https://wa.me/${digits}?text=${encodeURIComponent(`Hola, consulto por ${item.titulo}`)}` : null;
   }
 
-  protected selectBookingDate(date: string): void {
+  protected selectBookingDate(range: RentalDateRange): void {
     this.bookingError.set('');
     this.bookingSuccess.set('');
-    const start = this.selectedStart();
-    if (!start || this.selectedEnd() || date <= start) {
-      this.selectedStart.set(date);
-      this.selectedEnd.set(null);
-      return;
-    }
-    if (!this.isRangeAvailable(start, date)) {
-      this.bookingError.set('El rango incluye uno o más días no disponibles. Elegí otro período.');
-      this.selectedStart.set(date);
-      this.selectedEnd.set(null);
-      return;
-    }
-    this.selectedEnd.set(date);
+    this.selectedStart.set(range.start);
+    this.selectedEnd.set(range.end);
   }
 
   protected openPayment(): void {
@@ -269,8 +255,14 @@ export class PublicationDetailComponent {
       this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });
       return;
     }
-    if (!this.selectedStart() || !this.selectedEnd()) {
-      this.bookingError.set('Elegí la fecha de ingreso y la fecha de salida para continuar.');
+    const start = this.selectedStart();
+    const end = this.selectedEnd();
+    if (!start || !end) {
+      this.bookingError.set('Elegí un día o un período completo para continuar.');
+      return;
+    }
+    if (!isRentalRangeAvailable(start, end, this.availability())) {
+      this.bookingError.set('Los días elegidos ya no están disponibles. Elegí otras fechas.');
       return;
     }
     this.paymentOpen.set(true);
@@ -327,30 +319,28 @@ export class PublicationDetailComponent {
   }
 
   private loadAvailability(idPublication: number): void {
-    this.availabilityApi.getByPublication(idPublication).subscribe({
-      next: (items) => this.availability.set(items),
-      error: () => this.bookingError.set('No pudimos cargar la disponibilidad de esta propiedad.'),
+    this.availabilityLoading.set(true);
+    this.availabilityApi.getByPublication(idPublication).pipe(finalize(() => this.availabilityLoading.set(false))).subscribe({
+      next: (items) => {
+        this.availability.set(items);
+        const start = this.selectedStart();
+        const end = this.selectedEnd();
+        if (start && (!end || !isRentalRangeAvailable(start, end, items))) {
+          this.selectedStart.set(null);
+          this.selectedEnd.set(null);
+        }
+      },
+      error: () => {
+        this.availability.set([]);
+        this.selectedStart.set(null);
+        this.selectedEnd.set(null);
+        this.bookingError.set('No pudimos cargar la disponibilidad de esta propiedad. Volvé a intentar en unos instantes.');
+      },
     });
-  }
-
-  private isRangeAvailable(start: string, end: string): boolean {
-    const available = new Set(
-      this.availability().filter((item) => item.disponible).map((item) => item.fecha.slice(0, 10)),
-    );
-    const cursor = this.parseDate(start);
-    const last = this.parseDate(end);
-    while (cursor <= last) {
-      if (!available.has(this.toIso(cursor))) return false;
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return true;
   }
 
   private parseDate(value: string): Date {
     return new Date(`${value.slice(0, 10)}T12:00:00`);
   }
 
-  private toIso(value: Date): string {
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
-  }
 }

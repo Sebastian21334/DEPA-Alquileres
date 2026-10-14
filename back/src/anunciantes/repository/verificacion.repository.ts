@@ -2,14 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RevisionVerificacion } from '../entity/revision-verificacion.entity';
-import { SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
+import {
+  EstadoVerificacion,
+  SolicitudVerificacion,
+} from '../entity/solicitud-verificacion.entity';
 import { IVerificacionRepository } from './verificacion.repository.interface';
 
 @Injectable()
 export class VerificacionRepository implements IVerificacionRepository {
   constructor(
     // Repositorio TypeORM de la solicitud vigente por anunciante.
-      // Repositorio separado para conservar todas las decisiones administrativas.
+    // Repositorio separado para conservar todas las decisiones administrativas.
     @InjectRepository(SolicitudVerificacion)
     private readonly solicitudes: Repository<SolicitudVerificacion>,
     @InjectRepository(RevisionVerificacion)
@@ -38,8 +41,8 @@ export class VerificacionRepository implements IVerificacionRepository {
     // Solo devuelve estados que todavía requieren una decisión administrativa.
     return this.solicitudes.find({
       where: [
-        { estado: 'pendiente' as any },
-        { estado: 'reenviada' as any },
+        { estado: EstadoVerificacion.PENDIENTE },
+        { estado: EstadoVerificacion.REENVIADA },
       ],
       relations: { anunciante: { usuario: true, tipoAnunciante: true } },
       order: { actualizada_en: 'ASC' },

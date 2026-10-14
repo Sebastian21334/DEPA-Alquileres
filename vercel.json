@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm --prefix front ci",
   "buildCommand": "npm --prefix front run build",
   "outputDirectory": "front/dist/front/browser",
   "rewrites": [

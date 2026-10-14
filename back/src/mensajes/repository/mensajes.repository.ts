@@ -19,7 +19,32 @@ export class MensajeRepository implements IMensajeRepository {
     return this.repository.save(mensaje);
   }
 
-  buscarConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<Mensaje[]> {
+  existeConversacion(
+    idPublicacion: number,
+    idUsuarioA: number,
+    idUsuarioB: number,
+  ): Promise<boolean> {
+    return this.repository.exists({
+      where: [
+        {
+          publicacion: { id: idPublicacion },
+          origenUsuario: { id: idUsuarioA },
+          destinoUsuario: { id: idUsuarioB },
+        },
+        {
+          publicacion: { id: idPublicacion },
+          origenUsuario: { id: idUsuarioB },
+          destinoUsuario: { id: idUsuarioA },
+        },
+      ],
+    });
+  }
+
+  buscarConversacion(
+    idPublicacion: number,
+    idUsuarioA: number,
+    idUsuarioB: number,
+  ): Promise<Mensaje[]> {
     // El par puede estar en cualquier sentido (A->B o B->A), por eso el OR.
     return this.repository
       .createQueryBuilder('mensaje')
@@ -43,12 +68,19 @@ export class MensajeRepository implements IMensajeRepository {
       .leftJoinAndSelect('mensaje.origenUsuario', 'origenUsuario')
       .leftJoinAndSelect('mensaje.destinoUsuario', 'destinoUsuario')
       .leftJoinAndSelect('mensaje.publicacion', 'publicacion')
-      .where('mensaje.id_origen_usuario = :idUsuario OR mensaje.id_destino_usuario = :idUsuario', { idUsuario })
+      .where(
+        'mensaje.id_origen_usuario = :idUsuario OR mensaje.id_destino_usuario = :idUsuario',
+        { idUsuario },
+      )
       .orderBy('mensaje.fecha', 'DESC') // el más nuevo primero, importante para armar la lista de conversaciones
       .getMany();
   }
 
-  async marcarConversacionComoLeida(idPublicacion: number, idRemitente: number, idDestinatario: number): Promise<void> {
+  async marcarConversacionComoLeida(
+    idPublicacion: number,
+    idRemitente: number,
+    idDestinatario: number,
+  ): Promise<void> {
     await this.repository
       .createQueryBuilder()
       .update(Mensaje)

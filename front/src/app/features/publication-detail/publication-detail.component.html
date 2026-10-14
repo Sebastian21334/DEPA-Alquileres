@@ -118,21 +118,21 @@
       @if (esTemporaria()) {
         <section class="booking-layout" appReveal>
           <div class="booking-calendar">
-            <div class="section-heading"><div><span>Disponibilidad</span><h2>Elegí los días de tu estadía</h2></div><p>Solo podés seleccionar días marcados como disponibles.</p></div>
-            <app-availability-calendar [dates]="availability()" [selectedStart]="selectedStart()" [selectedEnd]="selectedEnd()" (dateSelected)="selectBookingDate($event)" />
-            @if (!availability().length) { <p class="calendar-empty">El anunciante todavía no cargó días disponibles para esta propiedad.</p> }
+            <div class="section-heading"><div><span>Disponibilidad</span><h2>Elegí las fechas de tu alquiler</h2></div></div>
+            <app-availability-calendar [dates]="availability()" [loading]="availabilityLoading()" [selectedStart]="selectedStart()" [selectedEnd]="selectedEnd()" (rangeChange)="selectBookingDate($event)" />
+            @if (!availabilityLoading() && !availability().length && !bookingError()) { <p class="calendar-empty">El anunciante todavía no cargó días disponibles para esta propiedad.</p> }
           </div>
           <aside class="booking-card">
             <div class="booking-card__price"><strong>{{ price(item) }}</strong><span>por día</span></div>
             <div class="date-summary">
-              <div><span>Ingreso</span><strong>{{ formatDate(selectedStart()) }}</strong></div>
-              <div><span>Salida</span><strong>{{ formatDate(selectedEnd()) }}</strong></div>
+              <div><span>Primer día</span><strong>{{ formatDate(selectedStart()) }}</strong></div>
+              <div><span>Último día</span><strong>{{ formatDate(selectedEnd()) }}</strong></div>
             </div>
             @if (bookingDays()) {
               <div class="total-row"><span>{{ bookingDays() }} {{ bookingDays() === 1 ? 'día' : 'días' }}</span><span>{{ item.tipoMoneda?.nombre ?? '$' }} {{ formatAmount(bookingTotal()) }}</span></div>
               <div class="total-row total-row--strong"><strong>Total</strong><strong>{{ item.tipoMoneda?.nombre ?? '$' }} {{ formatAmount(bookingTotal()) }}</strong></div>
             }
-            <button type="button" class="button button--reserve shine" (click)="openPayment()" [disabled]="esMiPublicacion()">{{ esMiPublicacion() ? 'No podés reservar tu publicación' : 'Reservar ahora' }}</button>
+            <button type="button" class="button button--reserve shine" (click)="openPayment()" [disabled]="esMiPublicacion() || !bookingDays() || availabilityLoading()">{{ esMiPublicacion() ? 'No podés reservar tu publicación' : bookingDays() ? 'Reservar ' + bookingDays() + (bookingDays() === 1 ? ' día' : ' días') : 'Elegí las fechas para reservar' }}</button>
             <small class="simulation-note">El pago se realiza de forma segura en Mercado Pago.</small>
             @if (bookingError()) { <p class="booking-message booking-message--error">{{ bookingError() }}</p> }
             @if (bookingSuccess()) { <p class="booking-message booking-message--success">{{ bookingSuccess() }}</p> }

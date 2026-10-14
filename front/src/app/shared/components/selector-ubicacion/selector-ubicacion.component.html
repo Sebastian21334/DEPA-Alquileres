@@ -1,0 +1,126 @@
+<div class="location-fields" [class.location-fields--compact]="compact()">
+  <div class="location-field">
+    <label [for]="idPrefix() + '-provincia'">Provincia{{ required() ? ' *' : '' }}</label>
+    <select
+      [id]="idPrefix() + '-provincia'"
+      [value]="provinciaId() ?? ''"
+      [disabled]="disabled() || cargandoProvincias()"
+      [attr.aria-invalid]="invalidProvincia()"
+      [attr.aria-required]="required()"
+      (change)="cambiarProvincia($event)"
+    >
+      <option value="" [disabled]="required()">
+        {{
+          cargandoProvincias()
+            ? 'Cargando provincias…'
+            : required()
+              ? 'Seleccioná una provincia'
+              : 'Todas las provincias'
+        }}
+      </option>
+      @for (provincia of provincias(); track provincia.id) {
+        <option [value]="provincia.id">{{ provincia.nombre }}</option>
+      }
+    </select>
+    @if (errorProvincias()) {
+      <span class="location-error" role="alert"
+        >{{ errorProvincias() }}
+        <button type="button" (click)="cargarProvincias()">Reintentar</button></span
+      >
+    } @else if (invalidProvincia()) {
+      <span class="location-error">Elegí una provincia.</span>
+    }
+  </div>
+
+  <div class="location-field">
+    <label [for]="idPrefix() + '-localidad'">Localidad{{ required() ? ' *' : '' }}</label>
+    <div class="combobox">
+      <div class="combobox__input" [class.combobox__input--invalid]="invalidLocalidad()">
+        <input
+          #localidadInput
+          type="text"
+          role="combobox"
+          autocomplete="off"
+          [id]="idPrefix() + '-localidad'"
+          [value]="valorInput()"
+          [placeholder]="placeholder()"
+          [disabled]="bloqueado()"
+          [attr.aria-expanded]="abierto()"
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          [attr.aria-controls]="idPrefix() + '-opciones'"
+          [attr.aria-describedby]="idPrefix() + '-ayuda'"
+          [attr.aria-invalid]="invalidLocalidad()"
+          [attr.aria-required]="required()"
+          [attr.aria-busy]="cargandoLocalidades()"
+          [attr.aria-activedescendant]="
+            abierto() && indiceActivo() >= 0 ? idPrefix() + '-opcion-' + indiceActivo() : null
+          "
+          (input)="escribir($event)"
+          (focus)="abierto.set(true)"
+          (blur)="cerrar()"
+          (keydown)="teclado($event)"
+        />
+        @if (valorInput() && !bloqueado()) {
+          <button
+            type="button"
+            class="combobox__clear"
+            aria-label="Limpiar localidad"
+            (mousedown)="$event.preventDefault()"
+            (click)="limpiar(localidadInput)"
+          >
+            ×
+          </button>
+        }
+      </div>
+      @if (abierto() && !bloqueado()) {
+        <div class="combobox__dropdown">
+          <ul role="listbox" [id]="idPrefix() + '-opciones'" aria-label="Localidades">
+            @for (localidad of sugerencias(); track localidad.id; let indice = $index) {
+              <li
+                role="option"
+                [id]="idPrefix() + '-opcion-' + indice"
+                [attr.aria-selected]="localidad.id === localidadId()"
+                [attr.data-active]="indice === indiceActivo()"
+                (mousedown)="$event.preventDefault()"
+                (click)="elegir(localidad)"
+              >
+                {{ localidad.nombre }}
+              </li>
+            }
+          </ul>
+          @if (!sugerencias().length) {
+            <p role="status">
+              {{
+                localidades().length
+                  ? 'No encontramos localidades con ese nombre.'
+                  : 'No hay localidades cargadas en esta provincia.'
+              }}
+            </p>
+          } @else if (coincidencias().length > sugerencias().length) {
+            <p role="status">Escribí para acotar las {{ coincidencias().length }} localidades.</p>
+          }
+        </div>
+      }
+    </div>
+    <span
+      class="location-hint"
+      [id]="idPrefix() + '-ayuda'"
+      [class.location-error]="invalidLocalidad() || !!errorLocalidades()"
+      aria-live="polite"
+    >
+      @if (errorLocalidades()) {
+        {{ errorLocalidades() }}
+        <button type="button" (click)="reintentarLocalidades()">Reintentar</button>
+      } @else if (invalidLocalidad()) {
+        Elegí una localidad de las sugerencias.
+      } @else if (provinciaId() && !localidadId() && texto()?.trim()) {
+        Seleccioná una sugerencia para elegir la localidad.
+      } @else if (provinciaId() && !localidadId() && !required() && !cargandoLocalidades()) {
+        Todas las localidades de la provincia.
+      } @else if (provinciaId() && !localidadId() && !cargandoLocalidades()) {
+        Escribí y seleccioná una sugerencia.
+      }
+    </span>
+  </div>
+</div>

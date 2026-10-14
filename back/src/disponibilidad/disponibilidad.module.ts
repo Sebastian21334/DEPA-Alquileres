@@ -2,7 +2,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Fecha } from './entity/fecha.entity';
-import { Publicacion } from '../publicaciones/entity/publicacion.entity';
 import { DisponibilidadService } from './service/disponibilidad.service';
 import { DisponibilidadController } from './controller/disponibilidad.controller';
 import { PropietarioPublicacionGuard } from '../common/guards/propietario-publicacion.guard';
@@ -14,7 +13,7 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 @Module({
   imports: [
     // Se usan Fecha para el calendario y Publicacion para resolver propiedad.
-    TypeOrmModule.forFeature([Fecha, Publicacion]),
+    TypeOrmModule.forFeature([Fecha]),
     AuthModule,
     PublicacionesModule,
   ],

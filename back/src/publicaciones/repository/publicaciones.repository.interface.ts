@@ -1,7 +1,9 @@
 import { Publicacion } from '../entity/publicacion.entity';
 
-export type CategoriaInicio = 'recientes' | 'temporales' | 'largo-plazo' | 'villa-maria' | 'reservadas';
-export type OrdenPublicaciones = 'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
+export type CategoriaInicio =
+  'recientes' | 'temporales' | 'largo-plazo' | 'villa-maria' | 'reservadas';
+export type OrdenPublicaciones =
+  'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
 
 export interface ConsultaPublicaciones {
   pagina: number;
@@ -10,6 +12,7 @@ export interface ConsultaPublicaciones {
   orden?: OrdenPublicaciones;
   busqueda?: string;
   idsCiudad?: number[];
+  idProvincia?: number;
   idsTipoPropiedad?: number[];
   idsTipoMoneda?: number[];
   precioMin?: number;
@@ -32,8 +35,13 @@ export interface IPublicacionesRepository {
   incrementarVisualizaciones(id: number): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
   buscarTodasActivas(): Promise<Publicacion[]>;
-  buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones>;
-  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]>;
+  buscarPaginadas(
+    consulta: ConsultaPublicaciones,
+  ): Promise<PaginaPublicaciones>;
+  buscarPorAnunciante(
+    idAnunciante: number,
+    soloActivas: boolean,
+  ): Promise<Publicacion[]>;
   eliminar(publicacion: Publicacion): Promise<Publicacion>;
 }
 

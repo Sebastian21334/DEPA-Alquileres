@@ -7,7 +7,7 @@ import { PUBLICACIONES_REPOSITORY } from './repository/publicaciones.repository.
 import { PublicacionesService } from './service/publicaciones.service';
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { UbicacionModule } from '../ubicacion/ubicacion.module';
-import { AuthModule } from '../auth/auth.module'; // <-- cambio
+import { AuthModule } from '../auth/auth.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { Reserva } from '../reservas/entity/reserva.entity';
 
@@ -28,7 +28,7 @@ import { Reserva } from '../reservas/entity/reserva.entity';
     // Se necesitan para resolver los IDs relacionales al crear una publicación.
     CatalogosModule,
     UbicacionModule,
-    AuthModule, 
+    AuthModule,
     AnunciantesModule,
   ],
   exports: [PublicacionesService],

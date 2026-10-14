@@ -8,8 +8,22 @@
         <span>Encontrá tu próximo hogar entre las mejores propiedades disponibles.</span>
       </div>
       <div class="modalidades" aria-label="Tipo de alquiler">
-        <button type="button" class="modalidad-btn modalidad-btn--primary" [class.modalidad-btn--active]="categoria() === 'largo-plazo'" (click)="seleccionarCategoria('largo-plazo')">Largo plazo</button>
-        <button type="button" class="modalidad-btn modalidad-btn--secondary" [class.modalidad-btn--active]="categoria() === 'temporales'" (click)="seleccionarCategoria('temporales')">Temporales</button>
+        <button
+          type="button"
+          class="modalidad-btn modalidad-btn--primary"
+          [class.modalidad-btn--active]="categoria() === 'largo-plazo'"
+          (click)="seleccionarCategoria('largo-plazo')"
+        >
+          Largo plazo
+        </button>
+        <button
+          type="button"
+          class="modalidad-btn modalidad-btn--secondary"
+          [class.modalidad-btn--active]="categoria() === 'temporales'"
+          (click)="seleccionarCategoria('temporales')"
+        >
+          Temporales
+        </button>
       </div>
     </div>
   </section>
@@ -31,7 +45,13 @@
     </div>
   </form>
 
-  <app-advanced-filters [form]="form" [tiposPropiedad]="tiposPropiedad()" [ciudades]="ciudades()" [monedas]="monedas()" [modalidades]="modalidades()" (search)="buscar()" />
+  <app-advanced-filters
+    [form]="form"
+    [tiposPropiedad]="tiposPropiedad()"
+    [monedas]="monedas()"
+    [modalidades]="modalidades()"
+    (search)="buscar()"
+  />
   <app-listing-grid
     [total]="resultado().total"
     [listings]="resultado().datos"
@@ -42,9 +62,21 @@
   />
   @if (!cargando() && !error() && resultado().totalPaginas > 1) {
     <nav class="pagination" aria-label="Paginación de publicaciones">
-      <button type="button" (click)="irAPagina(resultado().pagina - 1)" [disabled]="resultado().pagina === 1">Anterior</button>
+      <button
+        type="button"
+        (click)="irAPagina(resultado().pagina - 1)"
+        [disabled]="resultado().pagina === 1"
+      >
+        Anterior
+      </button>
       <span>Página {{ resultado().pagina }} de {{ resultado().totalPaginas }}</span>
-      <button type="button" (click)="irAPagina(resultado().pagina + 1)" [disabled]="resultado().pagina === resultado().totalPaginas">Siguiente</button>
+      <button
+        type="button"
+        (click)="irAPagina(resultado().pagina + 1)"
+        [disabled]="resultado().pagina === resultado().totalPaginas"
+      >
+        Siguiente
+      </button>
     </nav>
   }
 </main>

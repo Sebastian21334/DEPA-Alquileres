@@ -21,6 +21,7 @@ export class ActualizarPublicacionDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   descripcion?: string;
 
   @IsOptional()

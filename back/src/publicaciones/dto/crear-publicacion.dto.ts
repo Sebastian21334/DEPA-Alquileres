@@ -1,4 +1,13 @@
-import { IsString, IsNotEmpty, IsNumber, IsPositive, IsInt, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsNumber,
+  IsPositive,
+  IsInt,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CrearPublicacionDto {
   // Los IDs siguientes representan relaciones con catálogos y ubicación.
@@ -9,6 +18,7 @@ export class CrearPublicacionDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   descripcion: string;
 
   @IsNumber()

@@ -9,14 +9,14 @@ export interface IUbicacionRepository {
   actualizarProvincia(
     id: number,
     datos: Partial<Provincia>,
-  ): Promise<Provincia>;
+  ): Promise<Provincia | null>;
   eliminarProvincia(id: number): Promise<void>;
 
   // Ciudades
   buscarCiudadPorId(id: number): Promise<Ciudad | null>;
   buscarCiudadesPorProvincia(idProvincia: number): Promise<Ciudad[]>;
   crearCiudad(datos: Partial<Ciudad>): Promise<Ciudad>;
-  actualizarCiudad(id: number, datos: Partial<Ciudad>): Promise<Ciudad>;
+  actualizarCiudad(id: number, datos: Partial<Ciudad>): Promise<Ciudad | null>;
   eliminarCiudad(id: number): Promise<void>;
 }
 

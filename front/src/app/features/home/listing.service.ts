@@ -4,7 +4,8 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Publicacion, PublicacionPayload } from '../../shared/models/publicacion.model';
 
-export type OrdenPublicaciones = 'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
+export type OrdenPublicaciones =
+  'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
 
 /**
  * Consume el módulo `publicaciones` del backend (back/src/publicaciones).
@@ -21,28 +22,34 @@ export class ListingService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/publicaciones`;
 
-  getActivas(opciones: {
-    pagina?: number;
-    limite?: number;
-    categoria?: string;
-    orden?: OrdenPublicaciones;
-    busqueda?: string;
-    idsCiudad?: number[];
-    idsTipoPropiedad?: number[];
-    idsTipoMoneda?: number[];
-    precioMin?: number | null;
-    precioMax?: number | null;
-    ambientes?: string[];
-  } = {}): Observable<PaginaPublicaciones> {
+  getActivas(
+    opciones: {
+      pagina?: number;
+      limite?: number;
+      categoria?: string;
+      orden?: OrdenPublicaciones;
+      busqueda?: string;
+      idProvincia?: number;
+      idsCiudad?: number[];
+      idsTipoPropiedad?: number[];
+      idsTipoMoneda?: number[];
+      precioMin?: number | null;
+      precioMax?: number | null;
+      ambientes?: string[];
+    } = {},
+  ): Observable<PaginaPublicaciones> {
     let params = new HttpParams();
     if (opciones.pagina) params = params.set('pagina', opciones.pagina);
     if (opciones.limite) params = params.set('limite', opciones.limite);
     if (opciones.categoria) params = params.set('categoria', opciones.categoria);
     if (opciones.orden) params = params.set('orden', opciones.orden);
     if (opciones.busqueda?.trim()) params = params.set('q', opciones.busqueda.trim());
+    if (opciones.idProvincia) params = params.set('idProvincia', opciones.idProvincia);
     if (opciones.idsCiudad?.length) params = params.set('idsCiudad', opciones.idsCiudad.join(','));
-    if (opciones.idsTipoPropiedad?.length) params = params.set('idsTipoPropiedad', opciones.idsTipoPropiedad.join(','));
-    if (opciones.idsTipoMoneda?.length) params = params.set('idsTipoMoneda', opciones.idsTipoMoneda.join(','));
+    if (opciones.idsTipoPropiedad?.length)
+      params = params.set('idsTipoPropiedad', opciones.idsTipoPropiedad.join(','));
+    if (opciones.idsTipoMoneda?.length)
+      params = params.set('idsTipoMoneda', opciones.idsTipoMoneda.join(','));
     if (opciones.precioMin != null) params = params.set('precioMin', opciones.precioMin);
     if (opciones.precioMax != null) params = params.set('precioMax', opciones.precioMax);
     if (opciones.ambientes?.length) params = params.set('ambientes', opciones.ambientes.join(','));
@@ -62,7 +69,6 @@ export class ListingService {
       params: { activa: 'true' },
     });
   }
-
 
   create(payload: PublicacionPayload): Observable<Publicacion> {
     return this.http.post<Publicacion>(this.baseUrl, payload);

@@ -1,6 +1,17 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PUBLICACIONES_REPOSITORY } from '../repository/publicaciones.repository.interface';
-import type { CategoriaInicio, ConsultaPublicaciones, IPublicacionesRepository, OrdenPublicaciones } from '../repository/publicaciones.repository.interface';
+import type {
+  CategoriaInicio,
+  ConsultaPublicaciones,
+  IPublicacionesRepository,
+  OrdenPublicaciones,
+} from '../repository/publicaciones.repository.interface';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
@@ -21,10 +32,18 @@ export class PublicacionesService {
   async crear(anunciante: Anunciante, dto: CrearPublicacionDto) {
     // Estos servicios validan que cada catalogo y ubicacion exista; asi la
     // publicacion no queda apuntando a claves foraneas inexistentes.
-    const tipoMoneda = await this.catalogosService.getTipoMonedaPorId(dto.idTipoMoneda);
-    const modalidad = await this.catalogosService.getModalidadPorId(dto.idModalidad);
-    const tipoPropiedad = await this.catalogosService.getTipoPropiedadPorId(dto.idTipoPropiedad);
-    const provincia = await this.ubicacionService.getProvinciaPorId(dto.idProvincia);
+    const tipoMoneda = await this.catalogosService.getTipoMonedaPorId(
+      dto.idTipoMoneda,
+    );
+    const modalidad = await this.catalogosService.getModalidadPorId(
+      dto.idModalidad,
+    );
+    const tipoPropiedad = await this.catalogosService.getTipoPropiedadPorId(
+      dto.idTipoPropiedad,
+    );
+    const provincia = await this.ubicacionService.getProvinciaPorId(
+      dto.idProvincia,
+    );
     const ciudad = await this.ubicacionService.getCiudadPorId(dto.idCiudad);
 
     // La entidad recibe objetos completos para mantener sus relaciones TypeORM consistentes.
@@ -62,7 +81,8 @@ export class PublicacionesService {
   /** Registra una apertura real del detalle; el cliente evita repetirla durante la misma sesión. */
   async registrarVisualizacion(id: number) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
-    if (!publicacion || !publicacion.activa) throw new NotFoundException('Publicación no encontrada');
+    if (!publicacion || !publicacion.activa)
+      throw new NotFoundException('Publicación no encontrada');
     await this.publicacionesRepo.incrementarVisualizaciones(id);
     return { visualizaciones: Number(publicacion.visualizaciones ?? 0) + 1 };
   }
@@ -82,17 +102,38 @@ export class PublicacionesService {
     pagina = 1,
     limite = 12,
     categoria?: CategoriaInicio,
-    filtros: Omit<Partial<ConsultaPublicaciones>, 'pagina' | 'limite' | 'categoria'> = {},
+    filtros: Omit<
+      Partial<ConsultaPublicaciones>,
+      'pagina' | 'limite' | 'categoria'
+    > = {},
   ) {
-    const ordenesValidos: OrdenPublicaciones[] = ['recientes', 'antiguas', 'precio-menor', 'precio-mayor', 'titulo'];
+    if (
+      filtros.precioMin != null &&
+      filtros.precioMax != null &&
+      filtros.precioMin > filtros.precioMax
+    ) {
+      throw new BadRequestException(
+        'El precio mínimo no puede superar al máximo',
+      );
+    }
+    const ordenesValidos: OrdenPublicaciones[] = [
+      'recientes',
+      'antiguas',
+      'precio-menor',
+      'precio-mayor',
+      'titulo',
+    ];
     const consulta: ConsultaPublicaciones = {
-      pagina: Math.max(1, pagina),
-      limite: Math.min(Math.max(1, limite), 50),
+      pagina: Number.isFinite(pagina) ? Math.max(1, Math.trunc(pagina)) : 1,
+      limite: Number.isFinite(limite)
+        ? Math.min(Math.max(1, Math.trunc(limite)), 50)
+        : 12,
       categoria,
       ...filtros,
-      orden: ordenesValidos.includes(filtros.orden as OrdenPublicaciones)
-        ? filtros.orden as OrdenPublicaciones
-        : undefined,
+      orden:
+        filtros.orden && ordenesValidos.includes(filtros.orden)
+          ? filtros.orden
+          : undefined,
       busqueda: filtros.busqueda?.trim().slice(0, 200) || undefined,
     };
     return this.publicacionesRepo.buscarPaginadas(consulta);
@@ -100,9 +141,14 @@ export class PublicacionesService {
 
   /** Lista publicaciones de un anunciante, opcionalmente solo las activas. */
   async listarPorAnunciante(idAnunciante: number, soloActivas = false) {
-    const publicaciones = await this.publicacionesRepo.buscarPorAnunciante(idAnunciante, soloActivas);
+    const publicaciones = await this.publicacionesRepo.buscarPorAnunciante(
+      idAnunciante,
+      soloActivas,
+    );
     // El dueño ve todas (para poder completarlas); la vista pública solo las que cumplen la regla.
-    return soloActivas ? publicaciones.filter((p) => this.tieneImagenes(p)) : publicaciones;
+    return soloActivas
+      ? publicaciones.filter((p) => this.tieneImagenes(p))
+      : publicaciones;
   }
 
   /** Regla de negocio: una publicación sin imágenes nunca se muestra públicamente. */
@@ -111,37 +157,54 @@ export class PublicacionesService {
   }
 
   /** Modifica una publicación conservando la fecha original y validando propiedad. */
-  async actualizar(id: number, anuncianteQueOpera: Anunciante, dto: ActualizarPublicacionDto) {
+  async actualizar(
+    id: number,
+    anuncianteQueOpera: Anunciante,
+    dto: ActualizarPublicacionDto,
+  ) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
     if (!publicacion) throw new NotFoundException('Publicación no encontrada');
     if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
-      throw new ForbiddenException('No podés modificar una publicación que no es tuya');
+      throw new ForbiddenException(
+        'No podés modificar una publicación que no es tuya',
+      );
     }
 
     if (dto.titulo !== undefined) publicacion.titulo = dto.titulo;
-    if (dto.descripcion !== undefined) publicacion.descripcion = dto.descripcion;
+    if (dto.descripcion !== undefined)
+      publicacion.descripcion = dto.descripcion;
     if (dto.precio !== undefined) publicacion.precio = dto.precio;
     if (dto.direccion !== undefined) publicacion.direccion = dto.direccion;
     if (dto.latitud !== undefined) publicacion.latitud = dto.latitud;
     if (dto.longitud !== undefined) publicacion.longitud = dto.longitud;
-    if (dto.cantidad_ambientes !== undefined) publicacion.cantidad_ambientes = dto.cantidad_ambientes;
+    if (dto.cantidad_ambientes !== undefined)
+      publicacion.cantidad_ambientes = dto.cantidad_ambientes;
     if (dto.superficie !== undefined) publicacion.superficie = dto.superficie;
     if (dto.activa !== undefined) publicacion.activa = dto.activa;
 
     if (dto.idTipoMoneda !== undefined) {
-      publicacion.tipoMoneda = await this.catalogosService.getTipoMonedaPorId(dto.idTipoMoneda);
+      publicacion.tipoMoneda = await this.catalogosService.getTipoMonedaPorId(
+        dto.idTipoMoneda,
+      );
     }
     if (dto.idModalidad !== undefined) {
-      publicacion.modalidad = await this.catalogosService.getModalidadPorId(dto.idModalidad);
+      publicacion.modalidad = await this.catalogosService.getModalidadPorId(
+        dto.idModalidad,
+      );
     }
     if (dto.idTipoPropiedad !== undefined) {
-      publicacion.tipoPropiedad = await this.catalogosService.getTipoPropiedadPorId(dto.idTipoPropiedad);
+      publicacion.tipoPropiedad =
+        await this.catalogosService.getTipoPropiedadPorId(dto.idTipoPropiedad);
     }
     if (dto.idProvincia !== undefined) {
-      publicacion.provincia = await this.ubicacionService.getProvinciaPorId(dto.idProvincia);
+      publicacion.provincia = await this.ubicacionService.getProvinciaPorId(
+        dto.idProvincia,
+      );
     }
     if (dto.idCiudad !== undefined) {
-      publicacion.ciudad = await this.ubicacionService.getCiudadPorId(dto.idCiudad);
+      publicacion.ciudad = await this.ubicacionService.getCiudadPorId(
+        dto.idCiudad,
+      );
     }
 
     return this.publicacionesRepo.guardar(publicacion);
@@ -154,7 +217,9 @@ export class PublicacionesService {
 
     if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
       // El anunciante autenticado debe ser el dueño, aunque conozca el ID de otra publicación.
-      throw new ForbiddenException('No podés eliminar una publicación que no es tuya');
+      throw new ForbiddenException(
+        'No podés eliminar una publicación que no es tuya',
+      );
     }
 
     return this.publicacionesRepo.eliminar(publicacion);

@@ -13,3 +13,10 @@ front/.angular/
 *.log
 
 node_modules/
+
+# Archivos generados y herramientas locales
+*.tsbuildinfo
+.test-tmp/
+.codex/
+.claude/
+/datos/georef/

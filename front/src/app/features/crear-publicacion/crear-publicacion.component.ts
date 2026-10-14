@@ -1,3 +1,7 @@
+import {
+  SelectorUbicacionComponent,
+  NombresUbicacion,
+} from '../../shared/components/selector-ubicacion/selector-ubicacion.component';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -5,14 +9,16 @@ import { Router, RouterLink } from '@angular/router';
 import { concatMap, forkJoin, from, of, toArray, catchError } from 'rxjs';
 import { LucideImagePlus, LucideX } from '@lucide/angular';
 import { CatalogoService } from '../../shared/services/catalogo.service';
-import { UbicacionService } from '../../shared/services/ubicacion.service';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { AvailabilityService } from '../../shared/services/availability.service';
 import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
-import { Ciudad, Provincia } from '../../shared/models/ubicacion.model';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
-import { LocationPickerComponent, UbicacionConfirmada } from '../../shared/components/location-picker/location-picker.component';
+import { RentalDateRange } from '../../shared/utils/rental-dates';
+import {
+  LocationPickerComponent,
+  UbicacionConfirmada,
+} from '../../shared/components/location-picker/location-picker.component';
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_IMAGEN = 10 * 1024 * 1024;
@@ -34,6 +40,7 @@ interface ImagenSeleccionada {
     RevealDirective,
     AvailabilityCalendarComponent,
     LocationPickerComponent,
+    SelectorUbicacionComponent,
     LucideImagePlus,
     LucideX,
   ],
@@ -44,18 +51,14 @@ export class CrearPublicacionComponent {
   private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
   private readonly catalogos = inject(CatalogoService);
-  private readonly ubicacion = inject(UbicacionService);
   private readonly gestion = inject(GestionPublicacionesService);
   private readonly availability = inject(AvailabilityService);
 
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
   protected readonly modalidades = signal<Modalidad[]>([]);
   protected readonly monedas = signal<TipoMoneda[]>([]);
-  protected readonly provincias = signal<Provincia[]>([]);
-  protected readonly ciudades = signal<Ciudad[]>([]);
-  protected readonly cargandoCiudades = signal(true);
-  private readonly provinciaElegida = signal(0);
-  private readonly ciudadElegida = signal(0);
+  protected readonly provinciaElegida = signal(0);
+  protected readonly ciudadElegida = signal(0);
   private readonly modalidadElegida = signal(0);
   protected readonly disponibilidadInicio = signal<string | null>(null);
   protected readonly disponibilidadFin = signal<string | null>(null);
@@ -64,26 +67,9 @@ export class CrearPublicacionComponent {
     return modalidad?.nombre.toLocaleLowerCase().includes('tempor') ?? false;
   });
 
-  /** Opciones del select de ciudad: agrupadas por provincia, o solo las de la provincia elegida. */
-  protected readonly gruposCiudades = computed(() => {
-    const idProvincia = this.provinciaElegida();
-    return this.provincias()
-      .filter((p) => !idProvincia || p.id === idProvincia)
-      .map((provincia) => ({
-        provincia,
-        ciudades: this.ciudades().filter((c) => c.provincia?.id === provincia.id),
-      }))
-      .filter((g) => g.ciudades.length);
-  });
-  protected readonly provinciaSinCiudades = computed(
-    () => !!this.provinciaElegida() && !this.cargandoCiudades() && !this.gruposCiudades().length,
-  );
-  protected readonly nombreProvincia = computed(
-    () => this.provincias().find((item) => item.id === this.provinciaElegida())?.nombre ?? '',
-  );
-  protected readonly nombreCiudad = computed(
-    () => this.ciudades().find((item) => item.id === this.ciudadElegida())?.nombre ?? '',
-  );
+  protected readonly nombresUbicacion = signal<NombresUbicacion>({ provincia: '', localidad: '' });
+  protected readonly nombreProvincia = computed(() => this.nombresUbicacion().provincia);
+  protected readonly nombreCiudad = computed(() => this.nombresUbicacion().localidad);
   protected readonly latitud = signal<number | null>(null);
   protected readonly longitud = signal<number | null>(null);
   protected readonly imagenes = signal<ImagenSeleccionada[]>([]);
@@ -111,25 +97,14 @@ export class CrearPublicacionComponent {
       tipos: this.catalogos.getTiposPropiedad(),
       modalidades: this.catalogos.getModalidades(),
       monedas: this.catalogos.getTiposMoneda(),
-      provincias: this.ubicacion.getProvincias(),
     }).subscribe({
-      next: ({ tipos, modalidades, monedas, provincias }) => {
+      next: ({ tipos, modalidades, monedas }) => {
         this.tiposPropiedad.set(tipos);
         this.modalidades.set(modalidades);
         this.monedas.set(monedas);
-        this.provincias.set(provincias);
       },
-      error: (err: Error) => this.error.set(`No pudimos cargar las opciones del formulario: ${err.message}`),
-    });
-
-    // Se traen todas las ciudades de una vez (con su provincia) en lugar de pedirlas
-    // al cambiar de provincia: así el select de ciudad nunca queda bloqueado ni
-    // expuesto a respuestas que llegan fuera de orden.
-    this.ubicacion.getTodasCiudades().subscribe({
-      next: (ciudades) => this.ciudades.set(ciudades),
-      error: () => this.cargandoCiudades.set(false),
-      // Sin provincias el observable completa sin emitir, por eso se corta la carga acá.
-      complete: () => this.cargandoCiudades.set(false),
+      error: (err: Error) =>
+        this.error.set(`No pudimos cargar las opciones del formulario: ${err.message}`),
     });
 
     const { idProvincia, idCiudad } = this.form.controls;
@@ -142,21 +117,29 @@ export class CrearPublicacionComponent {
     });
     idProvincia.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
       this.provinciaElegida.set(id);
-      // Si la ciudad elegida no pertenece a la nueva provincia, se limpia.
-      const ciudad = this.ciudades().find((c) => c.id === idCiudad.value);
-      if (ciudad && ciudad.provincia?.id !== id) idCiudad.setValue(0);
+      idCiudad.setValue(0);
       this.limpiarUbicacionConfirmada();
     });
     idCiudad.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
       this.ciudadElegida.set(id);
-      // Elegir una ciudad completa sola la provincia.
-      const provincia = this.ciudades().find((c) => c.id === id)?.provincia?.id;
-      if (provincia && provincia !== idProvincia.value) idProvincia.setValue(provincia);
       this.limpiarUbicacionConfirmada();
     });
-    this.form.controls.direccion.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.limpiarUbicacionConfirmada());
+    this.form.controls.direccion.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.limpiarUbicacionConfirmada());
 
-    inject(DestroyRef).onDestroy(() => this.imagenes().forEach((img) => URL.revokeObjectURL(img.preview)));
+    inject(DestroyRef).onDestroy(() =>
+      this.imagenes().forEach((img) => URL.revokeObjectURL(img.preview)),
+    );
+  }
+
+  protected seleccionarProvincia(id: number | null): void {
+    this.form.controls.idProvincia.setValue(id ?? 0);
+    this.form.controls.idProvincia.markAsTouched();
+  }
+
+  protected seleccionarLocalidad(id: number | null): void {
+    this.form.controls.idCiudad.setValue(id ?? 0);
   }
 
   protected invalido(campo: string): boolean {
@@ -205,8 +188,12 @@ export class CrearPublicacionComponent {
     }
 
     const avisos = [];
-    if (descartadas) avisos.push(`${descartadas} archivo(s) descartado(s): solo imágenes JPG, PNG, WEBP o HEIC de hasta 10 MB.`);
-    if (total.length > MAX_IMAGENES) avisos.push(`Máximo ${MAX_IMAGENES} imágenes por publicación.`);
+    if (descartadas)
+      avisos.push(
+        `${descartadas} archivo(s) descartado(s): solo imágenes JPG, PNG, WEBP o HEIC de hasta 10 MB.`,
+      );
+    if (total.length > MAX_IMAGENES)
+      avisos.push(`Máximo ${MAX_IMAGENES} imágenes por publicación.`);
     this.avisoImagenes.set(avisos.join(' '));
   }
 
@@ -216,14 +203,9 @@ export class CrearPublicacionComponent {
     this.imagenes.update((lista) => lista.filter((_, i) => i !== index));
   }
 
-  protected seleccionarDisponibilidad(fecha: string): void {
-    const inicio = this.disponibilidadInicio();
-    if (!inicio || this.disponibilidadFin() || fecha < inicio) {
-      this.disponibilidadInicio.set(fecha);
-      this.disponibilidadFin.set(null);
-      return;
-    }
-    this.disponibilidadFin.set(fecha);
+  protected seleccionarDisponibilidad(range: RentalDateRange): void {
+    this.disponibilidadInicio.set(range.start);
+    this.disponibilidadFin.set(range.end);
     if (this.error().startsWith('Elegí el período')) this.error.set('');
   }
 
@@ -247,13 +229,20 @@ export class CrearPublicacionComponent {
         sinUbicacion && this.form.valid && !sinFotos && !sinDisponibilidad
           ? 'Confirmá la ubicación exacta en el mapa antes de publicar.'
           : sinDisponibilidad && this.form.valid && !sinFotos
-          ? 'Elegí el período de días disponibles para el alquiler temporal.'
-          : sinFotos && this.form.valid
-          ? 'Agregá al menos una foto de la propiedad para poder publicarla.'
-          : 'Revisá los campos marcados.',
+            ? 'Elegí el período de días disponibles para el alquiler temporal.'
+            : sinFotos && this.form.valid
+              ? 'Agregá al menos una foto de la propiedad para poder publicarla.'
+              : 'Revisá los campos marcados.',
       );
-      const destino = sinUbicacion ? 'ubicacion-mapa' : sinDisponibilidad ? 'disponibilidad' : sinFotos ? 'fotos' : null;
-      if (destino) document.getElementById(destino)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const destino = sinUbicacion
+        ? 'ubicacion-mapa'
+        : sinDisponibilidad
+          ? 'disponibilidad'
+          : sinFotos
+            ? 'fotos'
+            : null;
+      if (destino)
+        document.getElementById(destino)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
@@ -293,12 +282,14 @@ export class CrearPublicacionComponent {
               from(imagenes).pipe(
                 concatMap((img, i) => {
                   this.progreso.set(`Subiendo imagen ${i + 1} de ${imagenes.length}…`);
-                  return this.gestion.subirImagen(publicacion.id, img.archivo).pipe(
-                    catchError(() => of(null)),
-                  );
+                  return this.gestion
+                    .subirImagen(publicacion.id, img.archivo)
+                    .pipe(catchError(() => of(null)));
                 }),
                 toArray(),
-                concatMap((subidas) => of({ publicacion, fallidas: subidas.filter((s) => s === null).length })),
+                concatMap((subidas) =>
+                  of({ publicacion, fallidas: subidas.filter((s) => s === null).length }),
+                ),
               ),
             ),
           ),

@@ -1,3 +1,4 @@
+import type { Relation } from 'typeorm';
 import {
   Column,
   CreateDateColumn,
@@ -16,7 +17,7 @@ export class Pago {
 
   @OneToOne(() => Reserva, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_reserva' })
-  reserva: Reserva;
+  reserva: Relation<Reserva>;
 
   @Column({ type: 'varchar', length: 100, unique: true })
   external_reference: string;

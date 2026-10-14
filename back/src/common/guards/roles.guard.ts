@@ -1,3 +1,4 @@
+import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
@@ -17,8 +18,8 @@ export class RolesGuard implements CanActivate {
     if (!required?.length) return true;
 
     // 3. JwtStrategy ya validó el token y dejó el rol disponible en req.user.
-    const req = ctx.switchToHttp().getRequest();
-    const rol = req.user?.rol as string | undefined;
+    const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+    const rol = req.user?.rol;
 
     // 4. La autorización es inclusiva: alcanza con que coincida uno de los roles.
     return !!rol && required.includes(rol);

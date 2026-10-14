@@ -1,3 +1,7 @@
+import {
+  SelectorUbicacionComponent,
+  NombresUbicacion,
+} from '../../shared/components/selector-ubicacion/selector-ubicacion.component';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
@@ -5,23 +9,32 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin, map, of, switchMap } from 'rxjs';
 import { ListingService } from '../home/listing.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
-import { UbicacionService } from '../../shared/services/ubicacion.service';
 import {
   AvailabilityService,
   FechaDisponibleAdministracion,
 } from '../../shared/services/availability.service';
 import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
-import { Ciudad, Provincia } from '../../shared/models/ubicacion.model';
 import { PublicacionPayload } from '../../shared/models/publicacion.model';
 import { AuthService } from '../../core/services/auth.service';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
+import { RentalDateRange } from '../../shared/utils/rental-dates';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
-import { LocationPickerComponent, UbicacionConfirmada } from '../../shared/components/location-picker/location-picker.component';
+import {
+  LocationPickerComponent,
+  UbicacionConfirmada,
+} from '../../shared/components/location-picker/location-picker.component';
 
 @Component({
   selector: 'app-publication-form',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, AvailabilityCalendarComponent, SpinnerComponent, LocationPickerComponent],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    AvailabilityCalendarComponent,
+    SpinnerComponent,
+    LocationPickerComponent,
+    SelectorUbicacionComponent,
+  ],
   templateUrl: './publication-form.component.html',
   styleUrl: './publication-form.component.scss',
 })
@@ -31,7 +44,6 @@ export class PublicationFormComponent {
   private readonly router = inject(Router);
   private readonly listings = inject(ListingService);
   private readonly catalogs = inject(CatalogoService);
-  private readonly locations = inject(UbicacionService);
   private readonly availabilityApi = inject(AvailabilityService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly auth = inject(AuthService);
@@ -44,7 +56,6 @@ export class PublicationFormComponent {
   protected readonly modalidades = signal<Modalidad[]>([]);
   protected readonly monedas = signal<TipoMoneda[]>([]);
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
-  protected readonly ciudades = signal<Ciudad[]>([]);
   protected readonly selectedProvince = signal<number | null>(null);
   protected readonly selectedCity = signal<number | null>(null);
   protected readonly selectedModality = signal<number | null>(null);
@@ -53,27 +64,17 @@ export class PublicationFormComponent {
   protected readonly availability = signal<FechaDisponibleAdministracion[]>([]);
   protected readonly availabilityStart = signal<string | null>(null);
   protected readonly availabilityEnd = signal<string | null>(null);
-  protected readonly provincias = computed<Provincia[]>(() => {
-    const unique = new Map<number, Provincia>();
-    for (const city of this.ciudades()) {
-      if (city.provincia) unique.set(city.provincia.id, city.provincia);
-    }
-    return Array.from(unique.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
-  });
-  protected readonly filteredCities = computed(() => {
-    const province = this.selectedProvince();
-    return this.ciudades().filter((city) => !province || city.provincia?.id === province);
-  });
+  protected readonly nombresUbicacion = signal<NombresUbicacion>({ provincia: '', localidad: '' });
   protected readonly isTemporary = computed(() => {
     const selected = this.modalidades().find((item) => item.id === this.selectedModality());
-    return selected?.permite_reservas_por_fecha ?? selected?.nombre.toLowerCase().includes('tempor') ?? false;
+    return (
+      selected?.permite_reservas_por_fecha ??
+      selected?.nombre.toLowerCase().includes('tempor') ??
+      false
+    );
   });
-  protected readonly selectedProvinceName = computed(
-    () => this.provincias().find((item) => item.id === this.selectedProvince())?.nombre ?? '',
-  );
-  protected readonly selectedCityName = computed(
-    () => this.ciudades().find((item) => item.id === this.selectedCity())?.nombre ?? '',
-  );
+  protected readonly selectedProvinceName = computed(() => this.nombresUbicacion().provincia);
+  protected readonly selectedCityName = computed(() => this.nombresUbicacion().localidad);
 
   protected readonly form = this.fb.group({
     titulo: ['', [Validators.required, Validators.maxLength(255)]],
@@ -102,8 +103,7 @@ export class PublicationFormComponent {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((value) => {
         this.selectedProvince.set(value);
-        const currentCity = this.ciudades().find((city) => city.id === this.form.controls.idCiudad.value);
-        if (currentCity && currentCity.provincia?.id !== value) this.form.controls.idCiudad.setValue(null);
+        this.form.controls.idCiudad.setValue(null);
         this.clearConfirmedLocation();
       });
     this.form.controls.idCiudad.valueChanges
@@ -120,13 +120,11 @@ export class PublicationFormComponent {
       modalidades: this.catalogs.getModalidades(),
       monedas: this.catalogs.getTiposMoneda(),
       tipos: this.catalogs.getTiposPropiedad(),
-      ciudades: this.locations.getTodasCiudades(),
     }).subscribe({
-      next: ({ modalidades, monedas, tipos, ciudades }) => {
+      next: ({ modalidades, monedas, tipos }) => {
         this.modalidades.set(modalidades);
         this.monedas.set(monedas);
         this.tiposPropiedad.set(tipos);
-        this.ciudades.set(ciudades);
       },
       error: () => this.error.set('No se pudieron cargar los datos necesarios para publicar.'),
     });
@@ -134,14 +132,18 @@ export class PublicationFormComponent {
     if (this.publicationId) this.loadPublication(this.publicationId);
   }
 
-  protected selectAvailabilityDate(date: string): void {
-    const start = this.availabilityStart();
-    if (!start || this.availabilityEnd() || date <= start) {
-      this.availabilityStart.set(date);
-      this.availabilityEnd.set(null);
-      return;
-    }
-    this.availabilityEnd.set(date);
+  protected seleccionarProvincia(id: number | null): void {
+    this.form.controls.idProvincia.setValue(id);
+    this.form.controls.idProvincia.markAsTouched();
+  }
+
+  protected seleccionarLocalidad(id: number | null): void {
+    this.form.controls.idCiudad.setValue(id);
+  }
+
+  protected selectAvailabilityDate(range: RentalDateRange): void {
+    this.availabilityStart.set(range.start);
+    this.availabilityEnd.set(range.end);
   }
 
   protected toggleAvailability(item: FechaDisponibleAdministracion): void {
@@ -151,9 +153,12 @@ export class PublicationFormComponent {
     }
     this.error.set('');
     this.availabilityApi.setAvailable(item.id, !item.disponible).subscribe({
-      next: (updated) => this.availability.update((items) =>
-        items.map((current) => current.id === updated.id ? { ...current, disponible: updated.disponible } : current),
-      ),
+      next: (updated) =>
+        this.availability.update((items) =>
+          items.map((current) =>
+            current.id === updated.id ? { ...current, disponible: updated.disponible } : current,
+          ),
+        ),
       error: (err) => this.error.set(err?.error?.message ?? 'No se pudo modificar ese día.'),
     });
   }
@@ -167,14 +172,27 @@ export class PublicationFormComponent {
     }
     if (this.latitud() === null || this.longitud() === null) {
       this.error.set('Confirmá la ubicación exacta en el mapa antes de guardar.');
-      document.getElementById('edit-location-map')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document
+        .getElementById('edit-location-map')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    if (this.isTemporary() && !this.editing && (!this.availabilityStart() || !this.availabilityEnd())) {
-      this.error.set('En un alquiler temporal debés seleccionar el primer y el último día disponible.');
+    if (
+      this.isTemporary() &&
+      !this.editing &&
+      (!this.availabilityStart() || !this.availabilityEnd())
+    ) {
+      this.error.set(
+        'En un alquiler temporal debés seleccionar el primer y el último día disponible.',
+      );
       return;
     }
-    if (this.isTemporary() && this.editing && !this.availability().length && (!this.availabilityStart() || !this.availabilityEnd())) {
+    if (
+      this.isTemporary() &&
+      this.editing &&
+      !this.availability().length &&
+      (!this.availabilityStart() || !this.availabilityEnd())
+    ) {
       this.error.set('La publicación temporal debe tener al menos un rango de días disponibles.');
       return;
     }
@@ -201,20 +219,24 @@ export class PublicationFormComponent {
       ? this.listings.update(this.publicationId, payload)
       : this.listings.create(payload);
 
-    save$.pipe(
-      switchMap((publication) => {
-        const start = this.availabilityStart();
-        const end = this.availabilityEnd();
-        if (this.isTemporary() && start && end) {
-          return this.availabilityApi.addRange(publication.id, start, end).pipe(map(() => publication));
-        }
-        return of(publication);
-      }),
-      finalize(() => this.saving.set(false)),
-    ).subscribe({
-      next: (publication) => this.router.navigate(['/publicaciones', publication.id]),
-      error: (err) => this.error.set(err?.error?.message ?? 'No se pudo guardar la publicación.'),
-    });
+    save$
+      .pipe(
+        switchMap((publication) => {
+          const start = this.availabilityStart();
+          const end = this.availabilityEnd();
+          if (this.isTemporary() && start && end) {
+            return this.availabilityApi
+              .addRange(publication.id, start, end)
+              .pipe(map(() => publication));
+          }
+          return of(publication);
+        }),
+        finalize(() => this.saving.set(false)),
+      )
+      .subscribe({
+        next: (publication) => this.router.navigate(['/publicaciones', publication.id]),
+        error: (err) => this.error.set(err?.error?.message ?? 'No se pudo guardar la publicación.'),
+      });
   }
 
   protected confirmLocation(location: UbicacionConfirmada): void {
@@ -224,37 +246,40 @@ export class PublicationFormComponent {
   }
 
   private loadPublication(id: number): void {
-    this.listings.getById(id).pipe(finalize(() => this.loading.set(false))).subscribe({
-      next: (item) => {
-        if (item.anunciante?.idUsuario !== this.auth.currentUser()?.sub) {
-          this.error.set('No tenés permiso para modificar esta publicación.');
-          this.form.disable();
-          return;
-        }
-        this.form.patchValue({
-          titulo: item.titulo,
-          descripcion: item.descripcion,
-          precio: Number(item.precio),
-          direccion: item.direccion,
-          cantidad_ambientes: item.cantidad_ambientes,
-          superficie: Number(item.superficie),
-          idTipoMoneda: item.tipoMoneda?.id ?? null,
-          idModalidad: item.modalidad?.id ?? null,
-          idProvincia: item.provincia?.id ?? null,
-          idCiudad: item.ciudad?.id ?? null,
-          idTipoPropiedad: item.tipoPropiedad?.id ?? null,
-        });
-        this.selectedProvince.set(item.provincia?.id ?? null);
-        this.selectedCity.set(item.ciudad?.id ?? null);
-        this.selectedModality.set(item.modalidad?.id ?? null);
-        this.latitud.set(item.latitud == null ? null : Number(item.latitud));
-        this.longitud.set(item.longitud == null ? null : Number(item.longitud));
-        this.availabilityApi.getForAdministration(id).subscribe({
-          next: (dates) => this.availability.set(dates),
-        });
-      },
-      error: () => this.error.set('No se pudo cargar la publicación que querés modificar.'),
-    });
+    this.listings
+      .getById(id)
+      .pipe(finalize(() => this.loading.set(false)))
+      .subscribe({
+        next: (item) => {
+          if (item.anunciante?.idUsuario !== this.auth.currentUser()?.sub) {
+            this.error.set('No tenés permiso para modificar esta publicación.');
+            this.form.disable();
+            return;
+          }
+          this.form.patchValue({
+            titulo: item.titulo,
+            descripcion: item.descripcion,
+            precio: Number(item.precio),
+            direccion: item.direccion,
+            cantidad_ambientes: item.cantidad_ambientes,
+            superficie: Number(item.superficie),
+            idTipoMoneda: item.tipoMoneda?.id ?? null,
+            idModalidad: item.modalidad?.id ?? null,
+            idProvincia: item.provincia?.id ?? null,
+            idCiudad: item.ciudad?.id ?? null,
+            idTipoPropiedad: item.tipoPropiedad?.id ?? null,
+          });
+          this.selectedProvince.set(item.provincia?.id ?? null);
+          this.selectedCity.set(item.ciudad?.id ?? null);
+          this.selectedModality.set(item.modalidad?.id ?? null);
+          this.latitud.set(item.latitud == null ? null : Number(item.latitud));
+          this.longitud.set(item.longitud == null ? null : Number(item.longitud));
+          this.availabilityApi.getForAdministration(id).subscribe({
+            next: (dates) => this.availability.set(dates),
+          });
+        },
+        error: () => this.error.set('No se pudo cargar la publicación que querés modificar.'),
+      });
   }
 
   private clearConfirmedLocation(): void {

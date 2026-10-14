@@ -1,3 +1,4 @@
+import { AlmacenamientoModule } from '../common/almacenamiento/almacenamiento.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Imagen } from './entity/imagen.entity';
@@ -17,10 +18,11 @@ import { AuthModule } from '../auth/auth.module';
     {
       provide: IMAGENES_REPOSITORY,
       useExisting: ImagenesRepository,
-    }, 
+    },
     ImagenesService,
   ],
   imports: [
+    AlmacenamientoModule,
     // La entidad guarda la URL final, no los bytes de la imagen.
     TypeOrmModule.forFeature([Imagen]),
     // Se consultan publicación, anunciante y usuario para validar propiedad.

@@ -1,4 +1,12 @@
-import { CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
@@ -10,11 +18,11 @@ export class Favorito {
 
   @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_usuario' })
-  usuario: Usuario;
+  usuario: Relation<Usuario>;
 
   @ManyToOne(() => Publicacion, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_publicacion' })
-  publicacion: Publicacion;
+  publicacion: Relation<Publicacion>;
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;

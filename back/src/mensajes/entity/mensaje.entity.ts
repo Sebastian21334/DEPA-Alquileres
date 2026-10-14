@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
@@ -24,13 +31,13 @@ export class Mensaje {
   // Se separan origen y destino para reconstruir ambos sentidos de una conversación.
   @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_origen_usuario' })
-  origenUsuario: Usuario;
+  origenUsuario: Relation<Usuario>;
 
   @ManyToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_destino_usuario' })
-  destinoUsuario: Usuario;
+  destinoUsuario: Relation<Usuario>;
 
   @ManyToOne(() => Publicacion, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_publicacion' })
-  publicacion: Publicacion;
+  publicacion: Relation<Publicacion>;
 }

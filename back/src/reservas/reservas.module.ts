@@ -1,3 +1,5 @@
+import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
+import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
 // reservas.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -24,6 +26,8 @@ import { MailModule } from '../mail/mail.module';
   ],
   controllers: [ReservasController],
   providers: [
+    ReservaLiquidacionesService,
+    ReservaNotificacionesService,
     // El token desacopla el service de la implementación concreta del repositorio.
     ReservasService,
     ReservaRepository,

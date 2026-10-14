@@ -18,7 +18,7 @@ export interface Publicacion {
   /** Cantidad de reservas no canceladas; llega desde GET /publicaciones/destacadas. */
   cantidad_reservas?: number;
 
-  // Datos del inmueble, embebidos (ver Propiedad en propiedad.model.ts).
+  // Datos del inmueble, embebidos en la publicación.
   direccion: string;
   latitud?: number | null;
   longitud?: number | null;

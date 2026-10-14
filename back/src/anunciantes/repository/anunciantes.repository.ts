@@ -41,10 +41,8 @@ export class AnunciantesRepository implements IAnunciantesRepository {
   buscarPorId(id: number): Promise<Anunciante | null> {
     // id coincide con idUsuario porque esa columna es la PK de Anunciante.
     return this.repo.findOne({
-      where: { idUsuario: id }, // ajustá el nombre real de la PK
+      where: { idUsuario: id },
       relations: { usuario: true, tipoAnunciante: true },
     });
   }
-
-
 }

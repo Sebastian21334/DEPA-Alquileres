@@ -1,9 +1,19 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+} from '@nestjs/common';
 import { DisponibilidadService } from '../service/disponibilidad.service';
 import { CrearDisponibilidadDto } from '../dto/crear-disponibilidad.dto';
 import { ActualizarDisponibilidadDto } from '../dto/actualizar-disponibilidad.dto';
 import { PropietarioPublicacionGuard } from '../../common/guards/propietario-publicacion.guard';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'; // ajustá el nombre si es distinto
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 @Controller('disponibilidad')
 export class DisponibilidadController {
@@ -18,8 +28,12 @@ export class DisponibilidadController {
 
   @UseGuards(JwtAuthGuard, PropietarioPublicacionGuard)
   @Get('publicacion/:idPublicacion/administracion')
-  listarPorPublicacionParaAdministracion(@Param('idPublicacion', ParseIntPipe) id: number) {
-    return this.disponibilidadService.listarPorPublicacionParaAdministracion(id);
+  listarPorPublicacionParaAdministracion(
+    @Param('idPublicacion', ParseIntPipe) id: number,
+  ) {
+    return this.disponibilidadService.listarPorPublicacionParaAdministracion(
+      id,
+    );
   }
 
   @Get('publicacion/:id')
@@ -30,7 +44,10 @@ export class DisponibilidadController {
 
   @UseGuards(JwtAuthGuard, PropietarioPublicacionGuard)
   @Patch(':id')
-  actualizar(@Param('id', ParseIntPipe) id: number, @Body() dto: ActualizarDisponibilidadDto) {
+  actualizar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: ActualizarDisponibilidadDto,
+  ) {
     return this.disponibilidadService.actualizar(id, dto);
   }
 

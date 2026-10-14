@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 
@@ -18,9 +25,9 @@ export class Fecha {
   // -- Relaciones --
   @ManyToOne(() => Publicacion, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_publicacion' })
-  publicacion: Publicacion;
+  publicacion: Relation<Publicacion>;
 
   @ManyToOne(() => Reserva, { nullable: true })
   @JoinColumn({ name: 'id_reserva' })
-  reserva: Reserva;
+  reserva: Relation<Reserva | null>;
 }

@@ -1,3 +1,4 @@
+import type { Relation } from 'typeorm';
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { Ciudad } from './ciudad.entity';
 
@@ -12,5 +13,5 @@ export class Provincia {
 
   // Relación: Una provincia tiene muchas ciudades
   @OneToMany(() => Ciudad, (ciudad) => ciudad.provincia)
-  ciudades: Ciudad[];
+  ciudades: Relation<Ciudad[]>;
 }

@@ -1,3 +1,4 @@
+import type { Relation } from 'typeorm';
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
@@ -15,5 +16,5 @@ export class Rol {
 
   // Relación inversa: Un rol puede estar asignado a muchos usuarios
   @OneToMany(() => Usuario, (usuario) => usuario.rol)
-  usuarios: Usuario[];
+  usuarios: Relation<Usuario[]>;
 }

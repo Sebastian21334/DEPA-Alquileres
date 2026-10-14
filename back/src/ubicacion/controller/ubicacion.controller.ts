@@ -70,11 +70,7 @@ export class UbicacionController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   async crearCiudad(@Body() dto: CrearCiudadDto) {
-    // Se resuelve la provincia antes de guardar para crear una relación válida.
-    const provincia = await this.ubicacionService.getProvinciaPorId(
-      dto.idProvincia,
-    );
-    return this.ubicacionService.crearCiudad({ nombre: dto.nombre, provincia });
+    return this.ubicacionService.crearCiudad(dto);
   }
 
   @Put('ciudades/:id')

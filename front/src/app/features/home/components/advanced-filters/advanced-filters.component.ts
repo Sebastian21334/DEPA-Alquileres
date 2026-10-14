@@ -1,14 +1,8 @@
+import { SelectorUbicacionComponent } from '../../../../shared/components/selector-ubicacion/selector-ubicacion.component';
 import { Component, EventEmitter, Output, computed, effect, signal, input } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
-import {
-  LucideMapPin,
-  LucideHome,
-  LucideCoins,
-  LucideSearch,
-} from '@lucide/angular';
+import { LucideHome, LucideCoins, LucideSearch } from '@lucide/angular';
 import { TipoPropiedad, TipoMoneda } from '../../../../shared/models/catalogo.model';
-// Ajustar esta ruta si el modelo de Ciudad vive en otro archivo.
-import { Ciudad } from '../../../../shared/models/ubicacion.model';
 
 type SeccionFiltro = 'ubicacion' | 'tipoPropiedad' | 'ambientes' | 'moneda' | 'precio';
 
@@ -31,13 +25,7 @@ const PRECIO_MAX = 1_500_000;
 @Component({
   selector: 'app-advanced-filters',
   standalone: true,
-  imports: [
-    ReactiveFormsModule,
-    LucideMapPin,
-    LucideHome,
-    LucideCoins,
-    LucideSearch,
-  ],
+  imports: [ReactiveFormsModule, SelectorUbicacionComponent, LucideHome, LucideCoins, LucideSearch],
   templateUrl: './advanced-filters.component.html',
   styleUrl: './advanced-filters.component.scss',
 })
@@ -45,7 +33,6 @@ export class AdvancedFiltersComponent {
   @Output() search = new EventEmitter<void>();
   readonly form = input.required<FormGroup>();
   readonly tiposPropiedad = input<TipoPropiedad[]>([]);
-  readonly ciudades = input<Ciudad[]>([]);
   readonly monedas = input<TipoMoneda[]>([]);
   readonly modalidades = input<{ id: number; nombre: string }[]>([]);
 
@@ -78,7 +65,7 @@ export class AdvancedFiltersComponent {
   });
 
   private readonly controlesPorSeccion: Record<SeccionFiltro, string[]> = {
-    ubicacion: ['idsCiudad'],
+    ubicacion: ['idProvincia', 'idsCiudad'],
     tipoPropiedad: ['idsTipoPropiedad'],
     ambientes: ['ambientesSeleccionados'],
     moneda: ['idsTipoMoneda'],
@@ -121,26 +108,11 @@ export class AdvancedFiltersComponent {
     return (this.form().controls['idsCiudad']?.value ?? []) as number[];
   }
 
-  protected ciudadesSeleccionadas(): Ciudad[] {
-    const ids = new Set(this.ciudadesSeleccionadasIds);
-    return this.ciudades().filter((c) => ids.has(c.id));
+  protected seleccionarProvincia(id: number | null): void {
+    this.form().patchValue({ idProvincia: id, idsCiudad: [] });
   }
 
-  protected etiquetaCiudad(c: Ciudad): string {
-    return c.provincia ? `${c.nombre}, ${c.provincia.nombre}` : c.nombre;
-  }
-
-  protected onSeleccionarCiudad(idStr: string): void {
-    const id = Number(idStr);
-    if (!id) return;
-    const actuales = this.ciudadesSeleccionadasIds;
-    if (!actuales.includes(id)) {
-      this.actualizarControl('idsCiudad', [...actuales, id]);
-    }
-  }
-
-  protected seleccionarCiudadUnica(idStr: string): void {
-    const id = Number(idStr);
+  protected seleccionarCiudadUnica(id: number | null): void {
     this.actualizarControl('idsCiudad', id ? [id] : []);
   }
 
@@ -158,7 +130,6 @@ export class AdvancedFiltersComponent {
   }
 
   protected aplicar(): void {
-    this.form().updateValueAndValidity();
     this.search.emit();
   }
 
@@ -262,6 +233,7 @@ export class AdvancedFiltersComponent {
   protected limpiar(): void {
     this.form().patchValue({
       idsTipoPropiedad: [],
+      idProvincia: null,
       idsCiudad: [],
       idsTipoMoneda: [],
       ambientesSeleccionados: [],

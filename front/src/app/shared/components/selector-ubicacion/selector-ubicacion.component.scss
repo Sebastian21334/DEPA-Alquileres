@@ -1,0 +1,164 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+.location-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.location-field {
+  min-width: 0;
+}
+label {
+  display: block;
+  margin-bottom: 7px;
+  color: #344054;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+select,
+.combobox__input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: white;
+  color: var(--color-text, #101828);
+  font: inherit;
+}
+select {
+  padding: 10px 12px;
+}
+select:focus,
+.combobox__input:focus-within {
+  outline: 3px solid rgb(14 70 161 / 13%);
+  border-color: var(--color-secondary, #0e47a1);
+}
+select[aria-invalid='true'],
+.combobox__input--invalid {
+  border-color: var(--color-danger, #dc2626);
+}
+select:disabled,
+.combobox__input:has(input:disabled) {
+  background: #f8fafc;
+  color: #667085;
+  cursor: not-allowed;
+}
+.combobox {
+  position: relative;
+}
+.combobox__input {
+  display: flex;
+  align-items: center;
+}
+.combobox__input input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.combobox__input input::placeholder {
+  color: #667085;
+  font-size: 0.82rem;
+}
+.combobox__clear {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  margin-right: 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #475467;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.combobox__clear:hover {
+  background: #f1f5f9;
+}
+.combobox__clear:focus-visible {
+  outline: 2px solid var(--color-secondary, #0e47a1);
+}
+.combobox__dropdown {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 10px 28px rgb(16 24 40 / 15%);
+}
+ul {
+  max-height: 240px;
+  margin: 0;
+  padding: 5px;
+  overflow-y: auto;
+  list-style: none;
+}
+li {
+  padding: 10px;
+  border-radius: 5px;
+  color: #101828;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+li:hover,
+li[data-active='true'] {
+  background: #eef4ff;
+}
+li[aria-selected='true'] {
+  color: #0e47a1;
+  font-weight: 700;
+}
+.combobox__dropdown p {
+  margin: 0;
+  padding: 10px 12px;
+  border-top: 1px solid #eef2f6;
+  color: #667085;
+  font-size: 0.76rem;
+}
+.location-hint,
+.location-error {
+  display: block;
+  margin-top: 5px;
+  color: #667085;
+  font-size: 0.75rem;
+}
+.location-error {
+  color: var(--color-danger, #dc2626);
+}
+.location-hint button,
+.location-error button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-secondary, #0e47a1);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.location-fields--compact {
+  gap: 12px;
+}
+.location-fields--compact label {
+  font-size: 0.67rem;
+}
+.location-fields--compact select,
+.location-fields--compact input {
+  font-size: 0.81rem;
+}
+@media (max-width: 600px) {
+  .location-fields {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}

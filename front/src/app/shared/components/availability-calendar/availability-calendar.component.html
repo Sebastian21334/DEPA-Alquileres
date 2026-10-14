@@ -1,40 +1,159 @@
-<section class="calendar" aria-label="Calendario de disponibilidad">
+<section class="calendar" aria-label="Calendario de disponibilidad" [attr.aria-busy]="loading()">
+  @if (mode() !== 'manage') {
+    <div class="calendar__toolbar">
+      <div class="calendar__switch" role="group" aria-label="Duración del alquiler">
+        <button
+          type="button"
+          [attr.aria-pressed]="selectionType() === 'single'"
+          (click)="setSelectionType('single')"
+        >
+          Un día
+        </button>
+        <button
+          type="button"
+          [attr.aria-pressed]="selectionType() === 'range'"
+          (click)="setSelectionType('range')"
+        >
+          Varios días
+        </button>
+      </div>
+      <button class="calendar__clear" type="button" [disabled]="!selectedStart()" (click)="clear()">
+        Borrar fechas
+      </button>
+    </div>
+    <div class="calendar__dates" [class.calendar__dates--single]="selectionType() === 'single'">
+      <button
+        class="calendar__field"
+        type="button"
+        [class.is-active]="activeField() === 'start' || selectionType() === 'single'"
+        (click)="editField('start')"
+        [attr.aria-pressed]="activeField() === 'start'"
+      >
+        <span>{{ selectionType() === 'single' ? 'Día del alquiler' : 'Primer día' }}</span>
+        <strong>{{ formatDate(selectedStart()) }}</strong>
+      </button>
+      @if (selectionType() === 'range') {
+        <button
+          class="calendar__field"
+          type="button"
+          [class.is-active]="activeField() === 'end'"
+          (click)="editField('end')"
+          [attr.aria-pressed]="activeField() === 'end'"
+          [disabled]="!selectedStart()"
+        >
+          <span>Último día</span><strong>{{ formatDate(selectedEnd()) }}</strong>
+        </button>
+      }
+    </div>
+  }
+  <p class="calendar__help" aria-live="polite">{{ instruction() }}</p>
   <header class="calendar__header">
-    <button type="button" (click)="previousMonth()" aria-label="Mes anterior">‹</button>
-    <strong>{{ monthLabel() }}</strong>
-    <button type="button" (click)="nextMonth()" aria-label="Mes siguiente">›</button>
+    <button
+      class="calendar__nav"
+      type="button"
+      (click)="previousMonth()"
+      [disabled]="previousDisabled()"
+      aria-label="Mes anterior"
+    >
+      ‹
+    </button>
+    <label class="calendar__month">
+      <span>Mes y año</span>
+      <input
+        type="month"
+        aria-label="Ir a un mes"
+        [min]="today.slice(0, 7)"
+        [value]="monthValue()"
+        (change)="goToMonth($event)"
+      />
+    </label>
+    <button class="calendar__nav" type="button" (click)="nextMonth()" aria-label="Mes siguiente">
+      ›
+    </button>
   </header>
-
   <div class="calendar__weekdays" aria-hidden="true">
-    @for (name of weekDays; track name) { <span>{{ name }}</span> }
+    @for (name of weekDays; track name) {
+      <span>{{ name }}</span>
+    }
   </div>
-
-  <div class="calendar__grid">
+  <div class="calendar__grid" (mouseleave)="hoveredDate.set(null)">
     @for (day of days(); track $index) {
       @if (day) {
         <button
+          class="calendar__day"
           type="button"
           [disabled]="isDisabled(day)"
-          [class.is-available]="day.record?.disponible"
-          [class.is-unavailable]="day.record && !day.record.disponible"
-          [class.is-booked]="isBooked(day)"
-          [class.is-range]="isInRange(day.iso)"
-          [class.is-edge]="selectedStart() === day.iso || selectedEnd() === day.iso"
+          [class.is-available]="mode() === 'setup' || day.record?.disponible"
+          [class.is-unavailable]="!day.past && mode() !== 'setup' && !day.record?.disponible"
+          [class.is-booked]="!!day.record?.reserva"
+          [class.is-range]="mode() !== 'manage' && isInRange(day.iso)"
+          [class.is-preview]="isPreview(day.iso)"
+          [class.is-edge]="
+            mode() !== 'manage' && (selectedStart() === day.iso || selectedEnd() === day.iso)
+          "
+          [attr.aria-pressed]="
+            mode() === 'manage'
+              ? !!day.record?.disponible
+              : isInRange(day.iso) || selectedStart() === day.iso
+          "
+          [attr.aria-current]="day.iso === today ? 'date' : null"
+          [attr.aria-label]="dayLabel(day)"
+          [attr.data-date]="day.iso"
+          (mouseenter)="hoveredDate.set(day.iso)"
+          (focus)="hoveredDate.set(day.iso)"
+          (blur)="hoveredDate.set(null)"
           (click)="select(day)"
-          [attr.aria-label]="day.iso"
-        >{{ day.day }}</button>
-      } @else { <span></span> }
+        >
+          {{ day.day }}
+        </button>
+      } @else {
+        <span aria-hidden="true"></span>
+      }
     }
   </div>
-
-  <footer class="calendar__legend">
-    @if (mode() === 'manage') {
+  <footer class="calendar__footer">
+    <div class="calendar__legend">
       <span><i class="legend-available"></i>Disponible</span>
-      <span><i class="legend-blocked"></i>Bloqueado</span>
-      <span><i class="legend-booked"></i>Reservado</span>
-    } @else if (mode() === 'select') {
-      <span><i class="legend-available"></i>Disponible</span>
-      <span><i class="legend-blocked"></i>No disponible</span>
+      @if (mode() !== 'setup') {
+        <span
+          ><i class="legend-blocked"></i
+          >{{ mode() === 'manage' ? 'Bloqueado' : 'No disponible' }}</span
+        >
+      }
+      @if (mode() === 'manage') {
+        <span><i class="legend-booked"></i>Reservado</span>
+      } @else {
+        <span><i class="legend-selected"></i>Tu selección</span>
+      }
+    </div>
+    @if (mode() !== 'manage') {
+      <div class="calendar__summary" aria-live="polite">
+        @if (duration()) {
+          <strong
+            >{{ duration() }}
+            {{ duration() === 1 ? 'día seleccionado' : 'días seleccionados' }}</strong
+          >
+          <span>{{
+            mode() === 'setup'
+              ? 'Se habilitarán estos días al guardar.'
+              : 'El primer y el último día están incluidos.'
+          }}</span>
+        } @else if (selectedStart()) {
+          <span>Falta elegir el último día.</span>
+          <button class="calendar__clear" type="button" (click)="setSelectionType('single')">
+            Usar solo este día
+          </button>
+        } @else {
+          <span>{{
+            mode() === 'setup'
+              ? 'Definí cuándo estará disponible tu propiedad.'
+              : 'Seleccioná tus fechas para ver el total.'
+          }}</span>
+        }
+      </div>
     }
   </footer>
+  @if (error()) {
+    <p class="calendar__error" role="alert">{{ error() }}</p>
+  }
 </section>

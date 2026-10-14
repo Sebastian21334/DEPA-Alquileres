@@ -18,29 +18,52 @@
               <label for="modalidad">Tipo de alquiler *</label>
               <select id="modalidad" formControlName="idModalidad">
                 <option [ngValue]="0" disabled>Seleccioná una opción</option>
-                @for (m of modalidades(); track m.id) { <option [ngValue]="m.id">{{ m.nombre }}</option> }
+                @for (m of modalidades(); track m.id) {
+                  <option [ngValue]="m.id">{{ m.nombre }}</option>
+                }
               </select>
-              @if (invalido('idModalidad')) { <span class="acct-hint acct-hint--error">Elegí el tipo de alquiler.</span> }
+              @if (invalido('idModalidad')) {
+                <span class="acct-hint acct-hint--error">Elegí el tipo de alquiler.</span>
+              }
             </div>
             <div class="acct-field">
               <label for="tipo">Tipo de propiedad *</label>
               <select id="tipo" formControlName="idTipoPropiedad">
                 <option [ngValue]="0" disabled>Seleccioná una opción</option>
-                @for (t of tiposPropiedad(); track t.id) { <option [ngValue]="t.id">{{ t.nombre }}</option> }
+                @for (t of tiposPropiedad(); track t.id) {
+                  <option [ngValue]="t.id">{{ t.nombre }}</option>
+                }
               </select>
-              @if (invalido('idTipoPropiedad')) { <span class="acct-hint acct-hint--error">Elegí el tipo de propiedad.</span> }
+              @if (invalido('idTipoPropiedad')) {
+                <span class="acct-hint acct-hint--error">Elegí el tipo de propiedad.</span>
+              }
             </div>
             <div class="acct-field acct-span">
               <label for="titulo">Título de la publicación *</label>
-              <input id="titulo" formControlName="titulo" maxlength="255" placeholder="Ej.: Departamento luminoso con balcón en el centro" />
-              @if (invalido('titulo')) { <span class="acct-hint acct-hint--error">Ingresá un título.</span> }
+              <input
+                id="titulo"
+                formControlName="titulo"
+                maxlength="255"
+                placeholder="Ej.: Departamento luminoso con balcón en el centro"
+              />
+              @if (invalido('titulo')) {
+                <span class="acct-hint acct-hint--error">Ingresá un título.</span>
+              }
             </div>
             <div class="acct-field acct-span">
               <label for="descripcion">Descripción *</label>
-              <textarea id="descripcion" formControlName="descripcion" maxlength="255"
-                placeholder="Describí los ambientes, el estado de la propiedad y qué la hace especial."></textarea>
+              <textarea
+                id="descripcion"
+                formControlName="descripcion"
+                maxlength="255"
+                placeholder="Describí los ambientes, el estado de la propiedad y qué la hace especial."
+              ></textarea>
               <span class="acct-hint" [class.acct-hint--error]="invalido('descripcion')">
-                {{ invalido('descripcion') ? 'Ingresá una descripción.' : form.controls.descripcion.value.length + '/255 caracteres' }}
+                {{
+                  invalido('descripcion')
+                    ? 'Ingresá una descripción.'
+                    : form.controls.descripcion.value.length + '/255 caracteres'
+                }}
               </span>
             </div>
           </div>
@@ -50,34 +73,31 @@
         <section class="step" id="ubicacion-mapa" appReveal>
           <h2><span class="step__num">02</span> Ubicación</h2>
           <div class="acct-grid">
-            <div class="acct-field">
-              <label for="provincia">Provincia *</label>
-              <select id="provincia" formControlName="idProvincia">
-                <option [ngValue]="0" disabled>Seleccioná</option>
-                @for (p of provincias(); track p.id) { <option [ngValue]="p.id">{{ p.nombre }}</option> }
-              </select>
-              @if (invalido('idProvincia')) { <span class="acct-hint acct-hint--error">Elegí la provincia.</span> }
-            </div>
-            <div class="acct-field">
-              <label for="ciudad">Ciudad *</label>
-              <select id="ciudad" formControlName="idCiudad">
-                <option [ngValue]="0" disabled>{{ cargandoCiudades() ? 'Cargando ciudades…' : 'Seleccioná' }}</option>
-                @for (grupo of gruposCiudades(); track grupo.provincia.id) {
-                  <optgroup [label]="grupo.provincia.nombre">
-                    @for (c of grupo.ciudades; track c.id) { <option [ngValue]="c.id">{{ c.nombre }}</option> }
-                  </optgroup>
-                }
-              </select>
-              @if (provinciaSinCiudades()) {
-                <span class="acct-hint acct-hint--error">Esta provincia todavía no tiene ciudades cargadas. Pedile a un administrador que las agregue.</span>
-              } @else if (invalido('idCiudad')) {
-                <span class="acct-hint acct-hint--error">Elegí la ciudad.</span>
-              }
-            </div>
+            <app-selector-ubicacion
+              class="acct-span"
+              idPrefix="crear-ubicacion"
+              [required]="true"
+              [provinciaId]="provinciaElegida() || null"
+              [localidadId]="ciudadElegida() || null"
+              [disabled]="enviando()"
+              [invalidProvincia]="invalido('idProvincia')"
+              [invalidLocalidad]="invalido('idCiudad')"
+              (provinciaChange)="seleccionarProvincia($event)"
+              (localidadChange)="seleccionarLocalidad($event)"
+              (nombresChange)="nombresUbicacion.set($event)"
+              (touched)="form.controls.idCiudad.markAsTouched()"
+            />
             <div class="acct-field acct-span">
               <label for="direccion">Calle y número *</label>
-              <input id="direccion" formControlName="direccion" maxlength="255" placeholder="Ej.: José Ingenieros 123" />
-              @if (invalido('direccion')) { <span class="acct-hint acct-hint--error">Ingresá la dirección.</span> }
+              <input
+                id="direccion"
+                formControlName="direccion"
+                maxlength="255"
+                placeholder="Ej.: José Ingenieros 123"
+              />
+              @if (invalido('direccion')) {
+                <span class="acct-hint acct-hint--error">Ingresá la dirección.</span>
+              }
             </div>
             <app-location-picker
               [direccion]="form.controls.direccion.value"
@@ -96,13 +116,31 @@
           <div class="acct-grid">
             <div class="acct-field">
               <label for="ambientes">Ambientes *</label>
-              <input id="ambientes" type="number" min="1" step="1" formControlName="cantidad_ambientes" placeholder="Ej.: 2" />
-              @if (invalido('cantidad_ambientes')) { <span class="acct-hint acct-hint--error">Mínimo 1 ambiente.</span> }
+              <input
+                id="ambientes"
+                type="number"
+                min="1"
+                step="1"
+                formControlName="cantidad_ambientes"
+                placeholder="Ej.: 2"
+              />
+              @if (invalido('cantidad_ambientes')) {
+                <span class="acct-hint acct-hint--error">Mínimo 1 ambiente.</span>
+              }
             </div>
             <div class="acct-field">
               <label for="superficie">Superficie total (m²) *</label>
-              <input id="superficie" type="number" min="1" step="0.01" formControlName="superficie" placeholder="Ej.: 45" />
-              @if (invalido('superficie')) { <span class="acct-hint acct-hint--error">Ingresá la superficie.</span> }
+              <input
+                id="superficie"
+                type="number"
+                min="1"
+                step="0.01"
+                formControlName="superficie"
+                placeholder="Ej.: 45"
+              />
+              @if (invalido('superficie')) {
+                <span class="acct-hint acct-hint--error">Ingresá la superficie.</span>
+              }
             </div>
           </div>
         </section>
@@ -110,9 +148,20 @@
         <!-- 04 -->
         <section class="step" id="fotos" appReveal [class.step--error]="faltanFotos()">
           <h2><span class="step__num">04</span> Fotos de la propiedad *</h2>
-          <label class="drop" [class.is-dragging]="arrastrando()" [class.drop--error]="faltanFotos()"
-            (dragover)="onDragOver($event)" (dragleave)="arrastrando.set(false)" (drop)="onDrop($event)">
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple (change)="agregarDesdeInput($event)" />
+          <label
+            class="drop"
+            [class.is-dragging]="arrastrando()"
+            [class.drop--error]="faltanFotos()"
+            (dragover)="onDragOver($event)"
+            (dragleave)="arrastrando.set(false)"
+            (drop)="onDrop($event)"
+          >
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              multiple
+              (change)="agregarDesdeInput($event)"
+            />
             <span class="drop__icon"><svg lucideImagePlus [size]="30"></svg></span>
             <strong>Mostrá lo mejor de tu propiedad</strong>
             <span>Arrastrá tus fotos acá o elegilas desde tu dispositivo.</span>
@@ -124,8 +173,15 @@
               @for (img of imagenes(); track img.preview; let i = $index) {
                 <figure class="photo">
                   <img [src]="img.preview" [alt]="'Foto ' + (i + 1)" />
-                  @if (i === 0) { <span class="photo__cover">Portada</span> }
-                  <button type="button" class="photo__remove" aria-label="Quitar foto" (click)="quitarImagen(i)">
+                  @if (i === 0) {
+                    <span class="photo__cover">Portada</span>
+                  }
+                  <button
+                    type="button"
+                    class="photo__remove"
+                    aria-label="Quitar foto"
+                    (click)="quitarImagen(i)"
+                  >
                     <svg lucideX [size]="16"></svg>
                   </button>
                 </figure>
@@ -133,10 +189,17 @@
             </div>
           }
           @if (faltanFotos()) {
-            <p class="acct-hint acct-hint--error" role="alert">Tenés que agregar al menos una foto para publicar la propiedad.</p>
+            <p class="acct-hint acct-hint--error" role="alert">
+              Tenés que agregar al menos una foto para publicar la propiedad.
+            </p>
           }
-          <p class="acct-hint">Es obligatorio subir al menos una. La primera foto será la portada. Usá imágenes claras de los ambientes y la fachada (JPG, PNG, WEBP o HEIC, hasta 10 MB).</p>
-          @if (avisoImagenes()) { <p class="acct-hint acct-hint--error">{{ avisoImagenes() }}</p> }
+          <p class="acct-hint">
+            Es obligatorio subir al menos una. La primera foto será la portada. Usá imágenes claras
+            de los ambientes y la fachada (JPG, PNG, WEBP o HEIC, hasta 10 MB).
+          </p>
+          @if (avisoImagenes()) {
+            <p class="acct-hint acct-hint--error">{{ avisoImagenes() }}</p>
+          }
         </section>
 
         <!-- 05 -->
@@ -147,14 +210,27 @@
               <label for="moneda">Moneda *</label>
               <select id="moneda" formControlName="idTipoMoneda">
                 <option [ngValue]="0" disabled>Seleccioná</option>
-                @for (m of monedas(); track m.id) { <option [ngValue]="m.id">{{ m.nombre }}</option> }
+                @for (m of monedas(); track m.id) {
+                  <option [ngValue]="m.id">{{ m.nombre }}</option>
+                }
               </select>
-              @if (invalido('idTipoMoneda')) { <span class="acct-hint acct-hint--error">Elegí la moneda.</span> }
+              @if (invalido('idTipoMoneda')) {
+                <span class="acct-hint acct-hint--error">Elegí la moneda.</span>
+              }
             </div>
             <div class="acct-field">
               <label for="precio">Precio del alquiler *</label>
-              <input id="precio" type="number" min="1" step="0.01" formControlName="precio" placeholder="Ej.: 350000" />
-              @if (invalido('precio')) { <span class="acct-hint acct-hint--error">Ingresá un precio mayor a 0.</span> }
+              <input
+                id="precio"
+                type="number"
+                min="1"
+                step="0.01"
+                formControlName="precio"
+                placeholder="Ej.: 350000"
+              />
+              @if (invalido('precio')) {
+                <span class="acct-hint acct-hint--error">Ingresá un precio mayor a 0.</span>
+              }
             </div>
           </div>
         </section>
@@ -163,33 +239,29 @@
           <section class="step" id="disponibilidad" appReveal>
             <h2><span class="step__num">06</span> Días disponibles *</h2>
             <p class="availability-help">
-              Elegí el primer y el último día del período que querés habilitar. Después vas a poder
+              Habilitá un día o un período para recibir reservas. Después vas a poder
               bloquear días puntuales desde “Modificar publicación”.
             </p>
             <app-availability-calendar
               mode="setup"
               [selectedStart]="disponibilidadInicio()"
               [selectedEnd]="disponibilidadFin()"
-              (dateSelected)="seleccionarDisponibilidad($event)"
+              (rangeChange)="seleccionarDisponibilidad($event)"
             />
-            <p class="availability-summary" aria-live="polite">
-              @if (disponibilidadInicio() && disponibilidadFin()) {
-                Período disponible: <strong>{{ disponibilidadInicio() }}</strong> al
-                <strong>{{ disponibilidadFin() }}</strong>
-              } @else if (disponibilidadInicio()) {
-                Inicio: <strong>{{ disponibilidadInicio() }}</strong>. Ahora elegí el último día.
-              } @else {
-                Seleccioná una fecha de inicio.
-              }
-            </p>
           </section>
         }
 
-        <p class="create__note">Antes de publicar, revisá que los datos y las fotos sean correctos.</p>
-        @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
+        <p class="create__note">
+          Antes de publicar, revisá que los datos y las fotos sean correctos.
+        </p>
+        @if (error()) {
+          <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
+        }
 
         <div class="acct-actions">
-          @if (enviando()) { <span class="progress">{{ progreso() }}</span> }
+          @if (enviando()) {
+            <span class="progress">{{ progreso() }}</span>
+          }
           <a routerLink="/mis-publicaciones" class="acct-btn acct-btn--ghost">Cancelar</a>
           <button type="submit" class="acct-btn acct-btn--primary shine" [disabled]="enviando()">
             {{ enviando() ? 'Publicando…' : 'Publicar propiedad' }}
@@ -201,9 +273,18 @@
         <h2>Una buena publicación empieza acá</h2>
         <p>Completá los datos con claridad para recibir consultas que se ajusten a tu propiedad.</p>
         <ol>
-          <li><strong>Contá qué la hace especial</strong><span>Sumá un título concreto y una descripción de sus ambientes.</span></li>
-          <li><strong>Cuidá las fotos</strong><span>Elegí una portada luminosa y evitá imágenes borrosas.</span></li>
-          <li><strong>Aclará las condiciones</strong><span>Detallá el precio y la moneda. Los campos con * son obligatorios.</span></li>
+          <li>
+            <strong>Contá qué la hace especial</strong
+            ><span>Sumá un título concreto y una descripción de sus ambientes.</span>
+          </li>
+          <li>
+            <strong>Cuidá las fotos</strong
+            ><span>Elegí una portada luminosa y evitá imágenes borrosas.</span>
+          </li>
+          <li>
+            <strong>Aclará las condiciones</strong
+            ><span>Detallá el precio y la moneda. Los campos con * son obligatorios.</span>
+          </li>
         </ol>
       </aside>
     </div>

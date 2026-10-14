@@ -1,5 +1,16 @@
+import { ReservaLiquidacionesService } from '../service/reserva-liquidaciones.service';
+import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
 // reservas/controlador/reservas.controller.ts
-import { Controller, Get, Patch, Body, Param, ParseIntPipe, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  Param,
+  ParseIntPipe,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { ReservasService } from '../service/reservas.service';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -11,18 +22,21 @@ import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 
 @Controller('reservas')
 export class ReservasController {
-  constructor(private readonly reservasService: ReservasService) {}
+  constructor(
+    private readonly reservasService: ReservasService,
+    private readonly liquidacionesService: ReservaLiquidacionesService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get('mis-reservas')
   // Filtra el historial por el usuario autenticado.
-  listarPorUsuario(@Req() req: any) {
+  listarPorUsuario(@Req() req: AuthenticatedRequest) {
     return this.reservasService.listarPorUsuario(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('recibidas')
-  listarRecibidas(@Req() req: any) {
+  listarRecibidas(@Req() req: AuthenticatedRequest) {
     return this.reservasService.listarRecibidasPorAnunciante(req.user.id);
   }
 
@@ -30,25 +44,37 @@ export class ReservasController {
   @Roles('Administrador')
   @Get('liquidaciones/administracion')
   listarLiquidacionesAdministracion() {
-    return this.reservasService.listarLiquidacionesAdministracion();
+    return this.liquidacionesService.listarLiquidacionesAdministracion();
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('publicacion/:id')
-  listarPorPublicacion(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  listarPorPublicacion(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.reservasService.listarPorPublicacion(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  buscarPorId(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  buscarPorId(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.reservasService.buscarPorId(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id/codigo-alojamiento')
-  consultarCodigo(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    return this.reservasService.consultarCodigoAlojamiento(id, req.user.id);
+  consultarCodigo(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.liquidacionesService.consultarCodigoAlojamiento(
+      id,
+      req.user.id,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -56,9 +82,13 @@ export class ReservasController {
   validarCodigo(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ValidarCodigoAlojamientoDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.reservasService.validarCodigoAlojamiento(id, dto.codigo, req.user.id);
+    return this.liquidacionesService.validarCodigoAlojamiento(
+      id,
+      dto.codigo,
+      req.user.id,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -66,9 +96,13 @@ export class ReservasController {
   reportarProblema(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ReportarProblemaReservaDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.reservasService.reportarProblema(id, dto.motivo, req.user.id);
+    return this.liquidacionesService.reportarProblema(
+      id,
+      dto.motivo,
+      req.user.id,
+    );
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -78,18 +112,24 @@ export class ReservasController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ResolverLiquidacionDto,
   ) {
-    return this.reservasService.resolverLiquidacion(id, dto);
+    return this.liquidacionesService.resolverLiquidacion(id, dto);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/finalizar')
-  finalizar(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  finalizar(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.reservasService.finalizar(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/cancelar')
-  cancelar(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  cancelar(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
     return this.reservasService.cancelar(id, req.user.id);
   }
 
@@ -98,7 +138,7 @@ export class ReservasController {
   actualizarFechas(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ActualizarFechasReservaDto,
-    @Req() req: any,
+    @Req() req: AuthenticatedRequest,
   ) {
     return this.reservasService.actualizarFechas(id, dto, req.user.id);
   }

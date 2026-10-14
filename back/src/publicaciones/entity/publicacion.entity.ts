@@ -1,4 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+} from 'typeorm';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { Provincia } from '../../ubicacion/entity/provincia.entity';
 import { Ciudad } from '../../ubicacion/entity/ciudad.entity';
@@ -52,28 +60,28 @@ export class Publicacion {
   // Catálogos y ubicación se guardan como FK para evitar repetir sus nombres.
   @ManyToOne(() => TipoMoneda)
   @JoinColumn({ name: 'id_tipo_moneda' })
-  tipoMoneda: TipoMoneda;
+  tipoMoneda: Relation<TipoMoneda>;
 
   @ManyToOne(() => Modalidad)
   @JoinColumn({ name: 'id_modalidad' })
-  modalidad: Modalidad;
+  modalidad: Relation<Modalidad>;
 
   @ManyToOne(() => Anunciante, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_anunciante' })
-  anunciante: Anunciante;
+  anunciante: Relation<Anunciante>;
 
   @ManyToOne(() => Provincia)
   @JoinColumn({ name: 'id_provincia' })
-  provincia: Provincia;
+  provincia: Relation<Provincia>;
 
   @ManyToOne(() => Ciudad)
   @JoinColumn({ name: 'id_ciudad' })
-  ciudad: Ciudad;
+  ciudad: Relation<Ciudad>;
 
   @ManyToOne(() => TipoPropiedad)
   @JoinColumn({ name: 'id_tipo_propiedad' })
-  tipoPropiedad: TipoPropiedad;
+  tipoPropiedad: Relation<TipoPropiedad>;
 
   @OneToMany(() => Imagen, (imagen) => imagen.publicacion)
-  imagenes: Imagen[]
+  imagenes: Relation<Imagen[]>;
 }

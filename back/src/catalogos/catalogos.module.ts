@@ -8,13 +8,19 @@ import { TipoMoneda } from './entity/tipo-moneda.entity';
 import { CatalogosRepository } from './repository/catalogos.repository';
 import { CATALOGOS_REPOSITORY } from './repository/catalogos.repository.interface';
 import { CatalogosService } from './service/catalogos.service';
-import { CatalogosController } from './controlador/catalogos.controller';
-import {AuthModule} from "../auth/auth.module";
+import { CatalogosController } from './controller/catalogos.controller';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   // Centraliza las tablas maestras que son referenciadas por otros módulos.
   imports: [
-    TypeOrmModule.forFeature([Rol, TipoAnunciante, TipoPropiedad, Modalidad, TipoMoneda]),
+    TypeOrmModule.forFeature([
+      Rol,
+      TipoAnunciante,
+      TipoPropiedad,
+      Modalidad,
+      TipoMoneda,
+    ]),
     forwardRef(() => AuthModule),
   ],
   controllers: [CatalogosController],

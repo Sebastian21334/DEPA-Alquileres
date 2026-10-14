@@ -1,3 +1,4 @@
+import type { AnuncianteRequest } from '../../auth/interfaces/authenticated-request.interface';
 import {
   Controller,
   Post,
@@ -17,7 +18,13 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AnuncianteGuard } from '../../common/guards/anunciante.guard';
 import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
 
-const TIPOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+const TIPOS_PERMITIDOS = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
 
 @Controller('imagenes')
 export class ImagenesController {
@@ -33,7 +40,9 @@ export class ImagenesController {
         // Validar MIME temprano evita procesar o almacenar formatos no soportados.
         if (!TIPOS_PERMITIDOS.includes(file.mimetype)) {
           return callback(
-            new BadRequestException('Solo se permiten imágenes (JPEG, PNG, WEBP, HEIC)'),
+            new BadRequestException(
+              'Solo se permiten imágenes (JPEG, PNG, WEBP, HEIC)',
+            ),
             false,
           );
         }
@@ -41,24 +50,29 @@ export class ImagenesController {
       },
     }),
   )
-  // AnuncianteGuard agrega req.anunciante después de comprobar que el usuario es propietario.
+  // AnuncianteGuard agrega req.anunciante después de comprobar que el usuario es un anunciante verificado.
   async subir(
     @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
     @UploadedFile() archivo: ArchivoSubido,
-    @Req() req: any,
+    @Req() req: AnuncianteRequest,
   ) {
     if (!archivo) throw new BadRequestException('No se envió ningún archivo');
     return this.imagenesService.subir(idPublicacion, req.anunciante, archivo);
   }
 
   @Get('publicacion/:idPublicacion')
-  async listarPorPublicacion(@Param('idPublicacion', ParseIntPipe) idPublicacion: number) {
+  async listarPorPublicacion(
+    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
+  ) {
     return this.imagenesService.listarPorPublicacion(idPublicacion);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
-  async eliminar(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  async eliminar(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AnuncianteRequest,
+  ) {
     return this.imagenesService.eliminar(id, req.anunciante);
   }
 }

@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+import type { AnuncianteRequest } from '../../auth/interfaces/authenticated-request.interface';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 
 @Injectable()
@@ -7,12 +13,15 @@ export class AnuncianteGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Este guard se ejecuta después de JwtAuthGuard, por eso req.user ya existe.
-    const req = context.switchToHttp().getRequest();
+    const req = context.switchToHttp().getRequest<AnuncianteRequest>();
     const idUsuario = req.user.id;
 
-    const anunciante = await this.anunciantesService.buscarPorUsuario(idUsuario);
+    const anunciante =
+      await this.anunciantesService.buscarPorUsuario(idUsuario);
     if (!anunciante || !anunciante.verificado) {
-      throw new ForbiddenException('Debe ser un anunciante verificado para realizar esta acción');
+      throw new ForbiddenException(
+        'Debe ser un anunciante verificado para realizar esta acción',
+      );
     }
 
     // El controller recibe el anunciante ya cargado y evita repetir esta consulta.

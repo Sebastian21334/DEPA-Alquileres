@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
@@ -108,15 +115,14 @@ export class Reserva {
 
   @Column({ type: 'boolean', default: false })
   email_nueva_reserva_anunciante_enviado: boolean;
-  
+
   // Usuario que realiza la reserva (Inquilino)
   @ManyToOne(() => Usuario, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_usuario' })
-  usuario: Usuario | null;
+  usuario: Relation<Usuario | null>;
 
   // Publicación que se está reservando
   @ManyToOne(() => Publicacion, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_publicacion' })
-  publicacion: Publicacion | null;
-
+  publicacion: Relation<Publicacion | null>;
 }

@@ -5,7 +5,7 @@ import { Usuario } from '../entity/usuario.entity';
 import { IUsuariosRepository } from './usuarios.repository.interface';
 
 @Injectable()
-export class UsuariosRepository implements IUsuariosRepository {  
+export class UsuariosRepository implements IUsuariosRepository {
   constructor(
     @InjectRepository(Usuario)
     private readonly repo: Repository<Usuario>,
@@ -36,7 +36,7 @@ export class UsuariosRepository implements IUsuariosRepository {
 
   async buscarPorId(id: number): Promise<Usuario | null> {
     return this.repo.findOne({
-      where: { id: id }, // ajustá el nombre de la PK según tu convención
+      where: { id: id },
       relations: { rol: true },
     });
   }
@@ -47,13 +47,15 @@ export class UsuariosRepository implements IUsuariosRepository {
 
   async buscarParaLogin(email: string): Promise<Usuario | null> {
     // La contraseña tiene select:false en la entidad y debe pedirse explícitamente solo aquí.
-    return this.repo
-      .createQueryBuilder('u')
-      .addSelect('u.contrasenia') // <-- Fuerza traer la columna oculta
-      // El rol se necesita para autorizar la sesión y para incluirlo en el JWT.
-      .leftJoinAndSelect('u.rol', 'rol')
-      .where('u.email = :email', { email })
-      .getOne();
+    return (
+      this.repo
+        .createQueryBuilder('u')
+        .addSelect('u.contrasenia')
+        // El rol se necesita para autorizar la sesión y para incluirlo en el JWT.
+        .leftJoinAndSelect('u.rol', 'rol')
+        .where('u.email = :email', { email })
+        .getOne()
+    );
   }
 
   buscarPorTokenVerificacion(token: string): Promise<Usuario | null> {
@@ -72,5 +74,4 @@ export class UsuariosRepository implements IUsuariosRepository {
       .where('u.token_recuperacion = :token', { token })
       .getOne();
   }
-
 }

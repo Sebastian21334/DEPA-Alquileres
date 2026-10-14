@@ -11,18 +11,17 @@
   </div>
 
   <div class="advanced__controls" [formGroup]="form()">
-    <label class="advanced__field">
-      <svg lucideMapPin [size]="23" aria-hidden="true"></svg>
-      <span>
-        <small>Ubicación</small>
-        <select (change)="seleccionarCiudadUnica($any($event.target).value)">
-          <option value="">Todas las ciudades</option>
-          @for (ciudad of ciudades(); track ciudad.id) {
-            <option [value]="ciudad.id" [selected]="ciudadesSeleccionadasIds.includes(ciudad.id)">{{ etiquetaCiudad(ciudad) }}</option>
-          }
-        </select>
-      </span>
-    </label>
+    <div class="advanced__location">
+      <app-selector-ubicacion
+        idPrefix="filtro-ubicacion"
+        [compact]="true"
+        [provinciaId]="form().controls['idProvincia']?.value ?? null"
+        [localidadId]="ciudadesSeleccionadasIds[0] ?? null"
+        [disabled]="!activos().ubicacion"
+        (provinciaChange)="seleccionarProvincia($event)"
+        (localidadChange)="seleccionarCiudadUnica($event)"
+      />
+    </div>
 
     <label class="advanced__field">
       <svg lucideHome [size]="23" aria-hidden="true"></svg>
@@ -31,7 +30,9 @@
         <select (change)="seleccionarTipoPropiedadUnica($any($event.target).value)">
           <option value="">Todas</option>
           @for (tipo of tiposPropiedad(); track tipo.id) {
-            <option [value]="tipo.id" [selected]="tipoPropiedadSeleccionado(tipo.id)">{{ tipo.nombre }}</option>
+            <option [value]="tipo.id" [selected]="tipoPropiedadSeleccionado(tipo.id)">
+              {{ tipo.nombre }}
+            </option>
           }
         </select>
       </span>
@@ -42,9 +43,21 @@
       <span>
         <small>Precio mensual</small>
         <span class="advanced__price-inputs">
-          <input type="number" min="0" placeholder="Desde" [value]="form().controls['precioMin'].value ?? ''" (input)="onPrecioMinInput($any($event.target).value)" />
+          <input
+            type="number"
+            min="0"
+            placeholder="Desde"
+            [value]="form().controls['precioMin'].value ?? ''"
+            (input)="onPrecioMinInput($any($event.target).value)"
+          />
           <b>—</b>
-          <input type="number" min="0" placeholder="Hasta" [value]="form().controls['precioMax'].value ?? ''" (input)="onPrecioMaxInput($any($event.target).value)" />
+          <input
+            type="number"
+            min="0"
+            placeholder="Hasta"
+            [value]="form().controls['precioMax'].value ?? ''"
+            (input)="onPrecioMaxInput($any($event.target).value)"
+          />
         </span>
       </span>
     </label>

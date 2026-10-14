@@ -23,6 +23,8 @@ import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-r
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 import { VerificacionFacialService } from '../service/verificacion-facial.service';
 
+import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
+
 const TIPOS_DOCUMENTO = [
   // Las tres fotos proceden de la captura de cámara del flujo de identidad.
   'image/jpeg',
@@ -37,11 +39,14 @@ const DOCUMENTOS_INTERCEPTOR = FileFieldsInterceptor(
   ],
   {
     // Multer limita el archivo antes de entregarlo al servicio.
-    limits: { fileSize: 20 * 1024 * 1024 },
+    limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (req, file, callback) => {
       // El MIME se valida temprano para no almacenar formatos no soportados.
       if (!TIPOS_DOCUMENTO.includes(file.mimetype)) {
-        return callback(new BadRequestException('Formato de documento no permitido'), false);
+        return callback(
+          new BadRequestException('Formato de documento no permitido'),
+          false,
+        );
       }
       callback(null, true);
     },
@@ -60,7 +65,12 @@ const EVIDENCIAS_VITALIDAD_INTERCEPTOR = FileFieldsInterceptor(
     limits: { fileSize: 5 * 1024 * 1024, files: 5 },
     fileFilter: (_req, file, callback) => {
       if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
-        return callback(new BadRequestException('Las evidencias faciales deben ser imágenes JPG o PNG'), false);
+        return callback(
+          new BadRequestException(
+            'Las evidencias faciales deben ser imágenes JPG o PNG',
+          ),
+          false,
+        );
       }
       callback(null, true);
     },
@@ -86,7 +96,10 @@ export class AnunciantesController {
     @Req() req: AuthenticatedRequest,
     @Body('challengeToken') challengeToken: string,
   ) {
-    return this.verificacionFacialService.cambiarDesafio(req.user.id, challengeToken);
+    return this.verificacionFacialService.cambiarDesafio(
+      req.user.id,
+      challengeToken,
+    );
   }
 
   @Post('verificacion-facial/validar')
@@ -95,7 +108,7 @@ export class AnunciantesController {
   validarVitalidad(
     @Req() req: AuthenticatedRequest,
     @Body('challengeToken') challengeToken: string,
-    @UploadedFiles() archivos: any,
+    @UploadedFiles() archivos: Record<string, ArchivoSubido[] | undefined> = {},
   ) {
     return this.verificacionFacialService.validarVitalidad(
       req.user.id,
@@ -120,7 +133,7 @@ export class AnunciantesController {
   async subirDocumentos(
     @Req() req: AuthenticatedRequest,
     @Body('verificationToken') verificationToken: string,
-    @UploadedFiles() archivos: any,
+    @UploadedFiles() archivos: Record<string, ArchivoSubido[] | undefined> = {},
   ) {
     // El usuario autenticado se obtiene del JWT; nunca se recibe un ID manipulable.
     return this.anunciantesService.subirDocumentos(
@@ -136,7 +149,7 @@ export class AnunciantesController {
   async reenviarDocumentos(
     @Req() req: AuthenticatedRequest,
     @Body('verificationToken') verificationToken: string,
-    @UploadedFiles() archivos: any,
+    @UploadedFiles() archivos: Record<string, ArchivoSubido[] | undefined> = {},
   ) {
     // El servicio solo permite este endpoint si la solicitud anterior fue rechazada.
     return this.anunciantesService.subirDocumentos(
@@ -182,6 +195,4 @@ export class AnunciantesController {
     // El motivo se valida mediante DTO y queda guardado en el historial.
     return this.anunciantesService.rechazar(id, dto);
   }
-
-  
 }

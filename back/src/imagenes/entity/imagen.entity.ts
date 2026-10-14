@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
 @Entity('imagen')
@@ -11,7 +18,9 @@ export class Imagen {
   url: string;
 
   // La relación inversa permite cargar todas las imágenes de una publicación.
-  @ManyToOne(() => Publicacion, (publicacion) => publicacion.imagenes, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Publicacion, (publicacion) => publicacion.imagenes, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'id_publicacion' })
-  publicacion: Publicacion;;
+  publicacion: Relation<Publicacion>;
 }

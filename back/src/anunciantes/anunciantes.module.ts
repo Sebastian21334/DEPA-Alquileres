@@ -1,3 +1,6 @@
+import { FaceApiAnalisisRepository } from './repository/face-api-analisis.repository';
+import { ANALISIS_FACIAL_REPOSITORY } from './repository/analisis-facial.repository.interface';
+import { AlmacenamientoModule } from '../common/almacenamiento/almacenamiento.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Anunciante } from './entity/anunciante.entity';
@@ -9,7 +12,7 @@ import { AnunciantesService } from './service/anunciantes.service';
 import { AnunciantesController } from './controller/anunciantes.controller';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { CatalogosModule } from '../catalogos/catalogos.module';
-import { AuthModule } from '../auth/auth.module'; // <- agregar
+import { AuthModule } from '../auth/auth.module';
 import { MailModule } from '../mail/mail.module';
 import { VERIFICACION_REPOSITORY } from './repository/verificacion.repository.interface';
 import { VerificacionRepository } from './repository/verificacion.repository';
@@ -19,6 +22,11 @@ import { VerificacionFacialService } from './service/verificacion-facial.service
   // Agrupa endpoints, reglas de negocio y persistencia de solicitudes de anunciante.
   controllers: [AnunciantesController],
   providers: [
+    FaceApiAnalisisRepository,
+    {
+      provide: ANALISIS_FACIAL_REPOSITORY,
+      useExisting: FaceApiAnalisisRepository,
+    },
     AnunciantesRepository,
     {
       provide: ANUNCIANTES_REPOSITORY,
@@ -33,8 +41,13 @@ import { VerificacionFacialService } from './service/verificacion-facial.service
     },
   ],
   imports: [
+    AlmacenamientoModule,
     // Habilita consultas TypeORM sobre la entidad Anunciante.
-    TypeOrmModule.forFeature([Anunciante, SolicitudVerificacion, RevisionVerificacion]),
+    TypeOrmModule.forFeature([
+      Anunciante,
+      SolicitudVerificacion,
+      RevisionVerificacion,
+    ]),
     // Estas dependencias permiten validar el usuario, el tipo de anunciante y el JWT.
     UsuariosModule,
     CatalogosModule,

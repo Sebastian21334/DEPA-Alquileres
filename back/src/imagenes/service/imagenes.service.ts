@@ -1,6 +1,13 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { BlobServiceClient } from '@azure/storage-blob';
+import { ARCHIVO_REPOSITORY } from '../../common/almacenamiento/archivo.repository.interface';
+import type { IArchivoRepository } from '../../common/almacenamiento/archivo.repository.interface';
+import { randomUUID } from 'node:crypto';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import sharp from 'sharp';
 import { IMAGENES_REPOSITORY } from '../repository/imagenes.repository.interface';
 import type { IImagenesRepository } from '../repository/imagenes.repository.interface';
@@ -10,26 +17,27 @@ import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.inter
 
 @Injectable()
 export class ImagenesService {
-  private readonly blobServiceClient: BlobServiceClient;
-  private readonly containerName: string;
-
   constructor(
     @Inject(IMAGENES_REPOSITORY)
     private readonly imagenesRepo: IImagenesRepository,
     private readonly publicacionesService: PublicacionesService,
-    private readonly configService: ConfigService,
-  ) {
-    const connectionString = this.configService.get<string>('AZURE_STORAGE_CONNECTION_STRING')!;
-    this.containerName = this.configService.get<string>('AZURE_STORAGE_CONTAINER') ?? 'imagenes';
-    this.blobServiceClient = BlobServiceClient.fromConnectionString(connectionString);
-  }
+    @Inject(ARCHIVO_REPOSITORY)
+    private readonly archivosRepo: IArchivoRepository,
+  ) {}
 
   /** Procesa una imagen, la guarda en Azure y registra su URL en la base. */
-  async subir(idPublicacion: number, anuncianteQueOpera: Anunciante, archivo: ArchivoSubido) {
-    const publicacion = await this.publicacionesService.buscarPorId(idPublicacion);
+  async subir(
+    idPublicacion: number,
+    anuncianteQueOpera: Anunciante,
+    archivo: ArchivoSubido,
+  ) {
+    const publicacion =
+      await this.publicacionesService.buscarPorId(idPublicacion);
 
     if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
-      throw new ForbiddenException('No podés subir imágenes a una publicación que no es tuya');
+      throw new ForbiddenException(
+        'No podés subir imágenes a una publicación que no es tuya',
+      );
     }
 
     // Validar el contenido real evita aceptar archivos disfrazados con un mimetype de imagen.
@@ -44,18 +52,15 @@ export class ImagenesService {
       throw new BadRequestException('El archivo no es una imagen válida');
     }
 
-    const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
-    // El nombre incluye la publicacion y la hora para evitar colisiones entre cargas.
-    const nombreBlob = `publicaciones/${idPublicacion}-${Date.now()}.jpg`;
-    const blockBlobClient = containerClient.getBlockBlobClient(nombreBlob);
-
-    // Azure recibe solo la versión procesada, reduciendo peso y estandarizando la URL.
-    await blockBlobClient.uploadData(bufferProcesado, {
-      blobHTTPHeaders: { blobContentType: 'image/jpeg' },
-    });
+    const url = await this.archivosRepo.subir(
+      'imagenes',
+      `publicaciones/${idPublicacion}-${randomUUID()}.jpg`,
+      bufferProcesado,
+      'image/jpeg',
+    );
 
     const nuevaImagen = this.imagenesRepo.crear({
-      url: blockBlobClient.url,
+      url,
       publicacion,
     });
 
@@ -70,21 +75,25 @@ export class ImagenesService {
     const imagen = await this.imagenesRepo.buscarPorId(idImagen);
     if (!imagen) throw new NotFoundException('Imagen no encontrada');
 
-    if (imagen.publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
-      throw new ForbiddenException('No podés eliminar una imagen que no es tuya');
+    if (
+      imagen.publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario
+    ) {
+      throw new ForbiddenException(
+        'No podés eliminar una imagen que no es tuya',
+      );
     }
 
     // Regla de negocio: la publicación debe conservar al menos una imagen.
-    const imagenesDePublicacion = await this.imagenesRepo.buscarPorPublicacion(imagen.publicacion.id);
+    const imagenesDePublicacion = await this.imagenesRepo.buscarPorPublicacion(
+      imagen.publicacion.id,
+    );
     if (imagenesDePublicacion.length <= 1) {
       throw new BadRequestException(
         'Una publicación debe tener al menos una imagen. Subí otra antes de borrar esta.',
       );
     }
 
-    const containerClient = this.blobServiceClient.getContainerClient(this.containerName);
-    const nombreBlob = this.extraerNombreBlobDeUrl(imagen.url);
-    await containerClient.deleteBlob(nombreBlob);
+    await this.archivosRepo.eliminarImagenPropia(imagen.url);
 
     return this.imagenesRepo.eliminar(imagen);
   }
@@ -92,12 +101,5 @@ export class ImagenesService {
   /** Lista las imagenes asociadas a una publicacion. */
   async listarPorPublicacion(idPublicacion: number) {
     return this.imagenesRepo.buscarPorPublicacion(idPublicacion);
-  }
-
-  /** Convierte la URL publica de Azure al nombre relativo usado para borrarla. */
-  private extraerNombreBlobDeUrl(url: string): string {
-    // La ruta contiene /<container>/<blob>; se descartan protocolo, host y container.
-    const partes = new URL(url).pathname.split('/');
-    return partes.slice(2).join('/');
   }
 }

@@ -1,3 +1,6 @@
+import { ARCHIVO_REPOSITORY } from '../../common/almacenamiento/archivo.repository.interface';
+import type { IArchivoRepository } from '../../common/almacenamiento/archivo.repository.interface';
+import { randomUUID } from 'node:crypto';
 import {
   Injectable,
   ConflictException,
@@ -16,10 +19,11 @@ import * as bcrypt from 'bcrypt';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import * as crypto from 'crypto';
 import sharp from 'sharp';
-import { BlobServiceClient } from '@azure/storage-blob';
 import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
+
+import type { CrearUsuarioDatos } from '../interfaces/crear-usuario.interface';
 
 @Injectable()
 export class UsuariosService {
@@ -27,11 +31,13 @@ export class UsuariosService {
 
   constructor(
     @Inject(USUARIOS_REPOSITORY)
-    private usuariosRepo: IUsuariosRepository,
+    private readonly usuariosRepo: IUsuariosRepository,
 
-    private catalogosService: CatalogosService,
-    private configService: ConfigService,
+    private readonly catalogosService: CatalogosService,
+    private readonly configService: ConfigService,
     @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
+    @Inject(ARCHIVO_REPOSITORY)
+    private readonly archivosRepo: IArchivoRepository,
   ) {}
 
   /** Busca un usuario por correo para validar duplicados o iniciar sesion. */
@@ -40,7 +46,7 @@ export class UsuariosService {
   }
 
   /** Busca un usuario por su clave primaria. */
-   async buscarPorId(id: number): Promise<Usuario | null> {
+  async buscarPorId(id: number): Promise<Usuario | null> {
     return this.usuariosRepo.buscarPorId(id);
   }
 
@@ -80,7 +86,9 @@ export class UsuariosService {
   /** Elimina un usuario. Las relaciones dependientes deben tener cascada configurada. */
   async eliminar(idUsuario: number, idOperador: number) {
     if (idUsuario === idOperador) {
-      throw new BadRequestException('No podés eliminar tu propia cuenta desde este endpoint');
+      throw new BadRequestException(
+        'No podés eliminar tu propia cuenta desde este endpoint',
+      );
     }
 
     const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
@@ -93,9 +101,16 @@ export class UsuariosService {
   }
 
   /** Bloquea o habilita el acceso de un usuario desde el panel administrativo. */
-  async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
+  async cambiarBloqueo(
+    idUsuario: number,
+    bloqueado: boolean,
+    idOperador: number,
+    motivo?: string,
+  ) {
     if (idUsuario === idOperador) {
-      throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');
+      throw new BadRequestException(
+        'No podés bloquearte o habilitarte a vos mismo',
+      );
     }
 
     const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
@@ -107,13 +122,22 @@ export class UsuariosService {
     await this.usuariosRepo.guardar(usuario);
 
     try {
-      await this.mailService.enviarCambioBloqueo(usuario.email, bloqueado, motivo?.trim());
+      await this.mailService.enviarCambioBloqueo(
+        usuario.email,
+        bloqueado,
+        motivo?.trim(),
+      );
     } catch (error) {
-      this.logger.error(`No se pudo notificar el cambio de acceso a ${usuario.email}`, error as Error);
+      this.logger.error(
+        `No se pudo notificar el cambio de acceso a ${usuario.email}`,
+        error as Error,
+      );
     }
 
     return {
-      mensaje: bloqueado ? 'Usuario bloqueado correctamente' : 'Usuario habilitado correctamente',
+      mensaje: bloqueado
+        ? 'Usuario bloqueado correctamente'
+        : 'Usuario habilitado correctamente',
     };
   }
 
@@ -147,13 +171,15 @@ export class UsuariosService {
 
     // Va al mismo contenedor público que las fotos de publicaciones, así la URL
     // es permanente y se puede mostrar sin firmar.
-    const blob = this.contenedorImagenes().getBlockBlobClient(
-      `usuarios/${idUsuario}/perfil-${Date.now()}.jpg`,
+    const url = await this.archivosRepo.subir(
+      'imagenes',
+      `usuarios/${idUsuario}/perfil-${randomUUID()}.jpg`,
+      contenido,
+      'image/jpeg',
     );
-    await blob.uploadData(contenido, { blobHTTPHeaders: { blobContentType: 'image/jpeg' } });
 
     const anterior = usuario.foto_url;
-    usuario.foto_url = blob.url;
+    usuario.foto_url = url;
     const actualizado = await this.usuariosRepo.guardar(usuario);
     await this.borrarFotoAnterior(anterior);
     return this.usuarioSinSecretos(actualizado);
@@ -172,24 +198,15 @@ export class UsuariosService {
     return this.usuarioSinSecretos(actualizado);
   }
 
-  private contenedorImagenes() {
-    const connectionString = this.configService.get<string>('AZURE_STORAGE_CONNECTION_STRING');
-    if (!connectionString) throw new Error('Falta AZURE_STORAGE_CONNECTION_STRING');
-    const container = this.configService.get<string>('AZURE_STORAGE_CONTAINER') ?? 'imagenes';
-    return BlobServiceClient.fromConnectionString(connectionString).getContainerClient(container);
-  }
-
   private async borrarFotoAnterior(url: string | null) {
     if (!url) return;
-    const contenedor = this.contenedorImagenes();
-    // Solo se borran blobs propios; nunca una URL externa.
-    if (!url.startsWith(contenedor.url)) return;
     try {
-      const nombreBlob = decodeURIComponent(new URL(url).pathname.split('/').slice(2).join('/'));
-      await contenedor.deleteBlob(nombreBlob);
+      await this.archivosRepo.eliminarImagenPropia(url);
     } catch (error) {
       // La foto nueva ya quedó guardada; un blob huérfano no debe romper la operación.
-      this.logger.warn(`No se pudo borrar la foto anterior ${url}: ${(error as Error).message}`);
+      this.logger.warn(
+        `No se pudo borrar la foto anterior ${url}: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -229,9 +246,11 @@ export class UsuariosService {
   }
 
   /** Hashea la contrasenia, asigna el rol inicial y persiste el usuario. */
-  async crear(datos: any): Promise<Usuario> {
+  async crear(datos: CrearUsuarioDatos): Promise<Usuario> {
     // 1. Costo desde env (fallback 12)
-    const rounds = Number(this.configService.get<string>('BCRYPT_COST') ?? '12');
+    const rounds = Number(
+      this.configService.get<string>('BCRYPT_COST') ?? '12',
+    );
 
     // 2. Hashear la contraseña en texto plano
     const contraseniaHash = await bcrypt.hash(datos.contrasenia, rounds);
@@ -241,12 +260,15 @@ export class UsuariosService {
     const cantidadUsuarios = await this.usuariosRepo.contarUsuarios();
     const nombreRol = cantidadUsuarios === 0 ? 'Administrador' : 'Inquilino';
 
-  const rol = (await this.catalogosService.getRolPorNombre(nombreRol)) ?? (await this.catalogosService.crearRol({ nombre: nombreRol }));
+    const rol =
+      (await this.catalogosService.getRolPorNombre(nombreRol)) ??
+      (await this.catalogosService.crearRol({ nombre: nombreRol }));
 
-    // Se quita la contrasenia original para que solo el hash llegue a la entidad.
-    const { contrasenia, ...resto } = datos;
     const nuevoUsuario = this.usuariosRepo.crear({
-      ...resto,
+      nombre: datos.nombre,
+      apellido: datos.apellido,
+      email: datos.email,
+      telefono: datos.telefono,
       contrasenia: contraseniaHash,
       rol,
     });
@@ -254,83 +276,95 @@ export class UsuariosService {
   }
 
   /** Obtiene el usuario con su hash; la comparacion se hace en AuthService. */
-  async validarUsuarioParaLogin(email: string, password: string): Promise<Usuario | null> {
+  async buscarParaLogin(email: string): Promise<Usuario | null> {
     // Solo busca — la comparación bcrypt vive en AuthService.login
     return this.usuariosRepo.buscarParaLogin(email);
   }
 
   /** Cambia el rol de un usuario, evitando escrituras innecesarias. */
   async cambiarRol(idUsuario: number, nombreRolNuevo: string) {
-  const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
-  if (!usuario) {
-    throw new NotFoundException('Usuario no encontrado');
-  }
+    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
 
-  const rolNuevo = await this.catalogosService.getRolPorNombre(nombreRolNuevo);
-  if (!rolNuevo) {
-    throw new NotFoundException(`El rol '${nombreRolNuevo}' no existe`);
-  }
+    const rolNuevo =
+      await this.catalogosService.getRolPorNombre(nombreRolNuevo);
+    if (!rolNuevo) {
+      throw new NotFoundException(`El rol '${nombreRolNuevo}' no existe`);
+    }
 
-  if (usuario.rol.id === rolNuevo.id) {
-    throw new ConflictException(`El usuario ya tiene el rol '${nombreRolNuevo}'`);
-  }
+    if (usuario.rol.id === rolNuevo.id) {
+      throw new ConflictException(
+        `El usuario ya tiene el rol '${nombreRolNuevo}'`,
+      );
+    }
 
-  usuario.rol = rolNuevo;
+    usuario.rol = rolNuevo;
     const usuarioActualizado = await this.usuariosRepo.guardar(usuario);
     return this.usuarioSinSecretos(usuarioActualizado);
   }
 
   /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */
-async generarTokenVerificacion(usuario: Usuario): Promise<string> {
-  const token = crypto.randomBytes(32).toString('hex');
-  usuario.token_verificacion = token;
-  usuario.email_verificado = false;
-  await this.usuariosRepo.guardar(usuario);
-  return token;
-}
-
-/** Marca la cuenta como verificada y consume el token (uso único). */
-async verificarCuenta(token: string): Promise<void> {
-  const usuario = await this.usuariosRepo.buscarPorTokenVerificacion(token);
-  if (!usuario) {
-    throw new BadRequestException('Token de verificación inválido');
+  async generarTokenVerificacion(usuario: Usuario): Promise<string> {
+    const token = crypto.randomBytes(32).toString('hex');
+    usuario.token_verificacion = token;
+    usuario.email_verificado = false;
+    await this.usuariosRepo.guardar(usuario);
+    return token;
   }
 
-  usuario.email_verificado = true;
-  usuario.token_verificacion = null;
-  await this.usuariosRepo.guardar(usuario);
-}
+  /** Marca la cuenta como verificada y consume el token (uso único). */
+  async verificarCuenta(token: string): Promise<void> {
+    const usuario = await this.usuariosRepo.buscarPorTokenVerificacion(token);
+    if (!usuario) {
+      throw new BadRequestException('Token de verificación inválido');
+    }
 
-/**
- * Genera un token de recuperación si el email existe. Devuelve null si no existe,
- * para que AuthService pueda responder siempre igual y no filtrar qué emails están registrados.
- */
-async generarTokenRecuperacion(email: string): Promise<{ token: string; usuario: Usuario } | null> {
-  const usuario = await this.usuariosRepo.buscarPorEmail(email);
-  if (!usuario) return null;
-
-  const token = crypto.randomBytes(32).toString('hex');
-  usuario.token_recuperacion = token;
-  usuario.token_recuperacion_expira = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
-  await this.usuariosRepo.guardar(usuario);
-
-  return { token, usuario };
-}
-
-/** Valida el token de recuperación (existencia y vigencia) y setea la nueva contraseña hasheada. */
-async restablecerContrasenia(token: string, nuevaContrasenia: string): Promise<void> {
-  const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
-
-  if (!usuario || !usuario.token_recuperacion_expira || usuario.token_recuperacion_expira < new Date()) {
-    throw new BadRequestException('Token inválido o expirado');
+    usuario.email_verificado = true;
+    usuario.token_verificacion = null;
+    await this.usuariosRepo.guardar(usuario);
   }
 
-  const rounds = Number(this.configService.get<string>('BCRYPT_COST') ?? '12');
-  usuario.contrasenia = await bcrypt.hash(nuevaContrasenia, rounds);
-  usuario.token_recuperacion = null;
-  usuario.token_recuperacion_expira = null;
-  await this.usuariosRepo.guardar(usuario);
-}
+  /**
+   * Genera un token de recuperación si el email existe. Devuelve null si no existe,
+   * para que AuthService pueda responder siempre igual y no filtrar qué emails están registrados.
+   */
+  async generarTokenRecuperacion(
+    email: string,
+  ): Promise<{ token: string; usuario: Usuario } | null> {
+    const usuario = await this.usuariosRepo.buscarPorEmail(email);
+    if (!usuario) return null;
 
-  
+    const token = crypto.randomBytes(32).toString('hex');
+    usuario.token_recuperacion = token;
+    usuario.token_recuperacion_expira = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+    await this.usuariosRepo.guardar(usuario);
+
+    return { token, usuario };
+  }
+
+  /** Valida el token de recuperación (existencia y vigencia) y setea la nueva contraseña hasheada. */
+  async restablecerContrasenia(
+    token: string,
+    nuevaContrasenia: string,
+  ): Promise<void> {
+    const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
+
+    if (
+      !usuario ||
+      !usuario.token_recuperacion_expira ||
+      usuario.token_recuperacion_expira < new Date()
+    ) {
+      throw new BadRequestException('Token inválido o expirado');
+    }
+
+    const rounds = Number(
+      this.configService.get<string>('BCRYPT_COST') ?? '12',
+    );
+    usuario.contrasenia = await bcrypt.hash(nuevaContrasenia, rounds);
+    usuario.token_recuperacion = null;
+    usuario.token_recuperacion_expira = null;
+    await this.usuariosRepo.guardar(usuario);
+  }
 }

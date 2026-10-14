@@ -41,7 +41,7 @@
 
   /*
    * Foto de fondo de Iniciar sesión y Crear cuenta. Para cambiarla, reemplazá
-   * public/images/auth-bg.jpg (o apuntá esta variable a otro archivo).
+   * public/images/login-bg.webp (o apuntá esta variable a otro archivo).
    */
   --auth-bg-image: url("/images/login-bg.webp");
 

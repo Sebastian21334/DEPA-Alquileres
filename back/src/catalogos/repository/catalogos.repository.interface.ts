@@ -11,34 +11,46 @@ export interface ICatalogosRepository {
   buscarRolPorNombre(nombre: string): Promise<Rol | null>;
   buscarRolPorId(id: number): Promise<Rol | null>;
   crearRol(datos: Partial<Rol>): Promise<Rol>;
-  actualizarRol(id: number, datos: Partial<Rol>): Promise<Rol>;
+  actualizarRol(id: number, datos: Partial<Rol>): Promise<Rol | null>;
   eliminarRol(id: number): Promise<void>;
 
   buscarTodosTiposAnunciante(): Promise<TipoAnunciante[]>;
   buscarTipoAnunciantePorId(id: number): Promise<TipoAnunciante | null>;
   buscarTipoAnunciantePorNombre(nombre: string): Promise<TipoAnunciante | null>;
   crearTipoAnunciante(datos: Partial<TipoAnunciante>): Promise<TipoAnunciante>;
-  actualizarTipoAnunciante(id: number, datos: Partial<TipoAnunciante>): Promise<TipoAnunciante>;
+  actualizarTipoAnunciante(
+    id: number,
+    datos: Partial<TipoAnunciante>,
+  ): Promise<TipoAnunciante | null>;
   eliminarTipoAnunciante(id: number): Promise<void>;
 
   buscarTodosTiposPropiedad(): Promise<TipoPropiedad[]>;
   buscarTipoPropiedadPorId(id: number): Promise<TipoPropiedad | null>;
   buscarTipoPropiedadPorNombre(nombre: string): Promise<TipoPropiedad | null>;
   crearTipoPropiedad(datos: Partial<TipoPropiedad>): Promise<TipoPropiedad>;
-  actualizarTipoPropiedad(id: number, datos: Partial<TipoPropiedad>): Promise<TipoPropiedad>;
+  actualizarTipoPropiedad(
+    id: number,
+    datos: Partial<TipoPropiedad>,
+  ): Promise<TipoPropiedad | null>;
   eliminarTipoPropiedad(id: number): Promise<void>;
 
   buscarTodasModalidades(): Promise<Modalidad[]>;
   buscarModalidadPorId(id: number): Promise<Modalidad | null>;
   buscarModalidadPorNombre(nombre: string): Promise<Modalidad | null>;
   crearModalidad(datos: Partial<Modalidad>): Promise<Modalidad>;
-  actualizarModalidad(id: number, datos: Partial<Modalidad>): Promise<Modalidad>;
+  actualizarModalidad(
+    id: number,
+    datos: Partial<Modalidad>,
+  ): Promise<Modalidad | null>;
   eliminarModalidad(id: number): Promise<void>;
 
   buscarTodosTiposMoneda(): Promise<TipoMoneda[]>;
   buscarTipoMonedaPorId(id: number): Promise<TipoMoneda | null>;
   buscarTipoMonedaPorNombre(nombre: string): Promise<TipoMoneda | null>;
   crearTipoMoneda(datos: Partial<TipoMoneda>): Promise<TipoMoneda>;
-  actualizarTipoMoneda(id: number, datos: Partial<TipoMoneda>): Promise<TipoMoneda>;
+  actualizarTipoMoneda(
+    id: number,
+    datos: Partial<TipoMoneda>,
+  ): Promise<TipoMoneda | null>;
   eliminarTipoMoneda(id: number): Promise<void>;
 }

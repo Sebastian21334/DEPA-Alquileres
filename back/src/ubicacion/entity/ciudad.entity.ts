@@ -1,3 +1,4 @@
+import type { Relation } from 'typeorm';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -19,5 +20,5 @@ export class Ciudad {
   // Relación: Muchas ciudades pertenecen a una provincia
   @ManyToOne(() => Provincia, (provincia) => provincia.ciudades)
   @JoinColumn({ name: 'id_provincia' })
-  provincia: Provincia;
+  provincia: Relation<Provincia>;
 }

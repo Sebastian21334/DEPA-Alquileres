@@ -1,5 +1,12 @@
 // mensajes/servicio/mensajes.service.ts
-import { Inject, Injectable, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  ForbiddenException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Mensaje } from '../entity/mensaje.entity';
 import { EnviarMensajeDto } from '../dto/enviar-mensaje.dto';
 import type { IMensajeRepository } from '../repository/mensaje.repository.interface';
@@ -36,7 +43,10 @@ export class MensajesService {
    * queda implícitamente definida por (publicacion, origen, destino) apenas
    * se guarda el primer mensaje.
    */
-  async enviar(dto: EnviarMensajeDto, idUsuarioOrigen: number): Promise<Mensaje> {
+  async enviar(
+    dto: EnviarMensajeDto,
+    idUsuarioOrigen: number,
+  ): Promise<Mensaje> {
     if (idUsuarioOrigen === dto.id_destino_usuario) {
       throw new BadRequestException('No podés enviarte un mensaje a vos mismo');
     }
@@ -44,25 +54,33 @@ export class MensajesService {
     // El inquilino puede escribirle al anunciante de la publicación. El anunciante
     // solo puede iniciar el chat con un huésped que tenga una reserva aprobada, o
     // continuar una conversación que ese huésped ya hubiera iniciado.
-    const publicacion = await this.publicacionesService.buscarPorId(dto.id_publicacion);
+    const publicacion = await this.publicacionesService.buscarPorId(
+      dto.id_publicacion,
+    );
 
     const idAnunciante = publicacion.anunciante.usuario.id;
     if (idAnunciante !== dto.id_destino_usuario) {
       const esAnunciante = idUsuarioOrigen === idAnunciante;
       const [hayConversacion, hayReservaAprobada] = esAnunciante
         ? await Promise.all([
-          this.mensajeRepository.buscarConversacion(
-            dto.id_publicacion,
-            idUsuarioOrigen,
-            dto.id_destino_usuario,
-          ).then((mensajes) => mensajes.length > 0),
-          this.reservasService.existeReservaAprobada(dto.id_publicacion, dto.id_destino_usuario),
-        ])
+            this.mensajeRepository.existeConversacion(
+              dto.id_publicacion,
+              idUsuarioOrigen,
+              dto.id_destino_usuario,
+            ),
+            this.reservasService.existeReservaAprobada(
+              dto.id_publicacion,
+              dto.id_destino_usuario,
+            ),
+          ])
         : [false, false];
-      const puedeContactarHuesped = esAnunciante && (hayConversacion || hayReservaAprobada);
+      const puedeContactarHuesped =
+        esAnunciante && (hayConversacion || hayReservaAprobada);
 
       if (!puedeContactarHuesped) {
-        throw new ForbiddenException('El destinatario no es el anunciante de esta publicación');
+        throw new ForbiddenException(
+          'El destinatario no es el anunciante de esta publicación',
+        );
       }
     }
 
@@ -71,9 +89,11 @@ export class MensajesService {
       fecha: new Date(),
       leido: false,
       fecha_lectura: null,
-      origenUsuario: { id: idUsuarioOrigen } as any,
-      destinoUsuario: { id: dto.id_destino_usuario } as any,
-      publicacion: { id: dto.id_publicacion } as any,
+      origenUsuario: Object.assign(new Usuario(), { id: idUsuarioOrigen }),
+      destinoUsuario: Object.assign(new Usuario(), {
+        id: dto.id_destino_usuario,
+      }),
+      publicacion: publicacion,
     });
 
     const guardado = await this.mensajeRepository.guardar(mensaje);
@@ -91,7 +111,10 @@ export class MensajesService {
           publicacion.id,
         );
       } catch (error) {
-        this.logger.error(`No se pudo enviar el aviso de chat a ${destinatario.email}`, error as Error);
+        this.logger.error(
+          `No se pudo enviar el aviso de chat a ${destinatario.email}`,
+          error as Error,
+        );
       }
     }
     return guardado;
@@ -116,7 +139,9 @@ export class MensajesService {
     if (mensajes.length === 0) return mensajes;
 
     const esParticipante = mensajes.some(
-      (m) => m.origenUsuario.id === idUsuarioActual || m.destinoUsuario.id === idUsuarioActual,
+      (m) =>
+        m.origenUsuario.id === idUsuarioActual ||
+        m.destinoUsuario.id === idUsuarioActual,
     );
 
     if (!esParticipante) {
@@ -132,7 +157,9 @@ export class MensajesService {
    * Se resuelve en memoria aprovechando que buscarPorUsuario ya viene
    * ordenado DESC por fecha.
    */
-  async listarConversaciones(idUsuario: number): Promise<ConversacionResumen[]> {
+  async listarConversaciones(
+    idUsuario: number,
+  ): Promise<ConversacionResumen[]> {
     const mensajes = await this.mensajeRepository.buscarPorUsuario(idUsuario);
 
     // La consulta llega ordenada del mensaje mas nuevo al mas viejo. El Map
@@ -142,7 +169,9 @@ export class MensajesService {
     // Como la consulta está ordenada DESC, el primer mensaje de cada clave es el último real.
     for (const mensaje of mensajes) {
       const idOtroUsuario =
-        mensaje.origenUsuario.id === idUsuario ? mensaje.destinoUsuario.id : mensaje.origenUsuario.id;
+        mensaje.origenUsuario.id === idUsuario
+          ? mensaje.destinoUsuario.id
+          : mensaje.origenUsuario.id;
 
       const clave = `${mensaje.publicacion.id}-${idOtroUsuario}`;
 
@@ -164,7 +193,15 @@ export class MensajesService {
   }
 
   /** Marca como leídos solamente los mensajes que el usuario recibió en este chat. */
-  async marcarConversacionComoLeida(idPublicacion: number, idOtroUsuario: number, idUsuarioActual: number): Promise<void> {
-    await this.mensajeRepository.marcarConversacionComoLeida(idPublicacion, idOtroUsuario, idUsuarioActual);
+  async marcarConversacionComoLeida(
+    idPublicacion: number,
+    idOtroUsuario: number,
+    idUsuarioActual: number,
+  ): Promise<void> {
+    await this.mensajeRepository.marcarConversacionComoLeida(
+      idPublicacion,
+      idOtroUsuario,
+      idUsuarioActual,
+    );
   }
 }

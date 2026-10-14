@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Anunciante } from './anunciante.entity';
 
 export enum EstadoVerificacion {
@@ -22,12 +29,16 @@ export class SolicitudVerificacion {
   id: number;
 
   // Estado que determina qué acción puede realizar cada actor del sistema.
-    // URLs de los archivos privados almacenados en Azure Blob Storage.
-    // Motivo que el administrador debe informar cuando rechaza la documentación.
-    // Aumenta cada vez que el anunciante vuelve a enviar documentos.
-    // Fechas de auditoría para ordenar solicitudes y conocer su última modificación.
-    // Si se elimina el anunciante, su solicitud deja de tener sentido y se elimina en cascada.
-  @Column({ type: 'enum', enum: EstadoVerificacion, default: EstadoVerificacion.BORRADOR })
+  // URLs de los archivos privados almacenados en Azure Blob Storage.
+  // Motivo que el administrador debe informar cuando rechaza la documentación.
+  // Aumenta cada vez que el anunciante vuelve a enviar documentos.
+  // Fechas de auditoría para ordenar solicitudes y conocer su última modificación.
+  // Si se elimina el anunciante, su solicitud deja de tener sentido y se elimina en cascada.
+  @Column({
+    type: 'enum',
+    enum: EstadoVerificacion,
+    default: EstadoVerificacion.BORRADOR,
+  })
   estado: EstadoVerificacion;
 
   @Column({ type: 'varchar', length: 500, nullable: true })
@@ -53,5 +64,5 @@ export class SolicitudVerificacion {
 
   @ManyToOne(() => Anunciante, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_anunciante' })
-  anunciante: Anunciante;
+  anunciante: Relation<Anunciante>;
 }

@@ -1,4 +1,12 @@
-import { Entity, Column, PrimaryColumn, OneToOne, JoinColumn, ManyToOne } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  Column,
+  PrimaryColumn,
+  OneToOne,
+  JoinColumn,
+  ManyToOne,
+} from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { TipoAnunciante } from '../../catalogos/entity/tipo-anunciante.entity';
 
@@ -10,7 +18,7 @@ export class Anunciante {
 
   @OneToOne(() => Usuario, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_usuario' })
-  usuario: Usuario;
+  usuario: Relation<Usuario>;
 
   @Column({ type: 'boolean', default: false })
   // Solo los anunciantes verificados pueden publicar o administrar imágenes.
@@ -24,5 +32,5 @@ export class Anunciante {
 
   @ManyToOne(() => TipoAnunciante)
   @JoinColumn({ name: 'id_tipo_anunciante' })
-  tipoAnunciante: TipoAnunciante;
+  tipoAnunciante: Relation<TipoAnunciante>;
 }

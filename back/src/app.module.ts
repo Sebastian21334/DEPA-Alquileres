@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { createObserveModule } from '@nestjs/observe';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule, ConfigService } from '@nestjs/config';;
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -21,10 +21,10 @@ import { PagosModule } from './pagos/pagos.module';
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
 @Module({
-  imports: [    
+  imports: [
     // Configuración global para leer el archivo .env
     ConfigModule.forRoot({
-      isGlobal: true, 
+      isGlobal: true,
       envFilePath: ['.env'],
     }),
 
@@ -39,7 +39,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         synchronize: true, // Sincroniza el DER creando las tablas automáticamente (útil en desarrollo)
         ssl: {
           rejectUnauthorized: false, // Requerido por Neon y Azure
-        }
+        },
       }),
     }),
 

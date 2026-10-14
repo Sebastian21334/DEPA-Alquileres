@@ -1,8 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
-import { CategoriaInicio, ConsultaPublicaciones, IPublicacionesRepository, PaginaPublicaciones } from './publicaciones.repository.interface';
+import {
+  CategoriaInicio,
+  ConsultaPublicaciones,
+  IPublicacionesRepository,
+  PaginaPublicaciones,
+} from './publicaciones.repository.interface';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 
 @Injectable()
@@ -42,7 +47,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         provincia: true,
         ciudad: true,
         tipoPropiedad: true,
-        imagenes: true, // <- agregado
+        imagenes: true,
       },
       // La primera foto cargada es la portada; sin orden SQL el join puede invertir la galería.
       order: { imagenes: { id: 'ASC' } },
@@ -72,7 +77,9 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * agregado de reservas en SQL; después se cargan las relaciones de esos IDs.
    * Así una petición nunca materializa el catálogo completo en memoria.
    */
-  async buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones> {
+  async buscarPaginadas(
+    consulta: ConsultaPublicaciones,
+  ): Promise<PaginaPublicaciones> {
     const {
       pagina,
       limite,
@@ -80,6 +87,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       orden,
       busqueda,
       idsCiudad,
+      idProvincia,
       idsTipoPropiedad,
       idsTipoMoneda,
       precioMin,
@@ -102,22 +110,37 @@ export class PublicacionesRepository implements IPublicacionesRepository {
 
     this.aplicarCategoria(base, categoria);
     this.aplicarBusqueda(base, busqueda);
-    if (idsCiudad?.length) base.andWhere('ciudad.id IN (:...idsCiudad)', { idsCiudad });
+    if (idProvincia != null)
+      base.andWhere('provincia.id = :idProvincia', { idProvincia });
+    if (idsCiudad?.length)
+      base.andWhere('ciudad.id IN (:...idsCiudad)', { idsCiudad });
     if (idsTipoPropiedad?.length) {
-      base.andWhere('tipoPropiedad.id IN (:...idsTipoPropiedad)', { idsTipoPropiedad });
+      base.andWhere('tipoPropiedad.id IN (:...idsTipoPropiedad)', {
+        idsTipoPropiedad,
+      });
     }
     if (idsTipoMoneda?.length) {
       base.andWhere('tipoMoneda.id IN (:...idsTipoMoneda)', { idsTipoMoneda });
     }
-    if (precioMin != null) base.andWhere('publicacion.precio >= :precioMin', { precioMin });
-    if (precioMax != null) base.andWhere('publicacion.precio <= :precioMax', { precioMax });
+    if (precioMin != null)
+      base.andWhere('publicacion.precio >= :precioMin', { precioMin });
+    if (precioMax != null)
+      base.andWhere('publicacion.precio <= :precioMax', { precioMax });
     if (ambientes?.length) {
-      const exactos = ambientes.filter((ambiente) => ambiente !== '4+').map(Number);
+      const exactos = ambientes
+        .filter((ambiente) => ambiente !== '4+')
+        .map(Number);
       const condiciones = [
-        ...(exactos.length ? ['publicacion.cantidad_ambientes IN (:...ambientesExactos)'] : []),
-        ...(ambientes.includes('4+') ? ['publicacion.cantidad_ambientes >= 4'] : []),
+        ...(exactos.length
+          ? ['publicacion.cantidad_ambientes IN (:...ambientesExactos)']
+          : []),
+        ...(ambientes.includes('4+')
+          ? ['publicacion.cantidad_ambientes >= 4']
+          : []),
       ];
-      base.andWhere(`(${condiciones.join(' OR ')})`, { ambientesExactos: exactos });
+      base.andWhere(`(${condiciones.join(' OR ')})`, {
+        ambientesExactos: exactos,
+      });
     }
     const total = await base.clone().getCount();
 
@@ -129,7 +152,10 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .groupBy('reserva.id_publicacion');
 
     const ordenes = {
-      recientes: { columna: 'publicacion.fecha_publicacion', direccion: 'DESC' },
+      recientes: {
+        columna: 'publicacion.fecha_publicacion',
+        direccion: 'DESC',
+      },
       antiguas: { columna: 'publicacion.fecha_publicacion', direccion: 'ASC' },
       'precio-menor': { columna: 'publicacion.precio', direccion: 'ASC' },
       'precio-mayor': { columna: 'publicacion.precio', direccion: 'DESC' },
@@ -138,7 +164,10 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const ordenSeleccionado = orden
       ? ordenes[orden]
       : categoria === 'reservadas'
-        ? { columna: 'COALESCE(reservas.cantidad, 0)', direccion: 'DESC' as const }
+        ? {
+            columna: 'COALESCE(reservas.cantidad, 0)',
+            direccion: 'DESC' as const,
+          }
         : ordenes.recientes;
     const filas = await base
       .clone()
@@ -147,7 +176,11 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .addSelect('publicacion.fecha_publicacion', 'fechaPublicacion')
       .addSelect('publicacion.precio', 'precioOrden')
       .addSelect('LOWER(publicacion.titulo)', 'tituloOrden')
-      .leftJoin(`(${reservas.getQuery()})`, 'reservas', 'reservas."idPublicacion" = publicacion.id_publicacion')
+      .leftJoin(
+        `(${reservas.getQuery()})`,
+        'reservas',
+        'reservas."idPublicacion" = publicacion.id_publicacion',
+      )
       .setParameters(reservas.getParameters())
       .orderBy(ordenSeleccionado.columna, ordenSeleccionado.direccion)
       .addOrderBy('publicacion.id', 'DESC')
@@ -159,25 +192,57 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const publicaciones = ids.length
       ? await this.repo.find({
           where: ids.map((id) => ({ id, activa: true })),
-          relations: { tipoPropiedad: true, ciudad: true, provincia: true, modalidad: true, tipoMoneda: true, imagenes: true, anunciante: { usuario: true, tipoAnunciante: true } },
+          relations: {
+            tipoPropiedad: true,
+            ciudad: true,
+            provincia: true,
+            modalidad: true,
+            tipoMoneda: true,
+            imagenes: true,
+            anunciante: { usuario: true, tipoAnunciante: true },
+          },
           order: { imagenes: { id: 'ASC' } },
         })
       : [];
-    const porId = new Map(publicaciones.map((publicacion) => [publicacion.id, publicacion]));
-    const datos = filas
-      .map((fila) => porId.get(Number(fila.id)))
-      .filter((publicacion): publicacion is Publicacion => Boolean(publicacion))
-      .map((publicacion, indice) => ({ ...publicacion, cantidad_reservas: Number(filas[indice].cantidadReservas) }));
+    const porId = new Map(
+      publicaciones.map((publicacion) => [publicacion.id, publicacion]),
+    );
+    const datos = filas.flatMap((fila) => {
+      const publicacion = porId.get(Number(fila.id));
+      return publicacion
+        ? [{ ...publicacion, cantidad_reservas: Number(fila.cantidadReservas) }]
+        : [];
+    });
 
-    return { datos, pagina, limite, total, totalPaginas: Math.ceil(total / limite) };
+    return {
+      datos,
+      pagina,
+      limite,
+      total,
+      totalPaginas: Math.ceil(total / limite),
+    };
   }
 
-  private aplicarCategoria(query: any, categoria?: CategoriaInicio): void {
-    if (categoria === 'temporales') query.andWhere('LOWER(modalidad.nombre) LIKE :temporal', { temporal: '%tempor%' });
-    if (categoria === 'largo-plazo') query.andWhere('LOWER(modalidad.nombre) NOT LIKE :temporal', { temporal: '%tempor%' });
-    if (categoria === 'villa-maria') query.andWhere('LOWER(ciudad.nombre) IN (:...ciudades)', { ciudades: ['villa maria', 'villa maría'] });
+  private aplicarCategoria(
+    query: SelectQueryBuilder<Publicacion>,
+    categoria?: CategoriaInicio,
+  ): void {
+    if (categoria === 'temporales')
+      query.andWhere('LOWER(modalidad.nombre) LIKE :temporal', {
+        temporal: '%tempor%',
+      });
+    if (categoria === 'largo-plazo')
+      query.andWhere('LOWER(modalidad.nombre) NOT LIKE :temporal', {
+        temporal: '%tempor%',
+      });
+    if (categoria === 'villa-maria')
+      query.andWhere('LOWER(ciudad.nombre) IN (:...ciudades)', {
+        ciudades: ['villa maria', 'villa maría'],
+      });
     if (categoria === 'reservadas') {
-      query.andWhere(`EXISTS (SELECT 1 FROM reserva reserva_filtro WHERE reserva_filtro.id_publicacion = publicacion.id_publicacion AND reserva_filtro.cancelada = false)`);
+      query.andWhere(
+        `EXISTS (SELECT 1 FROM reserva reserva_filtro WHERE reserva_filtro.id_publicacion = publicacion.id_publicacion AND reserva_filtro.cancelada = false)`,
+      );
     }
   }
 
@@ -186,7 +251,10 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * catálogo o el detalle. Cada palabra puede aparecer en un campo distinto;
    * por ejemplo, "casa villa maria" combina tipo de propiedad y ciudad.
    */
-  private aplicarBusqueda(query: any, busqueda?: string): void {
+  private aplicarBusqueda(
+    query: SelectQueryBuilder<Publicacion>,
+    busqueda?: string,
+  ): void {
     const terminos = (busqueda ?? '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -228,7 +296,10 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
-  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]> {
+  buscarPorAnunciante(
+    idAnunciante: number,
+    soloActivas: boolean,
+  ): Promise<Publicacion[]> {
     // El spread agrega el filtro activa únicamente cuando el caller lo solicita.
     return this.repo.find({
       where: {

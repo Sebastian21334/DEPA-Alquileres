@@ -1,3 +1,4 @@
+import { eliminarConIntegridad } from '../../common/persistence/registro-en-uso.error';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -30,13 +31,13 @@ export class UbicacionRepository implements IUbicacionRepository {
   async actualizarProvincia(
     id: number,
     datos: Partial<Provincia>,
-  ): Promise<Provincia> {
+  ): Promise<Provincia | null> {
     await this.provinciaRepo.update(id, datos);
-    return (await this.buscarProvinciaPorId(id))!;
+    return this.buscarProvinciaPorId(id);
   }
 
   async eliminarProvincia(id: number): Promise<void> {
-    await this.provinciaRepo.delete(id);
+    await eliminarConIntegridad(() => this.provinciaRepo.delete(id));
   }
 
   buscarCiudadPorId(id: number): Promise<Ciudad | null> {
@@ -58,12 +59,15 @@ export class UbicacionRepository implements IUbicacionRepository {
     return this.ciudadRepo.save(ciudad);
   }
 
-  async actualizarCiudad(id: number, datos: Partial<Ciudad>): Promise<Ciudad> {
+  async actualizarCiudad(
+    id: number,
+    datos: Partial<Ciudad>,
+  ): Promise<Ciudad | null> {
     await this.ciudadRepo.update(id, datos);
-    return (await this.buscarCiudadPorId(id))!;
+    return this.buscarCiudadPorId(id);
   }
 
   async eliminarCiudad(id: number): Promise<void> {
-    await this.ciudadRepo.delete(id);
+    await eliminarConIntegridad(() => this.ciudadRepo.delete(id));
   }
 }

@@ -1,10 +1,8 @@
 import { forwardRef, Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './service/auth.service';
 import { AuthController } from './controller/auth.controller';
-import { Usuario } from '../usuarios/entity/usuario.entity';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategy/jwt.strategy';
@@ -14,17 +12,15 @@ import { MailModule } from '../mail/mail.module';
   imports: [
     // Passport conecta los endpoints protegidos con la estrategia JWT.
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    // Hace disponible la entidad para cualquier repositorio TypeORM del módulo.
-    TypeOrmModule.forFeature([Usuario]),
     // Auth y Usuarios se necesitan mutuamente; forwardRef retrasa la resolución circular.
     forwardRef(() => UsuariosModule),
     MailModule,
     JwtModule.registerAsync({
-      imports: [ConfigModule], 
+      imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         // El secreto firma los tokens; expiresIn limita su vigencia a una hora.
-        secret: configService.get<string>('JWT_SECRET') || 'secreto_super_seguro',
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: { expiresIn: '1h' },
       }),
     }),

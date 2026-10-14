@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import type { Relation } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
 import { Rol } from '../../catalogos/entity/rol.entity';
 
 @Entity('usuario')
@@ -27,7 +34,7 @@ export class Usuario {
   // Relación directa: Muchos usuarios pueden tener un mismo rol
   @ManyToOne(() => Rol, (rol) => rol.usuarios)
   @JoinColumn({ name: 'id_rol' })
-  rol: Rol;
+  rol: Relation<Rol>;
 
   @Column({ type: 'boolean', default: false })
   email_verificado: boolean;
@@ -47,5 +54,4 @@ export class Usuario {
 
   @Column({ type: 'timestamp', nullable: true, select: false })
   token_recuperacion_expira: Date | null;
-
 }
