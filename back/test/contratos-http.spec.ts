@@ -16,6 +16,7 @@ describe('Contratos HTTP', () => {
         idProvincia: '14',
         idsCiudad: '1,2',
         precioMin: '100',
+        superficieMin: '50.5',
         ambientes: '1,4+',
       },
       { type: 'query', metatype: ListarPublicacionesDto },
@@ -26,6 +27,7 @@ describe('Contratos HTTP', () => {
       idProvincia: 14,
       idsCiudad: [1, 2],
       precioMin: 100,
+      superficieMin: 50.5,
       ambientes: ['1', '4+'],
     });
   });
@@ -36,6 +38,9 @@ describe('Contratos HTTP', () => {
     { idsCiudad: '-1' },
     { idProvincia: '-1' },
     { orden: 'inexistente' },
+    { superficieMin: '-1' },
+    { superficieMin: 'Infinity' },
+    { superficieMin: 'texto' },
   ])('rechaza filtros inválidos: %j', async (consulta) => {
     await expect(
       pipe.transform(consulta, {

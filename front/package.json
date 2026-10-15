@@ -3,11 +3,10 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "node scripts/start.cjs",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test",
-    "serve:ssr:front": "node dist/front/server/server.mjs"
+    "test": "ng test"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

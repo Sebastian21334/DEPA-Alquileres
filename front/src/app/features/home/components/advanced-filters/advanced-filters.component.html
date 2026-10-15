@@ -1,67 +1,113 @@
 <section
   class="advanced"
-  [class.advanced--primary]="tieneModalidad() && !esSecundaria()"
-  [class.advanced--secondary]="esSecundaria()"
-  aria-label="Búsqueda avanzada"
+  [class.advanced--primary]="categoria() === 'largo-plazo'"
+  [class.advanced--secondary]="categoria() === 'temporales'"
+  aria-labelledby="advanced-title"
 >
   <div class="advanced__intro">
-    <svg lucideSearch [size]="30" aria-hidden="true"></svg>
-    <strong>Búsqueda avanzada</strong>
-    <span>Filtrá por ubicación, tipo de propiedad y precio</span>
+    <span class="advanced__icon"><svg lucideHouse [size]="48" aria-hidden="true"></svg></span>
+    <div>
+      <h2 id="advanced-title">Búsqueda avanzada</h2>
+      <p>Filtrá por ubicación, tipo de propiedad, precio y características</p>
+    </div>
   </div>
 
   <div class="advanced__controls" [formGroup]="form()">
-    <div class="advanced__location">
-      <app-selector-ubicacion
-        idPrefix="filtro-ubicacion"
-        [compact]="true"
-        [provinciaId]="form().controls['idProvincia']?.value ?? null"
-        [localidadId]="ciudadesSeleccionadasIds[0] ?? null"
-        [disabled]="!activos().ubicacion"
-        (provinciaChange)="seleccionarProvincia($event)"
-        (localidadChange)="seleccionarCiudadUnica($event)"
-      />
-    </div>
+    <app-selector-ubicacion
+      class="advanced__location"
+      idPrefix="filtro-ubicacion"
+      [advanced]="true"
+      [provinciaId]="form().controls['idProvincia'].value"
+      [localidadId]="form().controls['idsCiudad'].value[0] ?? null"
+      (provinciaChange)="seleccionarProvincia($event)"
+      (localidadChange)="seleccionarCiudad($event)"
+    />
 
-    <label class="advanced__field">
-      <svg lucideHome [size]="23" aria-hidden="true"></svg>
-      <span>
-        <small>Tipo de propiedad</small>
-        <select (change)="seleccionarTipoPropiedadUnica($any($event.target).value)">
+    <div class="advanced__field">
+      <label class="advanced__label" for="filtro-tipo-propiedad">
+        <svg lucideHouse [size]="25" aria-hidden="true"></svg>
+        Tipo de propiedad
+      </label>
+      <div class="advanced__select">
+        <select
+          id="filtro-tipo-propiedad"
+          [value]="form().controls['idsTipoPropiedad'].value[0] ?? ''"
+          (change)="seleccionarTipoPropiedad($any($event.target).value)"
+        >
           <option value="">Todas</option>
           @for (tipo of tiposPropiedad(); track tipo.id) {
-            <option [value]="tipo.id" [selected]="tipoPropiedadSeleccionado(tipo.id)">
-              {{ tipo.nombre }}
-            </option>
+            <option [value]="tipo.id">{{ tipo.nombre }}</option>
           }
         </select>
-      </span>
-    </label>
+        <svg lucideChevronDown [size]="22" aria-hidden="true"></svg>
+      </div>
+    </div>
 
-    <label class="advanced__field advanced__field--price">
-      <svg lucideCoins [size]="23" aria-hidden="true"></svg>
-      <span>
-        <small>Precio mensual</small>
-        <span class="advanced__price-inputs">
+    <fieldset class="advanced__field advanced__price">
+      <legend class="advanced__label">
+        <svg lucideCoins [size]="25" aria-hidden="true"></svg>
+        Precio mensual
+      </legend>
+      <div class="advanced__price-inputs">
+        <div class="advanced__input">
           <input
             type="number"
             min="0"
             placeholder="Desde"
-            [value]="form().controls['precioMin'].value ?? ''"
-            (input)="onPrecioMinInput($any($event.target).value)"
+            aria-label="Precio mensual desde"
+            formControlName="precioMin"
           />
-          <b>—</b>
+          <span aria-hidden="true">$</span>
+        </div>
+        <span class="advanced__separator" aria-hidden="true">–</span>
+        <div class="advanced__input">
           <input
             type="number"
             min="0"
             placeholder="Hasta"
-            [value]="form().controls['precioMax'].value ?? ''"
-            (input)="onPrecioMaxInput($any($event.target).value)"
+            aria-label="Precio mensual hasta"
+            formControlName="precioMax"
           />
-        </span>
-      </span>
-    </label>
+          <span aria-hidden="true">$</span>
+        </div>
+      </div>
+    </fieldset>
 
-    <button type="button" class="advanced__submit" (click)="aplicar()">Buscar</button>
+    <div class="advanced__field">
+      <label class="advanced__label" for="filtro-ambientes">
+        <svg lucideDoorOpen [size]="25" aria-hidden="true"></svg>
+        Ambientes
+      </label>
+      <div class="advanced__select">
+        <select
+          id="filtro-ambientes"
+          [value]="form().controls['ambientesSeleccionados'].value[0] ?? ''"
+          (change)="seleccionarAmbientes($any($event.target).value)"
+        >
+          <option value="">Todos</option>
+          @for (ambiente of ambientes; track ambiente) {
+            <option [value]="ambiente">{{ ambiente === '4+' ? '4 o más' : ambiente }}</option>
+          }
+        </select>
+        <svg lucideChevronDown [size]="22" aria-hidden="true"></svg>
+      </div>
+    </div>
+
+    <div class="advanced__field">
+      <label class="advanced__label" for="filtro-superficie">
+        <svg lucideArrowLeftRight [size]="25" aria-hidden="true"></svg>
+        m² mínimos
+      </label>
+      <div class="advanced__input">
+        <input
+          id="filtro-superficie"
+          type="number"
+          min="0"
+          placeholder="Ej. 50"
+          formControlName="superficieMin"
+        />
+        <span aria-hidden="true">m²</span>
+      </div>
+    </div>
   </div>
 </section>

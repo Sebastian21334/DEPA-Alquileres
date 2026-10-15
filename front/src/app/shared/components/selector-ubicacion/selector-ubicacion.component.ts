@@ -10,6 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { LucideBuilding2, LucideChevronDown, LucideMapPin, LucideSearch } from '@lucide/angular';
 import { Ciudad, Provincia } from '../../models/ubicacion.model';
 import { UbicacionService } from '../../services/ubicacion.service';
 
@@ -29,6 +30,7 @@ const MAX_SUGERENCIAS = 40;
 @Component({
   selector: 'app-selector-ubicacion',
   standalone: true,
+  imports: [LucideBuilding2, LucideChevronDown, LucideMapPin, LucideSearch],
   templateUrl: './selector-ubicacion.component.html',
   styleUrl: './selector-ubicacion.component.scss',
 })
@@ -46,6 +48,7 @@ export class SelectorUbicacionComponent {
   readonly invalidProvincia = input(false);
   readonly invalidLocalidad = input(false);
   readonly compact = input(false);
+  readonly advanced = input(false);
   readonly provinciaChange = output<number | null>();
   readonly localidadChange = output<number | null>();
   readonly nombresChange = output<NombresUbicacion>();

@@ -92,6 +92,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       idsTipoMoneda,
       precioMin,
       precioMax,
+      superficieMin,
       ambientes,
     } = consulta;
     const base = this.repo
@@ -126,6 +127,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       base.andWhere('publicacion.precio >= :precioMin', { precioMin });
     if (precioMax != null)
       base.andWhere('publicacion.precio <= :precioMax', { precioMax });
+    if (superficieMin != null)
+      base.andWhere('publicacion.superficie >= :superficieMin', { superficieMin });
     if (ambientes?.length) {
       const exactos = ambientes
         .filter((ambiente) => ambiente !== '4+')

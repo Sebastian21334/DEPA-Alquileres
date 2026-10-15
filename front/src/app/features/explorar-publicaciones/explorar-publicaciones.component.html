@@ -5,7 +5,7 @@
       <div>
         <p>Catálogo de alquileres</p>
         <h1>{{ titulo() }}</h1>
-        <span>Encontrá tu próximo hogar entre las mejores propiedades disponibles.</span>
+        <span>{{ descripcion() }}</span>
       </div>
       <div class="modalidades" aria-label="Tipo de alquiler">
         <button
@@ -48,9 +48,7 @@
   <app-advanced-filters
     [form]="form"
     [tiposPropiedad]="tiposPropiedad()"
-    [monedas]="monedas()"
-    [modalidades]="modalidades()"
-    (search)="buscar()"
+    [categoria]="categoria()"
   />
   <app-listing-grid
     [total]="resultado().total"

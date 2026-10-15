@@ -12,6 +12,10 @@ npm start
 La aplicación se abre en `http://localhost:4200`. Las URLs de la API se
 configuran en `src/environments/`.
 
+El inicio limita los procesos de compilación para reducir el consumo de memoria
+al ejecutar el front y el back juntos. La aplicación se compila solo para el
+navegador, sin generar una versión de servidor.
+
 ```sh
 npm test -- --watch=false
 npm run build

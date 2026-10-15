@@ -35,6 +35,7 @@ export class ListingService {
       idsTipoMoneda?: number[];
       precioMin?: number | null;
       precioMax?: number | null;
+      superficieMin?: number | null;
       ambientes?: string[];
     } = {},
   ): Observable<PaginaPublicaciones> {
@@ -52,6 +53,7 @@ export class ListingService {
       params = params.set('idsTipoMoneda', opciones.idsTipoMoneda.join(','));
     if (opciones.precioMin != null) params = params.set('precioMin', opciones.precioMin);
     if (opciones.precioMax != null) params = params.set('precioMax', opciones.precioMax);
+    if (opciones.superficieMin != null) params = params.set('superficieMin', opciones.superficieMin);
     if (opciones.ambientes?.length) params = params.set('ambientes', opciones.ambientes.join(','));
     return this.http.get<PaginaPublicaciones>(this.baseUrl, { params });
   }

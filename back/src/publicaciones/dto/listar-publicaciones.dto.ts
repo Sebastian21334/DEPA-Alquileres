@@ -83,6 +83,12 @@ export class ListarPublicacionesDto {
   precioMax?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  superficieMin?: number;
+
+  @IsOptional()
   @Transform(lista)
   @IsArray()
   @IsIn(['1', '2', '3', '4+'], { each: true })

@@ -70,4 +70,24 @@ describe('ExplorarPublicacionesComponent: cambios de ubicación', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent.trim()).toBe('2');
   });
+
+  it('aplica ambientes y superficie automáticamente y los quita al limpiar los campos', async () => {
+    fixture.componentInstance['form'].patchValue({
+      ambientesSeleccionados: ['4+'],
+      superficieMin: 50,
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(getActivas).toHaveBeenLastCalledWith(
+      expect.objectContaining({ ambientes: ['4+'], superficieMin: 50, pagina: 1 }),
+    );
+
+    fixture.componentInstance['form'].patchValue({
+      ambientesSeleccionados: [],
+      superficieMin: null,
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(getActivas).toHaveBeenLastCalledWith(
+      expect.objectContaining({ ambientes: [], superficieMin: null }),
+    );
+  });
 });

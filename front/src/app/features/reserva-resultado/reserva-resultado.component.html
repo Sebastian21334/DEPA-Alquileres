@@ -1,7 +1,10 @@
 <main class="receipt-page">
   <div class="receipt-wrap">
     @if (cargando()) {
-      <div class="receipt-state"><app-spinner /><p>Estamos verificando tu reserva…</p></div>
+      <div class="receipt-state">
+        <app-spinner />
+        <p>Estamos verificando tu reserva…</p>
+      </div>
     } @else if (error()) {
       <section class="receipt-card receipt-error">
         <span class="status-icon">!</span>
@@ -10,8 +13,14 @@
         <a class="acct-btn acct-btn--primary" routerLink="/mis-reservas">Ir a Mis reservas</a>
       </section>
     } @else if (reserva(); as item) {
-      <header class="receipt-hero" [class.is-approved]="item.estado_pago === 'APROBADO'" [class.is-pending]="item.estado_pago === 'PENDIENTE'">
-        <div class="status-icon">{{ item.estado_pago === 'APROBADO' ? '✓' : item.estado_pago === 'PENDIENTE' ? '…' : '!' }}</div>
+      <header
+        class="receipt-hero"
+        [class.is-approved]="item.estado_pago === 'APROBADO'"
+        [class.is-pending]="item.estado_pago === 'PENDIENTE'"
+      >
+        <div class="status-icon">
+          {{ item.estado_pago === 'APROBADO' ? '✓' : item.estado_pago === 'PENDIENTE' ? '…' : '!' }}
+        </div>
         <div>
           <span class="eyebrow">Reserva #{{ item.id }}</span>
           <h1>{{ tituloEstado(item) }}</h1>
@@ -22,27 +31,116 @@
 
       <div class="receipt-grid">
         <section class="receipt-card stay-card">
-          <div class="section-title"><span>Datos de la estadía</span><strong>{{ cantidadDias(item) }} {{ cantidadDias(item) === 1 ? 'día' : 'días' }}</strong></div>
-          <h2>{{ item.publicacion?.titulo ?? 'Publicación no disponible' }}</h2>
-          <p class="address">{{ direccion(item) }}</p>
-          <div class="date-grid">
-            <div><span>Ingreso</span><strong>{{ fecha(item.fecha_inicio) }}</strong><small>Desde las 14:00</small></div>
-            <div><span>Salida</span><strong>{{ fecha(item.fecha_fin) }}</strong><small>Hasta las 10:00</small></div>
+          <div class="section-title">
+            <span>Datos de la estadía</span
+            ><strong
+              >{{ cantidadDias(item) }} {{ cantidadDias(item) === 1 ? 'día' : 'días' }}</strong
+            >
           </div>
-          @if (item.publicacion) {
-            <a class="text-link" [routerLink]="['/publicaciones', item.publicacion.id]">Ver publicación</a>
+          <h2>{{ item.publicacion?.titulo ?? 'Publicación no disponible' }}</h2>
+          <div class="stay-location">
+            <p class="address">{{ direccion(item) }}</p>
+            @if (item.publicacion) {
+              <a class="text-link" [routerLink]="['/publicaciones', item.publicacion.id]"
+                >Ver publicación</a
+              >
+            }
+          </div>
+          <div class="date-grid">
+            <div>
+              <span>Ingreso</span><strong>{{ fecha(item.fecha_inicio) }}</strong
+              ><small>Desde las 14:00</small>
+            </div>
+            <div>
+              <span>Salida</span><strong>{{ fecha(item.fecha_fin) }}</strong
+              ><small>Hasta las 10:00</small>
+            </div>
+          </div>
+          @if (mostrarCodigo()) {
+            <section class="entry-code" aria-labelledby="entry-code-title">
+              <div class="entry-code__heading">
+                <svg lucideKeyRound [size]="32" aria-hidden="true"></svg>
+                <div>
+                  <h3 id="entry-code-title">Tu código de ingreso</h3>
+                  @if (!codigoValidado() && !item.finalizada) {
+                    <p>Mostráselo al propietario al llegar al alojamiento.</p>
+                  }
+                </div>
+              </div>
+              @if (codigoValidado()) {
+                <p class="entry-code__validated" role="status">
+                  <svg lucideCheck [size]="18" aria-hidden="true"></svg>
+                  Este código ya fue validado por el propietario.
+                </p>
+              } @else if (item.finalizada) {
+                <p class="entry-code__note">La estadía ya finalizó.</p>
+              } @else if (cargandoCodigo()) {
+                <p class="entry-code__note" role="status">Cargando tu código de ingreso…</p>
+              } @else if (errorCodigo()) {
+                <div class="entry-code__error">
+                  <p role="alert">{{ errorCodigo() }}</p>
+                  <button
+                    type="button"
+                    class="acct-btn acct-btn--ghost acct-btn--sm"
+                    (click)="reintentarCodigo()"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              } @else if (codigo(); as ingreso) {
+                <div class="entry-code__value">
+                  <strong class="entry-code__text" aria-label="Código de ingreso">{{
+                    ingreso.codigo
+                  }}</strong>
+                  <button type="button" class="acct-btn acct-btn--primary" (click)="copiarCodigo()">
+                    @if (copiado()) {
+                      <svg lucideCheck [size]="18" aria-hidden="true"></svg>
+                    } @else {
+                      <svg lucideCopy [size]="18" aria-hidden="true"></svg>
+                    }
+                    <span aria-live="polite">{{ copiado() ? 'Copiado' : 'Copiar código' }}</span>
+                  </button>
+                </div>
+                @if (errorCopiar()) {
+                  <p class="entry-code__copy-error" role="alert">{{ errorCopiar() }}</p>
+                }
+                <p class="entry-code__note">
+                  También lo encontrás en <a routerLink="/mis-reservas">Mis reservas</a>.
+                </p>
+              }
+            </section>
           }
         </section>
 
         <aside class="receipt-card payment-card">
-          <div class="section-title"><span>Datos del pago</span><strong class="payment-status">{{ estadoPagoMercado() }}</strong></div>
+          <div class="section-title">
+            <span>Datos del pago</span
+            ><strong class="payment-status">{{ estadoPagoMercado() }}</strong>
+          </div>
           <dl>
-            <div><dt>Total</dt><dd class="total">{{ monto(pago()?.amount ?? item.monto_pago, pago()?.currency ?? 'ARS') }}</dd></div>
-            <div><dt>Medio</dt><dd>{{ medioPago() }}</dd></div>
-            <div><dt>Operación</dt><dd>{{ pago()?.payment_id ?? 'Pendiente de asignación' }}</dd></div>
-            <div><dt>Fecha</dt><dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd></div>
+            <div>
+              <dt>Total</dt>
+              <dd class="total">
+                {{ monto(pago()?.amount ?? item.monto_pago, pago()?.currency ?? 'ARS') }}
+              </dd>
+            </div>
+            <div>
+              <dt>Medio</dt>
+              <dd>{{ medioPago() }}</dd>
+            </div>
+            <div>
+              <dt>Operación</dt>
+              <dd>{{ pago()?.payment_id ?? 'Pendiente de asignación' }}</dd>
+            </div>
+            <div>
+              <dt>Fecha</dt>
+              <dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd>
+            </div>
           </dl>
-          <p class="secure-note">El estado fue verificado directamente con Mercado Pago. DEPA no almacena los datos de tu tarjeta.</p>
+          <p class="secure-note">
+            El estado fue verificado directamente con Mercado Pago. DEPA no almacena los datos de tu
+            tarjeta.
+          </p>
         </aside>
       </div>
 
@@ -54,12 +152,30 @@
             <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
           </div>
           <div class="contact-actions">
-            <button type="button" class="acct-btn acct-btn--primary" [disabled]="!contactoDisponible()" (click)="abrirChat()">Mensaje por DEPA</button>
-            <button type="button" class="acct-btn whatsapp-btn" [disabled]="!whatsappUrl()" (click)="abrirConfirmacionWhatsapp()">Continuar por WhatsApp</button>
+            <button
+              type="button"
+              class="acct-btn acct-btn--primary"
+              [disabled]="!contactoDisponible()"
+              (click)="abrirChat()"
+            >
+              Mensaje por DEPA
+            </button>
+            <button
+              type="button"
+              class="acct-btn whatsapp-btn"
+              [disabled]="!whatsappUrl()"
+              (click)="abrirConfirmacionWhatsapp()"
+            >
+              Continuar por WhatsApp
+            </button>
           </div>
           <div class="safety-notice">
             <strong>Te recomendamos conversar dentro de DEPA.</strong>
-            <span>Si continuás por WhatsApp, la conversación ocurre fuera de la plataforma. DEPA no podrá revisar esos mensajes ni ayudarte con acuerdos o inconvenientes surgidos allí.</span>
+            <span
+              >Si continuás por WhatsApp, la conversación ocurre fuera de la plataforma. DEPA no
+              podrá revisar esos mensajes ni ayudarte con acuerdos o inconvenientes surgidos
+              allí.</span
+            >
           </div>
         </section>
       }
@@ -68,13 +184,30 @@
 
   @if (confirmarSalida()) {
     <div class="modal-backdrop" (click)="confirmarSalida.set(false)">
-      <section class="exit-modal" role="dialog" aria-modal="true" aria-labelledby="exit-title" (click)="$event.stopPropagation()">
+      <section
+        class="exit-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exit-title"
+        (click)="$event.stopPropagation()"
+      >
         <span class="exit-icon">↗</span>
         <h2 id="exit-title">Vas a salir de DEPA</h2>
-        <p>La conversación continuará en WhatsApp. DEPA no podrá acceder a esos mensajes ni intervenir si surge un problema.</p>
+        <p>
+          La conversación continuará en WhatsApp. DEPA no podrá acceder a esos mensajes ni
+          intervenir si surge un problema.
+        </p>
         <div class="exit-actions">
-          <button type="button" class="acct-btn acct-btn--ghost" (click)="confirmarSalida.set(false)">Quedarme en DEPA</button>
-          <button type="button" class="acct-btn whatsapp-btn" (click)="continuarWhatsapp()">Abrir WhatsApp</button>
+          <button
+            type="button"
+            class="acct-btn acct-btn--ghost"
+            (click)="confirmarSalida.set(false)"
+          >
+            Quedarme en DEPA
+          </button>
+          <button type="button" class="acct-btn whatsapp-btn" (click)="continuarWhatsapp()">
+            Abrir WhatsApp
+          </button>
         </div>
       </section>
     </div>

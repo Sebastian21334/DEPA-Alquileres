@@ -32,4 +32,17 @@ describe('ListingService: filtros de ubicación', () => {
     expect(solicitud.request.params.get('idsCiudad')).toBe('42');
     solicitud.flush({ datos: [], pagina: 1, limite: 12, total: 0, totalPaginas: 0 });
   });
+
+  it('envía la superficie mínima combinada con ambientes y la omite al vaciar el campo', () => {
+    service.getActivas({ superficieMin: 50, ambientes: ['4+'] }).subscribe();
+    const filtrada = http.expectOne((req) => req.url.endsWith('/publicaciones'));
+    expect(filtrada.request.params.get('superficieMin')).toBe('50');
+    expect(filtrada.request.params.get('ambientes')).toBe('4+');
+    filtrada.flush({ datos: [], pagina: 1, limite: 12, total: 0, totalPaginas: 0 });
+
+    service.getActivas({ superficieMin: null }).subscribe();
+    const sinFiltro = http.expectOne((req) => req.url.endsWith('/publicaciones'));
+    expect(sinFiltro.request.params.has('superficieMin')).toBe(false);
+    sinFiltro.flush({ datos: [], pagina: 1, limite: 12, total: 0, totalPaginas: 0 });
+  });
 });

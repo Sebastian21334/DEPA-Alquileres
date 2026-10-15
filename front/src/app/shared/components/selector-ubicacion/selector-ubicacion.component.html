@@ -1,27 +1,41 @@
-<div class="location-fields" [class.location-fields--compact]="compact()">
+<div
+  class="location-fields"
+  [class.location-fields--compact]="compact()"
+  [class.location-fields--advanced]="advanced()"
+>
   <div class="location-field">
-    <label [for]="idPrefix() + '-provincia'">Provincia{{ required() ? ' *' : '' }}</label>
-    <select
-      [id]="idPrefix() + '-provincia'"
-      [value]="provinciaId() ?? ''"
-      [disabled]="disabled() || cargandoProvincias()"
-      [attr.aria-invalid]="invalidProvincia()"
-      [attr.aria-required]="required()"
-      (change)="cambiarProvincia($event)"
-    >
-      <option value="" [disabled]="required()">
-        {{
-          cargandoProvincias()
-            ? 'Cargando provincias…'
-            : required()
-              ? 'Seleccioná una provincia'
-              : 'Todas las provincias'
-        }}
-      </option>
-      @for (provincia of provincias(); track provincia.id) {
-        <option [value]="provincia.id">{{ provincia.nombre }}</option>
+    <label [for]="idPrefix() + '-provincia'">
+      @if (advanced()) {
+        <svg lucideMapPin [size]="25" aria-hidden="true"></svg>
       }
-    </select>
+      Provincia{{ required() ? ' *' : '' }}
+    </label>
+    <div class="location-select">
+      <select
+        [id]="idPrefix() + '-provincia'"
+        [value]="provinciaId() ?? ''"
+        [disabled]="disabled() || cargandoProvincias()"
+        [attr.aria-invalid]="invalidProvincia()"
+        [attr.aria-required]="required()"
+        (change)="cambiarProvincia($event)"
+      >
+        <option value="" [disabled]="required()">
+          {{
+            cargandoProvincias()
+              ? 'Cargando provincias…'
+              : required()
+                ? 'Seleccioná una provincia'
+                : 'Todas las provincias'
+          }}
+        </option>
+        @for (provincia of provincias(); track provincia.id) {
+          <option [value]="provincia.id">{{ provincia.nombre }}</option>
+        }
+      </select>
+      @if (advanced()) {
+        <svg lucideChevronDown [size]="22" aria-hidden="true"></svg>
+      }
+    </div>
     @if (errorProvincias()) {
       <span class="location-error" role="alert"
         >{{ errorProvincias() }}
@@ -33,9 +47,17 @@
   </div>
 
   <div class="location-field">
-    <label [for]="idPrefix() + '-localidad'">Localidad{{ required() ? ' *' : '' }}</label>
+    <label [for]="idPrefix() + '-localidad'">
+      @if (advanced()) {
+        <svg lucideBuilding2 [size]="25" aria-hidden="true"></svg>
+      }
+      Localidad{{ required() ? ' *' : '' }}
+    </label>
     <div class="combobox">
       <div class="combobox__input" [class.combobox__input--invalid]="invalidLocalidad()">
+        @if (advanced()) {
+          <svg class="combobox__search" lucideSearch [size]="25" aria-hidden="true"></svg>
+        }
         <input
           #localidadInput
           type="text"

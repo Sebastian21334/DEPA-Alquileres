@@ -8,7 +8,7 @@ import { AdvancedFiltersComponent } from '../home/components/advanced-filters/ad
 import { ListingGridComponent } from '../home/components/listing-grid/listing-grid.component';
 import { ListingService, OrdenPublicaciones, PaginaPublicaciones } from '../home/listing.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
-import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
+import { Modalidad, TipoPropiedad } from '../../shared/models/catalogo.model';
 
 @Component({
   selector: 'app-explorar-publicaciones',
@@ -52,7 +52,6 @@ export class ExplorarPublicacionesComponent {
   protected readonly orden = signal<OrdenPublicaciones>('recientes');
   protected readonly modalidades = signal<Modalidad[]>([]);
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
-  protected readonly monedas = signal<TipoMoneda[]>([]);
   protected readonly busqueda = this.fb.nonNullable.control('');
   protected readonly form = this.fb.nonNullable.group({
     idModalidad: null as number | null,
@@ -63,6 +62,7 @@ export class ExplorarPublicacionesComponent {
     ambientesSeleccionados: [[] as string[]],
     precioMin: null as number | null,
     precioMax: null as number | null,
+    superficieMin: null as number | null,
   });
 
   constructor() {
@@ -159,6 +159,17 @@ export class ExplorarPublicacionesComponent {
       : 'Todas las publicaciones';
   }
 
+  protected descripcion(): string {
+    switch (this.categoria()) {
+      case 'temporales':
+        return 'Encontrá el alojamiento ideal para tu próxima estadía, escapada o viaje.';
+      case 'largo-plazo':
+        return 'Encontrá tu próximo hogar y el espacio ideal para tu día a día.';
+      default:
+        return 'Explorá las propiedades disponibles y encontrá el alquiler que se adapte a vos.';
+    }
+  }
+
   private cargarCatalogos(): void {
     this.catalogos.getModalidades().subscribe({
       next: (modalidades) => {
@@ -170,7 +181,6 @@ export class ExplorarPublicacionesComponent {
     this.catalogos
       .getTiposPropiedad()
       .subscribe({ next: (tipos) => this.tiposPropiedad.set(tipos) });
-    this.catalogos.getTiposMoneda().subscribe({ next: (monedas) => this.monedas.set(monedas) });
   }
 
   private sincronizarModalidad(categoria: string | null): void {
@@ -205,6 +215,7 @@ export class ExplorarPublicacionesComponent {
         idsTipoMoneda: filtros.idsTipoMoneda,
         precioMin: filtros.precioMin,
         precioMax: filtros.precioMax,
+        superficieMin: filtros.superficieMin,
         ambientes: filtros.ambientesSeleccionados,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))

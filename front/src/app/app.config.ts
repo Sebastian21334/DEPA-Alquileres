@@ -1,6 +1,5 @@
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter, withInMemoryScrolling, withViewTransitions } from '@angular/router';
-import { provideClientHydration, withHttpTransferCacheOptions } from '@angular/platform-browser';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { routes } from './app.routes';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
@@ -16,7 +15,6 @@ export const appConfig: ApplicationConfig = {
       // Transición animada entre páginas (estilos ::view-transition-* en styles.css).
       withViewTransitions(),
     ),
-    provideClientHydration(withHttpTransferCacheOptions({ includePostRequests: false })),
     provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
   ],
 };

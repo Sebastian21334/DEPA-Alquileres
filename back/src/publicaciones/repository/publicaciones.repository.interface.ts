@@ -17,6 +17,7 @@ export interface ConsultaPublicaciones {
   idsTipoMoneda?: number[];
   precioMin?: number;
   precioMax?: number;
+  superficieMin?: number;
   ambientes?: string[];
 }
 
