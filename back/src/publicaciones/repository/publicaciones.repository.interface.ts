@@ -33,9 +33,11 @@ export interface IPublicacionesRepository {
   crear(datos: Partial<Publicacion>): Publicacion;
   guardar(publicacion: Publicacion): Promise<Publicacion>;
   marcarActiva(id: number): Promise<void>;
+  darDeBaja(id: number, motivo: string): Promise<void>;
   incrementarVisualizaciones(id: number): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
   buscarTodasActivas(): Promise<Publicacion[]>;
+  buscarTodas(): Promise<Publicacion[]>;
   buscarPaginadas(
     consulta: ConsultaPublicaciones,
   ): Promise<PaginaPublicaciones>;

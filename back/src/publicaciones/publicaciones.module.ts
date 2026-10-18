@@ -10,6 +10,7 @@ import { UbicacionModule } from '../ubicacion/ubicacion.module';
 import { AuthModule } from '../auth/auth.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { Reserva } from '../reservas/entity/reserva.entity';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   // La publicación coordina catálogos, ubicación y anunciante propietario.
@@ -29,6 +30,7 @@ import { Reserva } from '../reservas/entity/reserva.entity';
     CatalogosModule,
     UbicacionModule,
     AuthModule,
+    MailModule,
     AnunciantesModule,
   ],
   exports: [PublicacionesService],

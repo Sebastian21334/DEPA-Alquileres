@@ -181,6 +181,18 @@ export class MailService implements IMailService {
     );
   }
 
+  async enviarBajaPublicacion(destinatario: string, titulo: string, motivo: string): Promise<void> {
+    await this.enviar(
+      destinatario,
+      'Tu publicación fue desactivada por un administrador',
+      `<p>Un administrador dio de baja tu publicación <strong>${this.plantillas.escapar(titulo)}</strong>.</p>
+       <p><strong>Motivo:</strong> ${this.plantillas.escapar(motivo)}</p>
+       <p>La publicación se conserva en tu cuenta y ya no aparece en el catálogo público.</p>
+       ${this.plantillas.boton('Ver mis publicaciones', `${this.frontendUrl}/mis-publicaciones`)}`,
+      'Información sobre la baja administrativa de tu publicación.',
+    );
+  }
+
   private enviar(
     destinatario: string,
     asunto: string,

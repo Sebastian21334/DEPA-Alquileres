@@ -3,7 +3,7 @@
     <div>
       <p class="admin__eyebrow">Administración</p>
       <h1>Panel de control</h1>
-      <p>Gestioná usuarios y revisá solicitudes de anunciantes.</p>
+      <p>Gestioná usuarios, publicaciones y solicitudes de anunciantes.</p>
     </div>
     <button class="button button--light" type="button" (click)="reload()" [disabled]="loading()">
       <svg lucideRefreshCw [size]="18"></svg> Actualizar
@@ -39,6 +39,62 @@
       </div>
     </article>
   </div>
+
+  <section class="panel">
+    <div class="panel__title panel__title--users">
+      <div>
+        <h2>Publicaciones</h2>
+        <p>Da de baja publicaciones de cualquier anunciante e informale el motivo por correo.</p>
+      </div>
+      <label class="search">
+        <svg lucideSearch [size]="18"></svg>
+        <input type="search" aria-label="Buscar publicaciones" placeholder="Buscar por título, ID o anunciante"
+          [ngModel]="publicationQuery()" (ngModelChange)="publicationQuery.set($event)" />
+      </label>
+    </div>
+    @if (loading()) {
+      <p class="empty">Cargando publicaciones…</p>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Publicación</th><th>Anunciante</th><th>Estado</th><th class="right">Acciones</th></tr></thead>
+          <tbody>
+            @for (publication of filteredPublications(); track publication.id) {
+              <tr>
+                <td><strong>{{ publication.titulo }}</strong><small>#{{ publication.id }} · {{ publication.direccion }}</small></td>
+                <td>{{ publication.anunciante?.usuario?.nombre }} {{ publication.anunciante?.usuario?.apellido }}<small>{{ publication.anunciante?.usuario?.email }}</small></td>
+                <td><span class="status" [class.status--blocked]="!publication.activa">{{ publication.motivo_baja_admin ? 'Desactivada por un administrador' : publication.activa ? 'Activa' : 'Inactiva' }}</span>
+                  @if (publication.motivo_baja_admin) { <small>Motivo: {{ publication.motivo_baja_admin }}</small> }
+                </td>
+                <td class="right"><button type="button" class="button button--danger-outline"
+                  [disabled]="busy() !== null" (click)="openBaja(publication)">
+                  {{ publication.motivo_baja_admin ? 'Actualizar baja / reenviar aviso' : 'Dar de baja' }}
+                </button></td>
+              </tr>
+              @if (bajaId() === publication.id) {
+                <tr><td colspan="4">
+                  <form class="reject-box" (ngSubmit)="confirmBaja(publication)">
+                    <label [for]="'baja-' + publication.id">Motivo de la baja de “{{ publication.titulo }}”</label>
+                    <textarea [id]="'baja-' + publication.id" name="motivoBaja" [(ngModel)]="bajaReason"
+                      required maxlength="500" [disabled]="busy() !== null" placeholder="Explicá por qué se desactiva esta publicación"></textarea>
+                    <p>El dueño verá este motivo en Mis publicaciones y recibirá un correo. La publicación se conservará desactivada.</p>
+                    <div>
+                      <button type="button" class="button button--ghost" [disabled]="busy() !== null" (click)="bajaId.set(null)">Cancelar</button>
+                      <button type="submit" class="button button--danger" [disabled]="busy() !== null || !bajaReason.trim()">
+                        {{ busy() === 'publication-' + publication.id ? 'Procesando…' : 'Confirmar baja y notificar' }}
+                      </button>
+                    </div>
+                  </form>
+                </td></tr>
+              }
+            } @empty {
+              <tr><td colspan="4" class="empty">No se encontraron publicaciones.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
 
   <section class="panel">
     <div class="panel__title">

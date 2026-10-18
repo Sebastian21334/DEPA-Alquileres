@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { Reserva } from '../../shared/services/reservation.service';
+import { Publicacion } from '../../shared/models/publicacion.model';
 
 export interface AdminUser {
   id: number;
@@ -50,6 +51,14 @@ export type CatalogKey =
 export class AdminService {
   private readonly http = inject(HttpClient);
   private readonly api = environment.apiUrl;
+  listarPublicaciones() {
+    return this.http.get<Publicacion[]>(`${this.api}/publicaciones/administracion`);
+  }
+  darDeBajaPublicacion(id: number, motivo: string) {
+    return this.http.patch<{ publicacion: Publicacion; correoEnviado: boolean }>(
+      `${this.api}/publicaciones/administracion/${id}/baja`, { motivo },
+    );
+  }
   listarUsuarios() {
     return this.http.get<AdminUser[]>(`${this.api}/usuarios`);
   }

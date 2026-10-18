@@ -5,6 +5,18 @@ import { MailPlantilla } from '../presentation/mail-plantilla';
 import type { ICorreoRepository } from '../repository/correo.repository.interface';
 
 describe('MailService', () => {
+  it('notifica la baja con el título, motivo escapado y enlace a Mis publicaciones', async () => {
+    const enviar = jest.fn<ICorreoRepository['enviar']>().mockResolvedValue(undefined);
+    const service = new MailService({ enviar }, new MailPlantilla(),
+      new ConfigService({ FRONTEND_URLS: 'https://example.test' }));
+    await service.enviarBajaPublicacion('dueno@gmail.com', '<Casa>', '<script>Motivo</script>');
+    const correo = enviar.mock.calls[0][0];
+    expect(correo.destinatario).toBe('dueno@gmail.com');
+    expect(correo.html).toContain('&lt;Casa&gt;');
+    expect(correo.html).toContain('&lt;script&gt;Motivo&lt;/script&gt;');
+    expect(correo.html).not.toContain('<script>');
+    expect(correo.html).toContain('https://example.test/mis-publicaciones');
+  });
   it('escapa datos personales y usa el primer frontend configurado', async () => {
     const enviar = jest
       .fn<ICorreoRepository['enviar']>()

@@ -19,6 +19,9 @@ import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AnuncianteGuard } from '../../common/guards/anunciante.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { BajaPublicacionDto } from '../dto/baja-publicacion.dto';
 
 @Controller('publicaciones')
 export class PublicacionesController {
@@ -41,6 +44,23 @@ export class PublicacionesController {
       ...filtros,
       busqueda: q,
     });
+  }
+
+  @Get('administracion')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  listarAdministracion() {
+    return this.publicacionesService.listarAdministracion();
+  }
+
+  @Patch('administracion/:id/baja')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  darDeBajaAdministracion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) dto: BajaPublicacionDto,
+  ) {
+    return this.publicacionesService.darDeBajaAdministracion(id, dto.motivo);
   }
 
   @Get('anunciante/:idAnunciante')

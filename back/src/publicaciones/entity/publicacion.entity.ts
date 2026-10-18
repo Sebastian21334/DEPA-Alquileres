@@ -36,6 +36,9 @@ export class Publicacion {
   @Column({ type: 'boolean', default: false })
   activa: boolean;
 
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  motivo_baja_admin: string | null;
+
   @Column({ type: 'int', default: 0 })
   visualizaciones: number;
 

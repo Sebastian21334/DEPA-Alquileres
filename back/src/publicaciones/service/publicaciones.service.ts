@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PUBLICACIONES_REPOSITORY } from '../repository/publicaciones.repository.interface';
@@ -18,14 +19,18 @@ import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { UbicacionService } from '../../ubicacion/service/ubicacion.service';
 import { Publicacion } from '../entity/publicacion.entity';
+import { MAIL_SERVICE } from '../../mail/mail.interface';
+import type { IMailService } from '../../mail/mail.interface';
 
 @Injectable()
 export class PublicacionesService {
+  private readonly logger = new Logger(PublicacionesService.name);
   constructor(
     @Inject(PUBLICACIONES_REPOSITORY)
     private readonly publicacionesRepo: IPublicacionesRepository,
     private readonly catalogosService: CatalogosService,
     private readonly ubicacionService: UbicacionService,
+    @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
   ) {}
 
   /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
@@ -89,7 +94,7 @@ export class PublicacionesService {
 
   /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
   async activar(publicacion: Publicacion) {
-    if (publicacion.activa) return;
+    if (publicacion.activa || publicacion.motivo_baja_admin) return;
     // Se actualiza solo la columna: guardar la entidad completa haría que TypeORM
     // sincronice publicacion.imagenes (leída antes de subir la foto, vacía) y
     // desvincule la imagen recién creada (id_publicacion = NULL).
@@ -180,6 +185,9 @@ export class PublicacionesService {
     if (dto.cantidad_ambientes !== undefined)
       publicacion.cantidad_ambientes = dto.cantidad_ambientes;
     if (dto.superficie !== undefined) publicacion.superficie = dto.superficie;
+    if (dto.activa === true && publicacion.motivo_baja_admin) {
+      throw new ForbiddenException('La publicación fue desactivada por un administrador y no puede reactivarse');
+    }
     if (dto.activa !== undefined) publicacion.activa = dto.activa;
 
     if (dto.idTipoMoneda !== undefined) {
@@ -208,6 +216,33 @@ export class PublicacionesService {
     }
 
     return this.publicacionesRepo.guardar(publicacion);
+  }
+
+  /** Incluye publicaciones activas e inactivas de todos los anunciantes. */
+  listarAdministracion() {
+    return this.publicacionesRepo.buscarTodas();
+  }
+
+  /** El controller restringe esta operación al rol Administrador. */
+  async darDeBajaAdministracion(id: number, motivo: string) {
+    const razon = motivo?.trim();
+    if (!razon || razon.length > 500) {
+      throw new BadRequestException('Ingresá un motivo de entre 1 y 500 caracteres');
+    }
+    const publicacion = await this.buscarPorId(id);
+    await this.publicacionesRepo.darDeBaja(id, razon);
+    publicacion.activa = false;
+    publicacion.motivo_baja_admin = razon;
+    let correoEnviado = false;
+    try {
+      await this.mailService.enviarBajaPublicacion(
+        publicacion.anunciante.usuario.email, publicacion.titulo, razon,
+      );
+      correoEnviado = true;
+    } catch (error) {
+      this.logger.error(`No se pudo notificar la baja de la publicación ${id}`, error as Error);
+    }
+    return { publicacion, correoEnviado };
   }
 
   /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */

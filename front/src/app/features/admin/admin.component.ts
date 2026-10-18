@@ -2,6 +2,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { Component, computed, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
+import { Publicacion } from '../../shared/models/publicacion.model';
 import {
   LucideUsers,
   LucideShieldCheck,
@@ -46,6 +47,18 @@ export class AdminComponent {
   private readonly api = inject(AdminService);
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   protected readonly users = signal<AdminUser[]>([]);
+  protected readonly publications = signal<Publicacion[]>([]);
+  protected readonly publicationQuery = signal('');
+  protected readonly bajaId = signal<number | null>(null);
+  protected bajaReason = '';
+  protected readonly filteredPublications = computed(() => {
+    const q = this.publicationQuery().trim().toLowerCase();
+    return this.publications().filter((p) => {
+      const user = p.anunciante?.usuario;
+      return `${p.id} ${p.titulo} ${user?.nombre ?? ''} ${user?.apellido ?? ''} ${user?.email ?? ''}`
+        .toLowerCase().includes(q);
+    });
+  });
   protected readonly requests = signal<VerificationRequest[]>([]);
   protected readonly settlements = signal<AdminSettlement[]>([]);
   protected readonly loading = signal(true);
@@ -90,10 +103,20 @@ export class AdminComponent {
   protected reload(): void {
     this.loading.set(true);
     this.error.set(null);
-    let pending = 3;
+    let pending = 4;
     const done = () => {
       if (--pending === 0) this.loading.set(false);
     };
+    this.api.listarPublicaciones().subscribe({
+      next: (v) => {
+        this.publications.set(v);
+        done();
+      },
+      error: (e: Error) => {
+        this.error.set(e.message);
+        done();
+      },
+    });
     this.api.listarUsuarios().subscribe({
       next: (v) => {
         this.users.set(v);
@@ -124,6 +147,32 @@ export class AdminComponent {
         done();
       },
     });
+  }
+
+  protected openBaja(publication: Publicacion): void {
+    this.bajaReason = publication.motivo_baja_admin ?? '';
+    this.bajaId.set(publication.id);
+  }
+
+  protected confirmBaja(publication: Publicacion): void {
+    if (this.busy()) return;
+    const motivo = this.bajaReason.trim();
+    if (!motivo || motivo.length > 500) return;
+    this.run(
+      `publication-${publication.id}`,
+      () => this.api.darDeBajaPublicacion(publication.id, motivo),
+      (value) => {
+        const result = value as { publicacion: Publicacion; correoEnviado: boolean };
+        this.publications.update((items) => items.map((item) =>
+          item.id === publication.id ? result.publicacion : item,
+        ));
+        this.bajaId.set(null);
+        if (!result.correoEnviado) {
+          this.error.set('La publicación fue desactivada, pero no se pudo enviar el correo. Podés repetir la baja para reintentar el aviso.');
+        }
+      },
+      'Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.',
+    );
   }
 
   protected registrarPago(settlement: AdminSettlement): void {

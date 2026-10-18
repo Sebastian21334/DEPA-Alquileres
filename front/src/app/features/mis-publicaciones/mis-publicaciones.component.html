@@ -37,7 +37,9 @@
 
             <div class="item__info">
               <div class="item__badges">
-                @if (pub.activa) {
+                @if (pub.motivo_baja_admin) {
+                  <span class="acct-badge acct-badge--warn">Desactivada por un administrador</span>
+                } @else if (pub.activa) {
                   <span class="acct-badge acct-badge--ok">Activa</span>
                 } @else if (!pub.imagenes?.length) {
                   <span class="acct-badge acct-badge--warn" title="Una publicación necesita al menos una imagen para mostrarse">No publicada · falta una imagen</span>
@@ -48,6 +50,9 @@
                 <small>Publicada el {{ fecha(pub.fecha_publicacion) }}</small>
               </div>
               <h2>{{ pub.titulo }}</h2>
+              @if (pub.motivo_baja_admin) {
+                <p class="acct-alert acct-alert--error"><strong>Motivo de la baja:</strong> {{ pub.motivo_baja_admin }}</p>
+              }
               <p class="item__location"><svg lucideMapPin [size]="14"></svg> {{ ubicacion(pub) }}</p>
               <p class="item__specs">
                 <strong>{{ precio(pub) }}</strong> · {{ pub.cantidad_ambientes }} amb. · {{ pub.superficie }} m²

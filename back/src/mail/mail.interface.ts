@@ -14,6 +14,7 @@ export interface ReservaEmailDetalle {
 }
 
 export interface IMailService {
+  enviarBajaPublicacion(destinatario: string, titulo: string, motivo: string): Promise<void>;
   enviarVerificacion(destinatario: string, token: string): Promise<void>;
   enviarRecuperacion(destinatario: string, token: string): Promise<void>;
   enviarResultadoVerificacion(

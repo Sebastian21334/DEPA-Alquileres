@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
 import {
   CategoriaInicio,
@@ -29,7 +29,11 @@ export class PublicacionesRepository implements IPublicacionesRepository {
 
   async marcarActiva(id: number): Promise<void> {
     // UPDATE directo: no toca relaciones (a diferencia de save con la entidad cargada).
-    await this.repo.update({ id }, { activa: true });
+    await this.repo.update({ id, motivo_baja_admin: IsNull() }, { activa: true });
+  }
+
+  async darDeBaja(id: number, motivo: string): Promise<void> {
+    await this.repo.update({ id }, { activa: false, motivo_baja_admin: motivo });
   }
 
   async incrementarVisualizaciones(id: number): Promise<void> {
@@ -51,6 +55,13 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       },
       // La primera foto cargada es la portada; sin orden SQL el join puede invertir la galería.
       order: { imagenes: { id: 'ASC' } },
+    });
+  }
+
+  buscarTodas(): Promise<Publicacion[]> {
+    return this.repo.find({
+      relations: { anunciante: { usuario: true }, ciudad: true, provincia: true },
+      order: { fecha_publicacion: 'DESC', id: 'DESC' },
     });
   }
 

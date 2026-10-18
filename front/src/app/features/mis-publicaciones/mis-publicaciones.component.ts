@@ -87,7 +87,7 @@ export class MisPublicacionesComponent {
       .subscribe({
         next: (imagen) =>
           // El backend activa la publicación al recibir su primera imagen.
-          this.actualizar(pub.id, (p) => ({ ...p, activa: true, imagenes: [...(p.imagenes ?? []), { id: imagen.id, url: imagen.url }] })),
+          this.actualizar(pub.id, (p) => ({ ...p, activa: !p.motivo_baja_admin, imagenes: [...(p.imagenes ?? []), { id: imagen.id, url: imagen.url }] })),
         error: (err: Error) => this.fallo(pub.id, err),
         complete: () => this.ocupada.set(null),
       });
