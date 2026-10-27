@@ -9,6 +9,8 @@ import { FechaRepository } from './repository/fecha.repository';
 import { FECHA_REPOSITORY } from './repository/fecha.repository.interface';
 import { AuthModule } from '../auth/auth.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
+import { TransaccionCalendario } from './repository/transaccion-calendario';
+import { TRANSACCION_CALENDARIO } from './repository/transaccion-calendario.interface';
 
 @Module({
   imports: [
@@ -22,12 +24,13 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
     // PropietarioPublicacionGuard evita modificar calendarios ajenos.
     DisponibilidadService,
     FechaRepository,
+    { provide: TRANSACCION_CALENDARIO, useClass: TransaccionCalendario },
     {
       provide: FECHA_REPOSITORY,
       useExisting: FechaRepository,
     },
     PropietarioPublicacionGuard,
   ],
-  exports: [DisponibilidadService],
+  exports: [DisponibilidadService, TRANSACCION_CALENDARIO],
 })
 export class DisponibilidadModule {}

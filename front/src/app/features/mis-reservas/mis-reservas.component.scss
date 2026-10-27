@@ -15,7 +15,17 @@
 .section-heading { margin-bottom: .85rem; }
 .section-heading h2 { margin: 0; font-size: 1.15rem; }
 .section-heading p { margin: .2rem 0 0; color: var(--color-text-muted); font-size: .9rem; }
-.reservation { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.reservation { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.reservation__body { flex: 1; min-width: 200px; }
+.reschedule-form { flex-basis: 100%; padding: 1rem; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-bg); }
+.reschedule-form h4 { margin: 0 0 .5rem; font-size: 1rem; }
+.reschedule-form__dates { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 1rem 0; }
+.reschedule-form__dates label, .reschedule-form__dates > div { display: grid; gap: .35rem; font-size: .9rem; }
+.reschedule-form__dates input { min-height: 44px; padding: .5rem .75rem; border: 1px solid var(--color-border); border-radius: 7px; background: #fff; font: inherit; }
+.reschedule-form__dates small { color: var(--color-text-muted); }
+.reschedule-form__actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .85rem; }
+.reschedule-history { display: grid; gap: .15rem; margin: .5rem 0; padding: .65rem .8rem; border-left: 3px solid var(--color-primary); background: #fffaf2; font-size: .85rem; }
+.reschedule-notice { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; color: #744210; font-size: .85rem; }
 .reservation h3 { margin: .5rem 0 .25rem; font-size: 1.05rem; }
 .reservation p { margin: .2rem 0; }
 .reservation__actions { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }

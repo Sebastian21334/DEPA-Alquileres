@@ -1,3 +1,5 @@
+import { TRANSACCION_CALENDARIO } from '../repository/transaccion-calendario.interface';
+import type { ITransaccionCalendario } from '../repository/transaccion-calendario.interface';
 import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
 import {
   Inject,
@@ -5,6 +7,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { Fecha } from '../entity/fecha.entity';
 import { CrearDisponibilidadDto } from '../dto/crear-disponibilidad.dto';
@@ -19,6 +22,8 @@ import { Reserva } from '../../reservas/entity/reserva.entity';
 @Injectable()
 export class DisponibilidadService {
   constructor(
+    @Inject(TRANSACCION_CALENDARIO)
+    private readonly transaccion: ITransaccionCalendario,
     @Inject(FECHA_REPOSITORY)
     private readonly fechaRepository: IFechaRepository,
     private readonly publicacionesService: PublicacionesService,
@@ -76,36 +81,41 @@ export class DisponibilidadService {
       );
     }
 
-    const existentes = await this.fechaRepository.buscarPorRango(
-      dto.id_publicacion,
-      inicio,
-      fin,
-    );
-    const fechasExistentes = new Set(
-      existentes.map((item) => this.claveFecha(item.fecha)),
-    );
-
-    // Armamos una entidad Fecha (todavía sin guardar) por cada día del rango.
-    // fechaRepository.crear() es un simple "new" con los valores por defecto,
-    // no pega contra la base todavía.
-    const fechas: Fecha[] = [];
-    // Se usa una copia de la fecha en cada iteración para no reutilizar la misma referencia mutable.
-    for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
-      if (fechasExistentes.has(this.claveFecha(d))) continue;
-      fechas.push(
-        this.fechaRepository.crear({
-          fecha: new Date(d), // copia del Date del loop, evita que todas apunten a la misma referencia
-          disponible: true,
-          publicacion,
-        }),
+    return this.transaccion.ejecutar(async ({ fechas: fechaRepository }) => {
+      await fechaRepository.bloquearPublicacion(dto.id_publicacion);
+      const existentes = await fechaRepository.buscarPorRango(
+        dto.id_publicacion,
+        inicio,
+        fin,
       );
-    }
+      const fechasExistentes = new Set(
+        existentes.map((item) => this.claveFecha(item.fecha)),
+      );
 
-    // Recién acá se hace el insert real, todo en una sola operación (batch)
-    if (!fechas.length) return this.aAdministracion(existentes);
-    return this.aAdministracion(
-      await this.fechaRepository.guardarVarias(fechas),
-    );
+      // Armamos una entidad Fecha (todavía sin guardar) por cada día del rango.
+      // fechaRepository.crear() es un simple "new" con los valores por defecto,
+      // no pega contra la base todavía.
+      const fechas: Fecha[] = [];
+      // Se usa una copia de la fecha en cada iteración para no reutilizar la misma referencia mutable.
+      for (
+        let d = new Date(inicio);
+        d <= fin;
+        d.setUTCDate(d.getUTCDate() + 1)
+      ) {
+        if (fechasExistentes.has(this.claveFecha(d))) continue;
+        fechas.push(
+          fechaRepository.crear({
+            fecha: this.claveFecha(d), // PostgreSQL date no lleva hora ni zona horaria
+            disponible: true,
+            publicacion,
+          }),
+        );
+      }
+
+      // Recién acá se hace el insert real, todo en una sola operación (batch)
+      if (!fechas.length) return this.aAdministracion(existentes);
+      return this.aAdministracion(await fechaRepository.guardarVarias(fechas));
+    });
   }
 
   /**
@@ -139,17 +149,19 @@ export class DisponibilidadService {
     id: number,
     dto: ActualizarDisponibilidadDto,
   ): Promise<FechaDisponibilidadAdministracionDto> {
-    const fecha = await this.fechaRepository.buscarPorId(id);
-    if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
+    return this.transaccion.ejecutar(async ({ fechas: fechaRepository }) => {
+      const fecha = await fechaRepository.buscarPorId(id);
+      if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
 
-    if (dto.disponible && fecha.reserva) {
-      throw new BadRequestException(
-        'No se puede liberar un día asociado a una reserva',
-      );
-    }
+      if (dto.disponible && fecha.reserva) {
+        throw new BadRequestException(
+          'No se puede liberar un día asociado a una reserva',
+        );
+      }
 
-    fecha.disponible = dto.disponible;
-    return this.aAdministracion([await this.fechaRepository.guardar(fecha)])[0];
+      fecha.disponible = dto.disponible;
+      return this.aAdministracion([await fechaRepository.guardar(fecha)])[0];
+    });
   }
 
   private aAdministracion(
@@ -163,25 +175,27 @@ export class DisponibilidadService {
     }));
   }
 
-  private claveFecha(fecha: Date): string {
+  private claveFecha(fecha: Date | string): string {
     return new Date(fecha).toISOString().slice(0, 10);
   }
 
   /** Elimina un dia y convierte el resultado del repositorio en un 404 claro. */
   async eliminar(id: number): Promise<void> {
-    const fecha = await this.fechaRepository.buscarPorId(id);
-    if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
-    if (fecha.reserva) {
-      throw new BadRequestException(
-        'No se puede eliminar un día asociado a una reserva',
-      );
-    }
-    // El repositorio devuelve la cantidad de filas afectadas en vez de
-    // lanzar error si no existe, así que el chequeo queda del lado del service
-    const afectadas = await this.fechaRepository.eliminar(id);
-    if (afectadas === 0) {
-      throw new NotFoundException(`No se encontró la fecha ${id}`);
-    }
+    return this.transaccion.ejecutar(async ({ fechas: fechaRepository }) => {
+      const fecha = await fechaRepository.buscarPorId(id);
+      if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
+      if (fecha.reserva) {
+        throw new BadRequestException(
+          'No se puede eliminar un día asociado a una reserva',
+        );
+      }
+      // El repositorio devuelve la cantidad de filas afectadas en vez de
+      // lanzar error si no existe, así que el chequeo queda del lado del service
+      const afectadas = await fechaRepository.eliminar(id);
+      if (afectadas === 0) {
+        throw new NotFoundException(`No se encontró la fecha ${id}`);
+      }
+    });
   }
 
   // ============================================================
@@ -199,8 +213,9 @@ export class DisponibilidadService {
     idPublicacion: number,
     fechaInicio: Date,
     fechaFin: Date,
+    fechaRepository: IFechaRepository = this.fechaRepository,
   ): Promise<boolean> {
-    const fechas = await this.fechaRepository.buscarPorRango(
+    const fechas = await fechaRepository.buscarPorRango(
       idPublicacion,
       fechaInicio,
       fechaFin,
@@ -214,10 +229,10 @@ export class DisponibilidadService {
       ) + 1;
 
     // Tener menos filas que días pedidos significa que el rango nunca fue habilitado completo.
-    if (fechas.length < diasEsperados) return false;
+    if (fechas.length !== diasEsperados) return false;
 
     // Un solo dia ocupado vuelve invalido el rango completo de la reserva.
-    return fechas.every((f) => f.disponible);
+    return fechas.every((f) => f.disponible && !f.reserva);
   }
 
   /**
@@ -230,10 +245,24 @@ export class DisponibilidadService {
     fechaInicio: Date,
     fechaFin: Date,
     idReserva: number,
+    fechaRepository: IFechaRepository,
   ): Promise<void> {
+    await fechaRepository.bloquearPublicacion(idPublicacion);
+    if (
+      !(await this.verificarDisponibilidad(
+        idPublicacion,
+        fechaInicio,
+        fechaFin,
+        fechaRepository,
+      ))
+    ) {
+      throw new ConflictException(
+        'El rango de fechas seleccionado no está disponible',
+      );
+    }
     // La reserva ya fue guardada y su ID permite dejar trazabilidad en cada dia
     // ocupado, relacion que tambien evita reutilizar esas fechas.
-    const fechas = await this.fechaRepository.buscarPorRango(
+    const fechas = await fechaRepository.buscarPorRango(
       idPublicacion,
       fechaInicio,
       fechaFin,
@@ -245,17 +274,20 @@ export class DisponibilidadService {
       fecha.reserva = Object.assign(new Reserva(), { id: idReserva });
     }
 
-    await this.fechaRepository.guardarVarias(fechas);
+    await fechaRepository.guardarVarias(fechas);
   }
 
   /** Libera únicamente las fechas enlazadas a una reserva cancelada. */
-  async liberarReserva(idReserva: number): Promise<void> {
-    const fechas = await this.fechaRepository.buscarPorReserva(idReserva);
+  async liberarReserva(
+    idReserva: number,
+    fechaRepository: IFechaRepository,
+  ): Promise<void> {
+    const fechas = await fechaRepository.buscarPorReserva(idReserva);
     for (const fecha of fechas) {
       fecha.disponible = true;
       fecha.reserva = null;
     }
-    if (fechas.length) await this.fechaRepository.guardarVarias(fechas);
+    if (fechas.length) await fechaRepository.guardarVarias(fechas);
   }
 
   /** Reasigna los días de una reserva al validar que el nuevo rango esté libre. */
@@ -264,8 +296,10 @@ export class DisponibilidadService {
     fechaInicio: Date,
     fechaFin: Date,
     idReserva: number,
+    fechaRepository: IFechaRepository,
   ): Promise<boolean> {
-    const nuevasFechas = await this.fechaRepository.buscarPorRangoConReserva(
+    await fechaRepository.bloquearPublicacion(idPublicacion);
+    const nuevasFechas = await fechaRepository.buscarPorRangoConReserva(
       idPublicacion,
       fechaInicio,
       fechaFin,
@@ -274,25 +308,24 @@ export class DisponibilidadService {
       Math.floor((fechaFin.getTime() - fechaInicio.getTime()) / 86_400_000) + 1;
     if (nuevasFechas.length !== diasEsperados) return false;
     if (
-      nuevasFechas.some(
-        (fecha) => !fecha.disponible && fecha.reserva?.id !== idReserva,
+      nuevasFechas.some((fecha) =>
+        fecha.reserva ? fecha.reserva.id !== idReserva : !fecha.disponible,
       )
     )
       return false;
 
-    const fechasAnteriores =
-      await this.fechaRepository.buscarPorReserva(idReserva);
+    const fechasAnteriores = await fechaRepository.buscarPorReserva(idReserva);
     for (const fecha of fechasAnteriores) {
       fecha.disponible = true;
       fecha.reserva = null;
     }
-    await this.fechaRepository.guardarVarias(fechasAnteriores);
+    await fechaRepository.guardarVarias(fechasAnteriores);
 
     for (const fecha of nuevasFechas) {
       fecha.disponible = false;
       fecha.reserva = Object.assign(new Reserva(), { id: idReserva });
     }
-    await this.fechaRepository.guardarVarias(nuevasFechas);
+    await fechaRepository.guardarVarias(nuevasFechas);
     return true;
   }
 }

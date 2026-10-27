@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   ServiceUnavailableException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Reserva } from '../entity/reserva.entity';
 import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
@@ -10,15 +11,48 @@ import type { IReservaRepository } from '../repository/reserva.repository.interf
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import type { IMailService } from '../../mail/mail.interface';
 import { normalizarFechaReserva } from './reservas.utils';
+import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transaccion-calendario.interface';
+import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
 
 @Injectable()
 export class ReservaNotificacionesService {
   private readonly logger = new Logger(ReservaNotificacionesService.name);
   constructor(
+    @Inject(TRANSACCION_CALENDARIO)
+    private readonly transaccion: ITransaccionCalendario,
     @Inject(RESERVA_REPOSITORY)
     private readonly reservaRepository: IReservaRepository,
     @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
   ) {}
+
+  async enviarReprogramacion(
+    idCambio: number,
+    idReserva: number,
+  ): Promise<boolean> {
+    try {
+      return await this.transaccion.ejecutar(async ({ reservas }) => {
+        // Serializa reintentos del mismo aviso sin bloquear reserva ni calendario.
+        const cambio = await reservas.buscarReprogramacion(idCambio, idReserva);
+        if (!cambio)
+          throw new NotFoundException('Reprogramación no encontrada');
+        if (cambio.notificada_en) return true;
+        if (!cambio.destinatario) return false;
+        await this.mailService.enviarReprogramacionReserva(
+          cambio.destinatario,
+          cambio.detalle,
+        );
+        await reservas.marcarReprogramacionNotificada(cambio.id);
+        return true;
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(
+        `Quedó pendiente el aviso de reprogramación ${idCambio}`,
+        error,
+      );
+      return false;
+    }
+  }
 
   async enviarConfirmacion(reserva: Reserva): Promise<void> {
     const titulo = reserva.publicacion?.titulo ?? 'Alojamiento';
@@ -55,7 +89,10 @@ export class ReservaNotificacionesService {
       fechaFin: fin,
       cantidadDias,
       monto: Number(reserva.monto_pago),
-      moneda: reserva.publicacion?.tipoMoneda?.nombre ?? 'ARS',
+      moneda:
+        reserva.moneda_contratada ??
+        reserva.publicacion?.tipoMoneda?.nombre ??
+        'ARS',
     };
     const notificaciones = [
       ...(reserva.usuario_email && !reserva.email_confirmacion_inquilino_enviado
@@ -115,7 +152,15 @@ export class ReservaNotificacionesService {
         reserva.email_nueva_reserva_anunciante_enviado = true;
       }
     });
-    if (huboCambios) await this.reservaRepository.guardar(reserva);
+    if (huboCambios)
+      await this.reservaRepository.registrarNotificaciones(reserva.id, {
+        ...(reserva.email_confirmacion_inquilino_enviado
+          ? { email_confirmacion_inquilino_enviado: true }
+          : {}),
+        ...(reserva.email_nueva_reserva_anunciante_enviado
+          ? { email_nueva_reserva_anunciante_enviado: true }
+          : {}),
+      });
     if (huboErrores) {
       // Un 5xx hace que Mercado Pago vuelva a notificar. Como los éxitos quedan
       // registrados, el próximo intento envía únicamente los correos pendientes.

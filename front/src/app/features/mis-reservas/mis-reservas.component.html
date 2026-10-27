@@ -7,6 +7,7 @@
       </div>
     </div>
 
+    @if (mensaje()) { <div class="acct-alert acct-alert--info" role="status">{{ mensaje() }}</div> }
     @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
     @if (cargando()) {
       <div class="acct-state"><app-spinner /><p>Cargando reservas…</p></div>
@@ -37,10 +38,23 @@
           </div>
           @for (reserva of propias(); track reserva.id) {
             <article class="acct-card reservation">
-              <div>
+              <div class="reservation__body">
                 <span class="acct-badge" [class.acct-badge--error]="reserva.cancelada" [class.acct-badge--ok]="!reserva.cancelada && !reserva.finalizada">{{ estado(reserva) }}</span>
+                @if (ultimoCambio(reserva); as cambio) {
+                  <div class="reschedule-history">
+                    <strong>Último cambio de fechas</strong>
+                    <span>Antes: {{ fecha(cambio.fecha_inicio_anterior) }} — {{ fecha(cambio.fecha_fin_anterior) }}</span>
+                    <span>Ahora: {{ fecha(cambio.fecha_inicio_nueva) }} — {{ fecha(cambio.fecha_fin_nueva) }}</span>
+                  </div>
+                }
+                @for (cambio of avisosPendientes(reserva); track cambio.id) {
+                  <div class="reschedule-notice" role="status">
+                    <span>Correo al anunciante pendiente: cambio al {{ fecha(cambio.fecha_inicio_nueva) }}.</span>
+                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="ocupada() !== null" (click)="reintentarAviso(reserva, cambio)">Reintentar aviso</button>
+                  </div>
+                }
                 <h3>{{ reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</h3>
-                <p>{{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }} · {{ monto(reserva.monto_pago) }}</p>
+                <p>{{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }} · {{ monto(reserva.monto_pago, reserva.moneda_contratada) }}</p>
                 @if (reserva.estado_pago === 'APROBADO') {
                   <p class="settlement-state">{{ estadoLiquidacion(reserva) }}</p>
                   @if (codigos()[reserva.id]; as codigo) {
@@ -55,6 +69,9 @@
               <div class="reservation__actions">
                 <a class="acct-btn acct-btn--primary acct-btn--sm" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">Ver detalle</a>
                 @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
+                @if (puedeReprogramar(reserva) && editando()?.id !== reserva.id) {
+                  <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="ocupada() !== null" (click)="abrirReprogramacion(reserva)">Cambiar fechas</button>
+                }
                 @if (!reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE') { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
                 @if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' && !reserva.codigo_validado_en) {
                   <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
@@ -63,6 +80,32 @@
                   <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="reportarProblema(reserva)">Reportar un problema</button>
                 }
               </div>
+              @if (editando()?.id === reserva.id) {
+                <form class="reschedule-form" (ngSubmit)="confirmarReprogramacion()" [attr.aria-busy]="ocupada() === reserva.id">
+                  <h4>Cambiar fechas de la reserva #{{ reserva.id }}</h4>
+                  <p>Elegí otro inicio. Se mantienen los <strong>{{ dias(reserva) }} días</strong> y el total pagado de
+                    <strong>{{ monto(reserva.importe_contratado ?? reserva.monto_pago, reserva.moneda_contratada) }}</strong>, con la tarifa original.</p>
+                  <p class="muted">Fechas actuales: {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}. Avisaremos al anunciante por correo cuando confirmes.</p>
+                  <div class="reschedule-form__dates">
+                    <label [for]="'inicio-' + reserva.id">Nuevo ingreso
+                      <input type="date" [id]="'inicio-' + reserva.id" name="inicioNuevo" [min]="hoy()" required
+                        [ngModel]="inicioNuevo()" (ngModelChange)="inicioNuevo.set($event)" [disabled]="ocupada() === reserva.id" />
+                    </label>
+                    <div><span>Nueva salida</span><strong>{{ fecha(finNuevo()) }}</strong><small>Se calcula para conservar la duración.</small></div>
+                  </div>
+                  @if (cargandoCalendario()) { <p role="status">Consultando disponibilidad…</p> }
+                  @else if (errorCalendario()) {
+                    <p role="alert">{{ errorCalendario() }}</p>
+                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="cargarCalendario(reserva)">Reintentar disponibilidad</button>
+                  } @else if (inicioNuevo() === reserva.fecha_inicio) { <p>Elegí una fecha de ingreso diferente.</p> }
+                  @else if (!rangoDisponible()) { <p role="alert">El rango elegido no está disponible. Elegí otro inicio.</p> }
+                  @else { <p class="settlement-state" role="status">Las fechas elegidas están disponibles. El total pagado se mantiene.</p> }
+                  <div class="reschedule-form__actions">
+                    <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() !== null || !rangoDisponible() || inicioNuevo() === reserva.fecha_inicio">{{ ocupada() === reserva.id ? 'Guardando cambio…' : 'Confirmar reprogramación' }}</button>
+                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="ocupada() !== null" (click)="cerrarReprogramacion()">Cerrar</button>
+                  </div>
+                </form>
+              }
             </article>
           } @empty {
             <div class="acct-card empty">Todavía no realizaste reservas.</div>
@@ -76,8 +119,21 @@
           </div>
           @for (reserva of recibidas(); track reserva.id) {
             <article class="acct-card reservation">
-              <div>
+              <div class="reservation__body">
                 <span class="acct-badge" [class.acct-badge--error]="reserva.cancelada" [class.acct-badge--ok]="!reserva.cancelada && !reserva.finalizada">{{ estado(reserva) }}</span>
+                @if (ultimoCambio(reserva); as cambio) {
+                  <div class="reschedule-history">
+                    <strong>Último cambio de fechas</strong>
+                    <span>Antes: {{ fecha(cambio.fecha_inicio_anterior) }} — {{ fecha(cambio.fecha_fin_anterior) }}</span>
+                    <span>Ahora: {{ fecha(cambio.fecha_inicio_nueva) }} — {{ fecha(cambio.fecha_fin_nueva) }}</span>
+                  </div>
+                }
+                @for (cambio of avisosPendientes(reserva); track cambio.id) {
+                  <div class="reschedule-notice" role="status">
+                    <span>Correo al anunciante pendiente: cambio al {{ fecha(cambio.fecha_inicio_nueva) }}.</span>
+                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="ocupada() !== null" (click)="reintentarAviso(reserva, cambio)">Reintentar aviso</button>
+                  </div>
+                }
                 <h3>{{ reserva.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
                 <p><strong>{{ inquilino(reserva) }}</strong> · {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}</p>
                 <p class="muted">{{ reserva.usuario_email ?? reserva.usuario?.email ?? 'Sin email' }} · {{ reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'Sin teléfono' }}</p>

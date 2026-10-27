@@ -142,4 +142,18 @@ export class ReservasController {
   ) {
     return this.reservasService.actualizarFechas(id, dto, req.user.id);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch(':id/reprogramaciones/:idCambio/notificar')
+  reintentarAviso(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('idCambio', ParseIntPipe) idCambio: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.reservasService.reintentarAvisoReprogramacion(
+      id,
+      idCambio,
+      req.user.id,
+    );
+  }
 }

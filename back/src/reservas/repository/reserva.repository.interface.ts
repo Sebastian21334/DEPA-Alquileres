@@ -1,8 +1,27 @@
 import { Reserva } from '../entity/reserva.entity';
+import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
 
 export const RESERVA_REPOSITORY = 'RESERVA_REPOSITORY';
 
 export interface IReservaRepository {
+  guardarReprogramacion(
+    datos: Partial<ReprogramacionReserva>,
+  ): Promise<ReprogramacionReserva>;
+  buscarReprogramacion(
+    id: number,
+    idReserva: number,
+  ): Promise<ReprogramacionReserva | null>;
+  marcarReprogramacionNotificada(id: number): Promise<void>;
+  registrarNotificaciones(
+    id: number,
+    datos: Partial<
+      Pick<
+        Reserva,
+        | 'email_confirmacion_inquilino_enviado'
+        | 'email_nueva_reserva_anunciante_enviado'
+      >
+    >,
+  ): Promise<void>;
   crear(datos: Partial<Reserva>): Reserva;
   guardar(reserva: Reserva): Promise<Reserva>;
   guardarVarias(reservas: Reserva[]): Promise<Reserva[]>;
@@ -12,6 +31,9 @@ export interface IReservaRepository {
   buscarPorPublicacion(idPublicacion: number): Promise<Reserva[]>;
   buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]>;
   buscarPendientesVencidas(fecha: Date): Promise<Reserva[]>;
-  existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean>;
+  existeAprobada(
+    idPublicacion: number,
+    idUsuarioInquilino: number,
+  ): Promise<boolean>;
   buscarLiquidacionesAdministracion(): Promise<Reserva[]>;
 }

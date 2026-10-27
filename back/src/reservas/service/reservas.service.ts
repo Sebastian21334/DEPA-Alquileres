@@ -1,3 +1,6 @@
+import { ConfigService } from '@nestjs/config';
+import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transaccion-calendario.interface';
+import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { generarCodigoAlojamiento } from './reservas.utils';
 import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
@@ -22,6 +25,9 @@ import { EstadoLiquidacionReserva } from '../entity/reserva.entity';
 @Injectable()
 export class ReservasService {
   constructor(
+    private readonly config: ConfigService,
+    @Inject(TRANSACCION_CALENDARIO)
+    private readonly transaccion: ITransaccionCalendario,
     @Inject(RESERVA_REPOSITORY)
     private readonly reservaRepository: IReservaRepository,
     private readonly disponibilidadService: DisponibilidadService,
@@ -33,11 +39,8 @@ export class ReservasService {
   /**
    * Crea una reserva y conserva una copia del periodo y de los datos del
    * inquilino para mantener el historial aunque la cuenta sea eliminada.
-   * El flujo es:
-   *   1) validar el rango recibido en el DTO
-   *   2) preguntarle a Disponibilidad si ese rango está libre
-   *   3) recién ahí crear la Reserva
-   *   4) y por último, marcar esas Fechas como ocupadas
+   * La validación del calendario, la reserva y sus fechas se confirman
+   * en una única transacción, con el calendario bloqueado.
    */
   async crearPendiente(
     dto: CrearReservaDto,
@@ -89,23 +92,6 @@ export class ReservasService {
       );
     }
 
-    // Una preferencia vencida no debe dejar bloqueado el calendario para siempre.
-    await this.liberarPendientesVencidas();
-
-    // Delegamos la pregunta "¿está libre este rango?" al módulo que es
-    // dueño de esa lógica (Disponibilidad), en vez de duplicarla acá
-    const disponible = await this.disponibilidadService.verificarDisponibilidad(
-      dto.id_publicacion,
-      inicio,
-      fin,
-    );
-
-    if (!disponible) {
-      throw new ConflictException(
-        'El rango de fechas seleccionado no está disponible',
-      );
-    }
-
     const usuario = await this.usuariosService.buscarPorId(idUsuario);
     if (!usuario) {
       throw new NotFoundException(
@@ -113,68 +99,101 @@ export class ReservasService {
       );
     }
 
-    // Las relaciones se crean con solo el ID: TypeORM puede resolver las FK sin cargar entidades completas.
-    const reserva = this.reservaRepository.crear({
-      finalizada: false,
-      cancelada: false,
-      fecha_cancelacion: null,
-      monto_pago: montoCalculado,
-      fecha_pago: null,
-      estado_pago: EstadoPagoReserva.PENDIENTE,
-      estado_liquidacion: EstadoLiquidacionReserva.NO_APLICA,
-      codigo_alojamiento: null,
-      codigo_generado_en: null,
-      codigo_validado_en: null,
-      intentos_codigo: 0,
-      fecha_resolucion_liquidacion: null,
-      referencia_liquidacion: null,
-      observacion_liquidacion: null,
-      pago_vencimiento: new Date(Date.now() + 15 * 60 * 1000),
-      fecha_inicio: inicio,
-      fecha_fin: fin,
-      usuario_nombre: usuario.nombre,
-      usuario_apellido: usuario.apellido,
-      usuario_email: usuario.email,
-      usuario_telefono: usuario.telefono,
-      usuario,
-      publicacion,
-    });
+    // Una preferencia vencida no debe dejar bloqueado el calendario para siempre.
+    await this.liberarPendientesVencidas();
 
-    // Persistimos la reserva primero para obtener su ID antes de asociarlo a las fechas.
-    const reservaGuardada = await this.reservaRepository.guardar(reserva);
+    return this.transaccion.ejecutar(
+      async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
+        await fechaRepository.bloquearPublicacion(dto.id_publicacion);
+        // Delegamos la pregunta "¿está libre este rango?" al módulo que es
+        // dueño de esa lógica (Disponibilidad), en vez de duplicarla acá
+        const disponible =
+          await this.disponibilidadService.verificarDisponibilidad(
+            dto.id_publicacion,
+            inicio,
+            fin,
+            fechaRepository,
+          );
 
-    // Primero se guarda la reserva para no enlazar fechas a una reserva sin ID.
-    await this.disponibilidadService.marcarComoReservadas(
-      dto.id_publicacion,
-      inicio,
-      fin,
-      reservaGuardada.id,
+        if (!disponible) {
+          throw new ConflictException(
+            'El rango de fechas seleccionado no está disponible',
+          );
+        }
+
+        // Las relaciones se crean con solo el ID: TypeORM puede resolver las FK sin cargar entidades completas.
+        const reserva = reservaRepository.crear({
+          finalizada: false,
+          cancelada: false,
+          fecha_cancelacion: null,
+          monto_pago: montoCalculado,
+          precio_unitario_contratado: precioDiario,
+          importe_contratado: montoCalculado,
+          moneda_contratada: this.config.get<string>('MP_CURRENCY_ID') ?? 'ARS',
+          fecha_pago: null,
+          estado_pago: EstadoPagoReserva.PENDIENTE,
+          estado_liquidacion: EstadoLiquidacionReserva.NO_APLICA,
+          codigo_alojamiento: null,
+          codigo_generado_en: null,
+          codigo_validado_en: null,
+          intentos_codigo: 0,
+          fecha_resolucion_liquidacion: null,
+          referencia_liquidacion: null,
+          observacion_liquidacion: null,
+          pago_vencimiento: new Date(Date.now() + 15 * 60 * 1000),
+          fecha_inicio: inicio.toISOString().slice(0, 10),
+          fecha_fin: fin.toISOString().slice(0, 10),
+          usuario_nombre: usuario.nombre,
+          usuario_apellido: usuario.apellido,
+          usuario_email: usuario.email,
+          usuario_telefono: usuario.telefono,
+          usuario,
+          publicacion,
+        });
+
+        // Persistimos la reserva primero para obtener su ID antes de asociarlo a las fechas.
+        const reservaGuardada = await reservaRepository.guardar(reserva);
+
+        // Primero se guarda la reserva para no enlazar fechas a una reserva sin ID.
+        await this.disponibilidadService.marcarComoReservadas(
+          dto.id_publicacion,
+          inicio,
+          fin,
+          reservaGuardada.id,
+          fechaRepository,
+        );
+
+        return reservaGuardada;
+      },
     );
-
-    return reservaGuardada;
   }
 
   /** Confirma la reserva únicamente después de verificar el pago con Mercado Pago. */
   async confirmarPago(id: number, fechaPago: Date): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
-    if (reserva.cancelada)
-      throw new ConflictException('La reserva ya fue cancelada');
+    const guardada = await this.transaccion.ejecutar(
+      async ({ reservas: reservaRepository }) => {
+        const reserva = await reservaRepository.buscarPorId(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        if (reserva.cancelada)
+          throw new ConflictException('La reserva ya fue cancelada');
 
-    let guardada = reserva;
-    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
-      reserva.estado_pago = EstadoPagoReserva.APROBADO;
-      reserva.fecha_pago = fechaPago;
-      reserva.pago_vencimiento = null;
-      reserva.codigo_alojamiento = generarCodigoAlojamiento();
-      reserva.codigo_generado_en = new Date();
-      reserva.codigo_validado_en = null;
-      reserva.intentos_codigo = 0;
-      reserva.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
-      guardada = await this.reservaRepository.guardar(reserva);
-    }
+        let guardada = reserva;
+        if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+          reserva.estado_pago = EstadoPagoReserva.APROBADO;
+          reserva.fecha_pago = fechaPago;
+          reserva.pago_vencimiento = null;
+          reserva.codigo_alojamiento = generarCodigoAlojamiento();
+          reserva.codigo_generado_en = new Date();
+          reserva.codigo_validado_en = null;
+          reserva.intentos_codigo = 0;
+          reserva.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
+          guardada = await reservaRepository.guardar(reserva);
+        }
 
+        return guardada;
+      },
+    );
     await this.notificacionesService.enviarConfirmacion(guardada);
     return guardada;
   }
@@ -184,23 +203,27 @@ export class ReservasService {
     id: number,
     estado: EstadoPagoReserva = EstadoPagoReserva.RECHAZADO,
   ): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
-    if (reserva.estado_pago === EstadoPagoReserva.APROBADO) return reserva;
-    if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
+    return this.transaccion.ejecutar(
+      async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
+        const reserva = await reservaRepository.buscarPorId(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        if (reserva.estado_pago === EstadoPagoReserva.APROBADO) return reserva;
+        if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
 
-    reserva.estado_pago = estado;
-    reserva.estado_liquidacion =
-      estado === EstadoPagoReserva.REEMBOLSADO
-        ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
-        : EstadoLiquidacionReserva.NO_APLICA;
-    reserva.cancelada = true;
-    reserva.fecha_cancelacion = new Date();
-    reserva.pago_vencimiento = null;
-    const guardada = await this.reservaRepository.guardar(reserva);
-    await this.disponibilidadService.liberarReserva(id);
-    return guardada;
+        reserva.estado_pago = estado;
+        reserva.estado_liquidacion =
+          estado === EstadoPagoReserva.REEMBOLSADO
+            ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
+            : EstadoLiquidacionReserva.NO_APLICA;
+        reserva.cancelada = true;
+        reserva.fecha_cancelacion = new Date();
+        reserva.pago_vencimiento = null;
+        const guardada = await reservaRepository.guardar(reserva);
+        await this.disponibilidadService.liberarReserva(id, fechaRepository);
+        return guardada;
+      },
+    );
   }
 
   /**
@@ -265,57 +288,68 @@ export class ReservasService {
    * ya fue efectivamente ocupado.
    */
   async finalizar(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
+    return this.transaccion.ejecutar(
+      async ({ reservas: reservaRepository }) => {
+        const reserva = await reservaRepository.buscarPorId(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
 
-    // Finalizar es una acción de gestión de la estadía; la realiza el
-    // anunciante dueño. El inquilino puede consultar su propia reserva.
-    if (reserva.publicacion?.anunciante?.idUsuario !== idUsuarioQueOpera) {
-      throw new ForbiddenException(
-        'Solo el anunciante de la publicación puede finalizar la reserva',
-      );
-    }
-    if (reserva.cancelada)
-      throw new BadRequestException(
-        'No se puede finalizar una reserva cancelada',
-      );
-    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
-      throw new BadRequestException(
-        'No se puede finalizar una reserva cuyo pago no fue aprobado',
-      );
-    }
-    if (!reserva.codigo_validado_en) {
-      throw new BadRequestException(
-        'No se puede finalizar la estadía antes de validar el código de alojamiento',
-      );
-    }
-    reserva.finalizada = true;
-    return this.reservaRepository.guardar(reserva);
+        // Finalizar es una acción de gestión de la estadía; la realiza el
+        // anunciante dueño. El inquilino puede consultar su propia reserva.
+        if (reserva.publicacion?.anunciante?.idUsuario !== idUsuarioQueOpera) {
+          throw new ForbiddenException(
+            'Solo el anunciante de la publicación puede finalizar la reserva',
+          );
+        }
+        if (reserva.cancelada)
+          throw new BadRequestException(
+            'No se puede finalizar una reserva cancelada',
+          );
+        if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+          throw new BadRequestException(
+            'No se puede finalizar una reserva cuyo pago no fue aprobado',
+          );
+        }
+        if (!reserva.codigo_validado_en) {
+          throw new BadRequestException(
+            'No se puede finalizar la estadía antes de validar el código de alojamiento',
+          );
+        }
+        reserva.finalizada = true;
+        return reservaRepository.guardar(reserva);
+      },
+    );
   }
 
   /** El inquilino participante o el anunciante dueño pueden cancelar. */
   async cancelar(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
-    this.verificarParticipanteOPropietario(reserva, idUsuarioQueOpera);
-    if (reserva.finalizada)
-      throw new BadRequestException(
-        'No se puede cancelar una reserva finalizada',
-      );
-    if (reserva.cancelada) return reserva;
-    if (reserva.estado_pago === EstadoPagoReserva.APROBADO) {
-      throw new BadRequestException(
-        'La reserva está pagada. Primero debe implementarse y procesarse su devolución en Mercado Pago.',
-      );
-    }
+    return this.transaccion.ejecutar(
+      async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
+        const reserva = await reservaRepository.buscarPorId(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        this.verificarParticipanteOPropietario(reserva, idUsuarioQueOpera);
+        if (reserva.finalizada)
+          throw new BadRequestException(
+            'No se puede cancelar una reserva finalizada',
+          );
+        if (reserva.cancelada) return reserva;
+        if (reserva.estado_pago === EstadoPagoReserva.APROBADO) {
+          throw new BadRequestException(
+            'La reserva está pagada. Primero debe implementarse y procesarse su devolución en Mercado Pago.',
+          );
+        }
 
-    reserva.cancelada = true;
-    reserva.fecha_cancelacion = new Date();
-    const guardada = await this.reservaRepository.guardar(reserva);
-    await this.disponibilidadService.liberarReserva(reserva.id);
-    return guardada;
+        reserva.cancelada = true;
+        reserva.fecha_cancelacion = new Date();
+        const guardada = await reservaRepository.guardar(reserva);
+        await this.disponibilidadService.liberarReserva(
+          reserva.id,
+          fechaRepository,
+        );
+        return guardada;
+      },
+    );
   }
 
   /** El inquilino puede cambiar sus fechas si el nuevo rango sigue libre. */
@@ -324,55 +358,169 @@ export class ReservasService {
     dto: ActualizarFechasReservaDto,
     idUsuarioQueOpera: number,
   ): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
+    const idCambio = await this.transaccion.ejecutar(
+      async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
+        const reserva = await reservaRepository.buscarPorId(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        if (reserva.usuario?.id !== idUsuarioQueOpera) {
+          throw new ForbiddenException(
+            'Solo el inquilino que realizó la reserva puede cambiar sus fechas',
+          );
+        }
+        if (reserva.cancelada || reserva.finalizada) {
+          throw new BadRequestException(
+            'No se pueden modificar las fechas de una reserva cerrada',
+          );
+        }
+        if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+          throw new BadRequestException(
+            'No se pueden modificar las fechas hasta que el pago esté aprobado',
+          );
+        }
+        if (!reserva.publicacion)
+          throw new BadRequestException(
+            'La publicación de la reserva ya no está disponible',
+          );
+        if (
+          !reserva.fecha_inicio ||
+          !reserva.fecha_fin ||
+          reserva.importe_contratado == null ||
+          !reserva.moneda_contratada
+        ) {
+          throw new ConflictException(
+            'La reserva requiere revisar sus condiciones originales antes de reprogramar. Contactá a soporte.',
+          );
+        }
+        if (
+          Math.abs(
+            Number(reserva.monto_pago) - Number(reserva.importe_contratado),
+          ) > 0.009
+        ) {
+          throw new ConflictException(
+            'El importe registrado no coincide con el contratado. Contactá a soporte antes de reprogramar.',
+          );
+        }
+        const inicio = new Date(dto.fecha_inicio);
+        const fin = new Date(dto.fecha_fin);
+        const hoy = new Date();
+        const hoyTexto = [
+          hoy.getFullYear(),
+          String(hoy.getMonth() + 1).padStart(2, '0'),
+          String(hoy.getDate()).padStart(2, '0'),
+        ].join('-');
+        if (
+          !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_inicio) ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_fin) ||
+          !Number.isFinite(inicio.getTime()) ||
+          !Number.isFinite(fin.getTime()) ||
+          inicio.toISOString().slice(0, 10) !== dto.fecha_inicio ||
+          fin.toISOString().slice(0, 10) !== dto.fecha_fin ||
+          inicio > fin ||
+          dto.fecha_inicio < hoyTexto
+        ) {
+          throw new BadRequestException(
+            'El nuevo rango de fechas no es válido',
+          );
+        }
+        const diasOriginales =
+          Math.floor(
+            (new Date(reserva.fecha_fin).getTime() -
+              new Date(reserva.fecha_inicio).getTime()) /
+              86400000,
+          ) + 1;
+        const diasNuevos =
+          Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
+        if (
+          !Number.isSafeInteger(diasOriginales) ||
+          diasOriginales < 1 ||
+          diasNuevos !== diasOriginales
+        ) {
+          throw new BadRequestException(
+            'La reprogramación debe conservar la misma cantidad de días y el importe pagado',
+          );
+        }
+        // Repetir la misma solicitud no genera otro cambio ni otro aviso.
+        if (
+          dto.fecha_inicio === reserva.fecha_inicio &&
+          dto.fecha_fin === reserva.fecha_fin
+        ) {
+          return (
+            (reserva.reprogramaciones ?? [])
+              .filter(
+                (c) =>
+                  c.fecha_inicio_nueva === dto.fecha_inicio &&
+                  c.fecha_fin_nueva === dto.fecha_fin,
+              )
+              .sort((a, b) => b.id - a.id)[0]?.id ?? null
+          );
+        }
+        const disponible = await this.disponibilidadService.reprogramarReserva(
+          reserva.publicacion.id,
+          inicio,
+          fin,
+          reserva.id,
+          fechaRepository,
+        );
+        if (!disponible)
+          throw new ConflictException(
+            'El nuevo rango de fechas no está disponible',
+          );
+        const anteriorInicio = reserva.fecha_inicio;
+        const anteriorFin = reserva.fecha_fin;
+        reserva.fecha_inicio = dto.fecha_inicio;
+        reserva.fecha_fin = dto.fecha_fin;
+        await reservaRepository.guardar(reserva);
+        const propietario = reserva.publicacion.anunciante?.usuario;
+        const cambio = await reservaRepository.guardarReprogramacion({
+          reserva,
+          fecha_inicio_anterior: anteriorInicio,
+          fecha_fin_anterior: anteriorFin,
+          fecha_inicio_nueva: dto.fecha_inicio,
+          fecha_fin_nueva: dto.fecha_fin,
+          destinatario: propietario?.email ?? null,
+          notificada_en: null,
+          detalle: {
+            idReserva: reserva.id,
+            titulo: reserva.publicacion.titulo,
+            nombreAnunciante:
+              [propietario?.nombre, propietario?.apellido]
+                .filter(Boolean)
+                .join(' ') || 'Anfitrión',
+            nombreInquilino:
+              [reserva.usuario_nombre, reserva.usuario_apellido]
+                .filter(Boolean)
+                .join(' ') || 'Inquilino',
+            inicioAnterior: anteriorInicio,
+            finAnterior: anteriorFin,
+            inicioNuevo: dto.fecha_inicio,
+            finNuevo: dto.fecha_fin,
+            cantidadDias: diasOriginales,
+            monto: Number(reserva.importe_contratado),
+            moneda: reserva.moneda_contratada,
+          },
+        });
+        return cambio.id;
+      },
+    );
+    // El correo usa su propia transacción y nunca mantiene bloqueado el calendario.
+    if (idCambio)
+      await this.notificacionesService.enviarReprogramacion(idCambio, id);
+    const actualizada = await this.reservaRepository.buscarPorId(id);
+    if (!actualizada)
       throw new NotFoundException(`No se encontró la reserva ${id}`);
-    if (reserva.usuario?.id !== idUsuarioQueOpera) {
-      throw new ForbiddenException(
-        'Solo el inquilino que realizó la reserva puede cambiar sus fechas',
-      );
-    }
-    if (reserva.cancelada || reserva.finalizada) {
-      throw new BadRequestException(
-        'No se pueden modificar las fechas de una reserva cerrada',
-      );
-    }
-    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
-      throw new BadRequestException(
-        'No se pueden modificar las fechas hasta que el pago esté aprobado',
-      );
-    }
-    if (!reserva.publicacion)
-      throw new BadRequestException(
-        'La publicación de la reserva ya no está disponible',
-      );
+    return actualizada;
+  }
 
-    const inicio = new Date(dto.fecha_inicio);
-    const fin = new Date(dto.fecha_fin);
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    if (inicio > fin || inicio < hoy || fin < hoy) {
-      throw new BadRequestException('El nuevo rango de fechas no es válido');
-    }
-    const disponible = await this.disponibilidadService.reprogramarReserva(
-      reserva.publicacion.id,
-      inicio,
-      fin,
-      reserva.id,
-    );
-    if (!disponible)
-      throw new ConflictException(
-        'El nuevo rango de fechas no está disponible',
-      );
-
-    const dias =
-      Math.floor((fin.getTime() - inicio.getTime()) / 86_400_000) + 1;
-    reserva.fecha_inicio = inicio;
-    reserva.fecha_fin = fin;
-    reserva.monto_pago = Number(
-      (Number(reserva.publicacion.precio) * dias).toFixed(2),
-    );
-    return this.reservaRepository.guardar(reserva);
+  async reintentarAvisoReprogramacion(
+    id: number,
+    idCambio: number,
+    idUsuario: number,
+  ): Promise<Reserva> {
+    const reserva = await this.buscarPorId(id, idUsuario);
+    this.verificarParticipanteOPropietario(reserva, idUsuario);
+    await this.notificacionesService.enviarReprogramacion(idCambio, id);
+    return this.buscarPorId(id, idUsuario);
   }
 
   private verificarParticipanteOPropietario(

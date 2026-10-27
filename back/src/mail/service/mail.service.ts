@@ -1,6 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IMailService, ReservaEmailDetalle } from '../mail.interface';
+import {
+  IMailService,
+  ReservaEmailDetalle,
+  ReprogramacionEmailDetalle,
+} from '../mail.interface';
 import { CORREO_REPOSITORY } from '../repository/correo.repository.interface';
 import type { ICorreoRepository } from '../repository/correo.repository.interface';
 import { MailPlantilla } from '../presentation/mail-plantilla';
@@ -30,6 +34,29 @@ export class MailService implements IMailService {
        ${this.plantillas.boton('Verificar mi cuenta', link)}
        <p style="margin:20px 0 0;color:#667085;font-size:13px">Si no creaste una cuenta en DEPA, podés ignorar este mensaje con tranquilidad.</p>`,
       'Confirmá tu correo para comenzar a usar DEPA.',
+    );
+  }
+
+  async enviarReprogramacionReserva(
+    destinatario: string,
+    detalle: ReprogramacionEmailDetalle,
+  ): Promise<void> {
+    const dia = (valor: string) =>
+      this.plantillas.fecha(new Date(`${valor}T12:00:00Z`));
+    await this.enviar(
+      destinatario,
+      `Cambio de fechas en la reserva #${detalle.idReserva} — ${detalle.titulo}`,
+      `<p>Hola <strong>${this.plantillas.escapar(detalle.nombreAnunciante)}</strong>,
+        <strong>${this.plantillas.escapar(detalle.nombreInquilino)}</strong> reprogramó su reserva de
+        <strong>${this.plantillas.escapar(detalle.titulo)}</strong>.</p>
+       <p><strong>Fechas anteriores:</strong> ${dia(detalle.inicioAnterior)} al ${dia(detalle.finAnterior)}.</p>
+       <p><strong>Nuevas fechas:</strong> ${dia(detalle.inicioNuevo)} al ${dia(detalle.finNuevo)}.</p>
+       <p>Se mantienen los ${detalle.cantidadDias} días y el total pagado de
+         <strong>${this.plantillas.importe(detalle.monto, detalle.moneda)}</strong>.
+         El calendario ya fue actualizado. Este cambio no genera cobros ni devoluciones.</p>
+       <p>Si hubo otros cambios, consultá la reserva para ver las fechas vigentes.</p>
+       ${this.plantillas.boton('Ver reserva', `${this.frontendUrl}/reserva/resultado?reserva_id=${detalle.idReserva}`)}`,
+      `El inquilino cambió las fechas de la reserva #${detalle.idReserva}.`,
     );
   }
 
@@ -181,7 +208,11 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarBajaPublicacion(destinatario: string, titulo: string, motivo: string): Promise<void> {
+  async enviarBajaPublicacion(
+    destinatario: string,
+    titulo: string,
+    motivo: string,
+  ): Promise<void> {
     await this.enviar(
       destinatario,
       'Tu publicación fue desactivada por un administrador',

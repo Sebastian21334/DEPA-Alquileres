@@ -5,9 +5,11 @@ import {
   Column,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import { ReprogramacionReserva } from './reprogramacion-reserva.entity';
 
 export enum EstadoPagoReserva {
   PENDIENTE = 'PENDIENTE',
@@ -43,6 +45,19 @@ export class Reserva {
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   monto_pago: number;
+
+  // Condiciones aceptadas al reservar; nunca se recalculan al cambiar fechas.
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  precio_unitario_contratado: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  importe_contratado: number | null;
+
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  moneda_contratada: string | null;
+
+  @OneToMany(() => ReprogramacionReserva, (cambio) => cambio.reserva)
+  reprogramaciones: Relation<ReprogramacionReserva[]>;
 
   @Column({ type: 'timestamp', nullable: true })
   fecha_pago: Date | null;
@@ -90,10 +105,10 @@ export class Reserva {
   // Se conserva una copia del periodo para mantener el historial aunque
   // posteriormente se elimine la publicación o su calendario.
   @Column({ type: 'date', nullable: true })
-  fecha_inicio: Date | null;
+  fecha_inicio: string | null;
 
   @Column({ type: 'date', nullable: true })
-  fecha_fin: Date | null;
+  fecha_fin: string | null;
 
   // Copia historica de los datos del inquilino al momento de reservar.
   // La relacion con Usuario puede quedar NULL si la cuenta se elimina.

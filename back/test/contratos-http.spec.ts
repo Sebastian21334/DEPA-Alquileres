@@ -2,6 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { ListarPublicacionesDto } from '../src/publicaciones/dto/listar-publicaciones.dto';
 import { RestablecerContraseniaDto } from '../src/auth/dto/restablecer-contrasenia.dto';
 import { CatalogoDto } from '../src/catalogos/dto/catalogo.dto';
+import { ActualizarFechasReservaDto } from '../src/reservas/dto/actualizar-fechas-reserva.dto';
 
 describe('Contratos HTTP', () => {
   const pipe = new ValidationPipe({
@@ -9,6 +10,22 @@ describe('Contratos HTTP', () => {
     whitelist: true,
     forbidNonWhitelisted: true,
   });
+
+  it.each([
+    { fecha_inicio: '2100-02-30', fecha_fin: '2100-03-02' },
+    { fecha_inicio: '2100-01-01T12:00:00Z', fecha_fin: '2100-01-03' },
+    { fecha_inicio: '2100-01-01', fecha_fin: '2100-01-03', monto_pago: 1 },
+  ])(
+    'rechaza fechas inválidas y cambios de importe en la reprogramación: %j',
+    async (entrada) => {
+      await expect(
+        pipe.transform(entrada, {
+          type: 'body',
+          metatype: ActualizarFechasReservaDto,
+        }),
+      ).rejects.toThrow();
+    },
+  );
 
   it('convierte filtros y conserva los valores predeterminados de paginación', async () => {
     const consulta = await pipe.transform(

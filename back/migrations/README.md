@@ -1,3 +1,34 @@
+# Unicidad del calendario y concurrencia de reservas
+
+Para habilitar también el cambio de fechas desde la web y sus avisos al anunciante,
+ver [la política y migración de reprogramaciones](../docs/reprogramaciones.md).
+
+Antes de iniciar esta versión con una base existente, detener el backend y,
+desde `back`, ejecutar:
+
+```sh
+node scripts/calendario-unico.cjs
+npm run db:calendario-unico
+```
+
+El primer comando informa fechas duplicadas o sin publicación. El segundo aplica
+`20261027-calendario-unico.sql` dentro de una transacción con bloqueo de tabla.
+Si encuentra esos problemas, revierte y exige revisar los datos; nunca borra ni
+fusiona filas. La migración es repetible. Aplicarla antes de arrancar: el backend
+tiene `synchronize: false` y no actualiza el esquema automáticamente.
+
+Las escrituras de calendario usan una misma transacción para reserva y fechas.
+Se bloquea la reserva existente antes de modificarla, luego la publicación y
+las fechas en orden ascendente. El bloqueo por publicación también coordina la
+creación de días ausentes y evita invertir el orden entre rangos al reprogramar.
+Publicaciones diferentes pueden modificarse en paralelo. Los correos se envían
+fuera de la transacción y solo actualizan sus indicadores de envío.
+
+Para ejecutar las pruebas reales, configurar `TEST_POSTGRES_URL` apuntando a una
+base **local descartable** cuyo nombre empiece con `calendario_test`, y ejecutar
+`npm run test:concurrencia`. No utiliza `DATABASE_URL` ni carga `.env`.
+Las pruebas crean y eliminan exclusivamente su esquema temporal.
+
 # Retiro del catálogo de métodos de pago
 
 Los pagos se gestionan mediante Mercado Pago Checkout Pro. El medio confirmado
@@ -20,5 +51,5 @@ restauración. Usa una transacción, no elimina dependencias con `CASCADE` y com
 el contenido de las reservas (excluyendo la columna retirada) y de los pagos
 antes y después. Puede ejecutarse nuevamente sin duplicar cambios.
 
-Aplicar la migración antes de arrancar esta versión: el proyecto todavía usa
-`synchronize: true` y podría retirar la columna por sí mismo, sin el respaldo.
+Aplicar la migración antes de arrancar esta versión. El proyecto usa
+`synchronize: false`: los cambios de esquema requieren migraciones explícitas.

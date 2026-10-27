@@ -2,8 +2,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Repository } from 'typeorm';
-import { EstadoLiquidacionReserva, EstadoPagoReserva, Reserva } from '../entity/reserva.entity';
+import {
+  EstadoLiquidacionReserva,
+  EstadoPagoReserva,
+  Reserva,
+} from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
+import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
 
 @Injectable()
 export class ReservaRepository implements IReservaRepository {
@@ -16,6 +21,50 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.create(datos);
   }
 
+  guardarReprogramacion(
+    datos: Partial<ReprogramacionReserva>,
+  ): Promise<ReprogramacionReserva> {
+    const repo = this.repository.manager.getRepository(ReprogramacionReserva);
+    return repo.save(repo.create(datos));
+  }
+
+  buscarReprogramacion(
+    id: number,
+    idReserva: number,
+  ): Promise<ReprogramacionReserva | null> {
+    const consulta = this.repository.manager
+      .getRepository(ReprogramacionReserva)
+      .createQueryBuilder('cambio')
+      .addSelect(['cambio.destinatario', 'cambio.detalle'])
+      .where('cambio.id = :id AND cambio.id_reserva = :idReserva', {
+        id,
+        idReserva,
+      });
+    if (this.repository.manager.queryRunner?.isTransactionActive)
+      consulta.setLock('pessimistic_write');
+    return consulta.getOne();
+  }
+
+  async marcarReprogramacionNotificada(id: number): Promise<void> {
+    await this.repository.manager
+      .getRepository(ReprogramacionReserva)
+      .update(id, { notificada_en: new Date() });
+  }
+
+  async registrarNotificaciones(
+    id: number,
+    datos: Partial<
+      Pick<
+        Reserva,
+        | 'email_confirmacion_inquilino_enviado'
+        | 'email_nueva_reserva_anunciante_enviado'
+      >
+    >,
+  ): Promise<void> {
+    // Un correo lento no debe restaurar fechas o estados leídos antes de otra operación.
+    await this.repository.update(id, datos);
+  }
+
   guardar(reserva: Reserva): Promise<Reserva> {
     return this.repository.save(reserva);
   }
@@ -24,10 +73,22 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.save(reservas);
   }
 
-  buscarPorId(id: number): Promise<Reserva | null> {
+  private async bloquear(id: number): Promise<void> {
+    if (this.repository.manager.queryRunner?.isTransactionActive) {
+      await this.repository
+        .createQueryBuilder('reserva')
+        .where('reserva.id = :id', { id })
+        .setLock('pessimistic_write')
+        .getOne();
+    }
+  }
+
+  async buscarPorId(id: number): Promise<Reserva | null> {
+    await this.bloquear(id);
     return this.repository.findOne({
       where: { id },
       relations: {
+        reprogramaciones: true,
         usuario: true,
         publicacion: {
           anunciante: { usuario: true },
@@ -39,7 +100,8 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarPorIdConCodigo(id: number): Promise<Reserva | null> {
+  async buscarPorIdConCodigo(id: number): Promise<Reserva | null> {
+    await this.bloquear(id);
     return this.repository
       .createQueryBuilder('reserva')
       .addSelect('reserva.codigo_alojamiento')
@@ -57,7 +119,14 @@ export class ReservaRepository implements IReservaRepository {
     // El orden descendente permite mostrar primero las reservas más recientes.
     return this.repository.find({
       where: { usuario: { id: idUsuario } },
-      relations: { publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true } },
+      relations: {
+        reprogramaciones: true,
+        publicacion: {
+          anunciante: { usuario: true },
+          ciudad: true,
+          provincia: true,
+        },
+      },
       order: { id: 'DESC' },
     });
   }
@@ -71,13 +140,23 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
+  buscarRecibidasPorAnunciante(
+    idUsuarioAnunciante: number,
+  ): Promise<Reserva[]> {
     return this.repository.find({
       where: {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
         estado_pago: EstadoPagoReserva.APROBADO,
       },
-      relations: { usuario: true, publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true } },
+      relations: {
+        reprogramaciones: true,
+        usuario: true,
+        publicacion: {
+          anunciante: { usuario: true },
+          ciudad: true,
+          provincia: true,
+        },
+      },
       order: { fecha_inicio: 'ASC' },
     });
   }
@@ -91,7 +170,10 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
+  existeAprobada(
+    idPublicacion: number,
+    idUsuarioInquilino: number,
+  ): Promise<boolean> {
     return this.repository.exists({
       where: {
         publicacion: { id: idPublicacion },
@@ -101,7 +183,6 @@ export class ReservaRepository implements IReservaRepository {
       },
     });
   }
-
 
   buscarLiquidacionesAdministracion(): Promise<Reserva[]> {
     return this.repository.find({
@@ -113,7 +194,11 @@ export class ReservaRepository implements IReservaRepository {
       },
       relations: {
         usuario: true,
-        publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true },
+        publicacion: {
+          anunciante: { usuario: true },
+          ciudad: true,
+          provincia: true,
+        },
       },
       order: { codigo_validado_en: 'ASC', id: 'DESC' },
     });

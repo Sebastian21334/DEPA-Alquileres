@@ -36,7 +36,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         type: 'postgres',
         url: configService.get<string>('DATABASE_URL'), // Lee la URL completa del .env
         autoLoadEntities: true, // Carga automáticamente las entidades de los módulos
-        synchronize: true, // Sincroniza el DER creando las tablas automáticamente (útil en desarrollo)
+        synchronize: false, // Los cambios de esquema se aplican mediante migraciones explícitas.
         ssl: {
           rejectUnauthorized: false, // Requerido por Neon y Azure
         },

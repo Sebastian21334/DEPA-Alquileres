@@ -5,7 +5,7 @@
  */
 export class FechaDisponibilidadAdministracionDto {
   id: number;
-  fecha: Date;
+  fecha: string;
   disponible: boolean;
   reserva: { id: number } | null;
 }

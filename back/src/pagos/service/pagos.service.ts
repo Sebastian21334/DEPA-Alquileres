@@ -37,7 +37,10 @@ export class PagosService {
     const reserva = await this.reservasService.crearPendiente(dto, idUsuario);
     const externalReference = `reserva:${reserva.id}`;
     const idempotencyKey = randomUUID();
-    const currency = this.config.get<string>('MP_CURRENCY_ID') ?? 'ARS';
+    const currency =
+      reserva.moneda_contratada ??
+      this.config.get<string>('MP_CURRENCY_ID') ??
+      'ARS';
 
     let pago = this.pagos.crear({
       reserva,

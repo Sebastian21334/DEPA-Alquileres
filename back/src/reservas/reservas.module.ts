@@ -4,6 +4,7 @@ import { ReservaNotificacionesService } from './service/reserva-notificaciones.s
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Reserva } from './entity/reserva.entity';
+import { ReprogramacionReserva } from './entity/reprogramacion-reserva.entity';
 import { ReservasService } from './service/reservas.service';
 import { ReservasController } from './controller/reservas.controller';
 import { ReservaRepository } from './repository/reserva.repository';
@@ -17,7 +18,7 @@ import { MailModule } from '../mail/mail.module';
 @Module({
   imports: [
     // Reserva se guarda con TypeORM y delega disponibilidad en otro módulo.
-    TypeOrmModule.forFeature([Reserva]),
+    TypeOrmModule.forFeature([Reserva, ReprogramacionReserva]),
     DisponibilidadModule,
     AuthModule,
     UsuariosModule,

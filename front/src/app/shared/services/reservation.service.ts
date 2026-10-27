@@ -31,7 +31,13 @@ export interface Reserva {
   cancelada: boolean;
   fecha_cancelacion: string | null;
   estado_pago: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'CANCELADO' | 'REEMBOLSADO';
-  estado_liquidacion: 'NO_APLICA' | 'RETENIDO' | 'PENDIENTE_PAGO_PROPIETARIO' | 'EN_REVISION' | 'PAGADO_PROPIETARIO' | 'DEVUELTO_INQUILINO';
+  estado_liquidacion:
+    | 'NO_APLICA'
+    | 'RETENIDO'
+    | 'PENDIENTE_PAGO_PROPIETARIO'
+    | 'EN_REVISION'
+    | 'PAGADO_PROPIETARIO'
+    | 'DEVUELTO_INQUILINO';
   codigo_generado_en: string | null;
   codigo_validado_en: string | null;
   intentos_codigo: number;
@@ -39,6 +45,10 @@ export interface Reserva {
   referencia_liquidacion: string | null;
   observacion_liquidacion: string | null;
   monto_pago: number;
+  precio_unitario_contratado?: number | null;
+  importe_contratado?: number | null;
+  moneda_contratada?: string | null;
+  reprogramaciones?: ReprogramacionReserva[];
   fecha_pago: string | null;
   fecha_inicio: string | null;
   fecha_fin: string | null;
@@ -55,6 +65,16 @@ export interface Reserva {
   usuario_email?: string | null;
   usuario_telefono?: string | null;
   usuario?: Usuario | null;
+}
+
+export interface ReprogramacionReserva {
+  id: number;
+  fecha_inicio_anterior: string;
+  fecha_fin_anterior: string;
+  fecha_inicio_nueva: string;
+  fecha_fin_nueva: string;
+  creada_en: string;
+  notificada_en: string | null;
 }
 
 export interface CodigoAlojamiento {
@@ -110,6 +130,17 @@ export class ReservationService {
 
   cancel(id: number): Observable<Reserva> {
     return this.http.patch<Reserva>(`${this.baseUrl}/${id}/cancelar`, {});
+  }
+
+  reschedule(id: number, fecha_inicio: string, fecha_fin: string): Observable<Reserva> {
+    return this.http.patch<Reserva>(`${this.baseUrl}/${id}/fechas`, { fecha_inicio, fecha_fin });
+  }
+
+  retryRescheduleNotice(id: number, idCambio: number): Observable<Reserva> {
+    return this.http.patch<Reserva>(
+      `${this.baseUrl}/${id}/reprogramaciones/${idCambio}/notificar`,
+      {},
+    );
   }
 
   finish(id: number): Observable<Reserva> {

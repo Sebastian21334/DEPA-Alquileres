@@ -120,7 +120,7 @@ export class MercadoPagoAdapter implements IPasarelaPagos {
     return value;
   }
 
-  private fechaCorta(value: Date | null): string {
+  private fechaCorta(value: Date | string | null): string {
     return value ? new Date(value).toISOString().slice(0, 10) : '-';
   }
 }

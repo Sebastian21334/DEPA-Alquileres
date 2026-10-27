@@ -8,6 +8,10 @@ import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { Fecha } from '../entity/fecha.entity';
 import { Reserva } from '../../reservas/entity/reserva.entity';
+import { TRANSACCION_CALENDARIO } from '../repository/transaccion-calendario.interface';
+import type { ITransaccionCalendario } from '../repository/transaccion-calendario.interface';
+import type { IFechaRepository } from '../repository/fecha.repository.interface';
+import type { IReservaRepository } from '../../reservas/repository/reserva.repository.interface';
 
 describe('DisponibilidadService', () => {
   let service: DisponibilidadService;
@@ -37,6 +41,16 @@ describe('DisponibilidadService', () => {
         DisponibilidadService,
         { provide: FECHA_REPOSITORY, useValue: repo },
         { provide: PublicacionesService, useValue: publicaciones },
+        {
+          provide: TRANSACCION_CALENDARIO,
+          useValue: {
+            ejecutar: ((operacion) =>
+              operacion({
+                fechas: repo as unknown as IFechaRepository,
+                reservas: {} as IReservaRepository,
+              })) satisfies ITransaccionCalendario['ejecutar'],
+          },
+        },
       ],
     }).compile();
     service = module.get(DisponibilidadService);

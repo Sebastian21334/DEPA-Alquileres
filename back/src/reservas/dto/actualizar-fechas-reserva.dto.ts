@@ -1,9 +1,11 @@
-import { IsDateString } from 'class-validator';
+import { IsDateString, Matches } from 'class-validator';
 
 export class ActualizarFechasReservaDto {
-  @IsDateString()
+  @IsDateString({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   fecha_inicio: string;
 
-  @IsDateString()
+  @IsDateString({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   fecha_fin: string;
 }

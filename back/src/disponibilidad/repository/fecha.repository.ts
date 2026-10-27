@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
+import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { Fecha } from '../entity/fecha.entity';
 import { IFechaRepository } from './fecha.repository.interface';
 
@@ -10,6 +11,36 @@ export class FechaRepository implements IFechaRepository {
     @InjectRepository(Fecha)
     private readonly repository: Repository<Fecha>,
   ) {}
+
+  async bloquearPublicacion(idPublicacion: number): Promise<void> {
+    if (!this.repository.manager.queryRunner?.isTransactionActive) {
+      throw new Error(
+        'El calendario debe modificarse dentro de una transacción',
+      );
+    }
+    // También protege inserciones de días que todavía no tienen una fila bloqueable.
+    const publicacion = await this.repository.manager
+      .getRepository(Publicacion)
+      .createQueryBuilder('publicacion')
+      .where('publicacion.id = :id', { id: idPublicacion })
+      .setLock('pessimistic_write')
+      .getOne();
+    if (!publicacion) throw new NotFoundException('Publicación no encontrada');
+  }
+
+  private consultaFechas() {
+    const consulta = this.repository
+      .createQueryBuilder('fecha')
+      .leftJoinAndSelect('fecha.reserva', 'reserva')
+      .leftJoinAndSelect('fecha.publicacion', 'publicacion')
+      .orderBy('fecha.fecha', 'ASC')
+      .addOrderBy('fecha.id', 'ASC');
+    if (this.repository.manager.queryRunner?.isTransactionActive) {
+      // Los joins son opcionales: PostgreSQL bloquea solo las filas de fecha.
+      consulta.setLock('pessimistic_write', undefined, ['fecha']);
+    }
+    return consulta;
+  }
 
   crear(datos: Partial<Fecha>): Fecha {
     return this.repository.create(datos);
@@ -23,11 +54,16 @@ export class FechaRepository implements IFechaRepository {
     return this.repository.save(fechas);
   }
 
-  buscarPorId(id: number): Promise<Fecha | null> {
-    return this.repository.findOne({
-      where: { id },
-      relations: { publicacion: true, reserva: true },
-    });
+  async buscarPorId(id: number): Promise<Fecha | null> {
+    if (this.repository.manager.queryRunner?.isTransactionActive) {
+      const fecha = await this.repository.findOne({
+        where: { id },
+        relations: { publicacion: true },
+      });
+      if (!fecha) return null;
+      await this.bloquearPublicacion(fecha.publicacion.id);
+    }
+    return this.consultaFechas().where('fecha.id = :id', { id }).getOne();
   }
 
   buscarPorPublicacion(idPublicacion: number): Promise<Fecha[]> {
@@ -37,7 +73,9 @@ export class FechaRepository implements IFechaRepository {
     });
   }
 
-  buscarPorPublicacionParaAdministracion(idPublicacion: number): Promise<Fecha[]> {
+  buscarPorPublicacionParaAdministracion(
+    idPublicacion: number,
+  ): Promise<Fecha[]> {
     return this.repository.find({
       where: { publicacion: { id: idPublicacion } },
       relations: { reserva: true },
@@ -45,30 +83,39 @@ export class FechaRepository implements IFechaRepository {
     });
   }
 
-  buscarPorReserva(idReserva: number): Promise<Fecha[]> {
-    return this.repository.find({
-      where: { reserva: { id: idReserva } },
-      order: { fecha: 'ASC' },
-    });
+  async buscarPorReserva(idReserva: number): Promise<Fecha[]> {
+    if (this.repository.manager.queryRunner?.isTransactionActive) {
+      const fecha = await this.repository.findOne({
+        where: { reserva: { id: idReserva } },
+        relations: { publicacion: true },
+      });
+      if (fecha) await this.bloquearPublicacion(fecha.publicacion.id);
+    }
+    return this.consultaFechas()
+      .where('fecha.id_reserva = :idReserva', { idReserva })
+      .getMany();
   }
 
-  buscarPorRango(idPublicacion: number, fechaInicio: Date, fechaFin: Date): Promise<Fecha[]> {
-    // Between incluye ambos extremos, por eso el rango reserva también el día de salida.
-    return this.repository.find({
-      where: {
-        publicacion: { id: idPublicacion },
-        fecha: Between(fechaInicio, fechaFin),
-      },
-      order: { fecha: 'ASC' },
-    });
+  buscarPorRango(
+    idPublicacion: number,
+    fechaInicio: Date,
+    fechaFin: Date,
+  ): Promise<Fecha[]> {
+    return this.consultaFechas()
+      .where('fecha.id_publicacion = :idPublicacion', { idPublicacion })
+      .andWhere('fecha.fecha BETWEEN :fechaInicio AND :fechaFin', {
+        fechaInicio: fechaInicio.toISOString().slice(0, 10),
+        fechaFin: fechaFin.toISOString().slice(0, 10),
+      })
+      .getMany();
   }
 
-  buscarPorRangoConReserva(idPublicacion: number, fechaInicio: Date, fechaFin: Date): Promise<Fecha[]> {
-    return this.repository.find({
-      where: { publicacion: { id: idPublicacion }, fecha: Between(fechaInicio, fechaFin) },
-      relations: { reserva: true },
-      order: { fecha: 'ASC' },
-    });
+  buscarPorRangoConReserva(
+    idPublicacion: number,
+    fechaInicio: Date,
+    fechaFin: Date,
+  ): Promise<Fecha[]> {
+    return this.buscarPorRango(idPublicacion, fechaInicio, fechaFin);
   }
 
   async eliminar(id: number): Promise<number> {
