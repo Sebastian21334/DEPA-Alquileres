@@ -15,12 +15,23 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CrearCheckoutDto } from '../dto/crear-checkout.dto';
 import { ReconciliarPagoDto } from '../dto/reconciliar-pago.dto';
 import { PagosService } from '../service/pagos.service';
+import { PresupuestosService } from '../service/presupuestos.service';
+import { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
 
 import type { WebhookPago } from '../interfaces/webhook.interface';
 
 @Controller('pagos')
 export class PagosController {
-  constructor(private readonly pagosService: PagosService) {}
+  constructor(
+    private readonly pagosService: PagosService,
+    private readonly presupuestos: PresupuestosService,
+  ) {}
+
+  @UseGuards(JwtAuthGuard)
+  @Post('presupuesto')
+  cotizar(@Body() dto: CrearReservaDto, @Req() req: AuthenticatedRequest) {
+    return this.presupuestos.cotizar(dto, req.user.id);
+  }
 
   @UseGuards(JwtAuthGuard)
   @Post('checkout')

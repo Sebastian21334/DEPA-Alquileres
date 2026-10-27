@@ -7,6 +7,7 @@ import { PAGOS_REPOSITORY } from '../repository/pagos.repository.interface';
 import {
   PASARELA_PAGOS,
   PagoExterno,
+  IPasarelaPagos,
 } from '../repository/pasarela-pagos.interface';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { Pago } from '../entity/pago.entity';
@@ -15,6 +16,7 @@ import {
   EstadoPagoReserva,
 } from '../../reservas/entity/reserva.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
+import { PresupuestosService } from './presupuestos.service';
 
 describe('PagosService', () => {
   const usuario = Object.assign(new Usuario(), { id: 7 });
@@ -22,18 +24,23 @@ describe('PagosService', () => {
   let pago: Pago;
   let payment: PagoExterno;
   const repo = {
+    crear: jest.fn<(datos: Partial<Pago>) => Pago>(),
     buscarPorReferencia: jest.fn<() => Promise<Pago | null>>(),
     guardar: jest.fn<(pago: Pago) => Promise<Pago>>(),
   };
   const reservas = {
+    crearPendiente: jest.fn<ReservasService['crearPendiente']>(),
     buscarPorId: jest.fn<() => Promise<Reserva>>(),
     confirmarPago: jest.fn<() => Promise<void>>(),
     rechazarPago: jest.fn<() => Promise<void>>(),
   };
   const pasarela = {
+    validarConfiguracionCheckout: jest.fn(),
+    crearCheckout: jest.fn<IPasarelaPagos['crearCheckout']>(),
     consultarPago: jest.fn<() => Promise<PagoExterno>>(),
     validarWebhook: jest.fn(),
   };
+  const validarPresupuesto = jest.fn<PresupuestosService['validar']>();
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -56,11 +63,16 @@ describe('PagosService', () => {
     };
     repo.buscarPorReferencia.mockResolvedValue(pago);
     repo.guardar.mockImplementation(async (p) => p);
+    repo.crear.mockImplementation((datos) => Object.assign(new Pago(), datos));
     reservas.buscarPorId.mockResolvedValue(reserva);
     pasarela.consultarPago.mockImplementation(async () => payment);
     const module = await Test.createTestingModule({
       providers: [
         PagosService,
+        {
+          provide: PresupuestosService,
+          useValue: { validar: validarPresupuesto },
+        },
         { provide: PAGOS_REPOSITORY, useValue: repo },
         { provide: ReservasService, useValue: reservas },
         { provide: ConfigService, useValue: new ConfigService() },
@@ -68,6 +80,69 @@ describe('PagosService', () => {
       ],
     }).compile();
     service = module.get(PagosService);
+  });
+
+  it('crea el checkout por el importe convertido en ARS y conserva el presupuesto aceptado', async () => {
+    const condiciones = {
+      precio_unitario_origen: '100.00',
+      moneda_origen: 'USD' as const,
+      total_origen: '200.00',
+      total_cobro: '300000.00',
+      cotizacion_id: 8,
+      emitida_en: new Date().toISOString(),
+      vence_en: new Date(Date.now() + 900000).toISOString(),
+    };
+    validarPresupuesto.mockResolvedValue(condiciones);
+    const reserva = Object.assign(new Reserva(), {
+      id: 42,
+      monto_pago: 300000,
+      moneda_contratada: 'ARS',
+      pago_vencimiento: new Date(condiciones.vence_en),
+    });
+    reservas.crearPendiente.mockResolvedValue(reserva);
+    pasarela.crearCheckout.mockResolvedValue({
+      id: 'preferencia',
+      url: 'https://example.test/pagar',
+    });
+    const dto = {
+      id_publicacion: 10,
+      fecha_inicio: '2100-01-01',
+      fecha_fin: '2100-01-02',
+      presupuesto_token: 'firmado',
+    };
+    expect(await service.crearCheckout(dto, 7)).toMatchObject({
+      reserva_id: 42,
+      checkout_url: 'https://example.test/pagar',
+    });
+    expect(reservas.crearPendiente).toHaveBeenCalledWith(dto, 7, condiciones);
+    expect(repo.crear).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 300000, currency: 'ARS' }),
+    );
+    expect(pasarela.crearCheckout).toHaveBeenCalledWith(
+      reserva,
+      'reserva:42',
+      expect.any(String),
+      'ARS',
+    );
+  });
+
+  it('no crea una reserva ni una preferencia si el presupuesto no es válido', async () => {
+    validarPresupuesto.mockRejectedValue(
+      new BadRequestException('Presupuesto inválido'),
+    );
+    await expect(
+      service.crearCheckout(
+        {
+          id_publicacion: 10,
+          fecha_inicio: '2100-01-01',
+          fecha_fin: '2100-01-02',
+          presupuesto_token: 'alterado',
+        },
+        7,
+      ),
+    ).rejects.toThrow('Presupuesto inválido');
+    expect(reservas.crearPendiente).not.toHaveBeenCalled();
+    expect(pasarela.crearCheckout).not.toHaveBeenCalled();
   });
 
   it('consulta el proveedor antes de aprobar una reserva al volver del checkout', async () => {

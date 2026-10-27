@@ -154,3 +154,5 @@ h2 { margin: 0 0 14px; font-size: 1.05rem; font-weight: 800; }
   .features__grid, .advertiser-card__stats { grid-template-columns: 1fr; }
   .payment-grid { grid-template-columns: 1fr; }
 }
+.conversion-accept { display: flex; align-items: flex-start; gap: .6rem; margin: .85rem 0; padding: .8rem; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; font-size: .9rem; }
+.conversion-accept input { margin-top: .2rem; flex-shrink: 0; }

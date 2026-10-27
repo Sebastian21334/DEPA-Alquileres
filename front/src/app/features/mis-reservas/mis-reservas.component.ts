@@ -333,8 +333,12 @@ export class MisReservasComponent {
     return valor ? new Date(`${valor.slice(0, 10)}T12:00:00`).toLocaleDateString('es-AR') : '—';
   }
 
-  protected monto(valor: number, moneda?: string | null): string {
-    return Number(valor).toLocaleString('es-AR', { style: 'currency', currency: moneda ?? 'ARS' });
+  protected monto(valor: number, moneda?: string | null, decimales = 2): string {
+    return Number(valor).toLocaleString('es-AR', {
+      style: 'currency',
+      currency: moneda ?? 'ARS',
+      maximumFractionDigits: decimales,
+    });
   }
 
   protected inquilino(reserva: Reserva): string {

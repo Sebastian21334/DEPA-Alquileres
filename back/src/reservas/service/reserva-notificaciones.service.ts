@@ -82,6 +82,20 @@ export class ReservaNotificacionesService {
       .filter(Boolean)
       .join(', ');
     const datosComunes = {
+      conversion:
+        reserva.cotizacion_dolar &&
+        reserva.importe_origen != null &&
+        reserva.moneda_origen
+          ? {
+              importeOrigen: Number(reserva.importe_origen),
+              monedaOrigen: reserva.moneda_origen,
+              cotizacionVenta: Number(reserva.cotizacion_dolar.venta),
+              fechaFuente: new Date(
+                reserva.cotizacion_dolar.actualizada_fuente_en,
+              ).toISOString(),
+              proveedor: reserva.cotizacion_dolar.proveedor,
+            }
+          : undefined,
       idReserva: reserva.id,
       titulo,
       direccion,

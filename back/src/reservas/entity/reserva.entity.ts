@@ -10,6 +10,7 @@ import {
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { ReprogramacionReserva } from './reprogramacion-reserva.entity';
+import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 
 export enum EstadoPagoReserva {
   PENDIENTE = 'PENDIENTE',
@@ -55,6 +56,28 @@ export class Reserva {
 
   @Column({ type: 'varchar', length: 3, nullable: true })
   moneda_contratada: string | null;
+
+  @Column({ type: 'varchar', length: 3, nullable: true })
+  moneda_origen: string | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  importe_origen: number | null;
+
+  @ManyToOne(() => CotizacionDolar, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({
+    name: 'id_cotizacion_dolar',
+    foreignKeyConstraintName: 'FK_reserva_cotizacion_dolar',
+  })
+  cotizacion_dolar: Relation<CotizacionDolar | null>;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  cotizacion_aceptada_en: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  presupuesto_emitido_en: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  presupuesto_vence_en: Date | null;
 
   @OneToMany(() => ReprogramacionReserva, (cambio) => cambio.reserva)
   reprogramaciones: Relation<ReprogramacionReserva[]>;

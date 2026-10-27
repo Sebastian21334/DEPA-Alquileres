@@ -1,0 +1,45 @@
+<section class="dolar-panel" aria-labelledby="dolar-title">
+  <header><div><h2 id="dolar-title">Cotización del dólar</h2><p>Dólar blue venta utilizado para convertir reservas de USD a pesos.</p></div>
+    <button type="button" class="button button--light" [disabled]="cargando()" (click)="cargar(1, true)">Verificar cotización</button>
+  </header>
+  @if (error()) { <p role="alert" class="dolar-error">{{ error() }}</p> }
+  @if (datos(); as estado) {
+    <div class="dolar-current" [class.dolar-current--pending]="!estado.vigente">
+      <strong>{{ estado.vigente ? 'Disponible para nuevas conversiones' : 'Conversión USD → ARS pendiente de verificación' }}</strong>
+      @if (estado.cotizacion; as cotizacion) {
+        <p><strong>Venta: {{ importe(cotizacion.venta) }}</strong> · Compra: {{ importe(cotizacion.compra) }} por USD</p>
+        <p>Fuente: {{ cotizacion.proveedor }} · Publicada: {{ fecha(cotizacion.actualizada_fuente_en) }}</p>
+        <p>Consultada por DEPA: {{ fecha(cotizacion.consultada_en) }}</p>
+      } @else { <p>Todavía no se obtuvo una cotización válida.</p> }
+      <p>Próxima revisión a partir de: {{ fecha(estado.proxima_revision_en) }}, cuando el backend esté activo.</p>
+      <small>Se verifica al despertar y antes de emitir presupuestos. No se reconstruyen consultas del tiempo en que estuvo dormido.
+        Antigüedad máxima permitida del dato de la fuente: {{ estado.max_antiguedad_fuente_horas }} horas.</small>
+      @if (estado.consulta && !estado.consulta.exitosa) { <p role="status">Última consulta fallida: {{ estado.consulta.error }} · {{ fecha(estado.consulta.realizada_en) }}</p> }
+    </div>
+    <form class="dolar-filters" (ngSubmit)="cargar()">
+      <label>Consultado desde <input type="date" name="dolarDesde" [(ngModel)]="desde" /></label>
+      <label>Hasta <input type="date" name="dolarHasta" [(ngModel)]="hasta" /></label>
+      <button type="submit" class="button button--light" [disabled]="cargando()">Filtrar historial</button>
+    </form>
+    <div class="dolar-table"><table>
+      <caption>Historial de cotizaciones guardadas · {{ estado.total }} registros</caption>
+      <thead><tr><th>ID</th><th>Compra</th><th>Venta utilizada</th><th>Publicada por la fuente</th><th>Consultada por DEPA</th><th>Proveedor</th></tr></thead>
+      <tbody>@for (cotizacion of estado.items; track cotizacion.id) {
+        <tr><td>#{{ cotizacion.id }}</td><td>{{ importe(cotizacion.compra) }}</td><td>{{ importe(cotizacion.venta) }}</td>
+          <td>{{ fecha(cotizacion.actualizada_fuente_en) }}</td><td>{{ fecha(cotizacion.consultada_en) }}</td><td>{{ cotizacion.proveedor }}</td></tr>
+      } @empty { <tr><td colspan="6">No hay cotizaciones para estas fechas.</td></tr> }</tbody>
+    </table></div>
+    <nav aria-label="Páginas de cotizaciones" class="dolar-pagination">
+      <button type="button" class="button button--light" [disabled]="cargando() || estado.pagina <= 1" (click)="cargar(estado.pagina - 1)">Anterior</button>
+      <span>Página {{ estado.pagina }}</span>
+      <button type="button" class="button button--light" [disabled]="cargando() || estado.pagina * estado.por_pagina >= estado.total" (click)="cargar(estado.pagina + 1)">Siguiente</button>
+    </nav>
+    <details><summary>Últimos intentos de actualización</summary>
+      @for (consulta of estado.consultas; track consulta.id) {
+        <p>{{ fecha(consulta.realizada_en) }} · {{ consulta.exitosa ? 'Correcta' : consulta.error }}</p>
+      } @empty { <p>No hay consultas registradas.</p> }
+    </details>
+  }
+  @if (cargando()) { <p role="status">Consultando cotizaciones…</p> }
+  <small>Datos de <a href="https://dolarapi.com" target="_blank" rel="noopener noreferrer">DolarApi</a>, fuente DolarHoy. Cotizaciones informativas; no garantizan la compra o venta de divisas.</small>
+</section>

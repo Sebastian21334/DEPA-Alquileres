@@ -1,0 +1,13 @@
+.dolar-panel { padding: 1.25rem; margin: 1.5rem 0; border: 1px solid var(--color-border, #e5e7eb); border-radius: 12px; background: #fff; }
+header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+h2 { margin: 0; } p { margin: .45rem 0; } small { color: #667085; line-height: 1.6; }
+.dolar-current { padding: 1rem; margin: 1rem 0; border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 8px; }
+.dolar-current--pending { border-color: #fed7aa; background: #fff7ed; }
+.dolar-filters, .dolar-pagination { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
+label { display: grid; gap: .3rem; font-size: .9rem; } input { padding: .5rem; border: 1px solid #d1d5db; border-radius: 6px; }
+.dolar-table { overflow-x: auto; } table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+caption { text-align: left; padding: .5rem 0; font-weight: 700; } th, td { padding: .75rem; border-bottom: 1px solid #e5e7eb; text-align: left; }
+.dolar-error { color: #b91c1c; } details { margin: 1rem 0; } summary { cursor: pointer; font-weight: 700; }
+.dolar-pagination { align-items: center; }
+.button { min-height: 40px; padding: .5rem .85rem; border: 1px solid #d1d5db; border-radius: 7px; background: #fff; color: #1f2937; font: inherit; cursor: pointer; }
+.button:disabled { opacity: .5; cursor: default; }

@@ -1,5 +1,8 @@
 # Unicidad del calendario y concurrencia de reservas
 
+Para cotizaciones históricas y conversión USD → ARS, aplicar además
+`20261027-cotizaciones-cobros.sql` según [estas instrucciones](../docs/cotizaciones-cobros.md).
+
 Para habilitar también el cambio de fechas desde la web y sus avisos al anunciante,
 ver [la política y migración de reprogramaciones](../docs/reprogramaciones.md).
 

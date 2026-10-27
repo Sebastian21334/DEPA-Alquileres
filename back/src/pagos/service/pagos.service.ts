@@ -1,3 +1,4 @@
+import { PresupuestosService } from './presupuestos.service';
 import {
   BadRequestException,
   ForbiddenException,
@@ -26,6 +27,7 @@ export class PagosService {
   private readonly logger = new Logger(PagosService.name);
 
   constructor(
+    private readonly presupuestos: PresupuestosService,
     @Inject(PAGOS_REPOSITORY) private readonly pagos: IPagosRepository,
     private readonly reservasService: ReservasService,
     private readonly config: ConfigService,
@@ -34,7 +36,14 @@ export class PagosService {
 
   async crearCheckout(dto: CrearCheckoutDto, idUsuario: number) {
     this.pasarela.validarConfiguracionCheckout();
-    const reserva = await this.reservasService.crearPendiente(dto, idUsuario);
+    const condiciones = dto.presupuesto_token
+      ? await this.presupuestos.validar(dto.presupuesto_token, dto, idUsuario)
+      : undefined;
+    const reserva = await this.reservasService.crearPendiente(
+      dto,
+      idUsuario,
+      condiciones,
+    );
     const externalReference = `reserva:${reserva.id}`;
     const idempotencyKey = randomUUID();
     const currency =
@@ -42,22 +51,22 @@ export class PagosService {
       this.config.get<string>('MP_CURRENCY_ID') ??
       'ARS';
 
-    let pago = this.pagos.crear({
-      reserva,
-      external_reference: externalReference,
-      preference_id: null,
-      payment_id: null,
-      status: 'pending',
-      status_detail: null,
-      amount: Number(reserva.monto_pago),
-      currency,
-      payment_method_id: null,
-      idempotency_key: idempotencyKey,
-      approved_at: null,
-    });
-    pago = await this.pagos.guardar(pago);
-
     try {
+      let pago = this.pagos.crear({
+        reserva,
+        external_reference: externalReference,
+        preference_id: null,
+        payment_id: null,
+        status: 'pending',
+        status_detail: null,
+        amount: Number(reserva.monto_pago),
+        currency,
+        payment_method_id: null,
+        idempotency_key: idempotencyKey,
+        approved_at: null,
+      });
+      pago = await this.pagos.guardar(pago);
+
       const preference = await this.pasarela.crearCheckout(
         reserva,
         externalReference,

@@ -55,6 +55,9 @@
                 }
                 <h3>{{ reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</h3>
                 <p>{{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }} · {{ monto(reserva.monto_pago, reserva.moneda_contratada) }}</p>
+                @if (reserva.cotizacion_dolar; as dolar) {
+                  <p class="muted">Publicado: {{ monto(reserva.importe_origen ?? 0, reserva.moneda_origen) }} · Cambio aceptado: blue venta {{ monto(+dolar.venta, 'ARS', 6) }} por USD · Cotización #{{ dolar.id }}.</p>
+                }
                 @if (reserva.estado_pago === 'APROBADO') {
                   <p class="settlement-state">{{ estadoLiquidacion(reserva) }}</p>
                   @if (codigos()[reserva.id]; as codigo) {

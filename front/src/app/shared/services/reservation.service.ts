@@ -4,11 +4,25 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Anunciante } from '../models/anunciante.model';
 import { Usuario } from '../models/usuario.model';
+import { CotizacionDolar } from './cotizaciones.service';
 
 export interface CrearReservaPayload {
   id_publicacion: number;
   fecha_inicio: string;
   fecha_fin: string;
+}
+
+export interface PresupuestoReserva {
+  token: string;
+  precio_unitario_origen: string;
+  moneda_origen: 'ARS' | 'USD';
+  total_origen: string;
+  total_cobro: string;
+  moneda_cobro: 'ARS';
+  cantidad_dias: number;
+  emitida_en: string;
+  vence_en: string;
+  cotizacion: CotizacionDolar | null;
 }
 
 export interface CheckoutCreado {
@@ -48,6 +62,10 @@ export interface Reserva {
   precio_unitario_contratado?: number | null;
   importe_contratado?: number | null;
   moneda_contratada?: string | null;
+  moneda_origen?: string | null;
+  importe_origen?: number | null;
+  cotizacion_dolar?: CotizacionDolar | null;
+  cotizacion_aceptada_en?: string | null;
   reprogramaciones?: ReprogramacionReserva[];
   fecha_pago: string | null;
   fecha_inicio: string | null;
@@ -108,7 +126,13 @@ export class ReservationService {
   private readonly baseUrl = `${environment.apiUrl}/reservas`;
   private readonly paymentUrl = `${environment.apiUrl}/pagos`;
 
-  createCheckout(payload: CrearReservaPayload): Observable<CheckoutCreado> {
+  quote(payload: CrearReservaPayload): Observable<PresupuestoReserva> {
+    return this.http.post<PresupuestoReserva>(`${this.paymentUrl}/presupuesto`, payload);
+  }
+
+  createCheckout(
+    payload: CrearReservaPayload & { presupuesto_token?: string },
+  ): Observable<CheckoutCreado> {
     return this.http.post<CheckoutCreado>(`${this.paymentUrl}/checkout`, payload);
   }
 

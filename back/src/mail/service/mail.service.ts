@@ -54,6 +54,7 @@ export class MailService implements IMailService {
        <p>Se mantienen los ${detalle.cantidadDias} días y el total pagado de
          <strong>${this.plantillas.importe(detalle.monto, detalle.moneda)}</strong>.
          El calendario ya fue actualizado. Este cambio no genera cobros ni devoluciones.</p>
+       ${this.plantillas.conversion(detalle.conversion)}
        <p>Si hubo otros cambios, consultá la reserva para ver las fechas vigentes.</p>
        ${this.plantillas.boton('Ver reserva', `${this.frontendUrl}/reserva/resultado?reserva_id=${detalle.idReserva}`)}`,
       `El inquilino cambió las fechas de la reserva #${detalle.idReserva}.`,

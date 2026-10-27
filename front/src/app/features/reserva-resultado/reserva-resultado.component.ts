@@ -277,8 +277,12 @@ export class ReservaResultadoComponent {
       : '—';
   }
 
-  protected monto(valor: number | undefined, moneda = 'ARS'): string {
-    return Number(valor ?? 0).toLocaleString('es-AR', { style: 'currency', currency: moneda });
+  protected monto(valor: number | undefined, moneda = 'ARS', decimales = 2): string {
+    return Number(valor ?? 0).toLocaleString('es-AR', {
+      style: 'currency',
+      currency: moneda,
+      maximumFractionDigits: decimales,
+    });
   }
 
   private cargarResumen(idReserva: number): void {

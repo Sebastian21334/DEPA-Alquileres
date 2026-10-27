@@ -195,9 +195,23 @@
           <h2 id="payment-title">Continuar a Mercado Pago</h2>
           <p>Vas a elegir el medio de pago e ingresar los datos directamente en Mercado Pago. DEPA no almacena los datos de tu tarjeta.</p>
           <form (submit)="confirmPayment($event)">
-            <div class="payment-placeholder">La disponibilidad quedará reservada durante 15 minutos mientras completás el pago.</div>
-            <div class="payment-total"><span>Total</span><strong>{{ item.tipoMoneda?.nombre ?? '$' }} {{ formatAmount(bookingTotal()) }}</strong></div>
-            <button class="button button--reserve" type="submit" [disabled]="processingPayment()">{{ processingPayment() ? 'Conectando…' : 'Pagar con Mercado Pago' }}</button>
+            @if (cotizando()) { <p role="status">Verificando precio y cotización…</p> }
+            @if (presupuesto(); as precio) {
+              <div class="payment-placeholder">Publicado: {{ formatCurrency(precio.total_origen, precio.moneda_origen) }} por {{ precio.cantidad_dias }} días.</div>
+              @if (precio.cotizacion; as dolar) {
+                <p>Dólar blue venta: <strong>{{ formatCurrency(dolar.venta, 'ARS', 6) }} por USD</strong>.</p>
+                <p>Fuente: <a href="https://dolarapi.com" target="_blank" rel="noopener noreferrer">DolarApi</a> / DolarHoy.</p>
+                <p>Publicada: {{ fechaCotizacion(dolar.actualizada_fuente_en) }}. Consultada: {{ fechaCotizacion(dolar.consultada_en) }}.</p>
+                <label class="conversion-accept"><input type="checkbox" [checked]="aceptaConversion()" (change)="aceptarConversion($event)" [disabled]="processingPayment()" />
+                  Acepto esta cotización y pagar {{ formatCurrency(precio.total_cobro, 'ARS') }} en pesos.</label>
+              }
+              <div class="payment-total"><span>Total a cobrar en pesos</span><strong>{{ formatCurrency(precio.total_cobro, 'ARS') }}</strong></div>
+              <p>Válido hasta {{ fechaCotizacion(precio.vence_en) }}. Una vez que continúes, las fechas quedarán reservadas hasta ese vencimiento.</p>
+              @if (presupuestoVencido()) { <p role="alert">El presupuesto venció. Solicitá uno nuevo.</p> }
+              <button class="button button--reserve" type="submit" [disabled]="processingPayment() || presupuestoVencido() || (precio.moneda_origen === 'USD' && !aceptaConversion())">{{ processingPayment() ? 'Conectando…' : 'Pagar con Mercado Pago' }}</button>
+            }
+            @if (bookingError()) { <p class="booking-message booking-message--error" role="alert">{{ bookingError() }}</p> }
+            <button type="button" class="button button--secondary" (click)="cotizarPago()" [disabled]="processingPayment() || cotizando()">Volver a cotizar</button>
           </form>
         </section>
       </div>

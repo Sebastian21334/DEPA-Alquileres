@@ -9,6 +9,7 @@ import {
 } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
+import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
 @Injectable()
 export class ReservaRepository implements IReservaRepository {
@@ -19,6 +20,12 @@ export class ReservaRepository implements IReservaRepository {
 
   crear(datos: Partial<Reserva>): Reserva {
     return this.repository.create(datos);
+  }
+
+  buscarCondicionesPublicacion(id: number): Promise<Publicacion | null> {
+    return this.repository.manager
+      .getRepository(Publicacion)
+      .findOne({ where: { id }, relations: { tipoMoneda: true } });
   }
 
   guardarReprogramacion(
@@ -89,6 +96,7 @@ export class ReservaRepository implements IReservaRepository {
       where: { id },
       relations: {
         reprogramaciones: true,
+        cotizacion_dolar: true,
         usuario: true,
         publicacion: {
           anunciante: { usuario: true },
@@ -121,6 +129,7 @@ export class ReservaRepository implements IReservaRepository {
       where: { usuario: { id: idUsuario } },
       relations: {
         reprogramaciones: true,
+        cotizacion_dolar: true,
         publicacion: {
           anunciante: { usuario: true },
           ciudad: true,
@@ -150,6 +159,7 @@ export class ReservaRepository implements IReservaRepository {
       },
       relations: {
         reprogramaciones: true,
+        cotizacion_dolar: true,
         usuario: true,
         publicacion: {
           anunciante: { usuario: true },

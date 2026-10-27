@@ -121,7 +121,7 @@
             <div>
               <dt>Total</dt>
               <dd class="total">
-                {{ monto(pago()?.amount ?? item.monto_pago, pago()?.currency ?? 'ARS') }}
+                {{ monto(pago()?.amount ?? item.monto_pago, pago()?.currency ?? item.moneda_contratada ?? 'ARS') }}
               </dd>
             </div>
             <div>
@@ -137,6 +137,15 @@
               <dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd>
             </div>
           </dl>
+          @if (item.cotizacion_dolar; as dolar) {
+            <div class="conversion-detail">
+              <p>Publicado: {{ monto(item.importe_origen ?? 0, item.moneda_origen ?? 'USD') }}.</p>
+              <p>Cambio aceptado: dólar blue venta {{ monto(+dolar.venta, 'ARS', 6) }} por USD.</p>
+              <p>Fuente: {{ dolar.proveedor }} · Publicada {{ fechaHora(dolar.actualizada_fuente_en) }}.</p>
+              <p>Consultada {{ fechaHora(dolar.consultada_en) }} · Aceptada {{ fechaHora(item.cotizacion_aceptada_en) }}.</p>
+              <small>El cobro y la liquidación se realizan en pesos con la conversión aceptada.</small>
+            </div>
+          }
           <p class="secure-note">
             El estado fue verificado directamente con Mercado Pago. DEPA no almacena los datos de tu
             tarjeta.

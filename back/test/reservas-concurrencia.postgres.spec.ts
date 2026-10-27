@@ -1,3 +1,9 @@
+import { CotizacionDolar } from '../src/cotizaciones/entity/cotizacion-dolar.entity';
+import { ConsultaCotizacion } from '../src/cotizaciones/entity/consulta-cotizacion.entity';
+import { CotizacionRepository } from '../src/cotizaciones/repository/cotizacion.repository';
+import { CotizacionesService } from '../src/cotizaciones/service/cotizaciones.service';
+import { PresupuestosService } from '../src/pagos/service/presupuestos.service';
+import { JwtService } from '@nestjs/jwt';
 import { jest } from '@jest/globals';
 import type { IMailService } from '../src/mail/mail.interface';
 import { ConfigService } from '@nestjs/config';
@@ -88,6 +94,8 @@ if (url) {
         synchronize: false,
         ssl: false,
         entities: [
+          CotizacionDolar,
+          ConsultaCotizacion,
           ReprogramacionReserva,
           Pago,
           Fecha,
@@ -112,7 +120,21 @@ if (url) {
         providers: [
           {
             provide: ConfigService,
-            useValue: new ConfigService({ MP_CURRENCY_ID: 'ARS' }),
+            useValue: new ConfigService({
+              MP_CURRENCY_ID: 'ARS',
+              JWT_SECRET: 'secreto-de-prueba',
+            }),
+          },
+          PresupuestosService,
+          JwtService,
+          {
+            provide: CotizacionesService,
+            useValue: {
+              obtenerVigente: async () =>
+                db
+                  .getRepository(CotizacionDolar)
+                  .findOneOrFail({ where: {}, order: { id: 'DESC' } }),
+            },
           },
           ReservasService,
           DisponibilidadService,
@@ -142,7 +164,11 @@ if (url) {
               async buscarPorId(id: number) {
                 const item = await db.getRepository(Publicacion).findOne({
                   where: { id },
-                  relations: { anunciante: true, modalidad: true },
+                  relations: {
+                    anunciante: true,
+                    modalidad: true,
+                    tipoMoneda: true,
+                  },
                 });
                 if (!item) throw new NotFoundException();
                 return item;
@@ -189,7 +215,11 @@ if (url) {
         nombre: 'Temporal',
         permite_reservas_por_fecha: true,
       });
+      const tipoMoneda = await db
+        .getRepository(TipoMoneda)
+        .save({ nombre: 'ARS' });
       publicacion = await db.getRepository(Publicacion).save({
+        tipoMoneda,
         titulo: 'Alojamiento de prueba',
         descripcion: 'Prueba aislada',
         activa: true,
@@ -883,6 +913,206 @@ if (url) {
         reservas.actualizarFechas(reserva.id, rango(4, 5), inquilinos[0].id),
       ).rejects.toThrow('no coincide con el contratado');
       expect(enviarAviso).not.toHaveBeenCalled();
+    });
+
+    it('guarda USD original, pesos cobrados, cotización exacta y aceptación sin cambiarlo al reprogramar', async () => {
+      const usd = await db.getRepository(TipoMoneda).save({ nombre: 'USD' });
+      await db
+        .getRepository(Publicacion)
+        .update(publicacion.id, { tipoMoneda: usd });
+      const cotizacion = await db.getRepository(CotizacionDolar).save({
+        compra: '1400.000000',
+        venta: '1500.000000',
+        tipo: 'blue',
+        proveedor: 'Proveedor de prueba',
+        actualizada_fuente_en: new Date(),
+      });
+      await expect(crear(1, 2)).rejects.toThrow('aceptar la conversión');
+      const dto = { id_publicacion: publicacion.id, ...rango(1, 2) };
+      const servicio = modulo.get(PresupuestosService);
+      const presupuesto = await servicio.cotizar(dto, inquilinos[0].id);
+      const condiciones = await servicio.validar(
+        presupuesto.token,
+        dto,
+        inquilinos[0].id,
+      );
+      const creada = await reservas.crearPendiente(
+        dto,
+        inquilinos[0].id,
+        condiciones,
+      );
+      await reservas.confirmarPago(creada.id, new Date());
+      await db.getRepository(CotizacionDolar).save({
+        compra: '1500.000000',
+        venta: '1700.000000',
+        tipo: 'blue',
+        proveedor: 'Proveedor de prueba',
+        actualizada_fuente_en: new Date(),
+      });
+      const actual = await reservas.actualizarFechas(
+        creada.id,
+        rango(4, 5),
+        inquilinos[0].id,
+      );
+      expect(actual).toMatchObject({
+        importe_origen: '200.00',
+        moneda_origen: 'USD',
+        monto_pago: '300000.00',
+        importe_contratado: '300000.00',
+        moneda_contratada: 'ARS',
+        precio_unitario_contratado: '100.00',
+        cotizacion_dolar: { id: cotizacion.id, venta: '1500.000000' },
+      });
+      expect(actual.cotizacion_aceptada_en).toBeInstanceOf(Date);
+      expect(enviarAviso).toHaveBeenCalledWith(
+        'usuario0@example.test',
+        expect.objectContaining({
+          monto: 300000,
+          moneda: 'ARS',
+          conversion: expect.objectContaining({
+            importeOrigen: 200,
+            monedaOrigen: 'USD',
+            cotizacionVenta: 1500,
+          }),
+        }),
+      );
+      await expect(
+        db.getRepository(CotizacionDolar).delete(cotizacion.id),
+      ).rejects.toMatchObject({ driverError: { code: '23001' } });
+    });
+
+    it('si cambia el precio antes de aceptar exige un nuevo presupuesto y no ocupa días', async () => {
+      const dto = { id_publicacion: publicacion.id, ...rango(1, 2) };
+      const servicio = modulo.get(PresupuestosService);
+      const presupuesto = await servicio.cotizar(dto, inquilinos[0].id);
+      await db
+        .getRepository(Publicacion)
+        .update(publicacion.id, { precio: 500 });
+      const condiciones = await servicio.validar(
+        presupuesto.token,
+        dto,
+        inquilinos[0].id,
+      );
+      await expect(
+        reservas.crearPendiente(dto, inquilinos[0].id, condiciones),
+      ).rejects.toThrow('cambiaron');
+      expect(await db.getRepository(Reserva).count()).toBe(0);
+      expect((await fechas()).every((f) => f.disponible)).toBe(true);
+    });
+
+    it('dos instancias despiertas usan un bloqueo de PostgreSQL y persisten una sola actualización', async () => {
+      let llamadas = 0;
+      const proveedor = {
+        consultar: async () => {
+          llamadas++;
+          await esperar(30);
+          return { compra: 1400, venta: 1500, actualizadaEn: new Date() };
+        },
+      };
+      const repo = new CotizacionRepository(db.getRepository(CotizacionDolar));
+      const a = new CotizacionesService(repo, proveedor, new ConfigService());
+      const b = new CotizacionesService(
+        new CotizacionRepository(db.getRepository(CotizacionDolar)),
+        proveedor,
+        new ConfigService(),
+      );
+      await Promise.all([a.obtenerVigente(), b.obtenerVigente()]);
+      expect(llamadas).toBe(1);
+      expect(await db.getRepository(CotizacionDolar).count()).toBe(1);
+      await db.query(
+        `UPDATE "${esquema}".consulta_cotizacion SET realizada_en = now() - interval '6 hours'`,
+      );
+      await new CotizacionesService(
+        repo,
+        proveedor,
+        new ConfigService(),
+      ).obtenerVigente();
+      expect(llamadas).toBe(2);
+      expect(await db.getRepository(CotizacionDolar).count()).toBe(2);
+      const historial = await a.administracion(undefined, undefined, 1);
+      expect(historial.total).toBe(2);
+      expect(historial.consultas).toHaveLength(2);
+    });
+
+    it('persiste una falla después de dormir sin reutilizar el dólar viejo ni impedir cotizar ARS', async () => {
+      const repo = new CotizacionRepository(db.getRepository(CotizacionDolar));
+      const proveedor = {
+        consultar:
+          jest.fn<
+            () => Promise<{
+              compra: number;
+              venta: number;
+              actualizadaEn: Date;
+            }>
+          >(),
+      };
+      proveedor.consultar.mockResolvedValue({
+        compra: 1400,
+        venta: 1500,
+        actualizadaEn: new Date(),
+      });
+      const servicio = new CotizacionesService(
+        repo,
+        proveedor,
+        new ConfigService(),
+      );
+      await servicio.obtenerVigente();
+      await db.query(
+        `UPDATE "${esquema}".consulta_cotizacion SET realizada_en = now() - interval '6 hours'`,
+      );
+      proveedor.consultar.mockRejectedValue(
+        new Error('La fuente no está disponible'),
+      );
+      await expect(
+        new CotizacionesService(
+          repo,
+          proveedor,
+          new ConfigService(),
+        ).obtenerVigente(),
+      ).rejects.toThrow('No hay una cotización');
+      expect(await db.getRepository(CotizacionDolar).count()).toBe(1);
+      expect(await repo.ultimaConsulta()).toMatchObject({
+        exitosa: false,
+        error: 'La fuente no está disponible',
+      });
+      const estado = await servicio.administracion(undefined, undefined, 1);
+      expect(estado.vigente).toBe(false);
+      const precio = await modulo
+        .get(PresupuestosService)
+        .cotizar(
+          { id_publicacion: publicacion.id, ...rango(1) },
+          inquilinos[0].id,
+        );
+      expect(precio).toMatchObject({
+        moneda_origen: 'ARS',
+        moneda_cobro: 'ARS',
+        total_cobro: '100.00',
+        cotizacion: null,
+      });
+      expect(proveedor.consultar).toHaveBeenCalledTimes(2);
+    });
+
+    it('la migración de cotizaciones puede repetirse y no reescribe importes históricos', async () => {
+      const reserva = await crear(1, 2);
+      const runner = db.createQueryRunner();
+      await runner.connect();
+      await runner.startTransaction();
+      try {
+        await runner.query(`SET LOCAL search_path TO "${esquema}"`);
+        const sql = readFileSync(
+          join(process.cwd(), 'migrations/20261027-cotizaciones-cobros.sql'),
+          'utf8',
+        );
+        await runner.query(sql);
+        await runner.query(sql);
+        await runner.commitTransaction();
+      } finally {
+        if (runner.isTransactionActive) await runner.rollbackTransaction();
+        await runner.release();
+      }
+      expect(
+        await db.getRepository(Reserva).findOneByOrFail({ id: reserva.id }),
+      ).toMatchObject({ monto_pago: '200.00', importe_contratado: '200.00' });
     });
 
     it('la migración detecta duplicados sin borrar datos y puede repetirse', async () => {

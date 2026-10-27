@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "db:cotizaciones-cobros": "node scripts/cotizaciones-cobros.cjs --aplicar",
     "db:reprogramacion-reservas": "node scripts/reprogramacion-reservas.cjs --aplicar",
     "db:calendario-unico": "node scripts/calendario-unico.cjs --aplicar",
     "test:concurrencia": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand test/reservas-concurrencia.postgres.spec.ts",

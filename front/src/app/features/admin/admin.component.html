@@ -40,6 +40,8 @@
     </article>
   </div>
 
+  <app-cotizaciones-admin />
+
   <section class="panel">
     <div class="panel__title panel__title--users">
       <div>
@@ -120,6 +122,10 @@
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
               <p><strong>Importe:</strong> {{ montoLiquidacion(settlement) }}</p>
+              @if (settlement.cotizacion_dolar; as dolar) {
+                <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
+                <p>Cotización #{{ dolar.id }} · {{ dolar.proveedor }} · Publicada: {{ dolar.actualizada_fuente_en }} · Aceptada: {{ settlement.cotizacion_aceptada_en }}.</p>
+              }
               @if (settlement.observacion_liquidacion) {
                 <p class="settlement-note">{{ settlement.observacion_liquidacion }}</p>
               }

@@ -1,9 +1,11 @@
 import { Reserva } from '../entity/reserva.entity';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
+import type { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
 export const RESERVA_REPOSITORY = 'RESERVA_REPOSITORY';
 
 export interface IReservaRepository {
+  buscarCondicionesPublicacion(id: number): Promise<Publicacion | null>;
   guardarReprogramacion(
     datos: Partial<ReprogramacionReserva>,
   ): Promise<ReprogramacionReserva>;

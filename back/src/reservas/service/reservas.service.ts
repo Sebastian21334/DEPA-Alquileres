@@ -1,3 +1,10 @@
+import {
+  decimalEntero,
+  importeTexto,
+  monedaPublicacion,
+} from '../../common/utils/importes';
+import type { CondicionesCobro } from '../interfaces/condiciones-cobro.interface';
+import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import { ConfigService } from '@nestjs/config';
 import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transaccion-calendario.interface';
 import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
@@ -45,6 +52,7 @@ export class ReservasService {
   async crearPendiente(
     dto: CrearReservaDto,
     idUsuario: number,
+    condiciones?: CondicionesCobro,
   ): Promise<Reserva> {
     // El DTO trae el rango; Reserva conserva el periodo y Fecha mantiene
     // cada dia para bloquearlo en el calendario.
@@ -83,14 +91,41 @@ export class ReservasService {
     const cantidadDias =
       Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) +
       1;
-    const precioDiario = Number(publicacion.precio);
-    const montoCalculado = Number((precioDiario * cantidadDias).toFixed(2));
-
-    if (!Number.isFinite(montoCalculado) || montoCalculado < 0) {
+    let moneda: 'ARS' | 'USD', original: string;
+    try {
+      moneda = monedaPublicacion(publicacion.tipoMoneda?.nombre);
+      original = importeTexto(
+        decimalEntero(publicacion.precio, 2) * BigInt(cantidadDias),
+      );
+      if (decimalEntero(original, 2) <= 0n)
+        throw new Error('El precio debe ser mayor a cero');
+    } catch (error) {
       throw new BadRequestException(
-        'No se pudo calcular el monto de la reserva',
+        error instanceof Error ? error.message : 'Precio inválido',
       );
     }
+    if ((this.config.get<string>('MP_CURRENCY_ID') ?? 'ARS') !== 'ARS') {
+      throw new BadRequestException(
+        'Esta integración solo admite cobros en ARS',
+      );
+    }
+    if (moneda === 'USD' && !condiciones)
+      throw new BadRequestException(
+        'Primero debés cotizar y aceptar la conversión a pesos',
+      );
+    if (
+      condiciones &&
+      (condiciones.moneda_origen !== moneda ||
+        condiciones.total_origen !== original ||
+        condiciones.precio_unitario_origen !==
+          importeTexto(decimalEntero(publicacion.precio, 2)))
+    ) {
+      throw new ConflictException(
+        'El precio o la moneda cambiaron. Solicitá un nuevo presupuesto.',
+      );
+    }
+    const precioDiario = Number(publicacion.precio);
+    const montoCalculado = Number(condiciones?.total_cobro ?? original);
 
     const usuario = await this.usuariosService.buscarPorId(idUsuario);
     if (!usuario) {
@@ -105,6 +140,32 @@ export class ReservasService {
     return this.transaccion.ejecutar(
       async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
         await fechaRepository.bloquearPublicacion(dto.id_publicacion);
+        const actual = await reservaRepository.buscarCondicionesPublicacion(
+          dto.id_publicacion,
+        );
+        let monedaActual: 'ARS' | 'USD' | undefined;
+        try {
+          monedaActual = monedaPublicacion(actual?.tipoMoneda?.nombre);
+        } catch {
+          monedaActual = undefined;
+        }
+        if (
+          !actual?.activa ||
+          Number(actual.precio) !== precioDiario ||
+          monedaActual !== moneda
+        ) {
+          throw new ConflictException(
+            'La publicación cambió. Volvé a cotizar antes de pagar.',
+          );
+        }
+        if (
+          condiciones &&
+          new Date(condiciones.vence_en).getTime() <= Date.now()
+        ) {
+          throw new ConflictException(
+            'El presupuesto venció. Volvé a cotizar antes de pagar.',
+          );
+        }
         // Delegamos la pregunta "¿está libre este rango?" al módulo que es
         // dueño de esa lógica (Disponibilidad), en vez de duplicarla acá
         const disponible =
@@ -129,7 +190,21 @@ export class ReservasService {
           monto_pago: montoCalculado,
           precio_unitario_contratado: precioDiario,
           importe_contratado: montoCalculado,
-          moneda_contratada: this.config.get<string>('MP_CURRENCY_ID') ?? 'ARS',
+          moneda_contratada: 'ARS',
+          moneda_origen: moneda,
+          importe_origen: Number(original),
+          cotizacion_dolar: condiciones?.cotizacion_id
+            ? Object.assign(new CotizacionDolar(), {
+                id: condiciones.cotizacion_id,
+              })
+            : null,
+          cotizacion_aceptada_en: condiciones ? new Date() : null,
+          presupuesto_emitido_en: condiciones
+            ? new Date(condiciones.emitida_en)
+            : null,
+          presupuesto_vence_en: condiciones
+            ? new Date(condiciones.vence_en)
+            : null,
           fecha_pago: null,
           estado_pago: EstadoPagoReserva.PENDIENTE,
           estado_liquidacion: EstadoLiquidacionReserva.NO_APLICA,
@@ -140,7 +215,9 @@ export class ReservasService {
           fecha_resolucion_liquidacion: null,
           referencia_liquidacion: null,
           observacion_liquidacion: null,
-          pago_vencimiento: new Date(Date.now() + 15 * 60 * 1000),
+          pago_vencimiento: condiciones
+            ? new Date(condiciones.vence_en)
+            : new Date(Date.now() + 15 * 60 * 1000),
           fecha_inicio: inicio.toISOString().slice(0, 10),
           fecha_fin: fin.toISOString().slice(0, 10),
           usuario_nombre: usuario.nombre,
@@ -481,6 +558,20 @@ export class ReservasService {
           destinatario: propietario?.email ?? null,
           notificada_en: null,
           detalle: {
+            conversion:
+              reserva.cotizacion_dolar &&
+              reserva.importe_origen != null &&
+              reserva.moneda_origen
+                ? {
+                    importeOrigen: Number(reserva.importe_origen),
+                    monedaOrigen: reserva.moneda_origen,
+                    cotizacionVenta: Number(reserva.cotizacion_dolar.venta),
+                    fechaFuente: new Date(
+                      reserva.cotizacion_dolar.actualizada_fuente_en,
+                    ).toISOString(),
+                    proveedor: reserva.cotizacion_dolar.proveedor,
+                  }
+                : undefined,
             idReserva: reserva.id,
             titulo: reserva.publicacion.titulo,
             nombreAnunciante:

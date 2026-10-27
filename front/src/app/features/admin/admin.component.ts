@@ -3,6 +3,7 @@ import { Component, computed, inject, PLATFORM_ID, signal } from '@angular/core'
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
 import {
   LucideUsers,
   LucideShieldCheck,
@@ -32,6 +33,7 @@ interface CatalogSection {
   selector: 'app-admin',
   standalone: true,
   imports: [
+    CotizacionesAdminComponent,
     FormsModule,
     LucideUsers,
     LucideShieldCheck,
@@ -56,7 +58,8 @@ export class AdminComponent {
     return this.publications().filter((p) => {
       const user = p.anunciante?.usuario;
       return `${p.id} ${p.titulo} ${user?.nombre ?? ''} ${user?.apellido ?? ''} ${user?.email ?? ''}`
-        .toLowerCase().includes(q);
+        .toLowerCase()
+        .includes(q);
     });
   });
   protected readonly requests = signal<VerificationRequest[]>([]);
@@ -163,12 +166,14 @@ export class AdminComponent {
       () => this.api.darDeBajaPublicacion(publication.id, motivo),
       (value) => {
         const result = value as { publicacion: Publicacion; correoEnviado: boolean };
-        this.publications.update((items) => items.map((item) =>
-          item.id === publication.id ? result.publicacion : item,
-        ));
+        this.publications.update((items) =>
+          items.map((item) => (item.id === publication.id ? result.publicacion : item)),
+        );
         this.bajaId.set(null);
         if (!result.correoEnviado) {
-          this.error.set('La publicación fue desactivada, pero no se pudo enviar el correo. Podés repetir la baja para reintentar el aviso.');
+          this.error.set(
+            'La publicación fue desactivada, pero no se pudo enviar el correo. Podés repetir la baja para reintentar el aviso.',
+          );
         }
       },
       'Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.',
@@ -176,15 +181,29 @@ export class AdminComponent {
   }
 
   protected registrarPago(settlement: AdminSettlement): void {
-    const referencia = window.prompt('Referencia o comprobante de la transferencia manual:')?.trim();
+    const referencia = window
+      .prompt('Referencia o comprobante de la transferencia manual:')
+      ?.trim();
     if (referencia === undefined) return;
-    this.resolverSettlement(settlement, 'PAGADO_PROPIETARIO', referencia, 'Transferencia manual al propietario registrada');
+    this.resolverSettlement(
+      settlement,
+      'PAGADO_PROPIETARIO',
+      referencia,
+      'Transferencia manual al propietario registrada',
+    );
   }
 
   protected registrarDevolucion(settlement: AdminSettlement): void {
-    const referencia = window.prompt('Referencia o comprobante de la devolución manual al inquilino:')?.trim();
+    const referencia = window
+      .prompt('Referencia o comprobante de la devolución manual al inquilino:')
+      ?.trim();
     if (referencia === undefined) return;
-    this.resolverSettlement(settlement, 'DEVUELTO_INQUILINO', referencia, 'Devolución manual al inquilino registrada');
+    this.resolverSettlement(
+      settlement,
+      'DEVUELTO_INQUILINO',
+      referencia,
+      'Devolución manual al inquilino registrada',
+    );
   }
 
   protected resolverReclamo(settlement: AdminSettlement): void {
@@ -200,12 +219,21 @@ export class AdminComponent {
   }
 
   protected nombreInquilino(settlement: AdminSettlement): string {
-    return [settlement.usuario_nombre ?? settlement.usuario?.nombre, settlement.usuario_apellido ?? settlement.usuario?.apellido]
-      .filter(Boolean).join(' ') || 'Inquilino eliminado';
+    return (
+      [
+        settlement.usuario_nombre ?? settlement.usuario?.nombre,
+        settlement.usuario_apellido ?? settlement.usuario?.apellido,
+      ]
+        .filter(Boolean)
+        .join(' ') || 'Inquilino eliminado'
+    );
   }
 
   protected montoLiquidacion(settlement: AdminSettlement): string {
-    return Number(settlement.monto_pago).toLocaleString('es-AR', { style: 'currency', currency: 'ARS' });
+    return Number(settlement.monto_pago).toLocaleString('es-AR', {
+      style: 'currency',
+      currency: settlement.moneda_contratada ?? 'ARS',
+    });
   }
 
   private resolverSettlement(
@@ -225,7 +253,9 @@ export class AdminComponent {
     const bloquear = !user.bloqueado;
     // El motivo viaja al backend y se incluye en el correo de bloqueo. Cancelar
     // el cuadro evita cambiar el estado por accidente.
-    const motivo = bloquear ? window.prompt(`Motivo del bloqueo para ${user.nombre} ${user.apellido}:`) : undefined;
+    const motivo = bloquear
+      ? window.prompt(`Motivo del bloqueo para ${user.nombre} ${user.apellido}:`)
+      : undefined;
     if (bloquear && motivo === null) return;
     this.run(
       `user-${user.id}`,
@@ -378,12 +408,10 @@ export class AdminComponent {
   }
   protected selectProvince(id: number): void {
     this.selectedProvince.set(id);
-    this.api
-      .listarCiudades(id)
-      .subscribe({
-        next: (v) => this.cities.set(v),
-        error: (e: Error) => this.error.set(e.message),
-      });
+    this.api.listarCiudades(id).subscribe({
+      next: (v) => this.cities.set(v),
+      error: (e: Error) => this.error.set(e.message),
+    });
   }
   protected addProvince(): void {
     const n = (this.newValues['province'] || '').trim();

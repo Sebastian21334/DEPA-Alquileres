@@ -1,12 +1,9 @@
-import { IsDateString, IsInt } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
 
-export class CrearCheckoutDto {
-  @IsInt()
-  id_publicacion: number;
-
-  @IsDateString()
-  fecha_inicio: string;
-
-  @IsDateString()
-  fecha_fin: string;
+export class CrearCheckoutDto extends CrearReservaDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(8192)
+  presupuesto_token?: string;
 }

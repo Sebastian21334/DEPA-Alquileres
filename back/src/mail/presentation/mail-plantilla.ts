@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { ReservaEmailDetalle } from '../mail.interface';
+import type {
+  ConversionEmailDetalle,
+  ReservaEmailDetalle,
+} from '../mail.interface';
 
 @Injectable()
 export class MailPlantilla {
@@ -18,12 +21,21 @@ export class MailPlantilla {
       .replaceAll("'", '&#39;');
   }
 
-  importe(valor: number, moneda: string): string {
-    const codigo = moneda.includes('USD') ? 'USD' : 'ARS';
+  importe(valor: number, moneda: string, decimales = 2): string {
+    const codigo = moneda === 'USD' || moneda.includes('USD') ? 'USD' : 'ARS';
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
       currency: codigo,
+      maximumFractionDigits: decimales,
     }).format(valor);
+  }
+
+  conversion(detalle?: ConversionEmailDetalle): string {
+    if (!detalle) return '';
+    return `<p><strong>Precio publicado:</strong> ${this.importe(detalle.importeOrigen, detalle.monedaOrigen)}.
+      Conversión aceptada a dólar blue venta: ${this.importe(detalle.cotizacionVenta, 'ARS', 6)} por USD.
+      Fuente: ${this.escapar(detalle.proveedor)}, publicada ${this.escapar(detalle.fechaFuente)}.
+      El importe pagado en pesos conserva la cotización aceptada al reservar.</p>`;
   }
 
   detalleReserva(detalle: ReservaEmailDetalle): string {
@@ -34,7 +46,7 @@ export class MailPlantilla {
       <tr><td style="padding:10px 16px;color:#667085">Salida</td><td style="padding:10px 16px;text-align:right;font-weight:600">${this.fecha(detalle.fechaFin)}</td></tr>
       <tr><td style="padding:10px 16px;color:#667085">Duración</td><td style="padding:10px 16px;text-align:right;font-weight:600">${detalle.cantidadDias} ${detalle.cantidadDias === 1 ? 'día' : 'días'}</td></tr>
       <tr><td style="padding:12px 16px;border-top:1px solid #e5e7eb;font-weight:700">Total pagado</td><td style="padding:12px 16px;border-top:1px solid #e5e7eb;text-align:right;font-size:18px;font-weight:800;color:#d94217">${this.importe(detalle.monto, detalle.moneda)}</td></tr>
-    </table>`;
+    </table>${this.conversion(detalle.conversion)}`;
   }
 
   avisoContacto(): string {

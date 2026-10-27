@@ -1,4 +1,13 @@
+export interface ConversionEmailDetalle {
+  importeOrigen: number;
+  monedaOrigen: string;
+  cotizacionVenta: number;
+  fechaFuente: string;
+  proveedor: string;
+}
+
 export interface ReservaEmailDetalle {
+  conversion?: ConversionEmailDetalle;
   idReserva: number;
   nombreDestinatario: string;
   titulo: string;
@@ -14,6 +23,7 @@ export interface ReservaEmailDetalle {
 }
 
 export interface ReprogramacionEmailDetalle {
+  conversion?: ConversionEmailDetalle;
   idReserva: number;
   nombreAnunciante: string;
   nombreInquilino: string;
