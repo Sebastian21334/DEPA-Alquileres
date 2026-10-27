@@ -7,7 +7,7 @@
 | **Alcance** | `back/` (NestJS) y `front/` (Angular) |
 | **Referencia** | *Diseño de Software Orientado a Objetos — Principios de diseño*, Judith Meles (PDF 2026) |
 | **Violaciones encontradas** | **39** (9 altas · 20 medias · 10 bajas) |
-| **Estado** | **3 resueltas** (01, 06 y 07, rama `fix/principios-diseno-01-06-07`, commit `903f7d0`) · 36 pendientes |
+| **Estado** | **6 resueltas** en la rama `fix/principios-diseno-01-06-07`: 01, 06 y 07 (commit `903f7d0`); 02, 13 y 14 (commit `07006c6`) · 33 pendientes |
 
 ## Cómo leer este informe
 
@@ -60,7 +60,7 @@ El back ya tiene un test de arquitectura ([back/test/arquitectura.spec.ts](back/
 | ID | Título | Principio(s) | Capa | Severidad | Estado |
 |---|---|---|---|---|---|
 | 01 | Los errores HTTP pierden el mensaje del back y el código 409 | SoC, DRY, Menor asombro | Front | Alta | **Resuelto** |
-| 02 | Modelo de dominio anémico: 21 entidades sin comportamiento | Tell don't ask, SRP | Back | Alta | Pendiente |
+| 02 | Modelo de dominio anémico: 21 entidades sin comportamiento | Tell don't ask, SRP | Back | Alta | **Resuelto** |
 | 03 | `ReservasService.crearPendiente`: 195 líneas, 7 responsabilidades | SRP, Métodos cortos, KISS | Back | Alta | Pendiente |
 | 04 | `ReservasService.actualizarFechas`: 172 líneas, 6 responsabilidades | SRP, Métodos cortos | Back | Alta | Pendiente |
 | 05 | Reglas de reserva duplicadas entre presupuesto y reserva | DRY | Back | Alta | Pendiente |
@@ -71,8 +71,8 @@ El back ya tiene un test de arquitectura ([back/test/arquitectura.spec.ts](back/
 | 10 | Dependencias circulares entre módulos y repositorio concreto creado con `new` | DIP | Back | Media | Pendiente |
 | 11 | Catálogos: cinco CRUD copiados y un repositorio de 30 métodos | DRY, ISP, SRP | Back | Media | Pendiente |
 | 12 | `IMailService`: interfaz de 11 métodos que crece con cada notificación | ISP, OCP, SoC | Back | Media | Pendiente |
-| 13 | El chequeo de "dueño de la publicación" se repite 11 veces | DRY, Tell don't ask | Back | Media | Pendiente |
-| 14 | Cadenas de navegación entre objetos | Ley de Demeter | Back | Media | Pendiente |
+| 13 | El chequeo de "dueño de la publicación" se repite 11 veces | DRY, Tell don't ask | Back | Media | **Resuelto** |
+| 14 | Cadenas de navegación entre objetos | Ley de Demeter | Back | Media | **Resuelto** |
 | 15 | `sharp` y `bcrypt` se usan directamente en servicios de negocio | DIP, DRY | Back | Media | Pendiente |
 | 16 | `UsuariosService` tiene cinco razones de cambio | SRP | Back | Media | Pendiente |
 | 17 | `AnunciantesService` tiene varias razones de cambio | SRP | Back | Media | Pendiente |
@@ -129,7 +129,7 @@ El back ya tiene un test de arquitectura ([back/test/arquitectura.spec.ts](back/
 
 ### 02 — Modelo de dominio anémico: 21 entidades sin comportamiento
 
-**Principios:** Tell, don't ask · SRP (distribución de responsabilidades) — **Capa:** Back — **Severidad:** Alta
+**Principios:** Tell, don't ask · SRP (distribución de responsabilidades) — **Capa:** Back — **Severidad:** Alta — **Estado:** Resuelto
 
 **Dónde:** todas las entidades en `back/src/*/entity/` tienen cero métodos. Los servicios preguntan por el estado y lo modifican campo por campo (85 asignaciones). Algunos ejemplos:
 - Confirmar un pago asigna 8 campos: [reservas.service.ts:259-267](back/src/reservas/service/reservas.service.ts#L259).
@@ -141,6 +141,18 @@ El back ya tiene un test de arquitectura ([back/test/arquitectura.spec.ts](back/
 **Por qué viola el principio:** el PDF pide "decirle a los objetos que hagan cosas" y definir un objeto por su comportamiento. Acá las reglas de cada estado (qué transición es válida, qué campos cambian juntos) están dispersas en los servicios, así que una regla nueva obliga a encontrar todos los lugares donde se modifica el estado.
 
 **Propuesta:** mover las transiciones a las entidades. Por ejemplo `reserva.confirmarPago(fecha)`, `reserva.cancelar()`, `reserva.estaConfirmada()`, `reserva.registrarIntentoCodigo(codigo)`, `solicitud.aprobar()`, `solicitud.rechazar(motivo)`, `fecha.ocuparPor(idReserva)` y `fecha.liberar()`.
+
+**Cómo se resolvió** (commit `07006c6`):
+- Las entidades con estado ahora tienen su comportamiento:
+  - [`Reserva`](back/src/reservas/entity/reserva.entity.ts): `confirmarPago`, `cerrarSinPago`, `cancelar`, `finalizar`, `reprogramar`, `registrarIntentoCodigo`, `reportarProblema`, `resolverLiquidacion` y las consultas `estaConfirmada`, `pagoAprobado`, `codigoBloqueado` y `liquidacionResuelta`.
+  - [`Fecha`](back/src/disponibilidad/entity/fecha.entity.ts): `ocuparPor`, `liberar`, `estaLibre` y `puedeOcuparla`.
+  - [`SolicitudVerificacion`](back/src/anunciantes/entity/solicitud-verificacion.entity.ts): `presentarDocumentos`, `aprobar`, `rechazar` y `estaPendienteDeRevision`.
+  - [`Publicacion`](back/src/publicaciones/entity/publicacion.entity.ts) (`activar`, `darDeBaja`, `modificar`), `Anunciante`, `Usuario` (perfil, bloqueo, foto, rol y tokens) y `Pago` (`registrarResultado`, `importeCoincide`).
+- Los servicios validan permisos, eligen el mensaje de error y orquestan, pero ya no modifican campos de las entidades. Con el mismo escaneo, las asignaciones directas a campos desde servicios pasaron de **104 a 0**. La única que queda es un contador de un DTO de respuesta (`ConversacionResumen`), no de una entidad.
+- **9 de 21** entidades tienen comportamiento. Las otras 12 son catálogos (rol, monedas, tipos), ubicaciones o registros históricos (cotizaciones, mensajes, favoritos, revisiones, reprogramaciones): ningún servicio les cambia el estado, así que no necesitan métodos.
+- El repositorio de publicaciones copiaba las entidades con *spread*, y esa copia perdía los métodos. Ahora usa `Object.assign` y conserva la instancia.
+- **Fuera de alcance:** el alta de la reserva con 35 campos sigue en `crearPendiente`. La fábrica `Reserva.crearPendiente(...)` corresponde a `03`.
+- **Tests:** se agregaron tests de las reglas de `Reserva`, `Fecha`, `SolicitudVerificacion` y `Publicacion`. Los tests que armaban entidades como objetos planos ahora usan instancias. La suite de PostgreSQL sigue sin ejecutarse en esta PC.
 
 ---
 
@@ -353,7 +365,7 @@ Además ya divergieron: el presupuesto rechaza fechas pasadas con validación de
 
 ### 13 — El chequeo de "dueño de la publicación" se repite 11 veces
 
-**Principios:** DRY · Tell, don't ask — **Capa:** Back — **Severidad:** Media
+**Principios:** DRY · Tell, don't ask — **Capa:** Back — **Severidad:** Media — **Estado:** Resuelto
 
 **Dónde:** `publicacion.anunciante.idUsuario !== idUsuario` aparece en:
 - [disponibilidad.service.ts:50](back/src/disponibilidad/service/disponibilidad.service.ts#L50)
@@ -365,11 +377,21 @@ Además ya divergieron: el presupuesto rechaza fechas pasadas con validación de
 
 **Propuesta:** `publicacion.perteneceA(idUsuario)` en la entidad (ver `02`) y un único `PublicacionesService.obtenerPropia(id, idUsuario)` que lance el 403.
 
+**Cómo se resolvió** (commit `07006c6`):
+- La regla vive solo en [`Publicacion.perteneceA()`](back/src/publicaciones/entity/publicacion.entity.ts). [`PublicacionesService.obtenerPropia()`](back/src/publicaciones/service/publicaciones.service.ts) es el único que lanza el 403 (404 si no existe). Cada caso de uso le pasa su mensaje, así que los textos que ve el usuario no cambiaron.
+- De los 11 lugares:
+  - 5 usan `obtenerPropia`: modificar y eliminar la publicación, subir imágenes, calendario y reservas de una publicación.
+  - 2 usan `perteneceA`: "no podés reservar tu propia publicación" en reservas y presupuestos.
+  - 3 sobre reservas usan `reserva.esDelAnunciante()` o `reserva.participa()`.
+  - Borrar una imagen usa `imagen.perteneceA()`.
+  - El chat de mensajes también usa `perteneceA`.
+- **Tests:** el test de arquitectura ahora falla si algún archivo fuera de `Publicacion` vuelve a comparar `anunciante.idUsuario` a mano. El test de disponibilidad usa el `PublicacionesService` real en lugar de un mock.
+
 ---
 
 ### 14 — Cadenas de navegación entre objetos
 
-**Principios:** Ley de Demeter ("hablá solo con tus amigos inmediatos") — **Capa:** Back — **Severidad:** Media
+**Principios:** Ley de Demeter ("hablá solo con tus amigos inmediatos") — **Capa:** Back — **Severidad:** Media — **Estado:** Resuelto
 
 **Dónde:** hay 13 cadenas de tres o más saltos. Por ejemplo:
 - `reserva.publicacion?.anunciante?.idUsuario` ([reservas.service.ts:376](back/src/reservas/service/reservas.service.ts#L376))
@@ -383,6 +405,15 @@ Además ya divergieron: el presupuesto rechaza fechas pasadas con validación de
 **Por qué viola el principio:** los servicios conocen la estructura interna del grafo de entidades, así que cualquier cambio en las relaciones rompe código alejado.
 
 **Propuesta:** exponer métodos que respondan la pregunta directamente, como `reserva.esDelAnunciante(id)`, `publicacion.emailDelAnunciante()` o `solicitud.nombreSolicitante()` (va junto con `02` y `13`).
+
+**Cómo se resolvió** (commit `07006c6`):
+- Cada entidad responde sobre sus relaciones y delega en la siguiente:
+  - `Reserva`: `esDelAnunciante`, `emailDelAnunciante`, `nombreDelAnunciante` y `nombreInquilino`.
+  - `Publicacion`: `emailDelAnunciante`, `telefonoDelAnunciante`, `direccionCompleta` y `nombreMoneda`.
+  - `SolicitudVerificacion`: `nombreSolicitante` y `emailSolicitante`.
+  - `Anunciante` y `Usuario`: `nombreCompleto`.
+- Con el mismo escaneo, las cadenas de 3 o más saltos en servicios, controladores y guards pasaron de **13 a 0**.
+- De paso, el armado de "nombre y apellido" quedó en `Usuario.nombreCompleto()` en lugar de repetirse en reservas, notificaciones y mensajes.
 
 ---
 
@@ -608,6 +639,8 @@ Renombrar el rol en el panel de catálogos (que lo permite) dejaría a todos sin
 
 **Propuesta:** constantes con nombre en un archivo de reglas por módulo (por ejemplo `reservas.constantes.ts`), y un tipo `Moneda` compartido.
 
+**Avance parcial** (al resolver `02`): el límite de intentos de código ahora es `Reserva.MAX_INTENTOS_CODIGO`. La tolerancia de importes de `pagos.service.ts` ahora vive en `Pago` (`importeCoincide`), pero `reservas.service.ts` sigue usando `0.009`. Quedan los demás números.
+
 ---
 
 ### 31 — Armado del detalle de correos y `eliminarSeguro` duplicados
@@ -735,4 +768,4 @@ Renombrar el rol en el panel de catálogos (que lo permite) dejaría a todos sin
 
 Decime qué IDs querés que resuelva (por ejemplo "01, 06 y 07") y, si querés, cómo. Si no me indicás un enfoque, uso la propuesta de cada entrada.
 
-**01**, **06** y **07**, que producían fallas visibles, ya están resueltas en la rama `fix/principios-diseno-01-06-07`. Sugerencia para seguir: **02** + **13** + **14**, porque se resuelven juntos al darles comportamiento a las entidades. `Modalidad` ya tiene un primer método (ver `06`).
+Ya están resueltas en la rama `fix/principios-diseno-01-06-07`: **01**, **06** y **07** (fallas visibles) y **02**, **13** y **14** (comportamiento en las entidades). Sugerencia para seguir: **03** + **05** (y después **04**). Ahora que `Reserva` tiene comportamiento, se pueden extraer la fábrica `Reserva.crearPendiente(...)` y las reglas compartidas de presupuesto y reserva.
