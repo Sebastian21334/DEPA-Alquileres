@@ -72,7 +72,7 @@ export class PresupuestosService {
     );
     if (!publicacion.activa || !admiteReservaPorFecha(publicacion.modalidad))
       throw new BadRequestException('Esta publicación no admite reservas');
-    if (publicacion.anunciante?.idUsuario === idUsuario)
+    if (publicacion.perteneceA(idUsuario))
       throw new BadRequestException('No podés reservar tu propia publicación');
     const dias = Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
     let moneda: 'ARS' | 'USD', unitario: bigint, origen: string;

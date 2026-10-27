@@ -4,6 +4,10 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { DisponibilidadService } from './disponibilidad.service';
 import { FECHA_REPOSITORY } from '../repository/fecha.repository.interface';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
+import { PUBLICACIONES_REPOSITORY } from '../../publicaciones/repository/publicaciones.repository.interface';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
+import { UbicacionService } from '../../ubicacion/service/ubicacion.service';
+import { MAIL_SERVICE } from '../../mail/mail.interface';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { Fecha } from '../entity/fecha.entity';
@@ -20,7 +24,9 @@ describe('DisponibilidadService', () => {
     guardar: jest.fn(),
     eliminar: jest.fn(),
   };
-  const publicaciones = { buscarPorId: jest.fn<() => Promise<Publicacion>>() };
+  const publicaciones = {
+    buscarPorId: jest.fn<() => Promise<Publicacion | null>>(),
+  };
 
   beforeEach(async () => {
     jest.resetAllMocks();
@@ -40,7 +46,12 @@ describe('DisponibilidadService', () => {
       providers: [
         DisponibilidadService,
         { provide: FECHA_REPOSITORY, useValue: repo },
-        { provide: PublicacionesService, useValue: publicaciones },
+        // El servicio real aplica la regla de propiedad; solo se simula su repositorio.
+        PublicacionesService,
+        { provide: PUBLICACIONES_REPOSITORY, useValue: publicaciones },
+        { provide: CatalogosService, useValue: {} },
+        { provide: UbicacionService, useValue: {} },
+        { provide: MAIL_SERVICE, useValue: {} },
         {
           provide: TRANSACCION_CALENDARIO,
           useValue: {

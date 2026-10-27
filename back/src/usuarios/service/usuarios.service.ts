@@ -66,18 +66,19 @@ export class UsuariosService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    if (dto.email) {
-      const email = dto.email.trim().toLowerCase();
+    const email = dto.email ? dto.email.trim().toLowerCase() : undefined;
+    if (email) {
       const usuarioConEmail = await this.usuariosRepo.buscarPorEmail(email);
       if (usuarioConEmail && usuarioConEmail.id !== idUsuario) {
         throw new ConflictException('El email ya está registrado');
       }
-      usuario.email = email;
     }
-
-    if (dto.nombre !== undefined) usuario.nombre = dto.nombre.trim();
-    if (dto.apellido !== undefined) usuario.apellido = dto.apellido.trim();
-    if (dto.telefono !== undefined) usuario.telefono = dto.telefono.trim();
+    usuario.actualizarDatosPersonales({
+      email,
+      nombre: dto.nombre,
+      apellido: dto.apellido,
+      telefono: dto.telefono,
+    });
 
     const usuarioActualizado = await this.usuariosRepo.guardar(usuario);
     return this.usuarioSinSecretos(usuarioActualizado);
@@ -118,7 +119,7 @@ export class UsuariosService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    usuario.bloqueado = bloqueado;
+    usuario.cambiarBloqueo(bloqueado);
     await this.usuariosRepo.guardar(usuario);
 
     try {
@@ -178,8 +179,7 @@ export class UsuariosService {
       'image/jpeg',
     );
 
-    const anterior = usuario.foto_url;
-    usuario.foto_url = url;
+    const anterior = usuario.cambiarFoto(url);
     const actualizado = await this.usuariosRepo.guardar(usuario);
     await this.borrarFotoAnterior(anterior);
     return this.usuarioSinSecretos(actualizado);
@@ -191,8 +191,7 @@ export class UsuariosService {
     if (!usuario) {
       throw new NotFoundException('Usuario no encontrado');
     }
-    const anterior = usuario.foto_url;
-    usuario.foto_url = null;
+    const anterior = usuario.cambiarFoto(null);
     const actualizado = await this.usuariosRepo.guardar(usuario);
     await this.borrarFotoAnterior(anterior);
     return this.usuarioSinSecretos(actualizado);
@@ -294,13 +293,13 @@ export class UsuariosService {
       throw new NotFoundException(`El rol '${nombreRolNuevo}' no existe`);
     }
 
-    if (usuario.rol.id === rolNuevo.id) {
+    if (usuario.tieneRol(rolNuevo)) {
       throw new ConflictException(
         `El usuario ya tiene el rol '${nombreRolNuevo}'`,
       );
     }
 
-    usuario.rol = rolNuevo;
+    usuario.asignarRol(rolNuevo);
     const usuarioActualizado = await this.usuariosRepo.guardar(usuario);
     return this.usuarioSinSecretos(usuarioActualizado);
   }
@@ -308,8 +307,7 @@ export class UsuariosService {
   /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */
   async generarTokenVerificacion(usuario: Usuario): Promise<string> {
     const token = crypto.randomBytes(32).toString('hex');
-    usuario.token_verificacion = token;
-    usuario.email_verificado = false;
+    usuario.iniciarVerificacionEmail(token);
     await this.usuariosRepo.guardar(usuario);
     return token;
   }
@@ -321,8 +319,7 @@ export class UsuariosService {
       throw new BadRequestException('Token de verificación inválido');
     }
 
-    usuario.email_verificado = true;
-    usuario.token_verificacion = null;
+    usuario.confirmarEmail();
     await this.usuariosRepo.guardar(usuario);
   }
 
@@ -337,8 +334,7 @@ export class UsuariosService {
     if (!usuario) return null;
 
     const token = crypto.randomBytes(32).toString('hex');
-    usuario.token_recuperacion = token;
-    usuario.token_recuperacion_expira = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
+    usuario.iniciarRecuperacion(token, new Date(Date.now() + 60 * 60 * 1000)); // 1 hora
     await this.usuariosRepo.guardar(usuario);
 
     return { token, usuario };
@@ -351,20 +347,14 @@ export class UsuariosService {
   ): Promise<void> {
     const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
 
-    if (
-      !usuario ||
-      !usuario.token_recuperacion_expira ||
-      usuario.token_recuperacion_expira < new Date()
-    ) {
+    if (!usuario?.recuperacionVigente()) {
       throw new BadRequestException('Token inválido o expirado');
     }
 
     const rounds = Number(
       this.configService.get<string>('BCRYPT_COST') ?? '12',
     );
-    usuario.contrasenia = await bcrypt.hash(nuevaContrasenia, rounds);
-    usuario.token_recuperacion = null;
-    usuario.token_recuperacion_expira = null;
+    usuario.cambiarContrasenia(await bcrypt.hash(nuevaContrasenia, rounds));
     await this.usuariosRepo.guardar(usuario);
   }
 }

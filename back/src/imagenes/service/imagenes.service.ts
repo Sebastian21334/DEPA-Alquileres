@@ -31,14 +31,11 @@ export class ImagenesService {
     anuncianteQueOpera: Anunciante,
     archivo: ArchivoSubido,
   ) {
-    const publicacion =
-      await this.publicacionesService.buscarPorId(idPublicacion);
-
-    if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
-      throw new ForbiddenException(
-        'No podés subir imágenes a una publicación que no es tuya',
-      );
-    }
+    const publicacion = await this.publicacionesService.obtenerPropia(
+      idPublicacion,
+      anuncianteQueOpera.idUsuario,
+      'No podés subir imágenes a una publicación que no es tuya',
+    );
 
     // Validar el contenido real evita aceptar archivos disfrazados con un mimetype de imagen.
     let bufferProcesado: Buffer;
@@ -75,9 +72,7 @@ export class ImagenesService {
     const imagen = await this.imagenesRepo.buscarPorId(idImagen);
     if (!imagen) throw new NotFoundException('Imagen no encontrada');
 
-    if (
-      imagen.publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario
-    ) {
+    if (!imagen.perteneceA(anuncianteQueOpera.idUsuario)) {
       throw new ForbiddenException(
         'No podés eliminar una imagen que no es tuya',
       );

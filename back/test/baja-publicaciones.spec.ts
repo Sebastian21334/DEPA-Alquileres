@@ -12,6 +12,7 @@ import { JwtAuthGuard } from '../src/common/guards/jwt-auth.guard';
 import { AnuncianteGuard } from '../src/common/guards/anunciante.guard';
 import { Publicacion } from '../src/publicaciones/entity/publicacion.entity';
 import { Anunciante } from '../src/anunciantes/entity/anunciante.entity';
+import { Usuario } from '../src/usuarios/entity/usuario.entity';
 
 describe('Baja administrativa de publicaciones', () => {
   let app: INestApplication;
@@ -56,10 +57,12 @@ describe('Baja administrativa de publicaciones', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
-    publicacion = {
+    publicacion = Object.assign(new Publicacion(), {
       id: 10, titulo: 'Casa', activa: true, motivo_baja_admin: null,
-      anunciante: { idUsuario: 7, usuario: { email: 'dueno@gmail.com' } },
-    } as Publicacion;
+      anunciante: Object.assign(new Anunciante(), {
+        idUsuario: 7, usuario: Object.assign(new Usuario(), { email: 'dueno@gmail.com' }),
+      }),
+    });
     repo.buscarPorId.mockResolvedValue(publicacion);
     repo.buscarTodas.mockResolvedValue([publicacion]);
     repo.darDeBaja.mockResolvedValue(undefined);

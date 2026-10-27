@@ -23,4 +23,8 @@ export class Imagen {
   })
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Relation<Publicacion>;
+
+  perteneceA(idUsuario: number): boolean {
+    return this.publicacion?.perteneceA(idUsuario) ?? false;
+  }
 }

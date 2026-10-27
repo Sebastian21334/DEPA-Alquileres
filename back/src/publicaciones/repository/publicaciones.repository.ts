@@ -224,8 +224,13 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     );
     const datos = filas.flatMap((fila) => {
       const publicacion = porId.get(Number(fila.id));
+      // Object.assign conserva la instancia (y sus métodos); un spread la copiaría como objeto plano.
       return publicacion
-        ? [{ ...publicacion, cantidad_reservas: Number(fila.cantidadReservas) }]
+        ? [
+            Object.assign(publicacion, {
+              cantidad_reservas: Number(fila.cantidadReservas),
+            }),
+          ]
         : [];
     });
 

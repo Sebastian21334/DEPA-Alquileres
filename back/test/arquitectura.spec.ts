@@ -72,6 +72,35 @@ describe('Límites de la arquitectura de tres capas', () => {
     expect(violaciones).toEqual([]);
   });
 
+  it('decide si una publicación es del usuario solo en la entidad Publicacion', () => {
+    const violaciones: string[] = [];
+    for (const archivo of archivos(raiz)) {
+      const ruta = relative(raiz, archivo).replaceAll('\\', '/');
+      if (ruta === 'publicaciones/entity/publicacion.entity.ts') continue;
+      const fuente = ts.createSourceFile(
+        archivo,
+        readFileSync(archivo, 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      );
+      const visitar = (nodo: ts.Node): void => {
+        if (
+          ts.isBinaryExpression(nodo) &&
+          [
+            ts.SyntaxKind.EqualsEqualsEqualsToken,
+            ts.SyntaxKind.ExclamationEqualsEqualsToken,
+          ].includes(nodo.operatorToken.kind) &&
+          /anunciante\??\.(idUsuario|usuario\??\.id)\b/.test(nodo.getText())
+        )
+          violaciones.push(`${ruta}: ${nodo.getText()}`);
+        ts.forEachChild(nodo, visitar);
+      };
+      visitar(fuente);
+    }
+    // Usar publicacion.perteneceA() o PublicacionesService.obtenerPropia().
+    expect(violaciones).toEqual([]);
+  });
+
   it('no permite tipos any explícitos en el código de producción', () => {
     const violaciones: string[] = [];
     for (const archivo of archivos(raiz)) {

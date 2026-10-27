@@ -66,21 +66,10 @@ export class ReservaNotificacionesService {
     const cantidadDias =
       Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) +
       1;
-    const nombreInquilino =
-      `${reserva.usuario_nombre ?? ''} ${reserva.usuario_apellido ?? ''}`.trim();
-    const anunciante = reserva.publicacion?.anunciante;
-    const usuarioAnunciante = anunciante?.usuario;
-    const emailAnunciante = usuarioAnunciante?.email;
-    const nombreAnunciante =
-      `${usuarioAnunciante?.nombre ?? ''} ${usuarioAnunciante?.apellido ?? ''}`.trim() ||
-      'Anfitrión';
-    const direccion = [
-      reserva.publicacion?.direccion,
-      reserva.publicacion?.ciudad?.nombre,
-      reserva.publicacion?.provincia?.nombre,
-    ]
-      .filter(Boolean)
-      .join(', ');
+    const nombreInquilino = reserva.nombreInquilino();
+    const emailAnunciante = reserva.emailDelAnunciante();
+    const nombreAnunciante = reserva.nombreDelAnunciante() || 'Anfitrión';
+    const direccion = reserva.publicacion?.direccionCompleta() ?? '';
     const datosComunes = {
       conversion:
         reserva.cotizacion_dolar &&
@@ -105,14 +94,14 @@ export class ReservaNotificacionesService {
       monto: Number(reserva.monto_pago),
       moneda:
         reserva.moneda_contratada ??
-        reserva.publicacion?.tipoMoneda?.nombre ??
+        reserva.publicacion?.nombreMoneda() ??
         'ARS',
     };
     const notificaciones = [
       ...(reserva.usuario_email && !reserva.email_confirmacion_inquilino_enviado
         ? [
             {
-              tipo: 'inquilino',
+              tipo: 'inquilino' as const,
               enviar: () =>
                 this.mailService.enviarReservaConfirmada(
                   reserva.usuario_email!,
@@ -120,10 +109,9 @@ export class ReservaNotificacionesService {
                     ...datosComunes,
                     nombreDestinatario: nombreInquilino || 'Huésped',
                     nombreContraparte: nombreAnunciante,
-                    emailContraparte: usuarioAnunciante?.email,
+                    emailContraparte: emailAnunciante,
                     telefonoContraparte:
-                      anunciante?.numero_contacto ??
-                      usuarioAnunciante?.telefono,
+                      reserva.publicacion?.telefonoDelAnunciante(),
                   },
                 ),
             },
@@ -132,7 +120,7 @@ export class ReservaNotificacionesService {
       ...(emailAnunciante && !reserva.email_nueva_reserva_anunciante_enviado
         ? [
             {
-              tipo: 'anunciante',
+              tipo: 'anunciante' as const,
               enviar: () =>
                 this.mailService.enviarNuevaReserva(emailAnunciante, {
                   ...datosComunes,
@@ -160,11 +148,7 @@ export class ReservaNotificacionesService {
         return;
       }
       huboCambios = true;
-      if (notificaciones[indice].tipo === 'inquilino') {
-        reserva.email_confirmacion_inquilino_enviado = true;
-      } else {
-        reserva.email_nueva_reserva_anunciante_enviado = true;
-      }
+      reserva.marcarAvisoEnviado(notificaciones[indice].tipo);
     });
     if (huboCambios)
       await this.reservaRepository.registrarNotificaciones(reserva.id, {
