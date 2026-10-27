@@ -12,6 +12,8 @@ import { AvailabilityService, FechaDisponible } from '../../shared/services/avai
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
+import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
+import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo } from '../../shared/utils/reservation-state';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -27,6 +29,9 @@ export class MisReservasComponent {
   private readonly calendarioApi = inject(AvailabilityService);
   private readonly destroyRef = inject(DestroyRef);
   private consultaCalendario?: Subscription;
+  private consultaReservas?: Subscription;
+  protected readonly estadiaActiva = estadiaActiva;
+  protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
@@ -86,19 +91,32 @@ export class MisReservasComponent {
     }
 
     this.cargarReservas();
+    activarActualizacionReservas(() => {
+      if (this.ocupada() === null) this.cargarReservas(true);
+    });
   }
 
-  private cargarReservas(): void {
-    forkJoin({
+  private cargarReservas(silenciosa = false): void {
+    this.consultaReservas?.unsubscribe();
+    this.consultaReservas = forkJoin({
       propias: this.reservasApi.mine(),
       recibidas: this.reservasApi.received(),
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ propias, recibidas }) => {
         this.propias.set(propias);
         this.recibidas.set(recibidas);
+        this.codigos.update((codigos) => Object.fromEntries(
+          Object.entries(codigos).filter(([id]) => propias.some((r) => r.id === +id && puedeConsultarCodigo(r))),
+        ));
+        const editada = this.editando();
+        if (editada) {
+          const vigente = propias.find((r) => r.id === editada.id);
+          if (!vigente || !this.puedeReprogramar(vigente)) this.cerrarReprogramacion();
+        }
         this.cargando.set(false);
       },
       error: (err: ApiError) => {
+        if (silenciosa) return;
         this.error.set(err.message);
         this.cargando.set(false);
       },
@@ -109,6 +127,8 @@ export class MisReservasComponent {
     return (
       !reserva.cancelada &&
       !reserva.finalizada &&
+      reserva.estado_estadia === 'CONFIRMADA' &&
+      !reserva.codigo_validado_en &&
       reserva.estado_pago === 'APROBADO' &&
       !!reserva.publicacion &&
       !!reserva.fecha_inicio &&
@@ -122,12 +142,9 @@ export class MisReservasComponent {
   }
 
   protected hoy(): string {
-    const fecha = new Date();
-    return [
-      fecha.getFullYear(),
-      String(fecha.getMonth() + 1).padStart(2, '0'),
-      String(fecha.getDate()).padStart(2, '0'),
-    ].join('-');
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
   }
 
   protected abrirReprogramacion(reserva: Reserva): void {
@@ -168,7 +185,7 @@ export class MisReservasComponent {
   protected confirmarReprogramacion(): void {
     const reserva = this.editando();
     if (
-      !reserva ||
+      !reserva || !this.puedeReprogramar(reserva) ||
       !this.rangoDisponible() ||
       this.inicioNuevo() === reserva.fecha_inicio ||
       this.ocupada() !== null
@@ -176,7 +193,7 @@ export class MisReservasComponent {
       return;
     this.error.set('');
     this.mensaje.set('');
-    this.ocupada.set(reserva.id);
+    this.iniciarOperacion(reserva.id);
     this.reservasApi
       .reschedule(reserva.id, this.inicioNuevo(), this.finNuevo())
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -210,7 +227,7 @@ export class MisReservasComponent {
     if (this.ocupada() !== null) return;
     this.error.set('');
     this.mensaje.set('');
-    this.ocupada.set(reserva.id);
+    this.iniciarOperacion(reserva.id);
     this.reservasApi
       .retryRescheduleNotice(reserva.id, cambio.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -234,8 +251,8 @@ export class MisReservasComponent {
   }
 
   protected cancelar(reserva: Reserva): void {
-    this.ocupada.set(reserva.id);
-    this.reservasApi.cancel(reserva.id).subscribe({
+    this.iniciarOperacion(reserva.id);
+    this.reservasApi.cancel(reserva.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (actualizada) => this.reemplazar(actualizada),
       error: (err: ApiError) => {
         this.error.set(err.message);
@@ -245,8 +262,8 @@ export class MisReservasComponent {
   }
 
   protected finalizar(reserva: Reserva): void {
-    this.ocupada.set(reserva.id);
-    this.reservasApi.finish(reserva.id).subscribe({
+    this.iniciarOperacion(reserva.id);
+    this.reservasApi.finish(reserva.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (actualizada) => this.reemplazar(actualizada),
       error: (err: ApiError) => {
         this.error.set(err.message);
@@ -256,9 +273,10 @@ export class MisReservasComponent {
   }
 
   protected verCodigo(reserva: Reserva): void {
-    this.ocupada.set(reserva.id);
+    if (!puedeConsultarCodigo(reserva)) return;
+    this.iniciarOperacion(reserva.id);
     this.error.set('');
-    this.reservasApi.lodgingCode(reserva.id).subscribe({
+    this.reservasApi.lodgingCode(reserva.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (resultado) => {
         this.codigos.update((actuales) => ({ ...actuales, [reserva.id]: resultado.codigo }));
         this.ocupada.set(null);
@@ -271,14 +289,15 @@ export class MisReservasComponent {
   }
 
   protected validarCodigo(reserva: Reserva): void {
+    if (reserva.estado_estadia !== 'PENDIENTE_INGRESO') return;
     const codigo = (this.codigoIngresado[reserva.id] ?? '').trim().toUpperCase();
     if (codigo.length !== 8) {
       this.error.set('El código debe tener ocho caracteres.');
       return;
     }
-    this.ocupada.set(reserva.id);
+    this.iniciarOperacion(reserva.id);
     this.error.set('');
-    this.reservasApi.validateLodgingCode(reserva.id, codigo).subscribe({
+    this.reservasApi.validateLodgingCode(reserva.id, codigo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (actualizada) => {
         this.codigoIngresado[reserva.id] = '';
         this.reemplazar(actualizada);
@@ -299,9 +318,9 @@ export class MisReservasComponent {
       this.error.set('El motivo debe tener al menos diez caracteres.');
       return;
     }
-    this.ocupada.set(reserva.id);
+    this.iniciarOperacion(reserva.id);
     this.error.set('');
-    this.reservasApi.reportProblem(reserva.id, motivo).subscribe({
+    this.reservasApi.reportProblem(reserva.id, motivo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (actualizada) => this.reemplazar(actualizada),
       error: (err: ApiError) => {
         this.error.set(err.message);
@@ -311,11 +330,7 @@ export class MisReservasComponent {
   }
 
   protected estado(reserva: Reserva): string {
-    if (reserva.cancelada) return 'Cancelada';
-    if (reserva.estado_pago === 'PENDIENTE') return 'Pendiente de pago';
-    if (reserva.estado_pago === 'REEMBOLSADO') return 'Reembolsada';
-    if (reserva.estado_pago === 'RECHAZADO') return 'Pago rechazado';
-    return reserva.finalizada ? 'Finalizada' : 'Confirmada';
+    return etiquetasEstadia[reserva.estado_estadia];
   }
 
   protected estadoLiquidacion(reserva: Reserva): string {
@@ -354,13 +369,17 @@ export class MisReservasComponent {
   }
 
   protected activas(reservas: Reserva[]): number {
-    return reservas.filter(
-      (reserva) => !reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'APROBADO',
-    ).length;
+    return reservas.filter(estadiaActiva).length;
   }
 
   protected detalleReserva(reserva: Reserva): { reserva_id: number } {
     return { reserva_id: reserva.id };
+  }
+
+  private iniciarOperacion(id: number): void {
+    // Una consulta anterior a la escritura no debe restaurar datos desactualizados.
+    this.consultaReservas?.unsubscribe();
+    this.ocupada.set(id);
   }
 
   private reemplazar(actualizada: Reserva): void {

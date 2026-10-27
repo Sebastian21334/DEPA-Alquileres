@@ -30,6 +30,7 @@ describe('Código de ingreso en el resultado de la reserva', () => {
     ({
       id: 37,
       estado_pago: 'APROBADO',
+      estado_estadia: 'CONFIRMADA',
       finalizada: false,
       cancelada: false,
       codigo_validado_en: null,
@@ -148,7 +149,7 @@ describe('Código de ingreso en el resultado de la reserva', () => {
   it('muestra el estado de un código ya usado sin volver a revelarlo', () => {
     api.summary.mockReturnValue(
       of({
-        reserva: reserva({ codigo_validado_en: '2026-10-16T14:00:00Z' }),
+        reserva: reserva({ estado_estadia: 'EN_CURSO', codigo_validado_en: '2026-10-16T14:00:00Z' }),
         pago: null,
       }),
     );
@@ -181,5 +182,32 @@ describe('Código de ingreso en el resultado de la reserva', () => {
     expect(api.summary).toHaveBeenCalledExactlyOnceWith(37);
     expect(api.lodgingCode).toHaveBeenCalledExactlyOnceWith(37);
     expect(texto()).toContain(codigo.codigo);
+  });
+
+  it.each([
+    ['PENDIENTE_INGRESO', 'Pendiente de ingreso'],
+    ['EN_CURSO', 'En curso'],
+    ['FINALIZADA', 'Finalizada'],
+    ['INGRESO_NO_VERIFICADO', 'Ingreso no verificado'],
+  ] as const)('muestra la etapa %s aunque el pago siga aprobado', (estado, etiqueta) => {
+    api.summary.mockReturnValue(of({ reserva: reserva({ estado_estadia: estado }), pago: null }));
+    mostrar();
+    expect(texto()).toContain(etiqueta);
+    expect(texto()).not.toContain('Reserva confirmada');
+    if (estado === 'FINALIZADA' || estado === 'INGRESO_NO_VERIFICADO') {
+      expect(api.lodgingCode).not.toHaveBeenCalled();
+      expect(texto()).not.toContain(codigo.codigo);
+    }
+  });
+
+  it('retira el código mostrado cuando la estadía vence al recuperar el foco', async () => {
+    mostrar();
+    expect(texto()).toContain(codigo.codigo);
+    api.summary.mockReturnValue(of({ reserva: reserva({ estado_estadia: 'INGRESO_NO_VERIFICADO' }), pago: null }));
+    window.dispatchEvent(new Event('focus'));
+    await fixture!.whenStable();
+    expect(texto()).toContain('Ingreso no verificado');
+    expect(texto()).not.toContain(codigo.codigo);
+    expect(api.lodgingCode).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,4 +1,5 @@
 import { CotizacionDolar } from '../src/cotizaciones/entity/cotizacion-dolar.entity';
+import { fechaArgentina } from '../src/reservas/domain/estado-estadia';
 import { ConsultaCotizacion } from '../src/cotizaciones/entity/consulta-cotizacion.entity';
 import { CotizacionRepository } from '../src/cotizaciones/repository/cotizacion.repository';
 import { CotizacionesService } from '../src/cotizaciones/service/cotizaciones.service';
@@ -647,6 +648,14 @@ if (url) {
     it('conserva los intentos incorrectos del código aunque la respuesta sea un error', async () => {
       const reserva = await crear(2);
       await reservas.confirmarPago(reserva.id, new Date());
+      // El ingreso solo se valida durante la estadía, incluso para este caso de concurrencia.
+      const hoy = fechaArgentina();
+      await db
+        .getRepository(Reserva)
+        .update(reserva.id, { fecha_inicio: hoy, fecha_fin: hoy });
+      await db
+        .getRepository(Fecha)
+        .update({ reserva: { id: reserva.id } }, { fecha: hoy });
       for (let intento = 1; intento <= 5; intento++) {
         await expect(
           liquidaciones.validarCodigoAlojamiento(
@@ -1037,14 +1046,13 @@ if (url) {
     it('persiste una falla después de dormir sin reutilizar el dólar viejo ni impedir cotizar ARS', async () => {
       const repo = new CotizacionRepository(db.getRepository(CotizacionDolar));
       const proveedor = {
-        consultar:
-          jest.fn<
-            () => Promise<{
-              compra: number;
-              venta: number;
-              actualizadaEn: Date;
-            }>
-          >(),
+        consultar: jest.fn<
+          () => Promise<{
+            compra: number;
+            venta: number;
+            actualizadaEn: Date;
+          }>
+        >(),
       };
       proveedor.consultar.mockResolvedValue({
         compra: 1400,

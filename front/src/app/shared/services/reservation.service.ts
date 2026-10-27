@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import { Anunciante } from '../models/anunciante.model';
 import { Usuario } from '../models/usuario.model';
 import { CotizacionDolar } from './cotizaciones.service';
+import type { EstadoEstadia } from '../utils/reservation-state';
 
 export interface CrearReservaPayload {
   id_publicacion: number;
@@ -41,6 +42,7 @@ export interface EstadoPago {
 
 export interface Reserva {
   id: number;
+  estado_estadia: EstadoEstadia;
   finalizada: boolean;
   cancelada: boolean;
   fecha_cancelacion: string | null;

@@ -35,6 +35,7 @@ describe('Reprogramación desde Mis reservas', () => {
       cancelada: false,
       finalizada: false,
       estado_pago: 'APROBADO',
+      estado_estadia: 'CONFIRMADA',
       estado_liquidacion: 'RETENIDO',
       fecha_inicio: '2100-01-01',
       fecha_fin: '2100-01-03',
@@ -119,6 +120,10 @@ describe('Reprogramación desde Mis reservas', () => {
     { cancelada: true },
     { finalizada: true },
     { publicacion: null },
+    { estado_estadia: 'PENDIENTE_INGRESO' },
+    { estado_estadia: 'EN_CURSO', codigo_validado_en: '2026-10-27T12:00:00Z' },
+    { estado_estadia: 'INGRESO_NO_VERIFICADO' },
+    { estado_estadia: 'FINALIZADA' },
   ])('no ofrece cambiar fechas en una reserva inhabilitada: %j', (datos) => {
     api.mine.mockReturnValue(of([reserva(datos)]));
     mostrar();
@@ -196,5 +201,69 @@ describe('Reprogramación desde Mis reservas', () => {
     boton('Cerrar')!.click();
     await fixture.whenStable();
     expect(pendiente.observed).toBe(false);
+  });
+
+  it.each([
+    ['CONFIRMADA', 'Confirmada'],
+    ['PENDIENTE_INGRESO', 'Pendiente de ingreso'],
+    ['EN_CURSO', 'En curso'],
+    ['FINALIZADA', 'Finalizada'],
+    ['INGRESO_NO_VERIFICADO', 'Ingreso no verificado'],
+  ] as const)('muestra la etapa enviada por el servidor: %s', (estado, etiqueta) => {
+    api.mine.mockReturnValue(of([reserva({ estado_estadia: estado })]));
+    mostrar();
+    expect(texto()).toContain(etiqueta);
+    if (estado === 'FINALIZADA' || estado === 'INGRESO_NO_VERIFICADO') {
+      expect(texto()).toContain('0 activas');
+      expect(boton('Ver código de ingreso')).toBeUndefined();
+      expect(boton('Cambiar fechas')).toBeUndefined();
+    }
+  });
+
+  it('actualiza la etapa al volver a la pantalla y quita el ingreso si venció', async () => {
+    api.mine.mockReturnValue(of([reserva({ estado_estadia: 'PENDIENTE_INGRESO' })]));
+    mostrar();
+    expect(boton('Ver código de ingreso')).toBeDefined();
+    api.mine.mockReturnValue(of([reserva({ estado_estadia: 'INGRESO_NO_VERIFICADO' })]));
+    window.dispatchEvent(new Event('focus'));
+    await fixture.whenStable();
+    expect(texto()).toContain('Ingreso no verificado');
+    expect(boton('Ver código de ingreso')).toBeUndefined();
+    fixture.destroy();
+    const llamadas = api.mine.mock.calls.length;
+    window.dispatchEvent(new Event('focus'));
+    expect(api.mine).toHaveBeenCalledTimes(llamadas);
+  });
+
+  it('solo ofrece validar el ingreso durante el período de la estadía', async () => {
+    api.mine.mockReturnValue(of([]));
+    api.received.mockReturnValue(of([reserva({ estado_estadia: 'CONFIRMADA' })]));
+    mostrar();
+    (fixture.nativeElement.querySelectorAll('[role=tab]')[1] as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(boton('Validar ingreso')).toBeUndefined();
+    api.received.mockReturnValue(of([reserva({ estado_estadia: 'PENDIENTE_INGRESO' })]));
+    window.dispatchEvent(new Event('focus'));
+    await fixture.whenStable();
+    expect(boton('Validar ingreso')).toBeDefined();
+    api.received.mockReturnValue(of([reserva({ estado_estadia: 'INGRESO_NO_VERIFICADO' })]));
+    window.dispatchEvent(new Event('focus'));
+    await fixture.whenStable();
+    expect(boton('Validar ingreso')).toBeUndefined();
+  });
+
+  it('descarta una actualización pendiente antes de guardar una reprogramación', async () => {
+    mostrar();
+    boton('Cambiar fechas')!.click();
+    fixture.detectChanges();
+    await cambiarInicio();
+    const pendiente = new Subject<Reserva[]>();
+    api.mine.mockReturnValue(pendiente);
+    window.dispatchEvent(new Event('focus'));
+    expect(pendiente.observed).toBe(true);
+    boton('Confirmar reprogramación')!.click();
+    await fixture.whenStable();
+    expect(pendiente.observed).toBe(false);
+    expect(api.reschedule).toHaveBeenCalledExactlyOnceWith(37, '2100-01-02', '2100-01-04');
   });
 });

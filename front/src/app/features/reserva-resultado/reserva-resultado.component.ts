@@ -1,4 +1,9 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
+import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
+import { etiquetasEstadia, puedeConsultarCodigo } from '../../shared/utils/reservation-state';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LucideCheck, LucideCopy, LucideKeyRound } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
@@ -24,6 +29,8 @@ export class ReservaResultadoComponent {
   private readonly reservasApi = inject(ReservationService);
   private readonly auth = inject(AuthService);
   private readonly chat = inject(ChatService);
+  private readonly destroyRef = inject(DestroyRef);
+  private consultaResumen?: Subscription;
 
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
@@ -43,7 +50,8 @@ export class ReservaResultadoComponent {
   );
   protected readonly mostrarCodigo = computed(() => {
     const reserva = this.reserva();
-    return this.esInquilino() && reserva?.estado_pago === 'APROBADO' && !reserva.cancelada;
+    return this.esInquilino() && !!reserva &&
+      (puedeConsultarCodigo(reserva) || reserva.estado_estadia === 'EN_CURSO');
   });
   protected readonly codigoValidado = computed(() =>
     Boolean(this.reserva()?.codigo_validado_en || this.codigo()?.validado_en),
@@ -101,6 +109,9 @@ export class ReservaResultadoComponent {
     }
 
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
+    activarActualizacionReservas(() => {
+      if (!this.cargando()) this.cargarResumen(idReserva, true);
+    });
     const paymentId =
       this.route.snapshot.queryParamMap.get('payment_id') ??
       this.route.snapshot.queryParamMap.get('collection_id');
@@ -196,14 +207,21 @@ export class ReservaResultadoComponent {
   }
 
   protected tituloEstado(reserva: Reserva): string {
-    if (reserva.estado_pago === 'APROBADO') return 'Reserva confirmada';
-    if (reserva.estado_pago === 'PENDIENTE') return 'Estamos validando el pago';
-    if (reserva.estado_pago === 'REEMBOLSADO') return 'Pago reembolsado';
-    if (reserva.estado_pago === 'CANCELADO') return 'Reserva cancelada';
-    return 'El pago no fue aprobado';
+    if (reserva.estado_estadia === 'CONFIRMADA') return 'Reserva confirmada';
+    return etiquetasEstadia[reserva.estado_estadia];
   }
 
   protected descripcionEstado(reserva: Reserva): string {
+    const descripciones: Partial<Record<Reserva['estado_estadia'], string>> = {
+      PENDIENTE_INGRESO: 'La estadía comenzó. El propietario todavía no validó el código de alojamiento.',
+      EN_CURSO: 'El ingreso fue validado y la estadía está en curso.',
+      FINALIZADA: 'La estadía finalizó. Podés consultar sus datos y el comprobante del pago.',
+      INGRESO_NO_VERIFICADO: 'El período de la estadía terminó sin un código de ingreso validado. Podés reportar un problema si necesitás revisión.',
+      FECHAS_A_REVISAR: 'Esta reserva no tiene un período válido registrado. Contactá a soporte para revisarla.',
+      CANCELADA: 'La reserva fue cancelada.',
+    };
+    const descripcion = descripciones[reserva.estado_estadia];
+    if (descripcion) return descripcion;
     if (reserva.estado_pago === 'APROBADO')
       return 'El pago fue acreditado y las fechas quedaron reservadas.';
     if (reserva.estado_pago === 'PENDIENTE')
@@ -286,13 +304,15 @@ export class ReservaResultadoComponent {
     });
   }
 
-  private cargarResumen(idReserva: number): void {
-    this.reservasApi.summary(idReserva).subscribe({
+  private cargarResumen(idReserva: number, silenciosa = false): void {
+    this.consultaResumen?.unsubscribe();
+    this.consultaResumen = this.reservasApi.summary(idReserva).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (resumen) => {
         this.resumen.set(resumen);
         this.cargando.set(false);
       },
       error: (err: ApiError) => {
+        if (silenciosa) return;
         this.error.set(err.message);
         this.cargando.set(false);
       },

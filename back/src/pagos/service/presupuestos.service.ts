@@ -18,6 +18,7 @@ import {
 } from '../../common/utils/importes';
 import type { CondicionesCobro } from '../../reservas/interfaces/condiciones-cobro.interface';
 import type { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
+import { fechaArgentina } from '../../reservas/domain/estado-estadia';
 
 interface PresupuestoFirmado extends CondicionesCobro {
   usuario: number;
@@ -50,12 +51,7 @@ export class PresupuestosService {
     }
     const inicio = new Date(dto.fecha_inicio),
       fin = new Date(dto.fecha_fin);
-    const hoy = new Date();
-    const hoyTexto = [
-      hoy.getFullYear(),
-      String(hoy.getMonth() + 1).padStart(2, '0'),
-      String(hoy.getDate()).padStart(2, '0'),
-    ].join('-');
+    const hoyTexto = fechaArgentina();
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_inicio) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_fin) ||
