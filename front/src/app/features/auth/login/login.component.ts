@@ -33,6 +33,12 @@ export class LoginComponent {
     contrasenia: ['', [Validators.required]],
   });
 
+  constructor() {
+    if (this.route.snapshot.queryParamMap.get('sesionExpirada') === '1') {
+      this.error.set('Tu sesión venció. Ingresá nuevamente para continuar.');
+    }
+  }
+
   protected onSubmit(): void {
     if (this.form.invalid || this.enviando()) {
       this.form.markAllAsTouched();

@@ -39,7 +39,8 @@ type FaseVitalidad =
   | 'centering'
   | 'capturing'
   | 'validating'
-  | 'complete';
+  | 'complete'
+  | 'error';
 
 interface HeadPose {
   yaw: number;
@@ -51,6 +52,8 @@ const RECENTERING_FRAMES = 5;
 const FINAL_CAPTURE_FRAMES = 10;
 const CALIBRATION_FRAMES = 12;
 const CAPTURE_NOTICE_MS = 250;
+const FRAMES_POR_ACCION = 2;
+const ESPERA_ENTRE_FRAMES_MS = 90;
 
 const puntuarCamaraTrasera = (label: string): number => {
   const nombre = label.toLocaleLowerCase();
@@ -82,6 +85,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
 
   @Output() readonly identidadValidada = new EventEmitter<IdentidadCapturada>();
   @Output() readonly fallo = new EventEmitter<string>();
+  @Output() readonly reintento = new EventEmitter<void>();
 
   private readonly facialService = inject(VerificacionFacialService);
 
@@ -100,6 +104,13 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   protected readonly instruccionActual = computed(
     () => this.instrucciones()[this.indiceInstruccion()] ?? null,
   );
+  protected readonly segundosRestantes = signal(0);
+  protected readonly tiempoRestante = computed(() => {
+    const total = this.segundosRestantes();
+    const minutos = Math.floor(total / 60);
+    const segundos = total % 60;
+    return `${minutos}:${segundos.toString().padStart(2, '0')}`;
+  });
   protected readonly progresoCapturaFinal = signal(0);
   protected readonly fotoPendientePreview = signal('');
   protected readonly puedeCambiarCamara = signal(false);
@@ -118,8 +129,10 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   private fotoPendiente: File | null = null;
   private neutralPhoto: File | null = null;
   private livePhoto: File | null = null;
-  private actionPhotos: File[] = [];
+  private actionPhotos: File[][] = [];
   private challengeToken = '';
+  private challengeExpiraEn = 0;
+  private temporizadorChallenge: number | null = null;
   private stream: MediaStream | null = null;
   private faceLandmarker: FaceLandmarker | null = null;
   private animationFrameId: number | null = null;
@@ -141,6 +154,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.detenerContador();
     if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
     this.stopCamera();
     this.faceLandmarker?.close();
@@ -214,31 +228,43 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   }
 
   protected async cambiarGestos(): Promise<void> {
-    if (!this.challengeToken || this.cambiandoDesafio() || ['capturing', 'validating', 'complete'].includes(this.fase())) return;
+    if (
+      !this.challengeToken ||
+      this.cambiandoDesafio() ||
+      this.procesando() ||
+      ['capturing', 'validating', 'complete'].includes(this.fase())
+    ) return;
+
     this.cambiandoDesafio.set(true);
     this.error.set('');
+    this.reintento.emit();
     try {
-      const challenge = await firstValueFrom(this.facialService.cambiarDesafio(this.challengeToken));
-      this.challengeToken = challenge.challengeToken;
-      this.instrucciones.set(challenge.instructions);
-      this.indiceInstruccion.set(0);
-      this.actionPhotos = [];
-      this.neutralPhoto = null;
-      this.neutralPose = null;
-      this.matchingFrames = 0;
-      this.calibrationYaw = 0;
-      this.calibrationRoll = 0;
-      this.calibrationCount = 0;
-      this.progresoCapturaFinal.set(0);
+      let challenge: DesafioVitalidad;
+      try {
+        challenge = await firstValueFrom(
+          this.facialService.cambiarDesafio(this.challengeToken),
+        );
+      } catch {
+        // Si el backend no puede reutilizar el desafío anterior (por ejemplo,
+        // porque venció), se pide uno nuevo sin reiniciar las fotos del DNI.
+        challenge = await firstValueFrom(this.facialService.crearDesafio());
+      }
+      this.aplicarDesafio(challenge);
       this.fase.set('calibrating');
       this.mensaje.set('Gestos cambiados. Mirá de frente para volver a calibrar.');
+      await this.asegurarCamaraYModelo();
     } catch (error: unknown) {
+      this.fase.set('error');
       this.showError(this.errorText(error));
     } finally {
       this.cambiandoDesafio.set(false);
     }
   }
 
+  /**
+   * Reinicia todo el flujo, incluidas las fotos del DNI. Para reintentar solo
+   * la prueba de vida conservando el DNI se usa "Cambiar gestos".
+   */
   protected async reiniciar(): Promise<void> {
     this.frente = null;
     this.dorso = null;
@@ -255,6 +281,9 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     this.progresoCapturaFinal.set(0);
     this.indiceInstruccion.set(0);
     this.instrucciones.set([]);
+    this.detenerContador();
+    this.challengeExpiraEn = 0;
+    this.segundosRestantes.set(0);
     this.fase.set('idle');
     this.paso.set('dni_frente');
     this.error.set('');
@@ -275,8 +304,8 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       this.initializeFaceLandmarker(),
       this.startCamera('user'),
     ]);
-    this.challengeToken = challenge.challengeToken;
-    this.instrucciones.set(challenge.instructions);
+    this.aplicarDesafio(challenge);
+    this.fase.set('calibrating');
     this.mensaje.set('Mirá de frente y mantené la cabeza quieta para calibrar.');
   }
 
@@ -392,7 +421,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   };
 
   private async processLiveness(result: FaceLandmarkerResult): Promise<void> {
-    if (this.busyFrame || ['idle', 'capturing', 'validating', 'complete'].includes(this.fase())) return;
+    if (this.busyFrame || ['idle', 'error', 'capturing', 'validating', 'complete'].includes(this.fase())) return;
     const landmarks = result.faceLandmarks[0];
     const blendshapes = result.faceBlendshapes[0];
     if (!landmarks || !blendshapes) {
@@ -468,7 +497,20 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     if (this.busyFrame) return;
     this.busyFrame = true;
     try {
-      this.actionPhotos.push(await this.captureFrame(`movimiento-${this.indiceInstruccion() + 1}.jpg`));
+      const fotogramas: File[] = [];
+      for (let frame = 0; frame < FRAMES_POR_ACCION; frame++) {
+        fotogramas.push(
+          await this.captureFrame(
+            `movimiento-${this.indiceInstruccion() + 1}-${frame + 1}.jpg`,
+          ),
+        );
+        if (frame < FRAMES_POR_ACCION - 1) {
+          await new Promise<void>((resolve) =>
+            window.setTimeout(resolve, ESPERA_ENTRE_FRAMES_MS),
+          );
+        }
+      }
+      this.actionPhotos.push(fotogramas);
       this.matchingFrames = 0;
       if (this.indiceInstruccion() === this.instrucciones().length - 1) {
         this.fase.set('centering');
@@ -499,11 +541,18 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       this.fase.set('validating');
       this.mensaje.set('Foto tomada. Estamos validando tu identidad…');
       const response = await firstValueFrom(
-        this.facialService.validarVitalidad(this.challengeToken, this.neutralPhoto, this.actionPhotos, this.livePhoto),
+        this.facialService.validarVitalidad(
+          this.challengeToken,
+          this.neutralPhoto,
+          this.actionPhotos,
+          this.livePhoto,
+        ),
       );
       this.fase.set('complete');
       this.paso.set('complete');
       this.mensaje.set('Identidad validada. Enviando la documentación…');
+      this.detenerContador();
+      this.segundosRestantes.set(0);
       this.stopCamera();
       this.identidadValidada.emit({
         dni_frente: this.frente,
@@ -512,11 +561,86 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
         verificationToken: response.verificationToken,
       });
     } catch (error: unknown) {
-      this.fase.set('idle');
+      this.fase.set('error');
       this.showError(this.errorText(error));
+      // La cámara queda apagada. Se enciende recién cuando el usuario pulsa
+      // "Cambiar gestos", para que el fallo no se confunda con una cámara activa.
+      this.stopCamera();
+      this.cameraReady.set(false);
     } finally {
       this.procesando.set(false);
       this.busyFrame = false;
+    }
+  }
+
+  private aplicarDesafio(challenge: DesafioVitalidad): void {
+    this.challengeToken = challenge.challengeToken;
+    this.instrucciones.set(challenge.instructions);
+    this.limpiarEstadoVitalidad();
+    this.iniciarContador(challenge);
+  }
+
+  /** Deja la prueba de vida lista para empezar de cero sin tocar las fotos del DNI. */
+  private limpiarEstadoVitalidad(): void {
+    this.neutralPhoto = null;
+    this.livePhoto = null;
+    this.actionPhotos = [];
+    this.neutralPose = null;
+    this.matchingFrames = 0;
+    this.calibrationYaw = 0;
+    this.calibrationRoll = 0;
+    this.calibrationCount = 0;
+    this.progresoCapturaFinal.set(0);
+    this.indiceInstruccion.set(0);
+  }
+
+  private async asegurarCamaraYModelo(): Promise<void> {
+    if (!this.faceLandmarker) await this.initializeFaceLandmarker();
+    if (!this.cameraReady()) await this.startCamera('user');
+  }
+
+  private iniciarContador(challenge: DesafioVitalidad): void {
+    this.detenerContador();
+    this.challengeExpiraEn =
+      this.expiracionDelToken(challenge.challengeToken) ??
+      Date.now() + challenge.expiresInSeconds * 1000;
+    this.actualizarContador();
+    this.temporizadorChallenge = window.setInterval(
+      () => this.actualizarContador(),
+      1000,
+    );
+  }
+
+  private actualizarContador(): void {
+    const restantes = Math.max(
+      0,
+      Math.ceil((this.challengeExpiraEn - Date.now()) / 1000),
+    );
+    this.segundosRestantes.set(restantes);
+    if (restantes <= 0) this.detenerContador();
+  }
+
+  private detenerContador(): void {
+    if (this.temporizadorChallenge !== null) {
+      window.clearInterval(this.temporizadorChallenge);
+      this.temporizadorChallenge = null;
+    }
+  }
+
+  /** Lee el `exp` del JWT del desafío para mostrar el tiempo real restante. */
+  private expiracionDelToken(token: string): number | null {
+    try {
+      const payload = token.split('.')[1];
+      if (!payload) return null;
+      const normalizado = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const conPadding = normalizado.padEnd(
+        Math.ceil(normalizado.length / 4) * 4,
+        '=',
+      );
+      const json = JSON.parse(atob(conPadding)) as { exp?: number };
+      return typeof json.exp === 'number' ? json.exp * 1000 : null;
+    } catch {
+      return null;
     }
   }
 

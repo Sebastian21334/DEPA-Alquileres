@@ -87,6 +87,8 @@
 .challenge-list li { padding: 0.2rem 0; }
 .challenge-list li.current { color: var(--color-text); font-weight: 800; }
 .challenge-list li.done { color: #15803d; text-decoration: line-through; }
+.challenge-timer { margin: 0; text-align: center; font-weight: 700; color: #9a3412; }
+.challenge-timer--expired { color: #b91c1c; }
 .change-challenge {
   margin: -0.35rem auto 0;
   border: 0;

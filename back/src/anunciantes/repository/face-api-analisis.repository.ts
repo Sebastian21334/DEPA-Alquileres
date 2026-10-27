@@ -8,8 +8,9 @@ import {
 import * as tf from '@tensorflow/tfjs';
 import { setWasmPaths } from '@tensorflow/tfjs-backend-wasm';
 import type { TNetInput } from '@vladmandic/face-api';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
@@ -49,6 +50,11 @@ export class FaceApiAnalisisRepository
       this.faceApi.nets.faceRecognitionNet.loadFromDisk(resolvedPath),
     ]);
     this.logger.log(`Modelos faciales cargados desde ${resolvedPath}`);
+    if (process.env.FACE_DEBUG === '1') {
+      this.logger.warn(
+        `FACE_DEBUG activo: los frames analizados se guardan en ${join(tmpdir(), 'opencode', 'face-debug')}`,
+      );
+    }
   }
 
   distancia(referencia: Float32Array, candidata: Float32Array): number {
@@ -58,6 +64,7 @@ export class FaceApiAnalisisRepository
     buffer: Buffer,
     nombre: string,
   ): Promise<AnalisisRostro> {
+    this.volcarDebug(buffer, nombre);
     let tensor: tf.Tensor3D;
     try {
       tensor = this.decodificarImagen(buffer);
@@ -73,6 +80,9 @@ export class FaceApiAnalisisRepository
         .withFaceLandmarks()
         .withFaceDescriptors();
       if (detecciones.length !== 1) {
+        this.logger.warn(
+          `Detecciones en ${nombre}: ${detecciones.length} (${tensor.shape[1]}x${tensor.shape[0]})`,
+        );
         throw new UnprocessableEntityException(
           detecciones.length === 0
             ? `No se detectó una cara en ${nombre}. Posible causa: poca luz, desenfoque o rostro fuera del recuadro.`
@@ -135,6 +145,27 @@ export class FaceApiAnalisisRepository
             ]).flat(),
           );
     return tf.tensor3d(rgb, [decoded.height, decoded.width, 3], 'int32');
+  }
+
+  private volcarDebug(buffer: Buffer, nombre: string): void {
+    if (process.env.FACE_DEBUG !== '1') return;
+    try {
+      const directorio = join(tmpdir(), 'opencode', 'face-debug');
+      mkdirSync(directorio, { recursive: true });
+      const seguro = nombre
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9_.-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      writeFileSync(
+        join(directorio, `${Date.now()}-${seguro || 'frame'}.jpg`),
+        buffer,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo guardar el frame de depuración: ${(error as Error).message}`,
+      );
+    }
   }
 
   private configurarWasm(): void {

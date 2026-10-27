@@ -18,11 +18,20 @@ import { MailModule } from '../mail/mail.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        // El secreto firma los tokens; expiresIn limita su vigencia a una hora.
-        secret: configService.getOrThrow<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '1h' },
-      }),
+      useFactory: (configService: ConfigService) => {
+        // JWT_EXPIRES_SEC está en segundos. En local se puede extender para
+        // pruebas largas; en producción el valor por defecto es una hora.
+        const segundos = Number(
+          configService.get<string>('JWT_EXPIRES_SEC') ?? 3600,
+        );
+        return {
+          secret: configService.getOrThrow<string>('JWT_SECRET'),
+          signOptions: {
+            expiresIn:
+              Number.isFinite(segundos) && segundos > 0 ? segundos : 3600,
+          },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

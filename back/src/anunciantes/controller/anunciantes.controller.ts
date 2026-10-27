@@ -56,13 +56,15 @@ const DOCUMENTOS_INTERCEPTOR = FileFieldsInterceptor(
 const EVIDENCIAS_VITALIDAD_INTERCEPTOR = FileFieldsInterceptor(
   [
     { name: 'neutralPhoto', maxCount: 1 },
-    { name: 'action0', maxCount: 1 },
-    { name: 'action1', maxCount: 1 },
-    { name: 'action2', maxCount: 1 },
+    // Cada gesto se captura dos veces para tolerar el frame en el que el
+    // movimiento todavía no llegó a su punto máximo.
+    { name: 'action0', maxCount: 2 },
+    { name: 'action1', maxCount: 2 },
+    { name: 'action2', maxCount: 2 },
     { name: 'livePhoto', maxCount: 1 },
   ],
   {
-    limits: { fileSize: 5 * 1024 * 1024, files: 5 },
+    limits: { fileSize: 5 * 1024 * 1024, files: 8 },
     fileFilter: (_req, file, callback) => {
       if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
         return callback(

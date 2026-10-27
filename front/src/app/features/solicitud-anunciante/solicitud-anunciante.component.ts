@@ -103,6 +103,10 @@ export class SolicitudAnuncianteComponent {
     this.error.set(mensaje);
   }
 
+  protected limpiarErrorCaptura(): void {
+    this.error.set('');
+  }
+
   protected fecha(valor: string): string {
     return new Date(valor).toLocaleString('es-AR', { dateStyle: 'medium', timeStyle: 'short' });
   }
