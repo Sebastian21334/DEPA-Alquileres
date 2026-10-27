@@ -11,6 +11,10 @@ import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { ReprogramacionReserva } from './reprogramacion-reserva.entity';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
+import {
+  calcularEstadoEstadia,
+  type EstadoEstadia,
+} from '../domain/estado-estadia';
 
 export enum EstadoPagoReserva {
   PENDIENTE = 'PENDIENTE',
@@ -31,6 +35,15 @@ export enum EstadoLiquidacionReserva {
 
 @Entity('reserva')
 export class Reserva {
+  // No es una columna: se evalúa también al serializar reservas históricas.
+  get estado_estadia(): EstadoEstadia {
+    return calcularEstadoEstadia(this);
+  }
+
+  toJSON(): object {
+    return { ...this, estado_estadia: this.estado_estadia };
+  }
+
   // La reserva registra el pago y vincula al inquilino con una publicación.
   @PrimaryGeneratedColumn({ name: 'id_reserva' })
   id: number;

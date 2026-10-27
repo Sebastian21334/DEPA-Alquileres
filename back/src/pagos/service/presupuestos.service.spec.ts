@@ -133,4 +133,21 @@ describe('Presupuesto aceptado antes de cobrar', () => {
     ).toBe('0.11');
     expect(() => importeTexto(10000000000n)).toThrow('supera el máximo');
   });
+
+  it('permite cotizar el día vigente en Argentina hasta su medianoche', async () => {
+    publicacion.tipoMoneda.nombre = 'ARS';
+    const fechas = {
+      ...dto,
+      fecha_inicio: '2026-10-27',
+      fecha_fin: '2026-10-27',
+    };
+    jest.setSystemTime(new Date('2026-10-28T02:59:00Z'));
+    await expect(servicio.cotizar(fechas, 7)).resolves.toMatchObject({
+      cantidad_dias: 1,
+    });
+    jest.setSystemTime(new Date('2026-10-28T03:00:00Z'));
+    await expect(servicio.cotizar(fechas, 7)).rejects.toThrow(
+      'fechas de la reserva',
+    );
+  });
 });

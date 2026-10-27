@@ -19,6 +19,7 @@ import type { IReservaRepository } from '../repository/reserva.repository.interf
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 import { generarCodigoAlojamiento } from './reservas.utils';
+import { calcularEstadoEstadia } from '../domain/estado-estadia';
 
 @Injectable()
 export class ReservaLiquidacionesService {
@@ -48,6 +49,15 @@ export class ReservaLiquidacionesService {
         ) {
           throw new ConflictException(
             'El código estará disponible cuando el pago se encuentre aprobado',
+          );
+        }
+        if (
+          !['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(
+            calcularEstadoEstadia(reserva),
+          )
+        ) {
+          throw new ConflictException(
+            'El código no está disponible para una estadía cerrada o sin fechas verificables',
           );
         }
         if (!reserva.codigo_alojamiento) {
@@ -95,6 +105,11 @@ export class ReservaLiquidacionesService {
         if (reserva.codigo_validado_en) {
           throw new ConflictException(
             'El código de esta reserva ya fue utilizado',
+          );
+        }
+        if (calcularEstadoEstadia(reserva) !== 'PENDIENTE_INGRESO') {
+          throw new ConflictException(
+            'El código solo puede validarse durante las fechas de la estadía',
           );
         }
         if (

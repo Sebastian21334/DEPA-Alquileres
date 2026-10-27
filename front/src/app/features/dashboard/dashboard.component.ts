@@ -1,6 +1,9 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
+import { estadiaActiva } from '../../shared/utils/reservation-state';
 import { RouterLink } from '@angular/router';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Subscription } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
@@ -32,6 +35,8 @@ export class DashboardComponent {
   private readonly auth = inject(AuthService);
   private readonly publicacionesApi = inject(GestionPublicacionesService);
   private readonly reservasApi = inject(ReservationService);
+  private readonly destroyRef = inject(DestroyRef);
+  private consultaReservas?: Subscription;
 
   protected readonly publicaciones = signal<Publicacion[]>([]);
   protected readonly reservas = signal<Reserva[]>([]);
@@ -47,7 +52,7 @@ export class DashboardComponent {
     this.reservasValidas().reduce((total, reserva) => total + Number(reserva.monto_pago ?? 0), 0),
   );
   protected readonly pendientes = computed(() =>
-    this.reservasValidas().filter((reserva) => !reserva.finalizada).length,
+    this.reservasValidas().filter(estadiaActiva).length,
   );
   protected readonly conversion = computed(() => {
     const vistas = this.totalVisualizaciones();
@@ -124,11 +129,19 @@ export class DashboardComponent {
   });
 
   constructor() {
+    activarActualizacionReservas(() => {
+      if (this.cargando()) return;
+      this.consultaReservas?.unsubscribe();
+      this.consultaReservas = this.reservasApi.received().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: (reservas) => this.reservas.set(reservas),
+        error: () => {},
+      });
+    });
     const id = Number(this.auth.currentUser()?.sub);
     forkJoin({
       publicaciones: this.publicacionesApi.listarMias(id),
       reservas: this.reservasApi.received(),
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ publicaciones, reservas }) => {
         this.publicaciones.set(publicaciones);
         this.reservas.set(reservas);

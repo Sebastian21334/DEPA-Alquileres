@@ -10,6 +10,10 @@ import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transacc
 import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { generarCodigoAlojamiento } from './reservas.utils';
+import {
+  calcularEstadoEstadia,
+  fechaArgentina,
+} from '../domain/estado-estadia';
 import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
 import {
   Inject,
@@ -81,9 +85,8 @@ export class ReservasService {
         'Solo las publicaciones temporales o de alquiler diario admiten reservas por fecha',
       );
     }
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    if (inicio < hoy || fin < hoy) {
+    const hoy = fechaArgentina();
+    if (dto.fecha_inicio < hoy || dto.fecha_fin < hoy) {
       throw new BadRequestException(
         'Las fechas de la reserva no pueden ser anteriores a hoy',
       );
@@ -392,6 +395,12 @@ export class ReservasService {
             'No se puede finalizar la estadía antes de validar el código de alojamiento',
           );
         }
+        const estado = calcularEstadoEstadia(reserva);
+        if (estado !== 'EN_CURSO' && estado !== 'FINALIZADA') {
+          throw new BadRequestException(
+            'La estadía todavía no comenzó o sus fechas requieren revisión',
+          );
+        }
         reserva.finalizada = true;
         return reservaRepository.guardar(reserva);
       },
@@ -445,7 +454,10 @@ export class ReservasService {
             'Solo el inquilino que realizó la reserva puede cambiar sus fechas',
           );
         }
-        if (reserva.cancelada || reserva.finalizada) {
+        if (
+          reserva.cancelada ||
+          calcularEstadoEstadia(reserva) === 'FINALIZADA'
+        ) {
           throw new BadRequestException(
             'No se pueden modificar las fechas de una reserva cerrada',
           );
@@ -453,6 +465,14 @@ export class ReservasService {
         if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
           throw new BadRequestException(
             'No se pueden modificar las fechas hasta que el pago esté aprobado',
+          );
+        }
+        if (
+          calcularEstadoEstadia(reserva) !== 'CONFIRMADA' ||
+          reserva.codigo_validado_en
+        ) {
+          throw new BadRequestException(
+            'Solo se pueden reprogramar reservas antes del inicio de la estadía y sin ingreso validado',
           );
         }
         if (!reserva.publicacion)
@@ -480,12 +500,7 @@ export class ReservasService {
         }
         const inicio = new Date(dto.fecha_inicio);
         const fin = new Date(dto.fecha_fin);
-        const hoy = new Date();
-        const hoyTexto = [
-          hoy.getFullYear(),
-          String(hoy.getMonth() + 1).padStart(2, '0'),
-          String(hoy.getDate()).padStart(2, '0'),
-        ].join('-');
+        const hoyTexto = fechaArgentina();
         if (
           !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_inicio) ||
           !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_fin) ||
