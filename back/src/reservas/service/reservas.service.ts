@@ -10,7 +10,7 @@ import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transacc
 import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { generarCodigoAlojamiento } from './reservas.utils';
-import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
+import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   Inject,
   Injectable,

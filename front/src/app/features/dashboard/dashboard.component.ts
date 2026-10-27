@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
+import { ApiError } from '../../core/interceptors/api-error';
 import { AuthService } from '../../core/services/auth.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
@@ -134,8 +135,8 @@ export class DashboardComponent {
         this.reservas.set(reservas);
         this.cargando.set(false);
       },
-      error: (error) => {
-        this.error.set(error?.error?.message ?? 'No pudimos cargar las métricas del panel.');
+      error: (error: ApiError) => {
+        this.error.set(error.message);
         this.cargando.set(false);
       },
     });

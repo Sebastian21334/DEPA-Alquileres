@@ -11,6 +11,7 @@ import {
 import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { FormsModule } from '@angular/forms';
+import { ApiError } from '../../core/interceptors/api-error';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -97,8 +98,8 @@ export class MisReservasComponent {
         this.recibidas.set(recibidas);
         this.cargando.set(false);
       },
-      error: (err) => {
-        this.error.set(err?.error?.message ?? 'No se pudieron cargar las reservas.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.cargando.set(false);
       },
     });
@@ -189,8 +190,8 @@ export class MisReservasComponent {
               : 'Fechas actualizadas. Avisamos al anunciante por correo. Se conserva el total pagado.',
           );
         },
-        error: (err) => {
-          this.error.set(err?.error?.message ?? 'No se pudo reprogramar la reserva.');
+        error: (err: ApiError) => {
+          this.error.set(err.message);
           this.ocupada.set(null);
           if (err.status === 409) this.cargarCalendario(reserva);
         },
@@ -225,8 +226,8 @@ export class MisReservasComponent {
               : 'El correo sigue pendiente. Intentá nuevamente más tarde.',
           );
         },
-        error: (err) => {
-          this.error.set(err?.error?.message ?? 'No se pudo reintentar el aviso.');
+        error: (err: ApiError) => {
+          this.error.set(err.message);
           this.ocupada.set(null);
         },
       });
@@ -236,8 +237,8 @@ export class MisReservasComponent {
     this.ocupada.set(reserva.id);
     this.reservasApi.cancel(reserva.id).subscribe({
       next: (actualizada) => this.reemplazar(actualizada),
-      error: (err) => {
-        this.error.set(err?.error?.message ?? 'No se pudo cancelar la reserva.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.ocupada.set(null);
       },
     });
@@ -247,8 +248,8 @@ export class MisReservasComponent {
     this.ocupada.set(reserva.id);
     this.reservasApi.finish(reserva.id).subscribe({
       next: (actualizada) => this.reemplazar(actualizada),
-      error: (err) => {
-        this.error.set(err?.error?.message ?? 'No se pudo finalizar la reserva.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.ocupada.set(null);
       },
     });
@@ -262,8 +263,8 @@ export class MisReservasComponent {
         this.codigos.update((actuales) => ({ ...actuales, [reserva.id]: resultado.codigo }));
         this.ocupada.set(null);
       },
-      error: (err) => {
-        this.error.set(err.message ?? 'No se pudo consultar el código.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.ocupada.set(null);
       },
     });
@@ -282,8 +283,8 @@ export class MisReservasComponent {
         this.codigoIngresado[reserva.id] = '';
         this.reemplazar(actualizada);
       },
-      error: (err) => {
-        this.error.set(err.message ?? 'No se pudo validar el código.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.ocupada.set(null);
       },
     });
@@ -302,8 +303,8 @@ export class MisReservasComponent {
     this.error.set('');
     this.reservasApi.reportProblem(reserva.id, motivo).subscribe({
       next: (actualizada) => this.reemplazar(actualizada),
-      error: (err) => {
-        this.error.set(err.message ?? 'No se pudo registrar el reclamo.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.ocupada.set(null);
       },
     });

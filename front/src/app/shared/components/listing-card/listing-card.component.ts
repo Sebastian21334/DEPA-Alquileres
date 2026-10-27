@@ -2,6 +2,7 @@ import { Component, EventEmitter, Output, inject, input, signal } from '@angular
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { Publicacion } from '../../models/publicacion.model';
+import { admiteReservasPorFecha } from '../../models/catalogo.model';
 import {
   LucideArrowRight,
   LucideBadgeCheck,
@@ -60,7 +61,7 @@ export class ListingCardComponent {
   }
 
   protected get esTemporaria(): boolean {
-    return this.publicacion().modalidad?.nombre.toLowerCase().includes('tempor') ?? false;
+    return admiteReservasPorFecha(this.publicacion().modalidad);
   }
 
   protected get imagenPrincipal(): string | null {

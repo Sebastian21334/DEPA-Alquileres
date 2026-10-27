@@ -10,7 +10,7 @@ import { createHmac } from 'node:crypto';
 import { CotizacionesService } from '../../cotizaciones/service/cotizaciones.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
-import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
+import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   decimalEntero,
   importeTexto,

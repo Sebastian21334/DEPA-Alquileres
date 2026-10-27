@@ -2,6 +2,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { Component, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ApiError } from '../../core/interceptors/api-error';
 import { CotizacionesService, HistorialDolar } from '../../shared/services/cotizaciones.service';
 
 @Component({
@@ -42,8 +43,8 @@ export class CotizacionesAdminComponent {
           this.hasta = '';
         }
       },
-      error: (err) => {
-        this.error.set(err?.error?.message ?? 'No se pudo consultar el historial del dólar.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.cargando.set(false);
       },
     });

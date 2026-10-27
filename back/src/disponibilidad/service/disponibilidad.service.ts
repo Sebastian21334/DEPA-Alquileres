@@ -1,6 +1,6 @@
 import { TRANSACCION_CALENDARIO } from '../repository/transaccion-calendario.interface';
 import type { ITransaccionCalendario } from '../repository/transaccion-calendario.interface';
-import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
+import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   Inject,
   Injectable,

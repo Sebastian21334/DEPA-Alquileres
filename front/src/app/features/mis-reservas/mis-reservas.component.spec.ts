@@ -3,6 +3,7 @@ import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/route
 import { of, Subject, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { MisReservasComponent } from './mis-reservas.component';
+import { ApiError } from '../../core/interceptors/api-error';
 import {
   Reserva,
   ReservationService,
@@ -137,7 +138,7 @@ describe('Reprogramación desde Mis reservas', () => {
 
   it('mantiene el formulario y refresca la disponibilidad ante un conflicto del servidor', async () => {
     api.reschedule.mockReturnValue(
-      throwError(() => ({ status: 409, error: { message: 'Las fechas fueron ocupadas' } })),
+      throwError(() => new ApiError(409, 'Las fechas fueron ocupadas')),
     );
     mostrar();
     boton('Cambiar fechas')!.click();

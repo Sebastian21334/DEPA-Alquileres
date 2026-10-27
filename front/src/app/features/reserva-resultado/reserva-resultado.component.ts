@@ -1,6 +1,7 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LucideCheck, LucideCopy, LucideKeyRound } from '@lucide/angular';
+import { ApiError } from '../../core/interceptors/api-error';
 import { ChatService } from '../../core/services/chat.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
@@ -291,8 +292,8 @@ export class ReservaResultadoComponent {
         this.resumen.set(resumen);
         this.cargando.set(false);
       },
-      error: (err) => {
-        this.error.set(err?.error?.message ?? 'No pudimos cargar el resumen de la reserva.');
+      error: (err: ApiError) => {
+        this.error.set(err.message);
         this.cargando.set(false);
       },
     });

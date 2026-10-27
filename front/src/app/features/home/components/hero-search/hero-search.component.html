@@ -8,10 +8,10 @@
         @for (m of modalidadesOrdenadas(); track m.id; let i = $index) {
           <a
             [routerLink]="['/publicaciones']"
-            [queryParams]="{ categoria: categoriaDe(m.nombre) }"
+            [queryParams]="{ categoria: categoriaDe(m) }"
             class="modalidad-btn"
-            [class.modalidad-btn--primary]="!esTemporaria(m.nombre)"
-            [class.modalidad-btn--secondary]="esTemporaria(m.nombre)"
+            [class.modalidad-btn--primary]="!esTemporaria(m)"
+            [class.modalidad-btn--secondary]="esTemporaria(m)"
           >
             {{ m.nombre }}
           </a>

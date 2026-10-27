@@ -9,6 +9,7 @@ import {
   PaginaPublicaciones,
 } from './publicaciones.repository.interface';
 import { Reserva } from '../../reservas/entity/reserva.entity';
+import { sqlAdmiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 
 @Injectable()
 export class PublicacionesRepository implements IPublicacionesRepository {
@@ -241,14 +242,11 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     query: SelectQueryBuilder<Publicacion>,
     categoria?: CategoriaInicio,
   ): void {
+    // Misma regla que calendario y reservas: "temporales" son las modalidades por fecha.
     if (categoria === 'temporales')
-      query.andWhere('LOWER(modalidad.nombre) LIKE :temporal', {
-        temporal: '%tempor%',
-      });
+      query.andWhere(sqlAdmiteReservaPorFecha('modalidad'));
     if (categoria === 'largo-plazo')
-      query.andWhere('LOWER(modalidad.nombre) NOT LIKE :temporal', {
-        temporal: '%tempor%',
-      });
+      query.andWhere(`NOT ${sqlAdmiteReservaPorFecha('modalidad')}`);
     if (categoria === 'villa-maria')
       query.andWhere('LOWER(ciudad.nombre) IN (:...ciudades)', {
         ciudades: ['villa maria', 'villa maría'],

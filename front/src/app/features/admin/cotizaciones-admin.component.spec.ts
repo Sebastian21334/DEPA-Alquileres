@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
+import { ApiError } from '../../core/interceptors/api-error';
 import { CotizacionesService, HistorialDolar } from '../../shared/services/cotizaciones.service';
 
 describe('Panel histórico del dólar', () => {
@@ -70,11 +71,13 @@ describe('Panel histórico del dólar', () => {
     expect(texto()).toContain('Disponible para nuevas conversiones');
   });
   it('pagina el historial y permite seguir viendo los datos si falla la nueva consulta', async () => {
-    api.listar.mockReturnValue(throwError(() => new Error('Sin conexión')));
+    api.listar.mockReturnValue(
+      throwError(() => new ApiError(0, 'No pudimos comunicarnos con el servidor.')),
+    );
     boton('Siguiente').click();
     await fixture.whenStable();
     expect(api.listar).toHaveBeenLastCalledWith('', '', 2);
-    expect(texto()).toContain('No se pudo consultar');
+    expect(texto()).toContain('No pudimos comunicarnos con el servidor.');
     expect(texto()).toContain('DolarApi / DolarHoy');
   });
 });

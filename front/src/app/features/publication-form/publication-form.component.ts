@@ -1,20 +1,15 @@
-import {
-  SelectorUbicacionComponent,
-  NombresUbicacion,
-} from '../../shared/components/selector-ubicacion/selector-ubicacion.component';
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { SelectorUbicacionComponent } from '../../shared/components/selector-ubicacion/selector-ubicacion.component';
+import { Component, inject, signal } from '@angular/core';
+import { ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { finalize, forkJoin, map, of, switchMap } from 'rxjs';
+import { finalize, map, of, switchMap } from 'rxjs';
+import { ApiError } from '../../core/interceptors/api-error';
 import { ListingService } from '../home/listing.service';
-import { CatalogoService } from '../../shared/services/catalogo.service';
 import {
   AvailabilityService,
   FechaDisponibleAdministracion,
 } from '../../shared/services/availability.service';
-import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
-import { PublicacionPayload } from '../../shared/models/publicacion.model';
+import { PublicacionFormulario } from '../../shared/forms/publicacion-formulario';
 import { AuthService } from '../../core/services/auth.service';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import { RentalDateRange } from '../../shared/utils/rental-dates';
@@ -24,6 +19,8 @@ import {
   UbicacionConfirmada,
 } from '../../shared/components/location-picker/location-picker.component';
 
+// Edición de una publicación propia (la ruta exige anuncianteGuard). El alta vive en
+// CrearPublicacionComponent; los dos comparten PublicacionFormulario.
 @Component({
   selector: 'app-publication-form',
   standalone: true,
@@ -35,110 +32,33 @@ import {
     LocationPickerComponent,
     SelectorUbicacionComponent,
   ],
+  providers: [PublicacionFormulario],
   templateUrl: './publication-form.component.html',
   styleUrl: './publication-form.component.scss',
 })
 export class PublicationFormComponent {
-  private readonly fb = inject(FormBuilder);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly listings = inject(ListingService);
-  private readonly catalogs = inject(CatalogoService);
   private readonly availabilityApi = inject(AvailabilityService);
-  private readonly destroyRef = inject(DestroyRef);
-  protected readonly auth = inject(AuthService);
+  private readonly auth = inject(AuthService);
+  protected readonly formulario = inject(PublicacionFormulario);
+  protected readonly form = this.formulario.form;
 
-  protected readonly publicationId = Number(this.route.snapshot.paramMap.get('id')) || null;
-  protected readonly editing = this.publicationId !== null;
-  protected readonly loading = signal(this.editing);
+  private readonly publicationId = Number(this.route.snapshot.paramMap.get('id'));
+  protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly error = signal('');
-  protected readonly modalidades = signal<Modalidad[]>([]);
-  protected readonly monedas = signal<TipoMoneda[]>([]);
-  protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
-  protected readonly selectedProvince = signal<number | null>(null);
-  protected readonly selectedCity = signal<number | null>(null);
-  protected readonly selectedModality = signal<number | null>(null);
-  protected readonly latitud = signal<number | null>(null);
-  protected readonly longitud = signal<number | null>(null);
   protected readonly availability = signal<FechaDisponibleAdministracion[]>([]);
   protected readonly availabilityStart = signal<string | null>(null);
   protected readonly availabilityEnd = signal<string | null>(null);
-  protected readonly nombresUbicacion = signal<NombresUbicacion>({ provincia: '', localidad: '' });
-  protected readonly isTemporary = computed(() => {
-    const selected = this.modalidades().find((item) => item.id === this.selectedModality());
-    return (
-      selected?.permite_reservas_por_fecha ??
-      selected?.nombre.toLowerCase().includes('tempor') ??
-      false
-    );
-  });
-  protected readonly selectedProvinceName = computed(() => this.nombresUbicacion().provincia);
-  protected readonly selectedCityName = computed(() => this.nombresUbicacion().localidad);
-
-  protected readonly form = this.fb.group({
-    titulo: ['', [Validators.required, Validators.maxLength(255)]],
-    descripcion: ['', Validators.required],
-    precio: [null as number | null, [Validators.required, Validators.min(1)]],
-    direccion: ['', [Validators.required, Validators.maxLength(255)]],
-    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1)]],
-    superficie: [null as number | null, [Validators.required, Validators.min(1)]],
-    idTipoMoneda: [null as number | null, Validators.required],
-    idModalidad: [null as number | null, Validators.required],
-    idProvincia: [null as number | null, Validators.required],
-    idCiudad: [null as number | null, Validators.required],
-    idTipoPropiedad: [null as number | null, Validators.required],
-  });
 
   constructor() {
-    if (!this.auth.isAuthenticated) {
-      this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });
-      return;
-    }
-
-    this.form.controls.idModalidad.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((value) => this.selectedModality.set(value));
-    this.form.controls.idProvincia.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((value) => {
-        this.selectedProvince.set(value);
-        this.form.controls.idCiudad.setValue(null);
-        this.clearConfirmedLocation();
-      });
-    this.form.controls.idCiudad.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((value) => {
-        this.selectedCity.set(value);
-        this.clearConfirmedLocation();
-      });
-    this.form.controls.direccion.valueChanges
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.clearConfirmedLocation());
-
-    forkJoin({
-      modalidades: this.catalogs.getModalidades(),
-      monedas: this.catalogs.getTiposMoneda(),
-      tipos: this.catalogs.getTiposPropiedad(),
-    }).subscribe({
-      next: ({ modalidades, monedas, tipos }) => {
-        this.modalidades.set(modalidades);
-        this.monedas.set(monedas);
-        this.tiposPropiedad.set(tipos);
-      },
-      error: () => this.error.set('No se pudieron cargar los datos necesarios para publicar.'),
+    this.formulario.cargarCatalogos().subscribe({
+      error: (err: ApiError) =>
+        this.error.set(`No pudimos cargar las opciones del formulario: ${err.message}`),
     });
-
-    if (this.publicationId) this.loadPublication(this.publicationId);
-  }
-
-  protected seleccionarProvincia(id: number | null): void {
-    this.form.controls.idProvincia.setValue(id);
-    this.form.controls.idProvincia.markAsTouched();
-  }
-
-  protected seleccionarLocalidad(id: number | null): void {
-    this.form.controls.idCiudad.setValue(id);
+    this.loadPublication(this.publicationId);
   }
 
   protected selectAvailabilityDate(range: RentalDateRange): void {
@@ -159,7 +79,7 @@ export class PublicationFormComponent {
             current.id === updated.id ? { ...current, disponible: updated.disponible } : current,
           ),
         ),
-      error: (err) => this.error.set(err?.error?.message ?? 'No se pudo modificar ese día.'),
+      error: (err: ApiError) => this.error.set(err.message),
     });
   }
 
@@ -170,7 +90,7 @@ export class PublicationFormComponent {
       this.error.set('Revisá los campos obligatorios antes de continuar.');
       return;
     }
-    if (this.latitud() === null || this.longitud() === null) {
+    if (!this.formulario.ubicacionConfirmada()) {
       this.error.set('Confirmá la ubicación exacta en el mapa antes de guardar.');
       document
         .getElementById('edit-location-map')
@@ -178,18 +98,7 @@ export class PublicationFormComponent {
       return;
     }
     if (
-      this.isTemporary() &&
-      !this.editing &&
-      (!this.availabilityStart() || !this.availabilityEnd())
-    ) {
-      this.error.set(
-        'En un alquiler temporal debés seleccionar el primer y el último día disponible.',
-      );
-      return;
-    }
-    if (
-      this.isTemporary() &&
-      this.editing &&
+      this.formulario.esTemporaria() &&
       !this.availability().length &&
       (!this.availabilityStart() || !this.availabilityEnd())
     ) {
@@ -197,34 +106,14 @@ export class PublicationFormComponent {
       return;
     }
 
-    const raw = this.form.getRawValue();
-    const payload: PublicacionPayload = {
-      titulo: raw.titulo!,
-      descripcion: raw.descripcion!,
-      precio: Number(raw.precio),
-      direccion: raw.direccion!,
-      latitud: this.latitud()!,
-      longitud: this.longitud()!,
-      cantidad_ambientes: Number(raw.cantidad_ambientes),
-      superficie: Number(raw.superficie),
-      idTipoMoneda: Number(raw.idTipoMoneda),
-      idModalidad: Number(raw.idModalidad),
-      idProvincia: Number(raw.idProvincia),
-      idCiudad: Number(raw.idCiudad),
-      idTipoPropiedad: Number(raw.idTipoPropiedad),
-    };
-
     this.saving.set(true);
-    const save$ = this.publicationId
-      ? this.listings.update(this.publicationId, payload)
-      : this.listings.create(payload);
-
-    save$
+    this.listings
+      .update(this.publicationId, this.formulario.payload())
       .pipe(
         switchMap((publication) => {
           const start = this.availabilityStart();
           const end = this.availabilityEnd();
-          if (this.isTemporary() && start && end) {
+          if (this.formulario.esTemporaria() && start && end) {
             return this.availabilityApi
               .addRange(publication.id, start, end)
               .pipe(map(() => publication));
@@ -235,13 +124,12 @@ export class PublicationFormComponent {
       )
       .subscribe({
         next: (publication) => this.router.navigate(['/publicaciones', publication.id]),
-        error: (err) => this.error.set(err?.error?.message ?? 'No se pudo guardar la publicación.'),
+        error: (err: ApiError) => this.error.set(err.message),
       });
   }
 
   protected confirmLocation(location: UbicacionConfirmada): void {
-    this.latitud.set(location.latitud);
-    this.longitud.set(location.longitud);
+    this.formulario.confirmarUbicacion(location);
     if (this.error().startsWith('Confirmá la ubicación')) this.error.set('');
   }
 
@@ -256,34 +144,12 @@ export class PublicationFormComponent {
             this.form.disable();
             return;
           }
-          this.form.patchValue({
-            titulo: item.titulo,
-            descripcion: item.descripcion,
-            precio: Number(item.precio),
-            direccion: item.direccion,
-            cantidad_ambientes: item.cantidad_ambientes,
-            superficie: Number(item.superficie),
-            idTipoMoneda: item.tipoMoneda?.id ?? null,
-            idModalidad: item.modalidad?.id ?? null,
-            idProvincia: item.provincia?.id ?? null,
-            idCiudad: item.ciudad?.id ?? null,
-            idTipoPropiedad: item.tipoPropiedad?.id ?? null,
-          });
-          this.selectedProvince.set(item.provincia?.id ?? null);
-          this.selectedCity.set(item.ciudad?.id ?? null);
-          this.selectedModality.set(item.modalidad?.id ?? null);
-          this.latitud.set(item.latitud == null ? null : Number(item.latitud));
-          this.longitud.set(item.longitud == null ? null : Number(item.longitud));
+          this.formulario.cargar(item);
           this.availabilityApi.getForAdministration(id).subscribe({
             next: (dates) => this.availability.set(dates),
           });
         },
         error: () => this.error.set('No se pudo cargar la publicación que querés modificar.'),
       });
-  }
-
-  private clearConfirmedLocation(): void {
-    this.latitud.set(null);
-    this.longitud.set(null);
   }
 }
