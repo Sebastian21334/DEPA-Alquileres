@@ -7,6 +7,7 @@ import {
   BadRequestException,
   Injectable,
   Inject,
+  Logger,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -37,8 +38,13 @@ const ACCIONES: ReadonlyArray<{ type: AccionVitalidad; label: string }> = [
   { type: 'OPEN_MOUTH', label: 'Abrí la boca' },
 ];
 
+// El desafío dura diez minutos: alcanza para calibrar, repetir un gesto y
+// volver a capturar sin obligar a reiniciar todo el trámite.
+const DURACION_DESAFIO_SEGUNDOS = 10 * 60;
+
 @Injectable()
 export class VerificacionFacialService {
+  private readonly logger = new Logger(VerificacionFacialService.name);
   private readonly umbralCoincidencia = 0.6;
 
   constructor(
@@ -77,18 +83,61 @@ export class VerificacionFacialService {
         actions: instructions.map(({ type }) => type),
         jti: randomUUID(),
       } satisfies DesafioPayload,
-      { expiresIn: '5m' },
+      { expiresIn: '10m' },
     );
-    return { challengeToken, instructions, expiresInSeconds: 300 };
+    return {
+      challengeToken,
+      instructions,
+      expiresInSeconds: DURACION_DESAFIO_SEGUNDOS,
+    };
   }
 
   async cambiarDesafio(idUsuario: number, challengeToken: string) {
-    const anterior = await this.verificarToken<DesafioPayload>(
+    const anterior = await this.leerDesafioParaCambio(
       challengeToken,
-      'face-liveness-challenge',
       idUsuario,
     );
-    return this.crearDesafio(idUsuario, anterior.actions);
+    // Si el desafío anterior venció, se emite uno nuevo. El usuario ya está
+    // autenticado por JWT, así que no hace falta obligarlo a reiniciar el flujo.
+    return this.crearDesafio(idUsuario, anterior?.actions ?? []);
+  }
+
+  /**
+   * Recupera el desafío anterior solo si sigue siendo válido y pertenece al
+   * usuario. Un token vencido no es un error para "cambiar gestos": se emite
+   * uno nuevo. Un token válido de otro usuario sí se rechaza.
+   */
+  private async leerDesafioParaCambio(
+    challengeToken: string,
+    idUsuario: number,
+  ): Promise<DesafioPayload | null> {
+    if (!challengeToken) return null;
+    try {
+      const payload =
+        await this.jwtService.verifyAsync<DesafioPayload>(challengeToken);
+      if (
+        Number(payload.sub) !== idUsuario ||
+        payload.scope !== 'face-liveness-challenge' ||
+        !Array.isArray(payload.actions) ||
+        payload.actions.length !== 3
+      ) {
+        throw new BadRequestException(
+          'La prueba de vida es inválida o venció. Posible causa: pasó demasiado tiempo o la sesión cambió; realizala nuevamente.',
+        );
+      }
+      return payload;
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      if ((error as { name?: string }).name === 'TokenExpiredError') {
+        this.logger.warn(
+          `El desafío facial del usuario ${idUsuario} venció; se emite uno nuevo.`,
+        );
+        return null;
+      }
+      throw new BadRequestException(
+        'La prueba de vida es inválida o venció. Posible causa: pasó demasiado tiempo o la sesión cambió; realizala nuevamente.',
+      );
+    }
   }
 
   async validarVitalidad(
@@ -109,10 +158,17 @@ export class VerificacionFacialService {
 
     const neutralPhoto = archivos.neutralPhoto?.[0];
     const livePhoto = archivos.livePhoto?.[0];
+    // Cada acción puede llegar con hasta dos capturas tomadas con pocos
+    // milisegundos de diferencia. Se acepta la primera que valide, así un
+    // frame tomado justo cuando el gesto empezaba a bajar no invalida toda la prueba.
     const actionPhotos = payload.actions.map(
-      (_, index) => archivos[`action${index}`]?.[0],
+      (_, index) => archivos[`action${index}`] ?? [],
     );
-    if (!neutralPhoto || !livePhoto || actionPhotos.some((foto) => !foto)) {
+    if (
+      !neutralPhoto ||
+      !livePhoto ||
+      actionPhotos.some((fotos) => fotos.length === 0)
+    ) {
       throw new BadRequestException('Faltan capturas de la prueba de vida');
     }
 
@@ -121,13 +177,40 @@ export class VerificacionFacialService {
       'la captura neutral',
     );
     for (let index = 0; index < payload.actions.length; index++) {
-      const evidencia = actionPhotos[index]!;
-      const analisis = await this.analisis.analizarRostro(
-        evidencia.buffer,
-        `la evidencia del movimiento ${index + 1}`,
-      );
-      this.validarMismaPersona(neutral, analisis);
-      this.validarAccion(payload.actions[index], neutral, analisis);
+      const accion = payload.actions[index];
+      const evidencias = actionPhotos[index];
+      let validada = false;
+      let ultimoError: Error | null = null;
+
+      for (const [frameIndex, evidencia] of evidencias.entries()) {
+        try {
+          const analisis = await this.analisis.analizarRostro(
+            evidencia.buffer,
+            `la evidencia del movimiento ${index + 1} (${accion}), captura ${frameIndex + 1}`,
+          );
+          this.validarMismaPersona(neutral, analisis);
+          this.validarAccion(accion, neutral, analisis);
+          validada = true;
+          break;
+        } catch (error) {
+          ultimoError = error as Error;
+          this.logger.debug(
+            `Movimiento ${index + 1} (${accion}), captura ${frameIndex + 1} rechazada: ${(error as Error).message}`,
+          );
+        }
+      }
+
+      if (!validada) {
+        this.logger.warn(
+          `No se pudo validar el movimiento ${index + 1} (${accion}) con ${evidencias.length} captura(s): ${ultimoError?.message ?? 'sin detalle'}`,
+        );
+        throw (
+          ultimoError ??
+          new UnprocessableEntityException(
+            `No se pudo validar la acción “${ACCIONES.find(({ type }) => type === accion)?.label}”.`,
+          )
+        );
+      }
     }
 
     const live = await this.analisis.analizarRostro(
@@ -209,17 +292,20 @@ export class VerificacionFacialService {
     neutral: AnalisisRostro,
     evidencia: AnalisisRostro,
   ): void {
+    // Los umbrales son algo más tolerantes que los del front (0.07 / 0.18 /
+    // 0.45) porque face-api mide con otros landmarks y el frame capturado
+    // puede tener menos recorrido que el que vio MediaPipe.
     const yaw = evidencia.yaw - neutral.yaw;
     const roll = evidencia.roll - neutral.roll;
     const valida =
       accion === 'TURN_LEFT'
-        ? yaw >= 0.06
+        ? yaw >= 0.05
         : accion === 'TURN_RIGHT'
-          ? yaw <= -0.06
+          ? yaw <= -0.05
           : accion === 'TILT_HEAD'
-            ? Math.abs(roll) >= 0.15
-            : evidencia.aperturaBoca >= 0.16 &&
-              evidencia.aperturaBoca >= neutral.aperturaBoca + 0.05;
+            ? Math.abs(roll) >= 0.1
+            : evidencia.aperturaBoca >= 0.12 &&
+              evidencia.aperturaBoca >= neutral.aperturaBoca + 0.03;
     if (!valida) {
       const causa =
         accion === 'OPEN_MOUTH'
@@ -247,7 +333,7 @@ export class VerificacionFacialService {
       return payload;
     } catch {
       throw new BadRequestException(
-        'La prueba de vida es inválida o venció. Posible causa: pasaron más de cinco minutos; realizala nuevamente.',
+        'La prueba de vida es inválida o venció. Posible causa: pasó demasiado tiempo o la sesión cambió; realizala nuevamente.',
       );
     }
   }

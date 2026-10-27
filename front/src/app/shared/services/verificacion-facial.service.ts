@@ -36,13 +36,17 @@ export class VerificacionFacialService {
   validarVitalidad(
     challengeToken: string,
     neutralPhoto: File,
-    actionPhotos: File[],
+    actionPhotos: File[][],
     livePhoto: File,
   ) {
     const body = new FormData();
     body.append('challengeToken', challengeToken);
     body.append('neutralPhoto', neutralPhoto);
-    actionPhotos.forEach((photo, index) => body.append(`action${index}`, photo));
+    // Cada gesto viaja con dos capturas separadas por pocos milisegundos;
+    // el backend acepta la primera que logre validar.
+    actionPhotos.forEach((frames, index) => {
+      frames.forEach((frame) => body.append(`action${index}`, frame));
+    });
     body.append('livePhoto', livePhoto);
     return this.http.post<VitalidadValidada>(`${this.api}/validar`, body);
   }

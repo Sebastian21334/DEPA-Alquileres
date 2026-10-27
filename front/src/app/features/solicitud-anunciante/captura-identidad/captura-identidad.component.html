@@ -71,13 +71,20 @@
         [class.current]="fase() === 'centering' || fase() === 'capturing'"
       >Mirar a la cámara para la foto final</li>
     </ol>
+    @if (fase() !== 'complete') {
+      @if (segundosRestantes() > 0) {
+        <p class="challenge-timer" role="status">El desafío vence en {{ tiempoRestante() }}</p>
+      } @else if (instrucciones().length) {
+        <p class="challenge-timer challenge-timer--expired" role="status">El desafío venció. Cambiá los gestos o reintentá.</p>
+      }
+    }
     @if (fase() !== 'capturing' && fase() !== 'validating' && fase() !== 'complete') {
       <button
         type="button"
         class="change-challenge"
         (click)="cambiarGestos()"
         [disabled]="cambiandoDesafio() || procesando()"
-      >{{ cambiandoDesafio() ? 'Buscando otros gestos…' : 'Cambiar estos gestos' }}</button>
+      >{{ cambiandoDesafio() ? 'Buscando otros gestos…' : (fase() === 'error' ? 'Cambiar gestos y reintentar' : 'Cambiar estos gestos') }}</button>
     }
   }
 
@@ -111,7 +118,7 @@
     <div class="capture-error" role="alert">
       <strong>No pudimos validar la identidad.</strong>
       <p>{{ error() }}</p>
-      <p>Revisá la luz, evitá reflejos en el DNI y asegurate de que aparezca una sola persona.</p>
+      <p>Revisá la luz, mantené una sola cara dentro del óvalo y repetí el gesto.</p>
     </div>
   }
 

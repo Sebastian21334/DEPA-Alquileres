@@ -9,6 +9,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import { ANUNCIANTES_REPOSITORY } from '../repository/anunciantes.repository.interface';
 import type { IAnunciantesRepository } from '../repository/anunciantes.repository.interface';
@@ -31,6 +32,11 @@ import { VerificacionFacialService } from './verificacion-facial.service';
 @Injectable()
 export class AnunciantesService {
   private readonly logger = new Logger(AnunciantesService.name);
+  /**
+   * En local se puede desactivar la comparación automática entre el rostro
+   * del DNI y la prueba de vida. En producción el valor por defecto es true.
+   */
+  private readonly validarCoincidenciaDni: boolean;
 
   constructor(
     @Inject(ANUNCIANTES_REPOSITORY)
@@ -44,7 +50,20 @@ export class AnunciantesService {
     @Inject(ARCHIVO_REPOSITORY)
     private readonly archivosRepo: IArchivoRepository,
     private readonly verificacionFacialService: VerificacionFacialService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    const valor = (
+      this.config.get<string>('VALIDAR_COINCIDENCIA_DNI') ?? 'true'
+    )
+      .trim()
+      .toLowerCase();
+    this.validarCoincidenciaDni = !['false', '0', 'no'].includes(valor);
+    if (!this.validarCoincidenciaDni) {
+      this.logger.warn(
+        'Coincidencia DNI-rostro deshabilitada (VALIDAR_COINCIDENCIA_DNI=false). Solo para desarrollo local.',
+      );
+    }
+  }
 
   /** Guarda los datos como borrador y evita que un usuario tenga dos solicitudes. */
   async solicitarAlta(idUsuario: number, dto: SolicitarAnuncianteDto) {
@@ -143,18 +162,21 @@ export class AnunciantesService {
       verificationToken,
       rostro.buffer,
     );
-    const comparacion =
-      await this.verificacionFacialService.compararConDocumento(
-        frente.buffer,
-        rostro.buffer,
-      );
-    if (!comparacion.match) {
-      throw new BadRequestException(
-        `El rostro no coincide con la foto del DNI. Posibles causas: el documento no pertenece a la persona frente a la cámara, la foto está borrosa, tiene reflejos o hay poca luz. Distancia: ${comparacion.distance.toFixed(3)}.`,
-      );
+    if (this.validarCoincidenciaDni) {
+      const comparacion =
+        await this.verificacionFacialService.compararConDocumento(
+          frente.buffer,
+          rostro.buffer,
+        );
+      if (!comparacion.match) {
+        throw new BadRequestException(
+          `El rostro no coincide con la foto del DNI. Posibles causas: el documento no pertenece a la persona frente a la cámara, la foto está borrosa, tiene reflejos o hay poca luz. Distancia: ${comparacion.distance.toFixed(3)}.`,
+        );
+      }
     }
 
-    // Recién después de validar vitalidad y coincidencia se persisten los archivos.
+    // Recién después de validar vitalidad y, si está habilitada, la
+    // coincidencia con el DNI, se persisten los archivos.
     solicitud.presentarDocumentos(
       {
         dniFrente: await this.subirDocumento(frente, idUsuario, 'dni-frente'),
