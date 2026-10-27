@@ -10,7 +10,7 @@ import { createHmac } from 'node:crypto';
 import { CotizacionesService } from '../../cotizaciones/service/cotizaciones.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
-import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
+import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   decimalEntero,
   importeTexto,
@@ -72,7 +72,7 @@ export class PresupuestosService {
     );
     if (!publicacion.activa || !admiteReservaPorFecha(publicacion.modalidad))
       throw new BadRequestException('Esta publicación no admite reservas');
-    if (publicacion.anunciante?.idUsuario === idUsuario)
+    if (publicacion.perteneceA(idUsuario))
       throw new BadRequestException('No podés reservar tu propia publicación');
     const dias = Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
     let moneda: 'ARS' | 'USD', unitario: bigint, origen: string;

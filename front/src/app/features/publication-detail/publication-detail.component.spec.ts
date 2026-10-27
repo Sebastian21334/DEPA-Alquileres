@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { NEVER, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { PublicationDetailComponent } from './publication-detail.component';
+import { ApiError } from '../../core/interceptors/api-error';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { ListingService } from '../home/listing.service';
@@ -58,7 +59,12 @@ describe('Fechas de la reserva', () => {
         {
           provide: ListingService,
           useValue: {
-            getById: () => of({ id: 42, precio: 25000, modalidad: { nombre: 'Temporario' } }),
+            getById: () =>
+              of({
+                id: 42,
+                precio: 25000,
+                modalidad: { nombre: 'Temporario', admite_reservas_por_fecha: true },
+              }),
             registerView: () => of(undefined),
           },
         },
@@ -135,7 +141,7 @@ describe('Fechas de la reserva', () => {
     fixture.detectChanges();
   }
   it('si el backend o la fuente no pueden cotizar, no permite iniciar el cobro', () => {
-    quote.mockReturnValue(throwError(() => ({ error: { message: 'Cotización no disponible' } })));
+    quote.mockReturnValue(throwError(() => new ApiError(503, 'Cotización no disponible')));
     seleccionarDia();
     fixture.componentInstance['confirmPayment'](new Event('submit'));
     expect(checkout).not.toHaveBeenCalled();

@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, PLATFORM_ID, ViewChild
 import { isPlatformBrowser } from '@angular/common';
 import { finalize } from 'rxjs';
 import type { LeafletMouseEvent, Map as LeafletMap, Marker } from 'leaflet';
+import { ApiError } from '../../../core/interceptors/api-error';
 import { ResultadoGeocodificacion, UbicacionService } from '../../services/ubicacion.service';
 
 export interface UbicacionConfirmada {
@@ -115,7 +116,7 @@ export class LocationPickerComponent implements AfterViewInit, OnDestroy {
           }
           this.selectResult(results[0]);
         },
-        error: (err) => this.error.set(err?.error?.message ?? 'No pudimos buscar la dirección. Intentá nuevamente.'),
+        error: (err: ApiError) => this.error.set(err.message),
       });
   }
 

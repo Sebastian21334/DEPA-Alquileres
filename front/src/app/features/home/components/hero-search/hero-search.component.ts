@@ -1,7 +1,7 @@
 import { Component, computed, inject, input } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
-import { Modalidad } from '../../../../shared/models/catalogo.model';
+import { Modalidad, admiteReservasPorFecha } from '../../../../shared/models/catalogo.model';
 import { LucideSearch } from '@lucide/angular';
 
 // Hero de la Home: título + selector de modalidad de alquiler (mapea a la
@@ -22,16 +22,14 @@ export class HeroSearchComponent {
 
   protected readonly modalidadesOrdenadas = computed(() =>
     [...this.modalidades()].sort(
-      (a, b) => Number(this.esTemporaria(a.nombre)) - Number(this.esTemporaria(b.nombre)),
+      (a, b) => Number(admiteReservasPorFecha(a)) - Number(admiteReservasPorFecha(b)),
     ),
   );
 
-  protected esTemporaria(nombre: string): boolean {
-    return nombre.toLowerCase().includes('tempor');
-  }
+  protected readonly esTemporaria = admiteReservasPorFecha;
 
-  protected categoriaDe(nombre: string): 'temporales' | 'largo-plazo' {
-    return this.esTemporaria(nombre) ? 'temporales' : 'largo-plazo';
+  protected categoriaDe(modalidad: Modalidad): 'temporales' | 'largo-plazo' {
+    return admiteReservasPorFecha(modalidad) ? 'temporales' : 'largo-plazo';
   }
 
   protected onSubmit(): void {

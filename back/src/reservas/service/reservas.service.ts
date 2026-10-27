@@ -10,7 +10,7 @@ import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transacc
 import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { generarCodigoAlojamiento } from './reservas.utils';
-import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
+import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   Inject,
   Injectable,
@@ -73,7 +73,7 @@ export class ReservasService {
         'No se puede reservar una publicación inactiva',
       );
     }
-    if (publicacion.anunciante?.idUsuario === idUsuario) {
+    if (publicacion.perteneceA(idUsuario)) {
       throw new BadRequestException('No podés reservar tu propia publicación');
     }
     if (!admiteReservaPorFecha(publicacion.modalidad)) {
@@ -255,20 +255,10 @@ export class ReservasService {
         if (reserva.cancelada)
           throw new ConflictException('La reserva ya fue cancelada');
 
-        let guardada = reserva;
-        if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
-          reserva.estado_pago = EstadoPagoReserva.APROBADO;
-          reserva.fecha_pago = fechaPago;
-          reserva.pago_vencimiento = null;
-          reserva.codigo_alojamiento = generarCodigoAlojamiento();
-          reserva.codigo_generado_en = new Date();
-          reserva.codigo_validado_en = null;
-          reserva.intentos_codigo = 0;
-          reserva.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
-          guardada = await reservaRepository.guardar(reserva);
-        }
-
-        return guardada;
+        // Mercado Pago puede notificar el mismo pago más de una vez.
+        if (reserva.pagoAprobado()) return reserva;
+        reserva.confirmarPago(fechaPago, generarCodigoAlojamiento());
+        return reservaRepository.guardar(reserva);
       },
     );
     await this.notificacionesService.enviarConfirmacion(guardada);
@@ -285,17 +275,10 @@ export class ReservasService {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
-        if (reserva.estado_pago === EstadoPagoReserva.APROBADO) return reserva;
+        if (reserva.pagoAprobado()) return reserva;
         if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
 
-        reserva.estado_pago = estado;
-        reserva.estado_liquidacion =
-          estado === EstadoPagoReserva.REEMBOLSADO
-            ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
-            : EstadoLiquidacionReserva.NO_APLICA;
-        reserva.cancelada = true;
-        reserva.fecha_cancelacion = new Date();
-        reserva.pago_vencimiento = null;
+        reserva.cerrarSinPago(estado);
         const guardada = await reservaRepository.guardar(reserva);
         await this.disponibilidadService.liberarReserva(id, fechaRepository);
         return guardada;
@@ -318,13 +301,11 @@ export class ReservasService {
     idPublicacion: number,
     idUsuarioQueOpera: number,
   ): Promise<Reserva[]> {
-    const publicacion =
-      await this.publicacionesService.buscarPorId(idPublicacion);
-    if (publicacion.anunciante?.idUsuario !== idUsuarioQueOpera) {
-      throw new ForbiddenException(
-        'No tenés permiso para consultar las reservas de esta publicación',
-      );
-    }
+    await this.publicacionesService.obtenerPropia(
+      idPublicacion,
+      idUsuarioQueOpera,
+      'No tenés permiso para consultar las reservas de esta publicación',
+    );
     return this.reservaRepository.buscarPorPublicacion(idPublicacion);
   }
 
@@ -373,7 +354,7 @@ export class ReservasService {
 
         // Finalizar es una acción de gestión de la estadía; la realiza el
         // anunciante dueño. El inquilino puede consultar su propia reserva.
-        if (reserva.publicacion?.anunciante?.idUsuario !== idUsuarioQueOpera) {
+        if (!reserva.esDelAnunciante(idUsuarioQueOpera)) {
           throw new ForbiddenException(
             'Solo el anunciante de la publicación puede finalizar la reserva',
           );
@@ -382,17 +363,17 @@ export class ReservasService {
           throw new BadRequestException(
             'No se puede finalizar una reserva cancelada',
           );
-        if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+        if (!reserva.pagoAprobado()) {
           throw new BadRequestException(
             'No se puede finalizar una reserva cuyo pago no fue aprobado',
           );
         }
-        if (!reserva.codigo_validado_en) {
+        if (!reserva.codigoValidado()) {
           throw new BadRequestException(
             'No se puede finalizar la estadía antes de validar el código de alojamiento',
           );
         }
-        reserva.finalizada = true;
+        reserva.finalizar();
         return reservaRepository.guardar(reserva);
       },
     );
@@ -411,14 +392,13 @@ export class ReservasService {
             'No se puede cancelar una reserva finalizada',
           );
         if (reserva.cancelada) return reserva;
-        if (reserva.estado_pago === EstadoPagoReserva.APROBADO) {
+        if (reserva.pagoAprobado()) {
           throw new BadRequestException(
             'La reserva está pagada. Primero debe implementarse y procesarse su devolución en Mercado Pago.',
           );
         }
 
-        reserva.cancelada = true;
-        reserva.fecha_cancelacion = new Date();
+        reserva.cancelar();
         const guardada = await reservaRepository.guardar(reserva);
         await this.disponibilidadService.liberarReserva(
           reserva.id,
@@ -440,17 +420,17 @@ export class ReservasService {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
-        if (reserva.usuario?.id !== idUsuarioQueOpera) {
+        if (!reserva.esDelInquilino(idUsuarioQueOpera)) {
           throw new ForbiddenException(
             'Solo el inquilino que realizó la reserva puede cambiar sus fechas',
           );
         }
-        if (reserva.cancelada || reserva.finalizada) {
+        if (reserva.estaCerrada()) {
           throw new BadRequestException(
             'No se pueden modificar las fechas de una reserva cerrada',
           );
         }
-        if (reserva.estado_pago !== EstadoPagoReserva.APROBADO) {
+        if (!reserva.pagoAprobado()) {
           throw new BadRequestException(
             'No se pueden modificar las fechas hasta que el pago esté aprobado',
           );
@@ -545,17 +525,15 @@ export class ReservasService {
           );
         const anteriorInicio = reserva.fecha_inicio;
         const anteriorFin = reserva.fecha_fin;
-        reserva.fecha_inicio = dto.fecha_inicio;
-        reserva.fecha_fin = dto.fecha_fin;
+        reserva.reprogramar(dto.fecha_inicio, dto.fecha_fin);
         await reservaRepository.guardar(reserva);
-        const propietario = reserva.publicacion.anunciante?.usuario;
         const cambio = await reservaRepository.guardarReprogramacion({
           reserva,
           fecha_inicio_anterior: anteriorInicio,
           fecha_fin_anterior: anteriorFin,
           fecha_inicio_nueva: dto.fecha_inicio,
           fecha_fin_nueva: dto.fecha_fin,
-          destinatario: propietario?.email ?? null,
+          destinatario: reserva.emailDelAnunciante() ?? null,
           notificada_en: null,
           detalle: {
             conversion:
@@ -574,14 +552,8 @@ export class ReservasService {
                 : undefined,
             idReserva: reserva.id,
             titulo: reserva.publicacion.titulo,
-            nombreAnunciante:
-              [propietario?.nombre, propietario?.apellido]
-                .filter(Boolean)
-                .join(' ') || 'Anfitrión',
-            nombreInquilino:
-              [reserva.usuario_nombre, reserva.usuario_apellido]
-                .filter(Boolean)
-                .join(' ') || 'Inquilino',
+            nombreAnunciante: reserva.nombreDelAnunciante() || 'Anfitrión',
+            nombreInquilino: reserva.nombreInquilino() || 'Inquilino',
             inicioAnterior: anteriorInicio,
             finAnterior: anteriorFin,
             inicioNuevo: dto.fecha_inicio,
@@ -618,10 +590,7 @@ export class ReservasService {
     reserva: Reserva,
     idUsuarioQueOpera: number,
   ): void {
-    const esInquilino = reserva.usuario?.id === idUsuarioQueOpera;
-    const esAnunciante =
-      reserva.publicacion?.anunciante?.idUsuario === idUsuarioQueOpera;
-    if (!esInquilino && !esAnunciante) {
+    if (!reserva.participa(idUsuarioQueOpera)) {
       throw new ForbiddenException(
         'No tenés permiso para consultar esta reserva',
       );

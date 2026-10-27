@@ -58,9 +58,8 @@ export class MensajesService {
       dto.id_publicacion,
     );
 
-    const idAnunciante = publicacion.anunciante.usuario.id;
-    if (idAnunciante !== dto.id_destino_usuario) {
-      const esAnunciante = idUsuarioOrigen === idAnunciante;
+    if (!publicacion.perteneceA(dto.id_destino_usuario)) {
+      const esAnunciante = publicacion.perteneceA(idUsuarioOrigen);
       const [hayConversacion, hayReservaAprobada] = esAnunciante
         ? await Promise.all([
             this.mensajeRepository.existeConversacion(
@@ -105,8 +104,8 @@ export class MensajesService {
       try {
         await this.mailService.enviarMensajeNuevo(
           destinatario.email,
-          `${destinatario.nombre} ${destinatario.apellido}`.trim(),
-          `${remitente.nombre} ${remitente.apellido}`.trim(),
+          destinatario.nombreCompleto(),
+          remitente.nombreCompleto(),
           publicacion.titulo,
           publicacion.id,
         );

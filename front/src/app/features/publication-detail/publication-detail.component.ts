@@ -17,10 +17,12 @@ import {
   LucideMapPin,
   LucideRuler,
 } from '@lucide/angular';
+import { ApiError } from '../../core/interceptors/api-error';
 import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { ListingService } from '../home/listing.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
@@ -103,14 +105,9 @@ export class PublicationDetailComponent {
     const id = this.publication()?.id;
     return id ? this.favorites.isFavorite(id) : false;
   });
-  protected readonly esTemporaria = computed(() => {
-    const modalidad = this.publication()?.modalidad;
-    return (
-      modalidad?.permite_reservas_por_fecha ??
-      modalidad?.nombre.toLowerCase().includes('tempor') ??
-      false
-    );
-  });
+  protected readonly esTemporaria = computed(() =>
+    admiteReservasPorFecha(this.publication()?.modalidad),
+  );
   protected readonly advertiserName = computed(() => {
     const user = this.publication()?.anunciante?.usuario;
     return user ? `${user.nombre} ${user.apellido}`.trim() : 'Anunciante';
@@ -321,10 +318,7 @@ export class PublicationDetailComponent {
       )
       .subscribe({
         next: (presupuesto) => this.presupuesto.set(presupuesto),
-        error: (err) =>
-          this.bookingError.set(
-            err?.error?.message ?? 'No pudimos cotizar la reserva. Intentá nuevamente.',
-          ),
+        error: (err: ApiError) => this.bookingError.set(err.message),
       });
   }
   protected presupuestoVencido(): boolean {
@@ -380,14 +374,12 @@ export class PublicationDetailComponent {
           }
           window.location.assign(checkout.checkout_url);
         },
-        error: (err) => {
+        error: (err: ApiError) => {
           if (err.status === 409) {
             this.presupuesto.set(null);
             this.aceptaConversion.set(false);
           }
-          this.bookingError.set(
-            err?.error?.message ?? 'No se pudo iniciar el pago con Mercado Pago.',
-          );
+          this.bookingError.set(err.message);
           this.loadAvailability(item.id);
         },
       });

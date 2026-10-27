@@ -107,10 +107,10 @@ export class AnunciantesService {
   ) {
     // Se recupera la solicitud vigente y se impide modificar una ya aprobada.
     const solicitud = await this.obtenerSolicitud(idUsuario);
-    if (solicitud.estado === EstadoVerificacion.APROBADA) {
+    if (solicitud.estaAprobada()) {
       throw new ConflictException('La identidad ya fue aprobada');
     }
-    if (reenvio && solicitud.estado !== EstadoVerificacion.RECHAZADA) {
+    if (reenvio && !solicitud.estaRechazada()) {
       throw new ConflictException(
         'Solo se puede reenviar una solicitud rechazada',
       );
@@ -155,37 +155,26 @@ export class AnunciantesService {
     }
 
     // Recién después de validar vitalidad y coincidencia se persisten los archivos.
-    solicitud.dni_frente_url = await this.subirDocumento(
-      frente,
-      idUsuario,
-      'dni-frente',
+    solicitud.presentarDocumentos(
+      {
+        dniFrente: await this.subirDocumento(frente, idUsuario, 'dni-frente'),
+        dniDorso: await this.subirDocumento(dorso, idUsuario, 'dni-dorso'),
+        rostro: await this.subirDocumento(rostro, idUsuario, 'rostro'),
+      },
+      reenvio,
     );
-    solicitud.dni_dorso_url = await this.subirDocumento(
-      dorso,
-      idUsuario,
-      'dni-dorso',
-    );
-    solicitud.rostro_url = await this.subirDocumento(
-      rostro,
-      idUsuario,
-      'rostro',
-    );
-    // Un reenvío representa una nueva revisión independiente en el historial.
-    if (reenvio) solicitud.numero_revision += 1;
-    solicitud.estado = reenvio
-      ? EstadoVerificacion.REENVIADA
-      : EstadoVerificacion.PENDIENTE;
-    solicitud.motivo_rechazo = null;
-    solicitud.actualizada_en = new Date();
 
     const guardada = await this.verificacionRepo.guardarSolicitud(solicitud);
     try {
+      const email = solicitud.emailSolicitante();
+      if (!email)
+        throw new Error('El solicitante no tiene un correo registrado');
       const administradores =
         await this.usuariosService.emailsAdministradores();
       await this.mailService.enviarSolicitudParaRevision(
         administradores,
-        `${solicitud.anunciante.usuario.nombre} ${solicitud.anunciante.usuario.apellido}`.trim(),
-        solicitud.anunciante.usuario.email,
+        solicitud.nombreSolicitante(),
+        email,
       );
     } catch (error) {
       this.logger.error(
@@ -207,32 +196,21 @@ export class AnunciantesService {
     // No se puede aprobar una solicitud que no tenga los tres documentos.
     const solicitud =
       await this.verificacionRepo.buscarSolicitudPorAnunciante(idAnunciante);
-    if (
-      !solicitud ||
-      !solicitud.dni_frente_url ||
-      !solicitud.dni_dorso_url ||
-      !solicitud.rostro_url
-    ) {
+    if (!solicitud?.tieneDocumentacionCompleta()) {
       throw new ConflictException(
         'La solicitud todavía no tiene toda la documentación requerida',
       );
     }
-    if (
-      ![EstadoVerificacion.PENDIENTE, EstadoVerificacion.REENVIADA].includes(
-        solicitud.estado,
-      )
-    ) {
+    if (!solicitud.estaPendienteDeRevision()) {
       throw new ConflictException(
         'La solicitud no está pendiente de aprobación',
       );
     }
 
     // El booleano existente se mantiene como dato rápido para AnuncianteGuard.
-    anunciante.verificado = true;
+    anunciante.verificar();
     const actualizado = await this.anunciantesRepo.guardar(anunciante);
-    solicitud.estado = EstadoVerificacion.APROBADA;
-    solicitud.motivo_rechazo = null;
-    solicitud.actualizada_en = new Date();
+    solicitud.aprobar();
     await this.verificacionRepo.guardarSolicitud(solicitud);
     // Se registra también la aprobación para conservar auditoría completa.
     await this.guardarRevision(solicitud, EstadoVerificacion.APROBADA);
@@ -240,14 +218,14 @@ export class AnunciantesService {
     // La aprobación ya quedó persistida (anunciante.verificado = true). Si
     // el mail de notificación falla o el proveedor rate-limitea, no debe
     // revertirse ni reportarse como error: el anunciante ya puede publicar.
+    const email = anunciante.email();
     try {
-      await this.mailService.enviarResultadoVerificacion(
-        anunciante.usuario.email,
-        true,
-      );
+      if (!email)
+        throw new Error('El anunciante no tiene un correo registrado');
+      await this.mailService.enviarResultadoVerificacion(email, true);
     } catch (error) {
       this.logger.error(
-        `No se pudo enviar el mail de aprobación a ${anunciante.usuario.email}`,
+        `No se pudo enviar el mail de aprobación a ${email}`,
         error as Error,
       );
     }
@@ -274,9 +252,7 @@ export class AnunciantesService {
       throw new NotFoundException('Solicitud de verificación no encontrada');
 
     // Rechazar ya no elimina al anunciante: conserva la solicitud y habilita corregirla.
-    solicitud.estado = EstadoVerificacion.RECHAZADA;
-    solicitud.motivo_rechazo = dto.motivo.trim();
-    solicitud.actualizada_en = new Date();
+    solicitud.rechazar(dto.motivo);
     await this.verificacionRepo.guardarSolicitud(solicitud);
     await this.guardarRevision(
       solicitud,
@@ -285,15 +261,18 @@ export class AnunciantesService {
     );
 
     // Mismo criterio que en aprobar(): el rechazo ya quedó persistido.
+    const email = anunciante.email();
     try {
+      if (!email)
+        throw new Error('El anunciante no tiene un correo registrado');
       await this.mailService.enviarResultadoVerificacion(
-        anunciante.usuario.email,
+        email,
         false,
-        solicitud.motivo_rechazo,
+        solicitud.motivo_rechazo ?? undefined,
       );
     } catch (error) {
       this.logger.error(
-        `No se pudo enviar el mail de rechazo a ${anunciante.usuario.email}`,
+        `No se pudo enviar el mail de rechazo a ${email}`,
         error as Error,
       );
     }

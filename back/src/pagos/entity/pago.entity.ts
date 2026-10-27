@@ -55,4 +55,37 @@ export class Pago {
 
   @UpdateDateColumn({ type: 'timestamp' })
   updated_at: Date;
+
+  // Tolerancia de redondeo al comparar importes con dos decimales.
+  private static readonly TOLERANCIA_IMPORTE = 0.009;
+
+  importeCoincide(importe: number): boolean {
+    return (
+      Number.isFinite(importe) &&
+      Math.abs(importe - Number(this.amount)) <= Pago.TOLERANCIA_IMPORTE
+    );
+  }
+
+  monedaCoincide(moneda: string | undefined): boolean {
+    return moneda === this.currency;
+  }
+
+  registrarPreferencia(preferenceId: string): void {
+    this.preference_id = preferenceId;
+  }
+
+  /** Guarda el resultado que informó la pasarela para este pago. */
+  registrarResultado(resultado: {
+    paymentId: string;
+    status: string;
+    statusDetail: string | null;
+    paymentMethodId: string | null;
+    approvedAt: Date | null;
+  }): void {
+    this.payment_id = resultado.paymentId;
+    this.status = resultado.status;
+    this.status_detail = resultado.statusDetail;
+    this.payment_method_id = resultado.paymentMethodId;
+    this.approved_at = resultado.approvedAt;
+  }
 }

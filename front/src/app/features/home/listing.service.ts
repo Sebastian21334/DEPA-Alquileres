@@ -72,10 +72,6 @@ export class ListingService {
     });
   }
 
-  create(payload: PublicacionPayload): Observable<Publicacion> {
-    return this.http.post<Publicacion>(this.baseUrl, payload);
-  }
-
   update(id: number, payload: Partial<PublicacionPayload>): Observable<Publicacion> {
     return this.http.patch<Publicacion>(`${this.baseUrl}/${id}`, payload);
   }

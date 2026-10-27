@@ -1,8 +1,8 @@
 <section class="publication-page">
   <header class="page-heading">
     <a routerLink="/">← Volver</a>
-    <span>{{ editing ? 'Administrar propiedad' : 'Nueva propiedad' }}</span>
-    <h1>{{ editing ? 'Modificar publicación' : 'Crear una publicación' }}</h1>
+    <span>Administrar propiedad</span>
+    <h1>Modificar publicación</h1>
     <p>Completá los datos del inmueble. Los campos marcados son obligatorios.</p>
   </header>
 
@@ -26,6 +26,7 @@
           ><input
             id="title"
             formControlName="titulo"
+            maxlength="255"
             placeholder="Ej. Departamento luminoso en el centro"
           />
         </div>
@@ -35,6 +36,7 @@
             id="description"
             rows="5"
             formControlName="descripcion"
+            maxlength="255"
             placeholder="Contá qué hace especial a la propiedad"
           ></textarea>
         </div>
@@ -42,7 +44,7 @@
           <label for="modality">Modalidad *</label
           ><select id="modality" formControlName="idModalidad">
             <option [ngValue]="null">Seleccionar</option>
-            @for (item of modalidades(); track item.id) {
+            @for (item of formulario.modalidades(); track item.id) {
               <option [ngValue]="item.id">{{ item.nombre }}</option>
             }
           </select>
@@ -51,20 +53,20 @@
           <label for="propertyType">Tipo de propiedad *</label
           ><select id="propertyType" formControlName="idTipoPropiedad">
             <option [ngValue]="null">Seleccionar</option>
-            @for (item of tiposPropiedad(); track item.id) {
+            @for (item of formulario.tiposPropiedad(); track item.id) {
               <option [ngValue]="item.id">{{ item.nombre }}</option>
             }
           </select>
         </div>
         <div class="field">
-          <label for="price">Precio {{ isTemporary() ? 'por día' : 'mensual' }} *</label
+          <label for="price">Precio {{ formulario.esTemporaria() ? 'por día' : 'mensual' }} *</label
           ><input id="price" type="number" min="1" formControlName="precio" />
         </div>
         <div class="field">
           <label for="currency">Moneda *</label
           ><select id="currency" formControlName="idTipoMoneda">
             <option [ngValue]="null">Seleccionar</option>
-            @for (item of monedas(); track item.id) {
+            @for (item of formulario.monedas(); track item.id) {
               <option [ngValue]="item.id">{{ item.nombre }}</option>
             }
           </select>
@@ -81,31 +83,34 @@
         </div>
         <div class="field field--full">
           <label for="address">Dirección *</label
-          ><input id="address" formControlName="direccion" placeholder="Calle y número" />
+          ><input
+            id="address"
+            formControlName="direccion"
+            maxlength="255"
+            placeholder="Calle y número"
+          />
         </div>
         <app-selector-ubicacion
           class="field--full"
           idPrefix="editar-ubicacion"
           [required]="true"
-          [provinciaId]="selectedProvince()"
-          [localidadId]="selectedCity()"
+          [provinciaId]="formulario.provincia()"
+          [localidadId]="formulario.ciudad()"
           [disabled]="form.disabled || saving()"
-          [invalidProvincia]="
-            form.controls.idProvincia.invalid && form.controls.idProvincia.touched
-          "
-          [invalidLocalidad]="form.controls.idCiudad.invalid && form.controls.idCiudad.touched"
-          (provinciaChange)="seleccionarProvincia($event)"
-          (localidadChange)="seleccionarLocalidad($event)"
-          (nombresChange)="nombresUbicacion.set($event)"
+          [invalidProvincia]="formulario.invalido('idProvincia')"
+          [invalidLocalidad]="formulario.invalido('idCiudad')"
+          (provinciaChange)="formulario.seleccionarProvincia($event)"
+          (localidadChange)="formulario.seleccionarLocalidad($event)"
+          (nombresChange)="formulario.nombresUbicacion.set($event)"
           (touched)="form.controls.idCiudad.markAsTouched()"
         />
         <app-location-picker
           id="edit-location-map"
-          [direccion]="form.controls.direccion.value ?? ''"
-          [ciudad]="selectedCityName()"
-          [provincia]="selectedProvinceName()"
-          [initialLatitude]="latitud()"
-          [initialLongitude]="longitud()"
+          [direccion]="form.controls.direccion.value"
+          [ciudad]="formulario.nombreCiudad()"
+          [provincia]="formulario.nombreProvincia()"
+          [initialLatitude]="formulario.latitud()"
+          [initialLongitude]="formulario.longitud()"
           (locationConfirmed)="confirmLocation($event)"
         />
         <div class="field">
@@ -118,18 +123,14 @@
         </div>
       </section>
 
-      @if (isTemporary()) {
+      @if (formulario.esTemporaria()) {
         <section class="form-card form-card--calendar">
           <div class="card-heading">
             <span>3</span>
             <div>
               <h2>Calendario de disponibilidad</h2>
               <p>
-                {{
-                  editing
-                    ? 'Agregá días disponibles. Más abajo podés bloquear o habilitar los que ya cargaste.'
-                    : 'Habilitá un solo día o un período para recibir reservas.'
-                }}
+                Agregá días disponibles. Más abajo podés bloquear o habilitar los que ya cargaste.
               </p>
             </div>
           </div>
@@ -139,7 +140,7 @@
             [selectedEnd]="availabilityEnd()"
             (rangeChange)="selectAvailabilityDate($event)"
           />
-          @if (editing && availability().length) {
+          @if (availability().length) {
             <div class="manage-heading">
               <h3>Administrar días cargados</h3>
               <p>Verde: disponible. Gris: bloqueado manualmente. Rojo: reservado y no editable.</p>
@@ -159,7 +160,7 @@
       <footer class="form-actions">
         <a routerLink="/">Cancelar</a
         ><button type="submit" [disabled]="saving() || form.disabled">
-          {{ saving() ? 'Guardando…' : editing ? 'Guardar cambios' : 'Publicar propiedad' }}
+          {{ saving() ? 'Guardando…' : 'Guardar cambios' }}
         </button>
       </footer>
     </form>

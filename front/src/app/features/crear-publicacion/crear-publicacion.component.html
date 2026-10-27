@@ -17,24 +17,24 @@
             <div class="acct-field">
               <label for="modalidad">Tipo de alquiler *</label>
               <select id="modalidad" formControlName="idModalidad">
-                <option [ngValue]="0" disabled>Seleccioná una opción</option>
-                @for (m of modalidades(); track m.id) {
+                <option [ngValue]="null" disabled>Seleccioná una opción</option>
+                @for (m of formulario.modalidades(); track m.id) {
                   <option [ngValue]="m.id">{{ m.nombre }}</option>
                 }
               </select>
-              @if (invalido('idModalidad')) {
+              @if (formulario.invalido('idModalidad')) {
                 <span class="acct-hint acct-hint--error">Elegí el tipo de alquiler.</span>
               }
             </div>
             <div class="acct-field">
               <label for="tipo">Tipo de propiedad *</label>
               <select id="tipo" formControlName="idTipoPropiedad">
-                <option [ngValue]="0" disabled>Seleccioná una opción</option>
-                @for (t of tiposPropiedad(); track t.id) {
+                <option [ngValue]="null" disabled>Seleccioná una opción</option>
+                @for (t of formulario.tiposPropiedad(); track t.id) {
                   <option [ngValue]="t.id">{{ t.nombre }}</option>
                 }
               </select>
-              @if (invalido('idTipoPropiedad')) {
+              @if (formulario.invalido('idTipoPropiedad')) {
                 <span class="acct-hint acct-hint--error">Elegí el tipo de propiedad.</span>
               }
             </div>
@@ -46,7 +46,7 @@
                 maxlength="255"
                 placeholder="Ej.: Departamento luminoso con balcón en el centro"
               />
-              @if (invalido('titulo')) {
+              @if (formulario.invalido('titulo')) {
                 <span class="acct-hint acct-hint--error">Ingresá un título.</span>
               }
             </div>
@@ -58,9 +58,9 @@
                 maxlength="255"
                 placeholder="Describí los ambientes, el estado de la propiedad y qué la hace especial."
               ></textarea>
-              <span class="acct-hint" [class.acct-hint--error]="invalido('descripcion')">
+              <span class="acct-hint" [class.acct-hint--error]="formulario.invalido('descripcion')">
                 {{
-                  invalido('descripcion')
+                  formulario.invalido('descripcion')
                     ? 'Ingresá una descripción.'
                     : form.controls.descripcion.value.length + '/255 caracteres'
                 }}
@@ -77,14 +77,14 @@
               class="acct-span"
               idPrefix="crear-ubicacion"
               [required]="true"
-              [provinciaId]="provinciaElegida() || null"
-              [localidadId]="ciudadElegida() || null"
+              [provinciaId]="formulario.provincia()"
+              [localidadId]="formulario.ciudad()"
               [disabled]="enviando()"
-              [invalidProvincia]="invalido('idProvincia')"
-              [invalidLocalidad]="invalido('idCiudad')"
-              (provinciaChange)="seleccionarProvincia($event)"
-              (localidadChange)="seleccionarLocalidad($event)"
-              (nombresChange)="nombresUbicacion.set($event)"
+              [invalidProvincia]="formulario.invalido('idProvincia')"
+              [invalidLocalidad]="formulario.invalido('idCiudad')"
+              (provinciaChange)="formulario.seleccionarProvincia($event)"
+              (localidadChange)="formulario.seleccionarLocalidad($event)"
+              (nombresChange)="formulario.nombresUbicacion.set($event)"
               (touched)="form.controls.idCiudad.markAsTouched()"
             />
             <div class="acct-field acct-span">
@@ -95,16 +95,16 @@
                 maxlength="255"
                 placeholder="Ej.: José Ingenieros 123"
               />
-              @if (invalido('direccion')) {
+              @if (formulario.invalido('direccion')) {
                 <span class="acct-hint acct-hint--error">Ingresá la dirección.</span>
               }
             </div>
             <app-location-picker
               [direccion]="form.controls.direccion.value"
-              [ciudad]="nombreCiudad()"
-              [provincia]="nombreProvincia()"
-              [initialLatitude]="latitud()"
-              [initialLongitude]="longitud()"
+              [ciudad]="formulario.nombreCiudad()"
+              [provincia]="formulario.nombreProvincia()"
+              [initialLatitude]="formulario.latitud()"
+              [initialLongitude]="formulario.longitud()"
               (locationConfirmed)="confirmarUbicacion($event)"
             />
           </div>
@@ -124,7 +124,7 @@
                 formControlName="cantidad_ambientes"
                 placeholder="Ej.: 2"
               />
-              @if (invalido('cantidad_ambientes')) {
+              @if (formulario.invalido('cantidad_ambientes')) {
                 <span class="acct-hint acct-hint--error">Mínimo 1 ambiente.</span>
               }
             </div>
@@ -138,7 +138,7 @@
                 formControlName="superficie"
                 placeholder="Ej.: 45"
               />
-              @if (invalido('superficie')) {
+              @if (formulario.invalido('superficie')) {
                 <span class="acct-hint acct-hint--error">Ingresá la superficie.</span>
               }
             </div>
@@ -209,12 +209,12 @@
             <div class="acct-field">
               <label for="moneda">Moneda *</label>
               <select id="moneda" formControlName="idTipoMoneda">
-                <option [ngValue]="0" disabled>Seleccioná</option>
-                @for (m of monedas(); track m.id) {
+                <option [ngValue]="null" disabled>Seleccioná</option>
+                @for (m of formulario.monedas(); track m.id) {
                   <option [ngValue]="m.id">{{ m.nombre }}</option>
                 }
               </select>
-              @if (invalido('idTipoMoneda')) {
+              @if (formulario.invalido('idTipoMoneda')) {
                 <span class="acct-hint acct-hint--error">Elegí la moneda.</span>
               }
             </div>
@@ -228,14 +228,14 @@
                 formControlName="precio"
                 placeholder="Ej.: 350000"
               />
-              @if (invalido('precio')) {
+              @if (formulario.invalido('precio')) {
                 <span class="acct-hint acct-hint--error">Ingresá un precio mayor a 0.</span>
               }
             </div>
           </div>
         </section>
 
-        @if (esTemporaria()) {
+        @if (formulario.esTemporaria()) {
           <section class="step" id="disponibilidad" appReveal>
             <h2><span class="step__num">06</span> Días disponibles *</h2>
             <p class="availability-help">

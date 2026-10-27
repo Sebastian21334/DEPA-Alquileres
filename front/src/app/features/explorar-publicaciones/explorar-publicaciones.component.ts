@@ -8,7 +8,11 @@ import { AdvancedFiltersComponent } from '../home/components/advanced-filters/ad
 import { ListingGridComponent } from '../home/components/listing-grid/listing-grid.component';
 import { ListingService, OrdenPublicaciones, PaginaPublicaciones } from '../home/listing.service';
 import { CatalogoService } from '../../shared/services/catalogo.service';
-import { Modalidad, TipoPropiedad } from '../../shared/models/catalogo.model';
+import {
+  Modalidad,
+  TipoPropiedad,
+  admiteReservasPorFecha,
+} from '../../shared/models/catalogo.model';
 
 @Component({
   selector: 'app-explorar-publicaciones',
@@ -187,9 +191,7 @@ export class ExplorarPublicacionesComponent {
     const esTemporal = categoria === 'temporales';
     const esLargoPlazo = categoria === 'largo-plazo';
     const modalidad = this.modalidades().find((item) =>
-      esTemporal
-        ? item.nombre.toLowerCase().includes('tempor')
-        : esLargoPlazo && !item.nombre.toLowerCase().includes('tempor'),
+      esTemporal ? admiteReservasPorFecha(item) : esLargoPlazo && !admiteReservasPorFecha(item),
     );
     const idModalidad = modalidad?.id ?? null;
     if (this.form.controls.idModalidad.value !== idModalidad) {

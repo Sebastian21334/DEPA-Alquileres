@@ -73,7 +73,7 @@ export class PagosService {
         idempotencyKey,
         currency,
       );
-      pago.preference_id = preference.id;
+      pago.registrarPreferencia(preference.id);
       await this.pagos.guardar(pago);
       return {
         reserva_id: reserva.id,
@@ -128,7 +128,7 @@ export class PagosService {
       idReserva,
       idUsuario,
     );
-    if (reserva.usuario?.id !== idUsuario) {
+    if (!reserva.esDelInquilino(idUsuario)) {
       throw new ForbiddenException('Solo el inquilino puede validar este pago');
     }
 
@@ -154,30 +154,28 @@ export class PagosService {
     const pago = await this.pagos.buscarPorReferencia(externalReference);
     if (!pago) throw new BadRequestException('No existe el pago informado');
 
-    const importeRecibido = Number(payment.transaction_amount);
-    if (
-      !Number.isFinite(importeRecibido) ||
-      Math.abs(importeRecibido - Number(pago.amount)) > 0.009
-    ) {
+    if (!pago.importeCoincide(Number(payment.transaction_amount))) {
       this.logger.warn(`Importe inválido para ${externalReference}`);
       throw new BadRequestException(
         'El importe del pago no coincide con la reserva',
       );
     }
-    if (payment.currency_id !== pago.currency) {
+    if (!pago.monedaCoincide(payment.currency_id)) {
       this.logger.warn(`Moneda inválida para ${externalReference}`);
       throw new BadRequestException(
         'La moneda del pago no coincide con la reserva',
       );
     }
 
-    pago.payment_id = String(payment.id);
-    pago.status = payment.status ?? 'unknown';
-    pago.status_detail = payment.status_detail ?? null;
-    pago.payment_method_id = payment.payment_method_id ?? null;
-    pago.approved_at = payment.date_approved
-      ? new Date(payment.date_approved)
-      : null;
+    pago.registrarResultado({
+      paymentId: String(payment.id),
+      status: payment.status ?? 'unknown',
+      statusDetail: payment.status_detail ?? null,
+      paymentMethodId: payment.payment_method_id ?? null,
+      approvedAt: payment.date_approved
+        ? new Date(payment.date_approved)
+        : null,
+    });
     await this.pagos.guardar(pago);
 
     if (payment.status === 'approved') {
@@ -204,7 +202,7 @@ export class PagosService {
       idReserva,
       idUsuario,
     );
-    if (reserva.usuario?.id !== idUsuario) {
+    if (!reserva.esDelInquilino(idUsuario)) {
       throw new ForbiddenException(
         'Solo el inquilino puede consultar el estado del pago',
       );

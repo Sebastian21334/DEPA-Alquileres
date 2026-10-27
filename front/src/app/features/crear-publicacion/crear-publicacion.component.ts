@@ -1,17 +1,14 @@
-import {
-  SelectorUbicacionComponent,
-  NombresUbicacion,
-} from '../../shared/components/selector-ubicacion/selector-ubicacion.component';
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { SelectorUbicacionComponent } from '../../shared/components/selector-ubicacion/selector-ubicacion.component';
+import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { concatMap, forkJoin, from, of, toArray, catchError } from 'rxjs';
+import { concatMap, from, of, toArray, catchError } from 'rxjs';
 import { LucideImagePlus, LucideX } from '@lucide/angular';
-import { CatalogoService } from '../../shared/services/catalogo.service';
+import { ApiError } from '../../core/interceptors/api-error';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { AvailabilityService } from '../../shared/services/availability.service';
-import { Modalidad, TipoMoneda, TipoPropiedad } from '../../shared/models/catalogo.model';
+import { PublicacionFormulario } from '../../shared/forms/publicacion-formulario';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import { RentalDateRange } from '../../shared/utils/rental-dates';
@@ -30,7 +27,8 @@ interface ImagenSeleccionada {
 }
 
 // Alta de publicación para anunciantes verificados: POST /publicaciones con los
-// datos del inmueble y luego POST /imagenes/publicacion/:id por cada foto.
+// datos del inmueble y luego POST /imagenes/publicacion/:id por cada foto. Los
+// datos del inmueble usan el mismo PublicacionFormulario que la edición.
 @Component({
   selector: 'app-crear-publicacion',
   standalone: true,
@@ -44,107 +42,41 @@ interface ImagenSeleccionada {
     LucideImagePlus,
     LucideX,
   ],
+  providers: [PublicacionFormulario],
   templateUrl: './crear-publicacion.component.html',
   styleUrl: './crear-publicacion.component.scss',
 })
 export class CrearPublicacionComponent {
-  private readonly fb = inject(FormBuilder);
   private readonly router = inject(Router);
-  private readonly catalogos = inject(CatalogoService);
   private readonly gestion = inject(GestionPublicacionesService);
   private readonly availability = inject(AvailabilityService);
+  protected readonly formulario = inject(PublicacionFormulario);
+  protected readonly form = this.formulario.form;
 
-  protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
-  protected readonly modalidades = signal<Modalidad[]>([]);
-  protected readonly monedas = signal<TipoMoneda[]>([]);
-  protected readonly provinciaElegida = signal(0);
-  protected readonly ciudadElegida = signal(0);
-  private readonly modalidadElegida = signal(0);
   protected readonly disponibilidadInicio = signal<string | null>(null);
   protected readonly disponibilidadFin = signal<string | null>(null);
-  protected readonly esTemporaria = computed(() => {
-    const modalidad = this.modalidades().find((item) => item.id === this.modalidadElegida());
-    return modalidad?.nombre.toLocaleLowerCase().includes('tempor') ?? false;
-  });
-
-  protected readonly nombresUbicacion = signal<NombresUbicacion>({ provincia: '', localidad: '' });
-  protected readonly nombreProvincia = computed(() => this.nombresUbicacion().provincia);
-  protected readonly nombreCiudad = computed(() => this.nombresUbicacion().localidad);
-  protected readonly latitud = signal<number | null>(null);
-  protected readonly longitud = signal<number | null>(null);
   protected readonly imagenes = signal<ImagenSeleccionada[]>([]);
   protected readonly avisoImagenes = signal('');
   protected readonly enviando = signal(false);
   protected readonly progreso = signal('');
   protected readonly error = signal('');
 
-  protected readonly form = this.fb.nonNullable.group({
-    titulo: ['', [Validators.required, Validators.maxLength(255)]],
-    descripcion: ['', [Validators.required, Validators.maxLength(255)]],
-    idTipoPropiedad: [0, Validators.min(1)],
-    idModalidad: [0, Validators.min(1)],
-    idTipoMoneda: [0, Validators.min(1)],
-    precio: [null as number | null, [Validators.required, Validators.min(1)]],
-    idProvincia: [0, Validators.min(1)],
-    idCiudad: [0, Validators.min(1)],
-    direccion: ['', [Validators.required, Validators.maxLength(255)]],
-    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1)]],
-    superficie: [null as number | null, [Validators.required, Validators.min(1)]],
-  });
-
   constructor() {
-    forkJoin({
-      tipos: this.catalogos.getTiposPropiedad(),
-      modalidades: this.catalogos.getModalidades(),
-      monedas: this.catalogos.getTiposMoneda(),
-    }).subscribe({
-      next: ({ tipos, modalidades, monedas }) => {
-        this.tiposPropiedad.set(tipos);
-        this.modalidades.set(modalidades);
-        this.monedas.set(monedas);
-      },
-      error: (err: Error) =>
+    this.formulario.cargarCatalogos().subscribe({
+      error: (err: ApiError) =>
         this.error.set(`No pudimos cargar las opciones del formulario: ${err.message}`),
     });
 
-    const { idProvincia, idCiudad } = this.form.controls;
-    this.form.controls.idModalidad.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
-      this.modalidadElegida.set(id);
-      if (!this.esTemporaria()) {
+    this.form.controls.idModalidad.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      if (!this.formulario.esTemporaria()) {
         this.disponibilidadInicio.set(null);
         this.disponibilidadFin.set(null);
       }
     });
-    idProvincia.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
-      this.provinciaElegida.set(id);
-      idCiudad.setValue(0);
-      this.limpiarUbicacionConfirmada();
-    });
-    idCiudad.valueChanges.pipe(takeUntilDestroyed()).subscribe((id) => {
-      this.ciudadElegida.set(id);
-      this.limpiarUbicacionConfirmada();
-    });
-    this.form.controls.direccion.valueChanges
-      .pipe(takeUntilDestroyed())
-      .subscribe(() => this.limpiarUbicacionConfirmada());
 
     inject(DestroyRef).onDestroy(() =>
       this.imagenes().forEach((img) => URL.revokeObjectURL(img.preview)),
     );
-  }
-
-  protected seleccionarProvincia(id: number | null): void {
-    this.form.controls.idProvincia.setValue(id ?? 0);
-    this.form.controls.idProvincia.markAsTouched();
-  }
-
-  protected seleccionarLocalidad(id: number | null): void {
-    this.form.controls.idCiudad.setValue(id ?? 0);
-  }
-
-  protected invalido(campo: string): boolean {
-    const control = this.form.get(campo);
-    return !!control && control.invalid && control.touched;
   }
 
   protected readonly arrastrando = signal(false);
@@ -210,19 +142,19 @@ export class CrearPublicacionComponent {
   }
 
   protected confirmarUbicacion(ubicacion: UbicacionConfirmada): void {
-    this.latitud.set(ubicacion.latitud);
-    this.longitud.set(ubicacion.longitud);
+    this.formulario.confirmarUbicacion(ubicacion);
     if (this.error().startsWith('Confirmá la ubicación')) this.error.set('');
   }
 
   protected publicar(): void {
     if (this.enviando()) return;
+    const esTemporaria = this.formulario.esTemporaria();
     // Regla de negocio: no se puede publicar sin al menos una imagen.
     const sinFotos = this.imagenes().length === 0;
     this.faltanFotos.set(sinFotos);
     const sinDisponibilidad =
-      this.esTemporaria() && (!this.disponibilidadInicio() || !this.disponibilidadFin());
-    const sinUbicacion = this.latitud() === null || this.longitud() === null;
+      esTemporaria && (!this.disponibilidadInicio() || !this.disponibilidadFin());
+    const sinUbicacion = !this.formulario.ubicacionConfirmada();
     if (this.form.invalid || sinFotos || sinDisponibilidad || sinUbicacion) {
       this.form.markAllAsTouched();
       this.error.set(
@@ -250,26 +182,13 @@ export class CrearPublicacionComponent {
     this.error.set('');
     this.progreso.set('Creando publicación…');
 
-    const v = this.form.getRawValue();
-    const dto = {
-      ...v,
-      titulo: v.titulo.trim(),
-      descripcion: v.descripcion.trim(),
-      direccion: v.direccion.trim(),
-      latitud: this.latitud()!,
-      longitud: this.longitud()!,
-      precio: Number(v.precio),
-      cantidad_ambientes: Number(v.cantidad_ambientes),
-      superficie: Number(v.superficie),
-    };
-
     const imagenes = this.imagenes();
     this.gestion
-      .crear(dto)
+      .crear(this.formulario.payload())
       .pipe(
         // Las fotos se suben de a una para no saturar al backend (Sharp + Azure).
         concatMap((publicacion) =>
-          (this.esTemporaria()
+          (esTemporaria
             ? (this.progreso.set('Guardando días disponibles…'),
               this.availability.addRange(
                 publicacion.id,
@@ -312,16 +231,11 @@ export class CrearPublicacionComponent {
             this.router.navigate(['/publicaciones', publicacion.id]);
           }
         },
-        error: (err: Error) => {
+        error: (err: ApiError) => {
           this.enviando.set(false);
           this.progreso.set('');
           this.error.set(err.message);
         },
       });
-  }
-
-  private limpiarUbicacionConfirmada(): void {
-    this.latitud.set(null);
-    this.longitud.set(null);
   }
 }

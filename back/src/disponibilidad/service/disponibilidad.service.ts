@@ -1,12 +1,11 @@
 import { TRANSACCION_CALENDARIO } from '../repository/transaccion-calendario.interface';
 import type { ITransaccionCalendario } from '../repository/transaccion-calendario.interface';
-import { admiteReservaPorFecha } from '../../catalogos/service/modalidad.utils';
+import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   Inject,
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
 import { Fecha } from '../entity/fecha.entity';
@@ -17,7 +16,6 @@ import { FECHA_REPOSITORY } from '../repository/fecha.repository.interface';
 import { FechaDisponibilidadPublicaDto } from '../dto/fecha-disponibilidad-publica.dto';
 import { FechaDisponibilidadAdministracionDto } from '../dto/fecha-disponibilidad-administracion.dto';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
-import { Reserva } from '../../reservas/entity/reserva.entity';
 
 @Injectable()
 export class DisponibilidadService {
@@ -45,11 +43,11 @@ export class DisponibilidadService {
     if (!Number.isSafeInteger(idPublicacion) || idPublicacion <= 0) {
       throw new BadRequestException('El ID de la publicación no es válido');
     }
-    const publicacion =
-      await this.publicacionesService.buscarPorId(idPublicacion);
-    if (publicacion.anunciante.idUsuario !== idUsuario) {
-      throw new ForbiddenException('No sos el propietario de esta publicación');
-    }
+    await this.publicacionesService.obtenerPropia(
+      idPublicacion,
+      idUsuario,
+      'No sos el propietario de esta publicación',
+    );
   }
 
   /**
@@ -153,13 +151,13 @@ export class DisponibilidadService {
       const fecha = await fechaRepository.buscarPorId(id);
       if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
 
-      if (dto.disponible && fecha.reserva) {
+      if (dto.disponible && fecha.estaReservada()) {
         throw new BadRequestException(
           'No se puede liberar un día asociado a una reserva',
         );
       }
 
-      fecha.disponible = dto.disponible;
+      fecha.cambiarDisponibilidad(dto.disponible);
       return this.aAdministracion([await fechaRepository.guardar(fecha)])[0];
     });
   }
@@ -184,7 +182,7 @@ export class DisponibilidadService {
     return this.transaccion.ejecutar(async ({ fechas: fechaRepository }) => {
       const fecha = await fechaRepository.buscarPorId(id);
       if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
-      if (fecha.reserva) {
+      if (fecha.estaReservada()) {
         throw new BadRequestException(
           'No se puede eliminar un día asociado a una reserva',
         );
@@ -232,7 +230,7 @@ export class DisponibilidadService {
     if (fechas.length !== diasEsperados) return false;
 
     // Un solo dia ocupado vuelve invalido el rango completo de la reserva.
-    return fechas.every((f) => f.disponible && !f.reserva);
+    return fechas.every((f) => f.estaLibre());
   }
 
   /**
@@ -269,11 +267,7 @@ export class DisponibilidadService {
     );
 
     // Se actualizan las mismas filas que se validaron; la reserva ya tiene ID para enlazarlas.
-    for (const fecha of fechas) {
-      fecha.disponible = false;
-      fecha.reserva = Object.assign(new Reserva(), { id: idReserva });
-    }
-
+    fechas.forEach((fecha) => fecha.ocuparPor(idReserva));
     await fechaRepository.guardarVarias(fechas);
   }
 
@@ -283,10 +277,7 @@ export class DisponibilidadService {
     fechaRepository: IFechaRepository,
   ): Promise<void> {
     const fechas = await fechaRepository.buscarPorReserva(idReserva);
-    for (const fecha of fechas) {
-      fecha.disponible = true;
-      fecha.reserva = null;
-    }
+    fechas.forEach((fecha) => fecha.liberar());
     if (fechas.length) await fechaRepository.guardarVarias(fechas);
   }
 
@@ -307,24 +298,14 @@ export class DisponibilidadService {
     const diasEsperados =
       Math.floor((fechaFin.getTime() - fechaInicio.getTime()) / 86_400_000) + 1;
     if (nuevasFechas.length !== diasEsperados) return false;
-    if (
-      nuevasFechas.some((fecha) =>
-        fecha.reserva ? fecha.reserva.id !== idReserva : !fecha.disponible,
-      )
-    )
+    if (!nuevasFechas.every((fecha) => fecha.puedeOcuparla(idReserva)))
       return false;
 
     const fechasAnteriores = await fechaRepository.buscarPorReserva(idReserva);
-    for (const fecha of fechasAnteriores) {
-      fecha.disponible = true;
-      fecha.reserva = null;
-    }
+    fechasAnteriores.forEach((fecha) => fecha.liberar());
     await fechaRepository.guardarVarias(fechasAnteriores);
 
-    for (const fecha of nuevasFechas) {
-      fecha.disponible = false;
-      fecha.reserva = Object.assign(new Reserva(), { id: idReserva });
-    }
+    nuevasFechas.forEach((fecha) => fecha.ocuparPor(idReserva));
     await fechaRepository.guardarVarias(nuevasFechas);
     return true;
   }

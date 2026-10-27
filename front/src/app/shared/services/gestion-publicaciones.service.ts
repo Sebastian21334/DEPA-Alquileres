@@ -2,25 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { Publicacion } from '../models/publicacion.model';
+import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { Imagen } from '../models/imagen.model';
-
-// Alineado con back/src/publicaciones/dto/crear-publicacion.dto.ts.
-export interface CrearPublicacionDto {
-  titulo: string;
-  descripcion: string;
-  precio: number;
-  direccion: string;
-  latitud: number;
-  longitud: number;
-  cantidad_ambientes: number;
-  superficie: number;
-  idTipoMoneda: number;
-  idModalidad: number;
-  idProvincia: number;
-  idCiudad: number;
-  idTipoPropiedad: number;
-}
 
 // Operaciones del anunciante verificado sobre sus propias publicaciones e imágenes.
 // El backend valida la propiedad con AnuncianteGuard; acá solo se arman los requests.
@@ -34,8 +17,8 @@ export class GestionPublicacionesService {
     return this.http.get<Publicacion[]>(`${this.api}/publicaciones/anunciante/${idAnunciante}`);
   }
 
-  /** POST /publicaciones */
-  crear(dto: CrearPublicacionDto): Observable<Publicacion> {
+  /** POST /publicaciones (alineado con back/src/publicaciones/dto/crear-publicacion.dto.ts). */
+  crear(dto: PublicacionPayload): Observable<Publicacion> {
     return this.http.post<Publicacion>(`${this.api}/publicaciones`, dto);
   }
 

@@ -65,4 +65,64 @@ export class SolicitudVerificacion {
   @ManyToOne(() => Anunciante, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'id_anunciante' })
   anunciante: Relation<Anunciante>;
+
+  estaAprobada(): boolean {
+    return this.estado === EstadoVerificacion.APROBADA;
+  }
+
+  estaRechazada(): boolean {
+    return this.estado === EstadoVerificacion.RECHAZADA;
+  }
+
+  /** Esperando la decisión de un administrador (primera vez o reenvío). */
+  estaPendienteDeRevision(): boolean {
+    return [
+      EstadoVerificacion.PENDIENTE,
+      EstadoVerificacion.REENVIADA,
+    ].includes(this.estado);
+  }
+
+  tieneDocumentacionCompleta(): boolean {
+    return !!(this.dni_frente_url && this.dni_dorso_url && this.rostro_url);
+  }
+
+  /**
+   * Adjunta los documentos ya verificados y la deja lista para revisión. Un
+   * reenvío representa una nueva revisión independiente en el historial.
+   */
+  presentarDocumentos(
+    urls: { dniFrente: string; dniDorso: string; rostro: string },
+    reenvio: boolean,
+  ): void {
+    this.dni_frente_url = urls.dniFrente;
+    this.dni_dorso_url = urls.dniDorso;
+    this.rostro_url = urls.rostro;
+    if (reenvio) this.numero_revision += 1;
+    this.estado = reenvio
+      ? EstadoVerificacion.REENVIADA
+      : EstadoVerificacion.PENDIENTE;
+    this.motivo_rechazo = null;
+    this.actualizada_en = new Date();
+  }
+
+  aprobar(): void {
+    this.estado = EstadoVerificacion.APROBADA;
+    this.motivo_rechazo = null;
+    this.actualizada_en = new Date();
+  }
+
+  /** Conserva la solicitud con el motivo para que el anunciante pueda corregirla. */
+  rechazar(motivo: string): void {
+    this.estado = EstadoVerificacion.RECHAZADA;
+    this.motivo_rechazo = motivo.trim();
+    this.actualizada_en = new Date();
+  }
+
+  nombreSolicitante(): string {
+    return this.anunciante?.nombreCompleto() ?? '';
+  }
+
+  emailSolicitante(): string | undefined {
+    return this.anunciante?.email();
+  }
 }

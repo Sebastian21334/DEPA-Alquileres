@@ -7,6 +7,7 @@ import { CotizacionesService } from '../../cotizaciones/service/cotizaciones.ser
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import { decimalEntero, importeTexto } from '../../common/utils/importes';
 
@@ -21,14 +22,14 @@ describe('Presupuesto aceptado antes de cobrar', () => {
   beforeEach(async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
     jest.setSystemTime(new Date('2026-10-27T12:00:00Z'));
-    publicacion = {
+    publicacion = Object.assign(new Publicacion(), {
       id: 42,
       precio: 100,
       activa: true,
       modalidad: { nombre: 'Temporal' },
       tipoMoneda: { nombre: 'USD' },
-      anunciante: { idUsuario: 1 },
-    } as Publicacion;
+      anunciante: Object.assign(new Anunciante(), { idUsuario: 1 }),
+    });
     obtenerVigente.mockReset().mockResolvedValue(
       Object.assign(new CotizacionDolar(), {
         id: 8,

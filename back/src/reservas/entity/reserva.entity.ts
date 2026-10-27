@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { Relation } from 'typeorm';
 import {
   Entity,
@@ -31,6 +32,9 @@ export enum EstadoLiquidacionReserva {
 
 @Entity('reserva')
 export class Reserva {
+  /** Intentos fallidos de código antes de pasar la liquidación a revisión. */
+  static readonly MAX_INTENTOS_CODIGO = 5;
+
   // La reserva registra el pago y vincula al inquilino con una publicación.
   @PrimaryGeneratedColumn({ name: 'id_reserva' })
   id: number;
@@ -163,4 +167,189 @@ export class Reserva {
   @ManyToOne(() => Publicacion, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Relation<Publicacion | null>;
+
+  // --- Participantes ---
+
+  esDelInquilino(idUsuario: number): boolean {
+    return this.usuario?.id === idUsuario;
+  }
+
+  esDelAnunciante(idUsuario: number): boolean {
+    return this.publicacion?.perteneceA(idUsuario) ?? false;
+  }
+
+  /** El detalle de una reserva solo corresponde al inquilino o al anunciante dueño. */
+  participa(idUsuario: number): boolean {
+    return this.esDelInquilino(idUsuario) || this.esDelAnunciante(idUsuario);
+  }
+
+  /** Copia histórica del nombre del inquilino; vacía si no se registró. */
+  nombreInquilino(): string {
+    return [this.usuario_nombre, this.usuario_apellido]
+      .filter(Boolean)
+      .join(' ');
+  }
+
+  emailDelAnunciante(): string | undefined {
+    return this.publicacion?.emailDelAnunciante();
+  }
+
+  nombreDelAnunciante(): string {
+    return this.publicacion?.nombreDelAnunciante() ?? '';
+  }
+
+  // --- Pago ---
+
+  pagoAprobado(): boolean {
+    return this.estado_pago === EstadoPagoReserva.APROBADO;
+  }
+
+  /** Pagada y vigente: habilita el código de alojamiento, los reclamos y la liquidación. */
+  estaConfirmada(): boolean {
+    return this.pagoAprobado() && !this.cancelada;
+  }
+
+  /** Ya no admite cambios del inquilino. */
+  estaCerrada(): boolean {
+    return this.cancelada || this.finalizada;
+  }
+
+  /** Aprueba el pago, emite el código de alojamiento y retiene el dinero hasta la estadía. */
+  confirmarPago(fechaPago: Date, codigoAlojamiento: string): void {
+    this.estado_pago = EstadoPagoReserva.APROBADO;
+    this.fecha_pago = fechaPago;
+    this.pago_vencimiento = null;
+    this.codigo_alojamiento = codigoAlojamiento;
+    this.codigo_generado_en = new Date();
+    this.codigo_validado_en = null;
+    this.intentos_codigo = 0;
+    this.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
+  }
+
+  /** Cierra la reserva cuyo pago falló, venció o fue devuelto. */
+  cerrarSinPago(estado: EstadoPagoReserva): void {
+    this.estado_pago = estado;
+    this.estado_liquidacion =
+      estado === EstadoPagoReserva.REEMBOLSADO
+        ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
+        : EstadoLiquidacionReserva.NO_APLICA;
+    this.cancelar();
+    this.pago_vencimiento = null;
+  }
+
+  cancelar(): void {
+    this.cancelada = true;
+    this.fecha_cancelacion = new Date();
+  }
+
+  /** Terminó la estadía. Las fechas no se liberan: quedan como historial. */
+  finalizar(): void {
+    this.finalizada = true;
+  }
+
+  /** Cambia el período conservando el importe contratado. */
+  reprogramar(inicio: string, fin: string): void {
+    this.fecha_inicio = inicio;
+    this.fecha_fin = fin;
+  }
+
+  // --- Código de alojamiento ---
+
+  /** Emite el código si falta (reservas aprobadas antes de existir el código). */
+  asegurarCodigoAlojamiento(codigo: string): boolean {
+    if (this.codigo_alojamiento) return false;
+    this.codigo_alojamiento = codigo;
+    this.codigo_generado_en = new Date();
+    this.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
+    return true;
+  }
+
+  codigoValidado(): boolean {
+    return !!this.codigo_validado_en;
+  }
+
+  codigoBloqueado(): boolean {
+    return this.intentos_codigo >= Reserva.MAX_INTENTOS_CODIGO;
+  }
+
+  intentosCodigoRestantes(): number {
+    return Math.max(0, Reserva.MAX_INTENTOS_CODIGO - this.intentos_codigo);
+  }
+
+  /**
+   * Compara el código presentado por el anunciante. Si coincide, libera la
+   * liquidación al propietario; si no, suma un intento y al llegar al límite
+   * deja la reserva en revisión administrativa.
+   */
+  registrarIntentoCodigo(codigo: string): boolean {
+    const recibido = codigo.trim().toUpperCase();
+    const esperado = this.codigo_alojamiento ?? '';
+    const coincide =
+      recibido.length === esperado.length &&
+      timingSafeEqual(Buffer.from(recibido), Buffer.from(esperado));
+    if (!coincide) {
+      this.intentos_codigo += 1;
+      if (this.codigoBloqueado()) {
+        this.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+        this.observacion_liquidacion =
+          'Código bloqueado después de cinco intentos incorrectos';
+      }
+      return false;
+    }
+    this.codigo_validado_en = new Date();
+    this.estado_liquidacion =
+      EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO;
+    this.observacion_liquidacion =
+      'Código de alojamiento validado por el anunciante';
+    return true;
+  }
+
+  // --- Liquidación ---
+
+  liquidacionEnRevision(): boolean {
+    return this.estado_liquidacion === EstadoLiquidacionReserva.EN_REVISION;
+  }
+
+  /** El dinero ya se pagó al propietario o se devolvió al inquilino. */
+  liquidacionResuelta(): boolean {
+    return [
+      EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+      EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+    ].includes(this.estado_liquidacion);
+  }
+
+  /** El reclamo del inquilino congela cualquier liquidación pendiente. */
+  reportarProblema(motivo: string): void {
+    this.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+    this.observacion_liquidacion = `Reclamo del inquilino: ${motivo.trim()}`;
+    this.fecha_resolucion_liquidacion = null;
+  }
+
+  /** Registra la decisión administrativa; devolver al inquilino también cancela la reserva. */
+  resolverLiquidacion(
+    estado: EstadoLiquidacionReserva,
+    referencia?: string,
+    observacion?: string,
+  ): void {
+    this.estado_liquidacion = estado;
+    this.referencia_liquidacion = referencia?.trim() || null;
+    this.observacion_liquidacion =
+      observacion?.trim() || this.observacion_liquidacion;
+    this.fecha_resolucion_liquidacion = this.liquidacionResuelta()
+      ? new Date()
+      : null;
+    if (estado === EstadoLiquidacionReserva.RETENIDO) this.intentos_codigo = 0;
+    if (estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO) {
+      this.estado_pago = EstadoPagoReserva.REEMBOLSADO;
+      this.cancelar();
+    }
+  }
+
+  // --- Avisos ---
+
+  marcarAvisoEnviado(destinatario: 'inquilino' | 'anunciante'): void {
+    if (destinatario === 'inquilino')
+      this.email_confirmacion_inquilino_enviado = true;
+    else this.email_nueva_reserva_anunciante_enviado = true;
+  }
 }

@@ -83,6 +83,21 @@ export class PublicacionesService {
     return publicacion;
   }
 
+  /**
+   * Único punto que autoriza operar sobre una publicación ajena: 404 si no
+   * existe y 403 si pertenece a otro anunciante. Cada caso de uso informa su mensaje.
+   */
+  async obtenerPropia(
+    id: number,
+    idUsuario: number,
+    mensaje = 'No tenés permiso para administrar esta publicación',
+  ): Promise<Publicacion> {
+    const publicacion = await this.buscarPorId(id);
+    if (!publicacion.perteneceA(idUsuario))
+      throw new ForbiddenException(mensaje);
+    return publicacion;
+  }
+
   /** Registra una apertura real del detalle; el cliente evita repetirla durante la misma sesión. */
   async registrarVisualizacion(id: number) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
@@ -94,12 +109,13 @@ export class PublicacionesService {
 
   /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
   async activar(publicacion: Publicacion) {
-    if (publicacion.activa || publicacion.motivo_baja_admin) return;
+    if (publicacion.activa || publicacion.estaDadaDeBajaPorAdministrador())
+      return;
     // Se actualiza solo la columna: guardar la entidad completa haría que TypeORM
     // sincronice publicacion.imagenes (leída antes de subir la foto, vacía) y
     // desvincule la imagen recién creada (id_publicacion = NULL).
     await this.publicacionesRepo.marcarActiva(publicacion.id);
-    publicacion.activa = true;
+    publicacion.activar();
   }
 
   /** Lista pública paginada; el límite se acota para proteger la base de datos. */
@@ -167,53 +183,49 @@ export class PublicacionesService {
     anuncianteQueOpera: Anunciante,
     dto: ActualizarPublicacionDto,
   ) {
-    const publicacion = await this.publicacionesRepo.buscarPorId(id);
-    if (!publicacion) throw new NotFoundException('Publicación no encontrada');
-    if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
-      throw new ForbiddenException(
-        'No podés modificar una publicación que no es tuya',
-      );
-    }
-
-    if (dto.titulo !== undefined) publicacion.titulo = dto.titulo;
-    if (dto.descripcion !== undefined)
-      publicacion.descripcion = dto.descripcion;
-    if (dto.precio !== undefined) publicacion.precio = dto.precio;
-    if (dto.direccion !== undefined) publicacion.direccion = dto.direccion;
-    if (dto.latitud !== undefined) publicacion.latitud = dto.latitud;
-    if (dto.longitud !== undefined) publicacion.longitud = dto.longitud;
-    if (dto.cantidad_ambientes !== undefined)
-      publicacion.cantidad_ambientes = dto.cantidad_ambientes;
-    if (dto.superficie !== undefined) publicacion.superficie = dto.superficie;
-    if (dto.activa === true && publicacion.motivo_baja_admin) {
+    const publicacion = await this.obtenerPropia(
+      id,
+      anuncianteQueOpera.idUsuario,
+      'No podés modificar una publicación que no es tuya',
+    );
+    if (dto.activa === true && publicacion.estaDadaDeBajaPorAdministrador()) {
       throw new ForbiddenException('La publicación fue desactivada por un administrador y no puede reactivarse');
     }
-    if (dto.activa !== undefined) publicacion.activa = dto.activa;
 
-    if (dto.idTipoMoneda !== undefined) {
-      publicacion.tipoMoneda = await this.catalogosService.getTipoMonedaPorId(
-        dto.idTipoMoneda,
-      );
-    }
-    if (dto.idModalidad !== undefined) {
-      publicacion.modalidad = await this.catalogosService.getModalidadPorId(
-        dto.idModalidad,
-      );
-    }
-    if (dto.idTipoPropiedad !== undefined) {
-      publicacion.tipoPropiedad =
-        await this.catalogosService.getTipoPropiedadPorId(dto.idTipoPropiedad);
-    }
-    if (dto.idProvincia !== undefined) {
-      publicacion.provincia = await this.ubicacionService.getProvinciaPorId(
-        dto.idProvincia,
-      );
-    }
-    if (dto.idCiudad !== undefined) {
-      publicacion.ciudad = await this.ubicacionService.getCiudadPorId(
-        dto.idCiudad,
-      );
-    }
+    // Los catálogos y la ubicación se validan contra la base antes de asignarlos.
+    publicacion.modificar({
+      titulo: dto.titulo,
+      descripcion: dto.descripcion,
+      precio: dto.precio,
+      direccion: dto.direccion,
+      latitud: dto.latitud,
+      longitud: dto.longitud,
+      cantidad_ambientes: dto.cantidad_ambientes,
+      superficie: dto.superficie,
+      activa: dto.activa,
+      tipoMoneda:
+        dto.idTipoMoneda === undefined
+          ? undefined
+          : await this.catalogosService.getTipoMonedaPorId(dto.idTipoMoneda),
+      modalidad:
+        dto.idModalidad === undefined
+          ? undefined
+          : await this.catalogosService.getModalidadPorId(dto.idModalidad),
+      tipoPropiedad:
+        dto.idTipoPropiedad === undefined
+          ? undefined
+          : await this.catalogosService.getTipoPropiedadPorId(
+              dto.idTipoPropiedad,
+            ),
+      provincia:
+        dto.idProvincia === undefined
+          ? undefined
+          : await this.ubicacionService.getProvinciaPorId(dto.idProvincia),
+      ciudad:
+        dto.idCiudad === undefined
+          ? undefined
+          : await this.ubicacionService.getCiudadPorId(dto.idCiudad),
+    });
 
     return this.publicacionesRepo.guardar(publicacion);
   }
@@ -231,12 +243,13 @@ export class PublicacionesService {
     }
     const publicacion = await this.buscarPorId(id);
     await this.publicacionesRepo.darDeBaja(id, razon);
-    publicacion.activa = false;
-    publicacion.motivo_baja_admin = razon;
+    publicacion.darDeBaja(razon);
     let correoEnviado = false;
     try {
+      const email = publicacion.emailDelAnunciante();
+      if (!email) throw new Error('El anunciante no tiene un correo registrado');
       await this.mailService.enviarBajaPublicacion(
-        publicacion.anunciante.usuario.email, publicacion.titulo, razon,
+        email, publicacion.titulo, razon,
       );
       correoEnviado = true;
     } catch (error) {
@@ -247,16 +260,12 @@ export class PublicacionesService {
 
   /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */
   async eliminar(id: number, anuncianteQueOpera: Anunciante) {
-    const publicacion = await this.publicacionesRepo.buscarPorId(id);
-    if (!publicacion) throw new NotFoundException('Publicación no encontrada');
-
-    if (publicacion.anunciante.idUsuario !== anuncianteQueOpera.idUsuario) {
-      // El anunciante autenticado debe ser el dueño, aunque conozca el ID de otra publicación.
-      throw new ForbiddenException(
-        'No podés eliminar una publicación que no es tuya',
-      );
-    }
-
+    // El anunciante autenticado debe ser el dueño, aunque conozca el ID de otra publicación.
+    const publicacion = await this.obtenerPropia(
+      id,
+      anuncianteQueOpera.idUsuario,
+      'No podés eliminar una publicación que no es tuya',
+    );
     return this.publicacionesRepo.eliminar(publicacion);
   }
 }

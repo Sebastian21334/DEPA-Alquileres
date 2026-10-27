@@ -33,4 +33,22 @@ export class Anunciante {
   @ManyToOne(() => TipoAnunciante)
   @JoinColumn({ name: 'id_tipo_anunciante' })
   tipoAnunciante: Relation<TipoAnunciante>;
+
+  /** Habilita a publicar después de aprobar la identidad. */
+  verificar(): void {
+    this.verificado = true;
+  }
+
+  nombreCompleto(): string {
+    return this.usuario?.nombreCompleto() ?? '';
+  }
+
+  email(): string | undefined {
+    return this.usuario?.email;
+  }
+
+  /** Teléfono que el anunciante informó para contacto o, si falta, el de su cuenta. */
+  telefonoDeContacto(): string | undefined {
+    return this.numero_contacto ?? this.usuario?.telefono;
+  }
 }
