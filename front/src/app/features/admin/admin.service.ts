@@ -20,9 +20,17 @@ export interface VerificationRequest {
   estado: string;
   numero_revision: number;
   actualizada_en: string;
+  prueba_vida_validada_en: string | null;
   dni_frente_url: string | null;
   dni_dorso_url: string | null;
   rostro_url: string | null;
+  razon_social?: string;
+  matricula_profesional?: string;
+  colegio_profesional?: string;
+  domicilio_comercial?: string;
+  dni_corredor?: string;
+  matricula_url?: string | null;
+  constancia_cuit_url?: string | null;
   anunciante: {
     idUsuario: number;
     cuit_cuil: string | null;
@@ -86,11 +94,11 @@ export class AdminService {
   cambiarRol(id: number, nombreRol: string) {
     return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });
   }
-  aprobar(id: number) {
-    return this.http.patch(`${this.api}/anunciantes/${id}/aprobar`, {});
+  aprobar(id: number, numero_revision: number) {
+    return this.http.patch(`${this.api}/anunciantes/${id}/aprobar`, { numero_revision });
   }
-  rechazar(id: number, motivo: string) {
-    return this.http.delete(`${this.api}/anunciantes/${id}/rechazar`, { body: { motivo } });
+  rechazar(id: number, motivo: string, numero_revision: number) {
+    return this.http.delete(`${this.api}/anunciantes/${id}/rechazar`, { body: { motivo, numero_revision } });
   }
   listarCatalogo(key: CatalogKey) {
     return this.http.get<AdminCatalogItem[]>(`${this.api}/catalogos/${key}`);

@@ -1,4 +1,4 @@
-import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import {
   Controller,
   Delete,
@@ -9,7 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { FavoritosService } from '../service/favoritos.service';
 
 @Controller('favoritos')

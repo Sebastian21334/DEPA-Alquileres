@@ -16,9 +16,9 @@ import {
   importeTexto,
   monedaPublicacion,
 } from '../../common/utils/importes';
-import type { CondicionesCobro } from '../../reservas/interfaces/condiciones-cobro.interface';
+import type { CondicionesCobro } from '../../reservas/service/reservas.service';
 import type { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
-import { fechaArgentina } from '../../reservas/domain/estado-estadia';
+import { fechaArgentina } from '../../common/utils/fechas';
 
 interface PresupuestoFirmado extends CondicionesCobro {
   usuario: number;

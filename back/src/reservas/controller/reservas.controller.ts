@@ -1,5 +1,6 @@
 import { ReservaLiquidacionesService } from '../service/reserva-liquidaciones.service';
-import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
+import { ReservaReprogramacionService } from '../service/reserva-reprogramacion.service';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 // reservas/controlador/reservas.controller.ts
 import {
   Controller,
@@ -13,9 +14,9 @@ import {
 } from '@nestjs/common';
 import { ReservasService } from '../service/reservas.service';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { RolesGuard } from '../../seguridad/guards/roles.guard';
+import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ValidarCodigoAlojamientoDto } from '../dto/validar-codigo-alojamiento.dto';
 import { ReportarProblemaReservaDto } from '../dto/reportar-problema-reserva.dto';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
@@ -25,6 +26,7 @@ export class ReservasController {
   constructor(
     private readonly reservasService: ReservasService,
     private readonly liquidacionesService: ReservaLiquidacionesService,
+    private readonly reprogramacionService: ReservaReprogramacionService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -140,7 +142,7 @@ export class ReservasController {
     @Body() dto: ActualizarFechasReservaDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.reservasService.actualizarFechas(id, dto, req.user.id);
+    return this.reprogramacionService.actualizarFechas(id, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -150,7 +152,7 @@ export class ReservasController {
     @Param('idCambio', ParseIntPipe) idCambio: number,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.reservasService.reintentarAvisoReprogramacion(
+    return this.reprogramacionService.reintentarAvisoReprogramacion(
       id,
       idCambio,
       req.user.id,

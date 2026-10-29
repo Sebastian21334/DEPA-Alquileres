@@ -83,7 +83,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   @ViewChild('overlay', { static: true }) private readonly overlayRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('capture', { static: true }) private readonly captureRef!: ElementRef<HTMLCanvasElement>;
 
-  @Output() readonly identidadValidada = new EventEmitter<IdentidadCapturada>();
+  @Output() readonly pruebaVidaCompletada = new EventEmitter<IdentidadCapturada>();
   @Output() readonly fallo = new EventEmitter<string>();
   @Output() readonly reintento = new EventEmitter<void>();
 
@@ -539,7 +539,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       this.stopCamera();
       this.cameraReady.set(false);
       this.fase.set('validating');
-      this.mensaje.set('Foto tomada. Estamos validando tu identidad…');
+      this.mensaje.set('Foto tomada. Estamos comprobando la prueba de vida…');
       const response = await firstValueFrom(
         this.facialService.validarVitalidad(
           this.challengeToken,
@@ -550,11 +550,11 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       );
       this.fase.set('complete');
       this.paso.set('complete');
-      this.mensaje.set('Identidad validada. Enviando la documentación…');
+      this.mensaje.set('Prueba de vida completada. Enviando la solicitud a revisión…');
       this.detenerContador();
       this.segundosRestantes.set(0);
       this.stopCamera();
-      this.identidadValidada.emit({
+      this.pruebaVidaCompletada.emit({
         dni_frente: this.frente,
         dni_dorso: this.dorso,
         rostro: this.livePhoto,

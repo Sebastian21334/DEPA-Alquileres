@@ -14,7 +14,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
 
 const TIPOS_FOTO = [
   'image/jpeg',
@@ -24,13 +23,13 @@ const TIPOS_FOTO = [
   'image/heif',
 ];
 import { UsuariosService } from '../service/usuarios.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { RolesGuard } from '../../seguridad/guards/roles.guard';
+import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { CambiarRolDto } from '../dto/cambiar-rol.dto';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import { CambiarBloqueoDto } from '../dto/cambiar-bloqueo.dto';
-import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 
 @Controller('usuarios')
 export class UsuariosController {
@@ -71,7 +70,7 @@ export class UsuariosController {
   )
   // Cada usuario solo puede cambiar su propia foto: el id sale del JWT.
   subirFoto(
-    @UploadedFile() archivo: ArchivoSubido,
+    @UploadedFile() archivo: Express.Multer.File,
     @Req() req: AuthenticatedRequest,
   ) {
     if (!archivo) throw new BadRequestException('No se envió ninguna imagen');

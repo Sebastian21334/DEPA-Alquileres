@@ -1,4 +1,7 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { Observable, of, switchMap } from 'rxjs';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideBadgeCheck, LucideClock } from '@lucide/angular';
@@ -18,7 +21,7 @@ import {
 @Component({
   selector: 'app-solicitud-anunciante',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, LucideBadgeCheck, LucideClock],
+  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, LucideBadgeCheck, LucideClock],
   templateUrl: './solicitud-anunciante.component.html',
   styleUrl: './solicitud-anunciante.component.scss',
 })
@@ -49,7 +52,45 @@ export class SolicitudAnuncianteComponent {
     numero_contacto: ['', [Validators.required, Validators.maxLength(20)]],
   });
 
+  protected readonly empresaForm = this.fb.nonNullable.group({
+    razon_social: ['', [Validators.required, Validators.maxLength(150)]],
+    matricula_profesional: ['', [Validators.required, Validators.maxLength(50)]],
+    colegio_profesional: ['', [Validators.required, Validators.maxLength(150)]],
+    domicilio_comercial: ['', [Validators.required, Validators.maxLength(255)]],
+    dni_corredor: ['', [Validators.required, Validators.maxLength(15), Validators.pattern(/^\d{7,8}$/)]],
+  });
+  private readonly tipoSeleccionado = toSignal(this.form.controls.idTipoAnunciante.valueChanges, { initialValue: 0 });
+  protected readonly esInmobiliaria = computed(() => {
+    const nombre = this.solicitud()?.anunciante.tipoAnunciante?.nombre ??
+      this.tipos().find((tipo) => tipo.id === this.tipoSeleccionado())?.nombre ?? '';
+    return /inmobiliaria|institucional/i.test(nombre);
+  });
+  protected readonly matricula = signal<File | null>(null);
+  protected readonly constanciaCuit = signal<File | null>(null);
+
+  protected seleccionarConstancia(evento: Event, tipo: 'matricula' | 'cuit') {
+    const archivo = (evento.target as HTMLInputElement).files?.[0] ?? null;
+    const destino = tipo === 'matricula' ? this.matricula : this.constanciaCuit;
+    if (archivo && (archivo.size > 5 * 1024 * 1024 || !['application/pdf', 'image/jpeg', 'image/png'].includes(archivo.type))) {
+      destino.set(null);
+      this.error.set('Adjuntá una constancia PDF, JPG o PNG de hasta 5 MB.');
+      return;
+    }
+    destino.set(archivo);
+    this.error.set('');
+  }
+
   constructor() {
+    effect(() => {
+      const solicitud = this.solicitud();
+      if (solicitud) this.empresaForm.patchValue({
+        razon_social: solicitud.razon_social ?? '',
+        matricula_profesional: solicitud.matricula_profesional ?? '',
+        colegio_profesional: solicitud.colegio_profesional ?? '',
+        domicilio_comercial: solicitud.domicilio_comercial ?? '',
+        dni_corredor: solicitud.dni_corredor ?? '',
+      }, { emitEvent: false });
+    });
     this.catalogos.getTiposAnunciante().subscribe({ next: (t) => this.tipos.set(t) });
     this.recargar();
   }
@@ -59,7 +100,8 @@ export class SolicitudAnuncianteComponent {
   }
 
   protected enviarDatos(): void {
-    if (this.form.invalid || this.enviando()) {
+    if (this.form.invalid || this.enviando() || (this.esInmobiliaria() && this.empresaForm.invalid)) {
+      this.empresaForm.markAllAsTouched();
       this.form.markAllAsTouched();
       return;
     }
@@ -67,7 +109,7 @@ export class SolicitudAnuncianteComponent {
     this.error.set('');
     const valor = this.form.getRawValue();
     this.perfilService
-      .solicitarAnunciante({ ...valor, cuit: valor.cuit.trim(), numero_contacto: valor.numero_contacto.trim() })
+      .solicitarAnunciante({ ...valor, ...(this.esInmobiliaria() ? this.empresaForm.getRawValue() : {}), cuit: valor.cuit.trim(), numero_contacto: valor.numero_contacto.trim() })
       .subscribe({
         next: () => {
           this.enviando.set(false);
@@ -86,10 +128,22 @@ export class SolicitudAnuncianteComponent {
     this.enviando.set(true);
     this.error.set('');
     const reenvio = this.solicitud()?.estado === 'rechazada';
-    this.perfilService.subirDocumentos(documentos, reenvio).subscribe({
+    if (this.esInmobiliaria() && (this.empresaForm.invalid || !this.matricula() || !this.constanciaCuit())) {
+      this.enviando.set(false);
+      this.empresaForm.markAllAsTouched();
+      this.error.set('Completá los datos y adjuntá matrícula y constancia de CUIT.');
+      return;
+    }
+    const preparar: Observable<unknown> = this.esInmobiliaria()
+      ? this.perfilService.actualizarDatosInmobiliaria(this.empresaForm.getRawValue())
+      : of(null);
+    preparar.pipe(switchMap(() => this.perfilService.subirDocumentos({
+      ...documentos,
+      ...(this.esInmobiliaria() ? { matricula: this.matricula()!, constancia_cuit: this.constanciaCuit()! } : {}),
+    }, reenvio))).subscribe({
       next: () => {
         this.enviando.set(false);
-        this.exito.set('¡Identidad validada y documentación enviada! Un administrador la va a revisar a la brevedad.');
+        this.exito.set('Prueba de vida completada y documentación enviada. Un administrador revisará tu solicitud.');
         this.recargar();
       },
       error: (err: Error) => {

@@ -1,12 +1,14 @@
+import {
+  type ICorreoRepository,
+  CORREO_REPOSITORY,
+} from '../repository/correo.repository.interface';
+import {
+  type ReservaEmailDetalle,
+  type ReprogramacionEmailDetalle,
+  type IMailService,
+} from '../mail.interface';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  IMailService,
-  ReservaEmailDetalle,
-  ReprogramacionEmailDetalle,
-} from '../mail.interface';
-import { CORREO_REPOSITORY } from '../repository/correo.repository.interface';
-import type { ICorreoRepository } from '../repository/correo.repository.interface';
 import { MailPlantilla } from '../presentation/mail-plantilla';
 
 @Injectable()
@@ -14,7 +16,8 @@ export class MailService implements IMailService {
   private readonly frontendUrl: string;
 
   constructor(
-    @Inject(CORREO_REPOSITORY) private readonly correos: ICorreoRepository,
+    @Inject(CORREO_REPOSITORY)
+    private readonly correos: ICorreoRepository,
     private readonly plantillas: MailPlantilla,
     config: ConfigService,
   ) {
@@ -164,7 +167,7 @@ export class MailService implements IMailService {
     await this.enviar(
       destinatario,
       'Recibimos tus datos de anunciante',
-      `<p>Guardamos correctamente la primera parte de tu solicitud.</p><p>Para enviarla a revisión todavía tenés que completar la captura del DNI, la prueba de vida y la comparación facial.</p>${this.plantillas.boton('Continuar verificación', `${this.frontendUrl}/mi-perfil/anunciante`)}`,
+      `<p>Guardamos correctamente la primera parte de tu solicitud.</p><p>Para enviarla a revisión todavía tenés que completar la captura del DNI y la prueba de vida. Un administrador revisará la correspondencia entre tu captura y el documento.</p>${this.plantillas.boton('Continuar verificación', `${this.frontendUrl}/mi-perfil/anunciante`)}`,
       'Tu solicitud de anunciante quedó guardada.',
     );
   }

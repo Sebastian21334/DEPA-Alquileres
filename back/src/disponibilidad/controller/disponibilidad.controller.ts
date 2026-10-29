@@ -12,8 +12,8 @@ import {
 import { DisponibilidadService } from '../service/disponibilidad.service';
 import { CrearDisponibilidadDto } from '../dto/crear-disponibilidad.dto';
 import { ActualizarDisponibilidadDto } from '../dto/actualizar-disponibilidad.dto';
-import { PropietarioPublicacionGuard } from '../../common/guards/propietario-publicacion.guard';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PropietarioPublicacionGuard } from '../guards/propietario-publicacion.guard';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 
 @Controller('disponibilidad')
 export class DisponibilidadController {

@@ -1,5 +1,5 @@
 import type { Reserva } from '../../reservas/entity/reserva.entity';
-import type { WebhookEntrada } from '../interfaces/webhook.interface';
+import type { WebhookEntrada } from '../dto/webhook-pago.dto';
 
 export const PASARELA_PAGOS = 'PASARELA_PAGOS';
 

@@ -284,7 +284,7 @@ export class AdminComponent {
     const id = request.anunciante.idUsuario;
     this.run(
       `request-${id}`,
-      () => this.api.aprobar(id),
+      () => this.api.aprobar(id, request.numero_revision),
       () => this.requests.update((v) => v.filter((r) => r.id !== request.id)),
       'Solicitud aprobada.',
     );
@@ -303,7 +303,7 @@ export class AdminComponent {
     const id = request.anunciante.idUsuario;
     this.run(
       `request-${id}`,
-      () => this.api.rechazar(id, motivo),
+      () => this.api.rechazar(id, motivo, request.numero_revision),
       () => {
         this.requests.update((v) => v.filter((r) => r.id !== request.id));
         this.cancelReject();

@@ -6,7 +6,7 @@ import { Pago } from './entity/pago.entity';
 import { PagosController } from './controller/pagos.controller';
 import { PagosService } from './service/pagos.service';
 import { ReservasModule } from '../reservas/reservas.module';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 import { CotizacionesModule } from '../cotizaciones/cotizaciones.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
@@ -19,7 +19,7 @@ import { PAGOS_REPOSITORY } from './repository/pagos.repository.interface';
   imports: [
     TypeOrmModule.forFeature([Pago]),
     ReservasModule,
-    AuthModule,
+    SeguridadModule,
     CotizacionesModule,
     PublicacionesModule,
     DisponibilidadModule,

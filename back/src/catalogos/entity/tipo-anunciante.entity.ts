@@ -10,4 +10,8 @@ export class TipoAnunciante {
 
   @Column({ type: 'varchar', length: 250, nullable: true })
   descripcion: string;
+
+  esInmobiliaria(): boolean {
+    return /inmobiliaria|institucional/i.test(this.nombre);
+  }
 }

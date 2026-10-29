@@ -6,6 +6,12 @@ del período y el ingreso validado. No se almacena otra columna ni se requiere
 una migración para esta funcionalidad. `finalizada` conserva los cierres manuales;
 para saber si la estadía sigue vigente se usa `estado_estadia`.
 
+El cálculo pertenece a la entidad `Reserva`, mediante `calcularEstadoEstadia()`.
+Los servicios consultan su propiedad `estado_estadia`; el controlador y el
+repositorio conservan sus responsabilidades de entrada y persistencia. No se
+agrega una capa `domain`. Las utilidades compartidas de fecha están en
+`common/utils/fechas.ts`.
+
 Con pago aprobado y sin cancelación ni cierre manual:
 
 | Condición | Estado |

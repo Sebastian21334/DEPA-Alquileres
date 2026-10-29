@@ -12,7 +12,7 @@
     "allowSyntheticDefaultImports": true,
     "target": "ES2023",
     "rootDir": ".",
-    "types": ["node", "jest"],
+    "types": ["node", "multer"],
     "sourceMap": true,
     "outDir": "./dist",
     "incremental": true,

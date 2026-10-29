@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { Favorito } from './entity/favorito.entity';
 import { FavoritosController } from './controller/favoritos.controller';
@@ -12,7 +12,7 @@ import { FAVORITOS_REPOSITORY } from './repository/favoritos.repository.interfac
 @Module({
   imports: [
     TypeOrmModule.forFeature([Favorito]),
-    AuthModule,
+    SeguridadModule,
     PublicacionesModule,
   ],
   controllers: [FavoritosController],

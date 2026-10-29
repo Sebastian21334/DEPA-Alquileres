@@ -1,4 +1,4 @@
-import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 // mensajes/controlador/mensajes.controller.ts
 import {
   Controller,
@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { MensajesService } from '../service/mensajes.service';
 import { EnviarMensajeDto } from '../dto/enviar-mensaje.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('mensajes')

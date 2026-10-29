@@ -13,9 +13,9 @@ import {
 import { UbicacionService } from '../service/ubicacion.service';
 import { CrearProvinciaDto } from '../dto/crear-provincia.dto';
 import { CrearCiudadDto } from '../dto/crear-ciudad.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { RolesGuard } from '../../seguridad/guards/roles.guard';
+import { Roles } from '../../seguridad/decorators/roles.decorator';
 
 @Controller('ubicacion')
 export class UbicacionController {

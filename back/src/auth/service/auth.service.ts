@@ -1,13 +1,12 @@
+import { UsuariosCredencialesService } from '../../usuarios/service/usuarios-credenciales.service';
 import {
   Injectable,
-  UnauthorizedException,
   ConflictException,
   ForbiddenException,
   Inject,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
@@ -20,6 +19,7 @@ export class AuthService {
 
   constructor(
     private readonly usuariosService: UsuariosService,
+    private readonly credencialesService: UsuariosCredencialesService,
     private readonly jwtService: JwtService,
     @Inject(MAIL_SERVICE)
     private readonly mailService: IMailService,
@@ -39,7 +39,8 @@ export class AuthService {
       email,
     });
 
-    const token = await this.usuariosService.generarTokenVerificacion(usuario);
+    const token =
+      await this.credencialesService.generarTokenVerificacion(usuario);
 
     // El alta de la cuenta ya quedó confirmada en la base (usuario + token de
     // verificación). Si el proveedor de mail falla o rate-limitea (Azure
@@ -66,7 +67,10 @@ export class AuthService {
   async login(dto: LoginDto) {
     const email = dto.email.trim().toLowerCase();
 
-    const user = await this.validarCredenciales(email, dto.contrasenia);
+    const user = await this.credencialesService.validarCredenciales(
+      email,
+      dto.contrasenia,
+    );
 
     // Se chequea después de la contraseña, para no revelar el estado de
     // verificación de una cuenta con credenciales incorrectas
@@ -85,7 +89,10 @@ export class AuthService {
   /** Genera un token nuevo y reenvía el mail para una cuenta aún no verificada. */
   async reenviarVerificacion(dto: LoginDto) {
     const email = dto.email.trim().toLowerCase();
-    const user = await this.validarCredenciales(email, dto.contrasenia);
+    const user = await this.credencialesService.validarCredenciales(
+      email,
+      dto.contrasenia,
+    );
 
     // Si ya se verificó, no se genera ni se envía un token innecesario.
     if (user.email_verificado) {
@@ -95,7 +102,7 @@ export class AuthService {
       };
     }
 
-    const token = await this.usuariosService.generarTokenVerificacion(user);
+    const token = await this.credencialesService.generarTokenVerificacion(user);
     try {
       await this.mailService.enviarVerificacion(user.email, token);
     } catch (error) {
@@ -112,12 +119,12 @@ export class AuthService {
   }
 
   async verificarCuenta(token: string) {
-    await this.usuariosService.verificarCuenta(token);
+    await this.credencialesService.verificarCuenta(token);
     return { mensaje: 'Cuenta verificada correctamente' };
   }
 
   async solicitarRecuperacion(email: string) {
-    const resultado = await this.usuariosService.generarTokenRecuperacion(
+    const resultado = await this.credencialesService.generarTokenRecuperacion(
       email.trim().toLowerCase(),
     );
 
@@ -146,17 +153,10 @@ export class AuthService {
   }
 
   async restablecerContrasenia(token: string, nuevaContrasenia: string) {
-    await this.usuariosService.restablecerContrasenia(token, nuevaContrasenia);
+    await this.credencialesService.restablecerContrasenia(
+      token,
+      nuevaContrasenia,
+    );
     return { mensaje: 'Contraseña restablecida correctamente' };
-  }
-
-  private async validarCredenciales(email: string, contrasenia: string) {
-    const user = await this.usuariosService.buscarParaLogin(email);
-    if (!user || !(await bcrypt.compare(contrasenia, user.contrasenia))) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
-    if (user.bloqueado)
-      throw new ForbiddenException('Tu usuario está bloqueado');
-    return user;
   }
 }

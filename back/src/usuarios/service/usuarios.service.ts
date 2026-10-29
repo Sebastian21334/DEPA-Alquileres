@@ -1,3 +1,4 @@
+import { UsuariosCredencialesService } from './usuarios-credenciales.service';
 import { ARCHIVO_REPOSITORY } from '../../common/almacenamiento/archivo.repository.interface';
 import type { IArchivoRepository } from '../../common/almacenamiento/archivo.repository.interface';
 import { randomUUID } from 'node:crypto';
@@ -14,16 +15,20 @@ import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface
 import type { IUsuariosRepository } from '../repository/usuarios.repository.interface';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Usuario } from '../entity/usuario.entity';
-import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
-import * as crypto from 'crypto';
 import sharp from 'sharp';
-import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
+
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 
-import type { CrearUsuarioDatos } from '../interfaces/crear-usuario.interface';
+/** Datos admitidos por el alta; el rol y los secretos se asignan en el servicio. */
+type CrearUsuarioDatos = {
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono: string;
+  contrasenia: string;
+};
 
 @Injectable()
 export class UsuariosService {
@@ -34,7 +39,7 @@ export class UsuariosService {
     private readonly usuariosRepo: IUsuariosRepository,
 
     private readonly catalogosService: CatalogosService,
-    private readonly configService: ConfigService,
+    private readonly credencialesService: UsuariosCredencialesService,
     @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
     @Inject(ARCHIVO_REPOSITORY)
     private readonly archivosRepo: IArchivoRepository,
@@ -152,7 +157,7 @@ export class UsuariosService {
   }
 
   /** Procesa y guarda la foto de perfil del usuario, reemplazando la anterior. */
-  async actualizarFoto(idUsuario: number, archivo: ArchivoSubido) {
+  async actualizarFoto(idUsuario: number, archivo: Express.Multer.File) {
     const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
     if (!usuario) {
       throw new NotFoundException('Usuario no encontrado');
@@ -246,13 +251,9 @@ export class UsuariosService {
 
   /** Hashea la contrasenia, asigna el rol inicial y persiste el usuario. */
   async crear(datos: CrearUsuarioDatos): Promise<Usuario> {
-    // 1. Costo desde env (fallback 12)
-    const rounds = Number(
-      this.configService.get<string>('BCRYPT_COST') ?? '12',
+    const contraseniaHash = await this.credencialesService.hashearContrasenia(
+      datos.contrasenia,
     );
-
-    // 2. Hashear la contraseña en texto plano
-    const contraseniaHash = await bcrypt.hash(datos.contrasenia, rounds);
 
     // El cliente nunca manda el rol: el primer usuario administra el sistema y
     // todos los siguientes comienzan como usuarios normales.
@@ -272,12 +273,6 @@ export class UsuariosService {
       rol,
     });
     return this.usuariosRepo.guardar(nuevoUsuario);
-  }
-
-  /** Obtiene el usuario con su hash; la comparacion se hace en AuthService. */
-  async buscarParaLogin(email: string): Promise<Usuario | null> {
-    // Solo busca — la comparación bcrypt vive en AuthService.login
-    return this.usuariosRepo.buscarParaLogin(email);
   }
 
   /** Cambia el rol de un usuario, evitando escrituras innecesarias. */
@@ -302,59 +297,5 @@ export class UsuariosService {
     usuario.asignarRol(rolNuevo);
     const usuarioActualizado = await this.usuariosRepo.guardar(usuario);
     return this.usuarioSinSecretos(usuarioActualizado);
-  }
-
-  /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */
-  async generarTokenVerificacion(usuario: Usuario): Promise<string> {
-    const token = crypto.randomBytes(32).toString('hex');
-    usuario.iniciarVerificacionEmail(token);
-    await this.usuariosRepo.guardar(usuario);
-    return token;
-  }
-
-  /** Marca la cuenta como verificada y consume el token (uso único). */
-  async verificarCuenta(token: string): Promise<void> {
-    const usuario = await this.usuariosRepo.buscarPorTokenVerificacion(token);
-    if (!usuario) {
-      throw new BadRequestException('Token de verificación inválido');
-    }
-
-    usuario.confirmarEmail();
-    await this.usuariosRepo.guardar(usuario);
-  }
-
-  /**
-   * Genera un token de recuperación si el email existe. Devuelve null si no existe,
-   * para que AuthService pueda responder siempre igual y no filtrar qué emails están registrados.
-   */
-  async generarTokenRecuperacion(
-    email: string,
-  ): Promise<{ token: string; usuario: Usuario } | null> {
-    const usuario = await this.usuariosRepo.buscarPorEmail(email);
-    if (!usuario) return null;
-
-    const token = crypto.randomBytes(32).toString('hex');
-    usuario.iniciarRecuperacion(token, new Date(Date.now() + 60 * 60 * 1000)); // 1 hora
-    await this.usuariosRepo.guardar(usuario);
-
-    return { token, usuario };
-  }
-
-  /** Valida el token de recuperación (existencia y vigencia) y setea la nueva contraseña hasheada. */
-  async restablecerContrasenia(
-    token: string,
-    nuevaContrasenia: string,
-  ): Promise<void> {
-    const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
-
-    if (!usuario?.recuperacionVigente()) {
-      throw new BadRequestException('Token inválido o expirado');
-    }
-
-    const rounds = Number(
-      this.configService.get<string>('BCRYPT_COST') ?? '12',
-    );
-    usuario.cambiarContrasenia(await bcrypt.hash(nuevaContrasenia, rounds));
-    await this.usuariosRepo.guardar(usuario);
   }
 }

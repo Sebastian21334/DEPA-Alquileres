@@ -11,7 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { PAGOS_REPOSITORY } from '../repository/pagos.repository.interface';
 import type { IPagosRepository } from '../repository/pagos.repository.interface';
-import type { WebhookEntrada } from '../interfaces/webhook.interface';
+import type { WebhookEntrada } from '../dto/webhook-pago.dto';
 import { PASARELA_PAGOS } from '../repository/pasarela-pagos.interface';
 import type {
   IPasarelaPagos,

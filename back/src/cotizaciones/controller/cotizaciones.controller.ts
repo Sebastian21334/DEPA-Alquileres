@@ -17,9 +17,9 @@ import {
   Min,
 } from 'class-validator';
 import { CotizacionesService } from '../service/cotizaciones.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { RolesGuard } from '../../seguridad/guards/roles.guard';
+import { Roles } from '../../seguridad/decorators/roles.decorator';
 
 export class HistorialCotizacionesDto {
   @IsOptional()

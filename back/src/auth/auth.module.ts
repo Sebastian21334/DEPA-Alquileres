@@ -1,43 +1,15 @@
-import { forwardRef, Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Module } from '@nestjs/common';
 import { AuthService } from './service/auth.service';
 import { AuthController } from './controller/auth.controller';
-import { UsuariosModule } from '../usuarios/usuarios.module';
-import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategy/jwt.strategy';
+import { UsuariosModule } from '../usuarios/usuarios.module';
 import { MailModule } from '../mail/mail.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 
 @Module({
-  imports: [
-    // Passport conecta los endpoints protegidos con la estrategia JWT.
-    PassportModule.register({ defaultStrategy: 'jwt' }),
-    // Auth y Usuarios se necesitan mutuamente; forwardRef retrasa la resolución circular.
-    forwardRef(() => UsuariosModule),
-    MailModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => {
-        // JWT_EXPIRES_SEC está en segundos. En local se puede extender para
-        // pruebas largas; en producción el valor por defecto es una hora.
-        const segundos = Number(
-          configService.get<string>('JWT_EXPIRES_SEC') ?? 3600,
-        );
-        return {
-          secret: configService.getOrThrow<string>('JWT_SECRET'),
-          signOptions: {
-            expiresIn:
-              Number.isFinite(segundos) && segundos > 0 ? segundos : 3600,
-          },
-        };
-      },
-    }),
-  ],
+  imports: [UsuariosModule, MailModule, SeguridadModule],
   controllers: [AuthController],
-  // JwtStrategy es utilizada internamente por Passport para validar Bearer tokens.
+  // Consulta el usuario actual; se registra una sola vez junto a los flujos de acceso.
   providers: [AuthService, JwtStrategy],
-  // Otros módulos necesitan registrar guards basados en Passport/JWT.
-  exports: [PassportModule, JwtModule],
 })
 export class AuthModule {}

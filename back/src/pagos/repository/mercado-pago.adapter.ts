@@ -12,7 +12,7 @@ import {
 } from 'mercadopago';
 import { IPasarelaPagos, PagoExterno } from './pasarela-pagos.interface';
 import { Reserva } from '../../reservas/entity/reserva.entity';
-import { WebhookEntrada } from '../interfaces/webhook.interface';
+import type { WebhookEntrada } from '../dto/webhook-pago.dto';
 
 @Injectable()
 export class MercadoPagoAdapter implements IPasarelaPagos {

@@ -1,4 +1,4 @@
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Rol } from './entity/rol.entity';
 import { TipoAnunciante } from './entity/tipo-anunciante.entity';
@@ -9,7 +9,7 @@ import { CatalogosRepository } from './repository/catalogos.repository';
 import { CATALOGOS_REPOSITORY } from './repository/catalogos.repository.interface';
 import { CatalogosService } from './service/catalogos.service';
 import { CatalogosController } from './controller/catalogos.controller';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 
 @Module({
   // Centraliza las tablas maestras que son referenciadas por otros módulos.
@@ -21,7 +21,7 @@ import { AuthModule } from '../auth/auth.module';
       Modalidad,
       TipoMoneda,
     ]),
-    forwardRef(() => AuthModule),
+    SeguridadModule,
   ],
   controllers: [CatalogosController],
   providers: [

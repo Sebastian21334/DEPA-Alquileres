@@ -1,10 +1,10 @@
+import {
+  type IArchivoRepository,
+  type ContenedorArchivos,
+} from './archivo.repository.interface';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BlobSASPermissions, BlobServiceClient } from '@azure/storage-blob';
-import {
-  ContenedorArchivos,
-  IArchivoRepository,
-} from './archivo.repository.interface';
 
 @Injectable()
 export class AzureArchivoRepository implements IArchivoRepository {
@@ -41,6 +41,14 @@ export class AzureArchivoRepository implements IArchivoRepository {
       permissions: BlobSASPermissions.parse('r'),
       expiresOn: new Date(Date.now() + 15 * 60 * 1000),
     });
+  }
+
+  async eliminarDocumentoPropio(url: string): Promise<void> {
+    const contenedor = this.contenedor('verificaciones');
+    const nombre = this.nombrePropio(url, contenedor.url);
+    if (nombre === null)
+      throw new Error('Documento ajeno al almacenamiento privado');
+    await contenedor.getBlobClient(nombre).deleteIfExists();
   }
 
   private contenedor(tipo: ContenedorArchivos) {

@@ -1,13 +1,14 @@
 import { AlmacenamientoModule } from '../common/almacenamiento/almacenamiento.module';
-import { forwardRef, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Usuario } from './entity/usuario.entity';
 import { USUARIOS_REPOSITORY } from './repository/usuarios.repository.interface';
 import { UsuariosRepository } from './repository/usuarios.repository';
 import { UsuariosService } from './service/usuarios.service';
+import { UsuariosCredencialesService } from './service/usuarios-credenciales.service';
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { UsuariosController } from './controller/usuarios.controller';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 import { MailModule } from '../mail/mail.module';
 
 @Module({
@@ -21,15 +22,15 @@ import { MailModule } from '../mail/mail.module';
       useExisting: UsuariosRepository,
     },
     UsuariosService,
+    UsuariosCredencialesService,
   ],
-  exports: [UsuariosService],
+  exports: [UsuariosService, UsuariosCredencialesService],
   imports: [
     AlmacenamientoModule,
     // TypeORM crea el repositorio de la entidad Usuario para este módulo.
     TypeOrmModule.forFeature([Usuario]),
-    // Catálogos aporta los roles; Auth y Usuarios tienen una dependencia circular.
-    forwardRef(() => CatalogosModule),
-    forwardRef(() => AuthModule),
+    CatalogosModule,
+    SeguridadModule,
     MailModule,
   ],
 })

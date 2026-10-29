@@ -1,4 +1,4 @@
-import type { AnuncianteRequest } from '../../auth/interfaces/authenticated-request.interface';
+import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guard';
 import {
   Controller,
   Post,
@@ -14,9 +14,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImagenesService } from '../service/imagenes.service';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { AnuncianteGuard } from '../../common/guards/anunciante.guard';
-import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { AnuncianteGuard } from '../../anunciantes/guards/anunciante.guard';
 
 const TIPOS_PERMITIDOS = [
   'image/jpeg',
@@ -53,7 +52,7 @@ export class ImagenesController {
   // AnuncianteGuard agrega req.anunciante después de comprobar que el usuario es un anunciante verificado.
   async subir(
     @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-    @UploadedFile() archivo: ArchivoSubido,
+    @UploadedFile() archivo: Express.Multer.File,
     @Req() req: AnuncianteRequest,
   ) {
     if (!archivo) throw new BadRequestException('No se envió ningún archivo');

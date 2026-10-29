@@ -46,6 +46,13 @@ export interface SolicitudVerificacion {
   dni_dorso_url: string | null;
   rostro_url: string | null;
   motivo_rechazo: string | null;
+  razon_social?: string;
+  matricula_profesional?: string;
+  colegio_profesional?: string;
+  domicilio_comercial?: string;
+  dni_corredor?: string;
+  matricula_url?: string | null;
+  constancia_cuit_url?: string | null;
   numero_revision: number;
   creada_en: string;
   actualizada_en: string;

@@ -13,9 +13,21 @@ import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { ReprogramacionReserva } from './reprogramacion-reserva.entity';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import {
-  calcularEstadoEstadia,
-  type EstadoEstadia,
-} from '../domain/estado-estadia';
+  esFechaCalendarioValida,
+  fechaArgentina,
+} from '../../common/utils/fechas';
+
+export type EstadoEstadia =
+  | 'PENDIENTE_PAGO'
+  | 'CONFIRMADA'
+  | 'PENDIENTE_INGRESO'
+  | 'EN_CURSO'
+  | 'FINALIZADA'
+  | 'INGRESO_NO_VERIFICADO'
+  | 'CANCELADA'
+  | 'REEMBOLSADA'
+  | 'PAGO_RECHAZADO'
+  | 'FECHAS_A_REVISAR';
 
 export enum EstadoPagoReserva {
   PENDIENTE = 'PENDIENTE',
@@ -41,7 +53,34 @@ export class Reserva {
 
   // No es una columna: se evalúa también al serializar reservas históricas.
   get estado_estadia(): EstadoEstadia {
-    return calcularEstadoEstadia(this);
+    return this.calcularEstadoEstadia();
+  }
+
+  /** Estado derivado: no modifica el pago, la liquidación ni el calendario. */
+  calcularEstadoEstadia(ahora = new Date()): EstadoEstadia {
+    if (this.estado_pago === EstadoPagoReserva.REEMBOLSADO)
+      return 'REEMBOLSADA';
+    if (this.estado_pago === EstadoPagoReserva.RECHAZADO)
+      return 'PAGO_RECHAZADO';
+    if (this.cancelada || this.estado_pago === EstadoPagoReserva.CANCELADO)
+      return 'CANCELADA';
+    if (this.estado_pago === EstadoPagoReserva.PENDIENTE)
+      return 'PENDIENTE_PAGO';
+    // Conserva los cierres manuales existentes.
+    if (this.finalizada) return 'FINALIZADA';
+    if (
+      !esFechaCalendarioValida(this.fecha_inicio) ||
+      !esFechaCalendarioValida(this.fecha_fin) ||
+      this.fecha_inicio > this.fecha_fin
+    )
+      return 'FECHAS_A_REVISAR';
+
+    const hoy = fechaArgentina(ahora);
+    if (hoy < this.fecha_inicio) return 'CONFIRMADA';
+    if (hoy > this.fecha_fin) {
+      return this.codigo_validado_en ? 'FINALIZADA' : 'INGRESO_NO_VERIFICADO';
+    }
+    return this.codigo_validado_en ? 'EN_CURSO' : 'PENDIENTE_INGRESO';
   }
 
   toJSON(): object {

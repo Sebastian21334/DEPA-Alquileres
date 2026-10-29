@@ -1,5 +1,6 @@
 import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
 import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
+import { ReservaReprogramacionService } from './service/reserva-reprogramacion.service';
 // reservas.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -10,7 +11,7 @@ import { ReservasController } from './controller/reservas.controller';
 import { ReservaRepository } from './repository/reserva.repository';
 import { RESERVA_REPOSITORY } from './repository/reserva.repository.interface';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { MailModule } from '../mail/mail.module';
@@ -20,7 +21,7 @@ import { MailModule } from '../mail/mail.module';
     // Reserva se guarda con TypeORM y delega disponibilidad en otro módulo.
     TypeOrmModule.forFeature([Reserva, ReprogramacionReserva]),
     DisponibilidadModule,
-    AuthModule,
+    SeguridadModule,
     UsuariosModule,
     PublicacionesModule,
     MailModule,
@@ -29,6 +30,7 @@ import { MailModule } from '../mail/mail.module';
   providers: [
     ReservaLiquidacionesService,
     ReservaNotificacionesService,
+    ReservaReprogramacionService,
     // El token desacopla el service de la implementación concreta del repositorio.
     ReservasService,
     ReservaRepository,

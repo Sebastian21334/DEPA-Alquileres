@@ -8,7 +8,7 @@ import { ImagenesService } from './service/imagenes.service';
 import { ImagenesController } from './controller/imagenes.controller';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 
 @Module({
   // Coordina el archivo recibido, el almacenamiento externo y su registro en DB.
@@ -28,7 +28,7 @@ import { AuthModule } from '../auth/auth.module';
     // Se consultan publicación, anunciante y usuario para validar propiedad.
     PublicacionesModule,
     AnunciantesModule,
-    AuthModule,
+    SeguridadModule,
   ],
 })
 export class ImagenesModule {}

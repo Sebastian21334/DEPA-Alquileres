@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 import { CotizacionDolar } from './entity/cotizacion-dolar.entity';
 import { ConsultaCotizacion } from './entity/consulta-cotizacion.entity';
 import { CotizacionRepository } from './repository/cotizacion.repository';
@@ -13,7 +13,7 @@ import { CotizacionesController } from './controller/cotizaciones.controller';
 @Module({
   imports: [
     TypeOrmModule.forFeature([CotizacionDolar, ConsultaCotizacion]),
-    AuthModule,
+    SeguridadModule,
   ],
   controllers: [CotizacionesController],
   providers: [

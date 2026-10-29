@@ -7,7 +7,7 @@ import { PUBLICACIONES_REPOSITORY } from './repository/publicaciones.repository.
 import { PublicacionesService } from './service/publicaciones.service';
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { UbicacionModule } from '../ubicacion/ubicacion.module';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { Reserva } from '../reservas/entity/reserva.entity';
 import { MailModule } from '../mail/mail.module';
@@ -29,7 +29,7 @@ import { MailModule } from '../mail/mail.module';
     // Se necesitan para resolver los IDs relacionales al crear una publicación.
     CatalogosModule,
     UbicacionModule,
-    AuthModule,
+    SeguridadModule,
     MailModule,
     AnunciantesModule,
   ],

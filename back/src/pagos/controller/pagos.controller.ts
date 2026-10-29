@@ -1,4 +1,4 @@
-import type { AuthenticatedRequest } from '../../auth/interfaces/authenticated-request.interface';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import {
   Body,
   Controller,
@@ -11,14 +11,14 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { CrearCheckoutDto } from '../dto/crear-checkout.dto';
 import { ReconciliarPagoDto } from '../dto/reconciliar-pago.dto';
 import { PagosService } from '../service/pagos.service';
 import { PresupuestosService } from '../service/presupuestos.service';
 import { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
 
-import type { WebhookPago } from '../interfaces/webhook.interface';
+import type { WebhookPago } from '../dto/webhook-pago.dto';
 
 @Controller('pagos')
 export class PagosController {

@@ -21,7 +21,6 @@ npm run start:dev
 
 ```sh
 npm run lint
-npm test -- --runInBand
 npm run build
 npm run start:prod
 ```
@@ -29,6 +28,8 @@ npm run start:prod
 Los módulos separan controladores, servicios y repositorios. Las integraciones
 externas se encapsulan en adaptadores. Los modelos faciales de `src/models`
 se copian automáticamente al compilar.
+
+La generación automática de archivos de prueba está desactivada.
 
 Las migraciones y sus instrucciones están en `migrations/`. El script
 `scripts/importar-ubicaciones.cjs` permite importar localidades y catálogos;

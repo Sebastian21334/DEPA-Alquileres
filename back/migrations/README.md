@@ -1,5 +1,8 @@
 # Unicidad del calendario y concurrencia de reservas
 
+Para separar la prueba de vida de la revisión manual de identidad, aplicar
+`20261028-verificacion-identidad.sql` según [estas instrucciones](../docs/verificacion-identidad.md).
+
 Para cotizaciones históricas y conversión USD → ARS, aplicar además
 `20261027-cotizaciones-cobros.sql` según [estas instrucciones](../docs/cotizaciones-cobros.md).
 
@@ -27,11 +30,6 @@ creación de días ausentes y evita invertir el orden entre rangos al reprograma
 Publicaciones diferentes pueden modificarse en paralelo. Los correos se envían
 fuera de la transacción y solo actualizan sus indicadores de envío.
 
-Para ejecutar las pruebas reales, configurar `TEST_POSTGRES_URL` apuntando a una
-base **local descartable** cuyo nombre empiece con `calendario_test`, y ejecutar
-`npm run test:concurrencia`. No utiliza `DATABASE_URL` ni carga `.env`.
-Las pruebas crean y eliminan exclusivamente su esquema temporal.
-
 # Retiro del catálogo de métodos de pago
 
 Los pagos se gestionan mediante Mercado Pago Checkout Pro. El medio confirmado
@@ -56,3 +54,5 @@ antes y después. Puede ejecutarse nuevamente sin duplicar cambios.
 
 Aplicar la migración antes de arrancar esta versión. El proyecto usa
 `synchronize: false`: los cambios de esquema requieren migraciones explícitas.
+
+Para documentación diferenciada de inmobiliarias, ver [el flujo y su migración](../docs/documentacion-inmobiliaria.md).

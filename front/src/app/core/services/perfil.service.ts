@@ -10,6 +10,11 @@ export interface SolicitarAnuncianteDto {
   cuit: string;
   numero_contacto: string;
   idTipoAnunciante: number;
+  razon_social?: string;
+  matricula_profesional?: string;
+  colegio_profesional?: string;
+  domicilio_comercial?: string;
+  dni_corredor?: string;
 }
 
 export interface DocumentosVerificacion {
@@ -17,6 +22,8 @@ export interface DocumentosVerificacion {
   dni_dorso: File;
   rostro: File;
   verificationToken: string;
+  matricula?: File;
+  constancia_cuit?: File;
 }
 
 // Estado de la cuenta del usuario logueado: datos personales (GET /usuarios/me)
@@ -103,6 +110,13 @@ export class PerfilService {
     return this.http.post(`${this.api}/anunciantes/solicitar`, dto);
   }
 
+  actualizarDatosInmobiliaria(datos: {
+    razon_social: string; matricula_profesional: string; colegio_profesional: string;
+    domicilio_comercial: string; dni_corredor: string;
+  }) {
+    return this.http.patch(`${this.api}/anunciantes/mi-solicitud/datos-inmobiliaria`, datos);
+  }
+
   /** POST /anunciantes/mi-solicitud/documentos o /reenviar si la anterior fue rechazada. */
   subirDocumentos(docs: DocumentosVerificacion, reenvio: boolean) {
     const body = new FormData();
@@ -110,6 +124,8 @@ export class PerfilService {
     body.append('dni_dorso', docs.dni_dorso);
     body.append('rostro', docs.rostro);
     body.append('verificationToken', docs.verificationToken);
+    if (docs.matricula) body.append('matricula', docs.matricula);
+    if (docs.constancia_cuit) body.append('constancia_cuit', docs.constancia_cuit);
     const accion = reenvio ? 'reenviar' : 'documentos';
     return this.http.post<SolicitudVerificacion>(`${this.api}/anunciantes/mi-solicitud/${accion}`, body);
   }

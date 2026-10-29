@@ -13,7 +13,6 @@ import { IMAGENES_REPOSITORY } from '../repository/imagenes.repository.interface
 import type { IImagenesRepository } from '../repository/imagenes.repository.interface';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
-import type { ArchivoSubido } from '../../common/interfaces/archivo-subido.interface';
 
 @Injectable()
 export class ImagenesService {
@@ -29,7 +28,7 @@ export class ImagenesService {
   async subir(
     idPublicacion: number,
     anuncianteQueOpera: Anunciante,
-    archivo: ArchivoSubido,
+    archivo: Express.Multer.File,
   ) {
     const publicacion = await this.publicacionesService.obtenerPropia(
       idPublicacion,

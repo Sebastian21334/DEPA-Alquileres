@@ -30,6 +30,30 @@ Los reintentos no vuelven a modificar el calendario y se serializan por aviso.
 Repetir las mismas fechas no crea otro evento. Si el proveedor entrega el correo
 pero falla la confirmación local, un reintento podría repetir ese correo.
 
+## Organización del código
+
+`ReservaReprogramacionService` es un servicio interno de `ReservasModule`.
+Concentra el cambio de fechas y la coordinación del reintento del aviso.
+Reutiliza las entidades, repositorios y transacción del calendario existentes;
+no requiere un módulo ni tablas adicionales.
+
+El controlador conserva las rutas `PATCH /reservas/:id/fechas` y
+`PATCH /reservas/:id/reprogramaciones/:idCambio/notificar`, con los mismos DTO
+y controles de autenticación. Solo el inquilino puede cambiar fechas. Para
+reintentar el aviso se reutiliza la consulta autorizada de `ReservasService`,
+que exige que el usuario participe en la reserva.
+
+`ReservaNotificacionesService` conserva el registro y envío de los avisos,
+delegando el contenido y transporte del correo en `MailService`.
+`ReservaLiquidacionesService` conserva los códigos de ingreso, reportes y
+liquidaciones. La separación no modifica las reglas ni el esquema de datos.
+
+La extracción se comprobó con compilación, oxlint y 42 pruebas externas al
+repositorio, incluidas las rutas HTTP. Se utilizaron persistencia y correo
+simulados: no fue una prueba contra PostgreSQL ni un envío real.
+
+## Preparación de una base existente
+
 Antes de iniciar esta versión con una base existente, detener el backend, aplicar
 primero la migración de unicidad del calendario y luego, desde `back`:
 

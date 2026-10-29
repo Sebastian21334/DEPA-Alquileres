@@ -10,4 +10,5 @@ export interface IArchivoRepository {
   ): Promise<string>;
   eliminarImagenPropia(url: string): Promise<void>;
   firmarDocumento(url: string): Promise<string>;
+  eliminarDocumentoPropio(url: string): Promise<void>;
 }

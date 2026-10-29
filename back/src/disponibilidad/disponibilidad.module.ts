@@ -4,10 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Fecha } from './entity/fecha.entity';
 import { DisponibilidadService } from './service/disponibilidad.service';
 import { DisponibilidadController } from './controller/disponibilidad.controller';
-import { PropietarioPublicacionGuard } from '../common/guards/propietario-publicacion.guard';
+import { PropietarioPublicacionGuard } from './guards/propietario-publicacion.guard';
 import { FechaRepository } from './repository/fecha.repository';
 import { FECHA_REPOSITORY } from './repository/fecha.repository.interface';
-import { AuthModule } from '../auth/auth.module';
+import { SeguridadModule } from '../seguridad/seguridad.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { TransaccionCalendario } from './repository/transaccion-calendario';
 import { TRANSACCION_CALENDARIO } from './repository/transaccion-calendario.interface';
@@ -16,7 +16,7 @@ import { TRANSACCION_CALENDARIO } from './repository/transaccion-calendario.inte
   imports: [
     // Se usan Fecha para el calendario y Publicacion para resolver propiedad.
     TypeOrmModule.forFeature([Fecha]),
-    AuthModule,
+    SeguridadModule,
     PublicacionesModule,
   ],
   controllers: [DisponibilidadController],

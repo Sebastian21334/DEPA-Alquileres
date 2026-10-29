@@ -1,59 +1,19 @@
-import { FaceApiAnalisisRepository } from './repository/face-api-analisis.repository';
-import { ANALISIS_FACIAL_REPOSITORY } from './repository/analisis-facial.repository.interface';
-import { AlmacenamientoModule } from '../common/almacenamiento/almacenamiento.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Anunciante } from './entity/anunciante.entity';
-import { SolicitudVerificacion } from './entity/solicitud-verificacion.entity';
-import { RevisionVerificacion } from './entity/revision-verificacion.entity';
-import { ANUNCIANTES_REPOSITORY } from './repository/anunciantes.repository.interface';
 import { AnunciantesRepository } from './repository/anunciantes.repository';
+import { ANUNCIANTES_REPOSITORY } from './repository/anunciantes.repository.interface';
 import { AnunciantesService } from './service/anunciantes.service';
-import { AnunciantesController } from './controller/anunciantes.controller';
-import { UsuariosModule } from '../usuarios/usuarios.module';
-import { CatalogosModule } from '../catalogos/catalogos.module';
-import { AuthModule } from '../auth/auth.module';
-import { MailModule } from '../mail/mail.module';
-import { VERIFICACION_REPOSITORY } from './repository/verificacion.repository.interface';
-import { VerificacionRepository } from './repository/verificacion.repository';
-import { VerificacionFacialService } from './service/verificacion-facial.service';
+import { AnuncianteGuard } from './guards/anunciante.guard';
 
 @Module({
-  // Agrupa endpoints, reglas de negocio y persistencia de solicitudes de anunciante.
-  controllers: [AnunciantesController],
+  imports: [TypeOrmModule.forFeature([Anunciante])],
   providers: [
-    FaceApiAnalisisRepository,
-    {
-      provide: ANALISIS_FACIAL_REPOSITORY,
-      useExisting: FaceApiAnalisisRepository,
-    },
     AnunciantesRepository,
-    {
-      provide: ANUNCIANTES_REPOSITORY,
-      useExisting: AnunciantesRepository,
-    },
+    { provide: ANUNCIANTES_REPOSITORY, useExisting: AnunciantesRepository },
     AnunciantesService,
-    VerificacionFacialService,
-    VerificacionRepository,
-    {
-      provide: VERIFICACION_REPOSITORY,
-      useExisting: VerificacionRepository,
-    },
+    AnuncianteGuard,
   ],
-  imports: [
-    AlmacenamientoModule,
-    // Habilita consultas TypeORM sobre la entidad Anunciante.
-    TypeOrmModule.forFeature([
-      Anunciante,
-      SolicitudVerificacion,
-      RevisionVerificacion,
-    ]),
-    // Estas dependencias permiten validar el usuario, el tipo de anunciante y el JWT.
-    UsuariosModule,
-    CatalogosModule,
-    AuthModule,
-    MailModule,
-  ],
-  exports: [AnunciantesService],
+  exports: [AnunciantesService, AnuncianteGuard],
 })
 export class AnunciantesModule {}

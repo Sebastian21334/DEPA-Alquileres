@@ -1,5 +1,11 @@
-import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transaccion-calendario.interface';
-import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
+import {
+  type IReservaRepository,
+  RESERVA_REPOSITORY,
+} from '../repository/reserva.repository.interface';
+import {
+  type ITransaccionCalendario,
+  TRANSACCION_CALENDARIO,
+} from '../../disponibilidad/repository/transaccion-calendario.interface';
 import {
   Inject,
   Injectable,
@@ -9,12 +15,9 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { EstadoLiquidacionReserva, Reserva } from '../entity/reserva.entity';
-import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
-import type { IReservaRepository } from '../repository/reserva.repository.interface';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 import { generarCodigoAlojamiento } from './reservas.utils';
-import { calcularEstadoEstadia } from '../domain/estado-estadia';
 
 @Injectable()
 export class ReservaLiquidacionesService {
@@ -45,7 +48,7 @@ export class ReservaLiquidacionesService {
         }
         if (
           !['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(
-            calcularEstadoEstadia(reserva),
+            reserva.estado_estadia,
           )
         ) {
           throw new ConflictException(
@@ -90,7 +93,7 @@ export class ReservaLiquidacionesService {
             'El código de esta reserva ya fue utilizado',
           );
         }
-        if (calcularEstadoEstadia(reserva) !== 'PENDIENTE_INGRESO') {
+        if (reserva.estado_estadia !== 'PENDIENTE_INGRESO') {
           throw new ConflictException(
             'El código solo puede validarse durante las fechas de la estadía',
           );

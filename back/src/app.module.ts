@@ -7,6 +7,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UsuariosModule } from './usuarios/usuarios.module';
 import { AnunciantesModule } from './anunciantes/anunciantes.module';
+import { VerificacionAnuncianteModule } from './verificacion-anunciante/verificacion-anunciante.module';
 import { PublicacionesModule } from './publicaciones/publicaciones.module';
 import { UbicacionModule } from './ubicacion/ubicacion.module';
 import { ImagenesModule } from './imagenes/imagenes.module';
@@ -47,6 +48,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     AuthModule,
     UsuariosModule,
     AnunciantesModule,
+    VerificacionAnuncianteModule,
     PublicacionesModule,
     UbicacionModule,
     ImagenesModule,

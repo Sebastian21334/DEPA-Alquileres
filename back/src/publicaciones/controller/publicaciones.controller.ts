@@ -1,5 +1,5 @@
 import { ListarPublicacionesDto } from '../dto/listar-publicaciones.dto';
-import type { AnuncianteRequest } from '../../auth/interfaces/authenticated-request.interface';
+import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guard';
 import {
   Controller,
   Post,
@@ -17,10 +17,10 @@ import {
 import { PublicacionesService } from '../service/publicaciones.service';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { AnuncianteGuard } from '../../common/guards/anunciante.guard';
-import { RolesGuard } from '../../common/guards/roles.guard';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { AnuncianteGuard } from '../../anunciantes/guards/anunciante.guard';
+import { RolesGuard } from '../../seguridad/guards/roles.guard';
+import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { BajaPublicacionDto } from '../dto/baja-publicacion.dto';
 
 @Controller('publicaciones')
@@ -58,7 +58,14 @@ export class PublicacionesController {
   @Roles('Administrador')
   darDeBajaAdministracion(
     @Param('id', ParseIntPipe) id: number,
-    @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) dto: BajaPublicacionDto,
+    @Body(
+      new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: BajaPublicacionDto,
   ) {
     return this.publicacionesService.darDeBajaAdministracion(id, dto.motivo);
   }

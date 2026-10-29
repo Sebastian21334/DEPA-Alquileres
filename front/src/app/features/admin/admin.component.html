@@ -182,7 +182,22 @@
                 <dt>Revisión</dt>
                 <dd>#{{ request.numero_revision }}</dd>
               </div>
+              <div>
+                <dt>Prueba de vida</dt>
+                <dd>{{ request.prueba_vida_validada_en ? 'Completada' : 'Requiere una nueva captura' }}</dd>
+              </div>
             </dl>
+            @if (request.razon_social || request.matricula_profesional) {
+              <h4>Inmobiliaria y corredor responsable</h4>
+              <dl>
+                <div><dt>Nombre o razón social</dt><dd>{{ request.razon_social || 'Sin informar' }}</dd></div>
+                <div><dt>Matrícula del corredor responsable</dt><dd>{{ request.matricula_profesional || 'Sin informar' }}</dd></div>
+                <div><dt>Colegio profesional y jurisdicción</dt><dd>{{ request.colegio_profesional || 'Sin informar' }}</dd></div>
+                <div><dt>Domicilio comercial</dt><dd>{{ request.domicilio_comercial || 'Sin informar' }}</dd></div>
+                <div><dt>DNI del corredor responsable</dt><dd>{{ request.dni_corredor || 'Sin informar' }}</dd></div>
+              </dl>
+              <p>Compará el DNI y la captura del titular de la cuenta. Revisá matrícula, colegio/jurisdicción, domicilio comercial y constancia de CUIT antes de aprobar.</p>
+            }
             <div class="documents">
               @if (request.dni_frente_url) {
                 <a class="document-preview" [href]="request.dni_frente_url" target="_blank" rel="noopener">
@@ -207,6 +222,8 @@
                 </a>
               }
             </div>
+            @if (request.matricula_url) { <a [href]="request.matricula_url" target="_blank" rel="noopener">Ver constancia de matrícula</a> }
+            @if (request.constancia_cuit_url) { <a [href]="request.constancia_cuit_url" target="_blank" rel="noopener">Ver constancia de CUIT</a> }
             @if (rejectId() === request.id) {
               <div class="reject-box">
                 <label [for]="'reason-' + request.id">Motivo del rechazo</label
@@ -241,7 +258,7 @@
                   type="button"
                   class="button button--success"
                   (click)="approve(request)"
-                  [disabled]="busy() === 'request-' + request.anunciante.idUsuario"
+                  [disabled]="busy() === 'request-' + request.anunciante.idUsuario || !request.prueba_vida_validada_en"
                 >
                   <svg lucideCheck [size]="17"></svg> Aprobar
                 </button>
