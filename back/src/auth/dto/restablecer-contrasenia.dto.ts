@@ -1,8 +1,9 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsString } from 'class-validator';
 import { VerificarCuentaDto } from './verificar-cuenta.dto';
+import { ContraseniaSegura } from '../validators/contrasenia-segura.decorator';
 
 export class RestablecerContraseniaDto extends VerificarCuentaDto {
   @IsString()
-  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
+  @ContraseniaSegura()
   nuevaContrasenia: string;
 }

@@ -64,12 +64,12 @@
               @if (verContrasenia()) { <svg lucideEyeOff [size]="18"></svg> } @else { <svg lucideEye [size]="18"></svg> }
             </button>
           </div>
-          @if (form.controls.contrasenia.touched && form.controls.contrasenia.errors; as errores) {
+          @if (form.controls.contrasenia.touched && form.controls.contrasenia.errors) {
             <span class="auth__hint auth__hint--error">
-              La contraseña debe tener al menos 8 caracteres, incluyendo una letra, un número y un carácter especial.
+              {{ politicaContrasenia }}
             </span>
           } @else {
-            <span class="auth__hint">Mínimo 8 caracteres, con una letra, un número y un carácter especial.</span>
+            <span class="auth__hint">{{ politicaContrasenia }}</span>
           }
         </div>
 

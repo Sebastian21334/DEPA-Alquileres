@@ -3,7 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideArrowLeft, LucideEye, LucideEyeOff } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
-import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../shared/validators/password.validators';
+import { contraseniasIgualesValidator, MENSAJE_CONTRASENIA_SEGURA, passwordSeguraValidator } from '../../../shared/validators/password.validators';
 
 // RF1 (alta de usuario) + caso de uso "Crear Cuenta" (ID 1 del documento):
 // el registro siempre crea un usuario tipo Inquilino (back/src/usuarios/service
@@ -25,6 +25,7 @@ import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../
   styleUrl: './register.component.scss',
 })
 export class RegisterComponent {
+  protected readonly politicaContrasenia = MENSAJE_CONTRASENIA_SEGURA;
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
 

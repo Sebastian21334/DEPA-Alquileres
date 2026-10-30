@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
-import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../shared/validators/password.validators';
+import { contraseniasIgualesValidator, MENSAJE_CONTRASENIA_SEGURA, passwordSeguraValidator } from '../../../shared/validators/password.validators';
 
 // Segundo paso del caso de uso "Cambiar contraseña" (ID 4): consume el link
 // que llega por mail (back/src/mail/mail.service.ts#enviarRecuperacion, que
@@ -24,6 +24,7 @@ import { contraseniasIgualesValidator, passwordSeguraValidator } from '../../../
   styleUrl: './restablecer-contrasenia.component.scss',
 })
 export class RestablecerContraseniaComponent implements OnInit {
+  protected readonly politicaContrasenia = MENSAJE_CONTRASENIA_SEGURA;
   private readonly route = inject(ActivatedRoute);
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);

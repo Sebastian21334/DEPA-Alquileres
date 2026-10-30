@@ -1,23 +1,24 @@
 import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 
-// RNF5: "La contraseña debe contener al menos 8 dígitos alfanuméricos, un
-// número y un carácter especial." El backend hoy solo valida longitud mínima
-// (ver back/src/auth/dto/register.dto.ts), pero el formulario igual exige la
-// regla completa del documento para no depender de esa validación faltante.
+export const MENSAJE_CONTRASENIA_SEGURA =
+  'Usá al menos 12 caracteres, con una letra, un número y un símbolo, sin espacios ni caracteres invisibles. Máximo 72 bytes en UTF-8.';
+
+// Misma política que ContraseniaSegura en los DTO de registro y restablecimiento.
 export function passwordSeguraValidator(): ValidatorFn {
-  const tieneLetra = /[A-Za-z]/;
-  const tieneNumero = /\d/;
-  const tieneCaracterEspecial = /[^A-Za-z0-9]/;
+  const encoder = new TextEncoder();
 
   return (control: AbstractControl): ValidationErrors | null => {
-    const valor = control.value as string | null;
-    if (!valor) return null; // Validators.required se encarga de este caso
+    const valor: unknown = control.value;
+    if (valor === null || valor === undefined || valor === '') return null;
+    if (typeof valor !== 'string') return { contraseniaInvalida: true };
 
     const errores: ValidationErrors = {};
-    if (valor.length < 8) errores['minlength'] = true;
-    if (!tieneLetra.test(valor)) errores['sinLetra'] = true;
-    if (!tieneNumero.test(valor)) errores['sinNumero'] = true;
-    if (!tieneCaracterEspecial.test(valor)) errores['sinCaracterEspecial'] = true;
+    if (Array.from(valor).length < 12) errores['minlength'] = true;
+    if (encoder.encode(valor).length > 72) errores['maxBytes'] = true;
+    if (!/\p{L}/u.test(valor)) errores['sinLetra'] = true;
+    if (!/[0-9]/.test(valor)) errores['sinNumero'] = true;
+    if (!/[\p{P}\p{S}]/u.test(valor)) errores['sinCaracterEspecial'] = true;
+    if (/[\s\p{C}]/u.test(valor)) errores['caracterNoPermitido'] = true;
 
     return Object.keys(errores).length ? errores : null;
   };

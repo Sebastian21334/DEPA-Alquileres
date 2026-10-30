@@ -30,6 +30,24 @@ JWT. Seguridad no importa esos módulos.
 Las utilidades de fechas e importes, el error de registro en uso y
 `AlmacenamientoModule` se mantienen en `common`.
 
+## Política de contraseñas
+
+Registro y restablecimiento exigen la misma definición en front y back:
+al menos 12 caracteres Unicode, una letra (incluidas letras con tilde), un
+número del 0 al 9 y un símbolo (puntuación o símbolo Unicode, incluidos emojis).
+No se permiten espacios ni caracteres de control o formato invisibles. No es
+obligatorio combinar mayúsculas y minúsculas.
+
+El máximo es 72 bytes en UTF-8 para impedir el truncamiento de bcrypt; no
+equivale necesariamente a 72 caracteres. La contraseña no se recorta ni se
+normaliza antes de validarla o guardarla.
+
+El back aplica `@ContraseniaSegura()` en `RegisterDto` y
+`RestablecerContraseniaDto`, mediante el `ValidationPipe` global. El front
+reutiliza `passwordSeguraValidator()` y el mismo mensaje en ambos formularios,
+y exige que la confirmación coincida. El ingreso conserva la validación de
+credenciales existentes: esta política se exige al crear una contraseña nueva.
+
 ## Compatibilidad
 
 Las rutas, DTO y respuestas públicas no cambian. Se conservan `JWT_SECRET`,

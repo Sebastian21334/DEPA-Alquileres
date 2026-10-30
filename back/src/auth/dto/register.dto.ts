@@ -3,8 +3,8 @@ import {
   IsNotEmpty,
   IsString,
   MaxLength,
-  MinLength,
 } from 'class-validator';
+import { ContraseniaSegura } from '../validators/contrasenia-segura.decorator';
 
 export class RegisterDto {
   @IsString()
@@ -28,6 +28,6 @@ export class RegisterDto {
   telefono: string;
 
   @IsString()
-  @MinLength(8, { message: 'La contraseña debe tener al menos 8 caracteres' })
+  @ContraseniaSegura()
   contrasenia: string;
 }
