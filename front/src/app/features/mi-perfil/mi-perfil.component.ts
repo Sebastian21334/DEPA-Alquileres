@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import {
   LucideBadgeCheck,
@@ -12,6 +12,8 @@ import {
   LucideUser,
 } from '@lucide/angular';
 import { PerfilService } from '../../core/services/perfil.service';
+import { AuthService } from '../../core/services/auth.service';
+import { ChatService } from '../../core/services/chat.service';
 import { PerfilUsuario, etiquetaRol } from '../../shared/models/perfil.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
@@ -42,6 +44,9 @@ const MAX_FOTO = 5 * 1024 * 1024;
 })
 export class MiPerfilComponent {
   private readonly perfilService = inject(PerfilService);
+  private readonly auth = inject(AuthService);
+  private readonly chat = inject(ChatService);
+  private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
   protected readonly perfil = signal<PerfilUsuario | null>(null);
@@ -55,6 +60,9 @@ export class MiPerfilComponent {
   protected readonly guardando = signal(false);
   protected readonly errorEdicion = signal('');
   protected readonly guardado = signal(false);
+  protected readonly mostrarConfirmacionBaja = signal(false);
+  protected readonly eliminandoCuenta = signal(false);
+  protected readonly errorBaja = signal('');
 
   // Mismas reglas que ActualizarUsuarioDto (back/src/usuarios/dto/actualizar-usuario.dto.ts).
   protected readonly form = this.fb.nonNullable.group({
@@ -175,6 +183,25 @@ export class MiPerfilComponent {
       error: (err: Error) => {
         this.errorFoto.set(err.message);
         this.subiendoFoto.set(false);
+      },
+    });
+  }
+
+  protected confirmarBajaCuenta(): void {
+    if (this.eliminandoCuenta()) return;
+    this.eliminandoCuenta.set(true);
+    this.errorBaja.set('');
+
+    this.perfilService.eliminarCuenta().subscribe({
+      next: () => {
+        this.auth.logout();
+        this.perfilService.limpiar();
+        this.chat.cerrarTodos();
+        void this.router.navigateByUrl('/');
+      },
+      error: (err: Error) => {
+        this.errorBaja.set(err.message);
+        this.eliminandoCuenta.set(false);
       },
     });
   }
