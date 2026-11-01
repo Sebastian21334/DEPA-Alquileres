@@ -17,6 +17,15 @@ import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Usuario } from '../entity/usuario.entity';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import sharp from 'sharp';
+import { DataSource, EntityManager } from 'typeorm';
+import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import {
+  EstadoLiquidacionReserva,
+  EstadoPagoReserva,
+  Reserva,
+} from '../../reservas/entity/reserva.entity';
+import { Pago } from '../../pagos/entity/pago.entity';
+import { fechaArgentina } from '../../common/utils/fechas';
 
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
@@ -40,6 +49,7 @@ export class UsuariosService {
 
     private readonly catalogosService: CatalogosService,
     private readonly credencialesService: UsuariosCredencialesService,
+    private readonly dataSource: DataSource,
     @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
     @Inject(ARCHIVO_REPOSITORY)
     private readonly archivosRepo: IArchivoRepository,
@@ -89,21 +99,139 @@ export class UsuariosService {
     return this.usuarioSinSecretos(usuarioActualizado);
   }
 
-  /** Elimina un usuario. Las relaciones dependientes deben tener cascada configurada. */
+  /** Da de baja la cuenta autenticada sin borrar publicaciones ni historial. */
+  darDeBajaPropia(idUsuario: number) {
+    return this.darDeBajaCuenta(idUsuario);
+  }
+
+  /** El panel administrativo aplica la misma baja lógica; no borra relaciones. */
   async eliminar(idUsuario: number, idOperador: number) {
     if (idUsuario === idOperador) {
       throw new BadRequestException(
-        'No podés eliminar tu propia cuenta desde este endpoint',
+        'No podés dar de baja tu cuenta desde el panel administrativo',
       );
     }
+    return this.darDeBajaCuenta(idUsuario);
+  }
 
-    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
-    if (!usuario) {
-      throw new NotFoundException('Usuario no encontrado');
+  private async darDeBajaCuenta(idUsuario: number) {
+    await this.dataSource.transaction(async (manager) => {
+      const usuario = await manager.getRepository(Usuario)
+        .createQueryBuilder('usuario')
+        .where('usuario.id = :idUsuario', { idUsuario })
+        .setLock('pessimistic_write')
+        .getOne();
+
+      if (!usuario) throw new NotFoundException('Usuario no encontrado');
+      if (!usuario.activa) {
+        throw new ConflictException('La cuenta ya está inactiva');
+      }
+
+      // El calendario también bloquea la fila Publicacion al crear reservas.
+      // Se toman los mismos bloqueos antes de verificar operaciones pendientes,
+      // para impedir nuevas reservas mientras se tramita la baja.
+      const publicaciones = await manager.getRepository(Publicacion)
+        .createQueryBuilder('publicacion')
+        .select('publicacion.id')
+        .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
+        .orderBy('publicacion.id', 'ASC')
+        .setLock('pessimistic_write')
+        .getMany();
+
+      if (publicaciones.length > 0) {
+        await this.validarOperacionesResueltas(manager, idUsuario);
+      }
+
+      // UPDATE directo: conserva publicaciones, fechas, reservas, pagos e historial.
+      await manager.createQueryBuilder()
+        .update(Publicacion)
+        .set({ activa: false })
+        .where('id_anunciante = :idUsuario', { idUsuario })
+        .execute();
+
+      usuario.darDeBaja();
+      await manager.getRepository(Usuario).save(usuario);
+    });
+
+    return { mensaje: 'Tu cuenta fue dada de baja correctamente' };
+  }
+
+  /**
+   * La baja se rechaza si un anunciante tiene compromisos por resolver.
+   * Se ejecuta dentro de la transacción que bloquea sus publicaciones.
+   * Los estados históricos (reservas cerradas y pagos conciliados) no bloquean.
+   */
+  private async validarOperacionesResueltas(
+    manager: EntityManager,
+    idUsuario: number,
+  ): Promise<void> {
+    const consultasReservas = () => manager.getRepository(Reserva)
+      .createQueryBuilder('reserva')
+      .innerJoin('reserva.publicacion', 'publicacion')
+      .where('publicacion.id_anunciante = :idUsuario', { idUsuario });
+
+    // No se permite la baja con un checkout pendiente, incluso si el plazo
+    // de 15 minutos venció: primero debe quedar cancelado o conciliado.
+    const reservasPendientes = await consultasReservas()
+      .andWhere('reserva.estado_pago = :pendiente', {
+        pendiente: EstadoPagoReserva.PENDIENTE,
+      })
+      .getCount();
+
+    // También se impide la baja con una reserva pagada para hoy o el futuro,
+    // incluso si su liquidación figura como resuelta por alguna anomalía.
+    const hoy = fechaArgentina();
+    const estadiasVigentes = await consultasReservas()
+      .andWhere('reserva.estado_pago = :aprobado', {
+        aprobado: EstadoPagoReserva.APROBADO,
+      })
+      .andWhere('reserva.cancelada = false')
+      .andWhere('reserva.finalizada = false')
+      .andWhere(`(
+        reserva.fecha_inicio IS NULL OR reserva.fecha_fin IS NULL
+        OR reserva.fecha_inicio > reserva.fecha_fin
+        OR reserva.fecha_fin >= :hoy
+      )`, { hoy })
+      .getCount();
+
+    // Incluye dinero retenido, pagos al propietario todavía no registrados,
+    // reclamos en revisión y cualquier otro estado no resuelto.
+    const liquidacionesPendientes = await consultasReservas()
+      .andWhere('reserva.estado_pago = :aprobado', {
+        aprobado: EstadoPagoReserva.APROBADO,
+      })
+      .andWhere('reserva.estado_liquidacion NOT IN (:...resueltas)', {
+        resueltas: [
+          EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+          EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+        ],
+      })
+      .getCount();
+
+    // Evita dar de baja al anunciante si Mercado Pago aún puede notificar
+    // una aprobación tardía, aun cuando la reserva ya se haya cancelado.
+    const pagosSinConciliar = await manager.getRepository(Pago)
+      .createQueryBuilder('pago')
+      .innerJoin('pago.reserva', 'reserva')
+      .innerJoin('reserva.publicacion', 'publicacion')
+      .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
+      .andWhere('pago.status NOT IN (:...finales)', {
+        finales: ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'],
+      })
+      .getCount();
+
+    const motivos: string[] = [];
+    if (reservasPendientes) motivos.push(`${reservasPendientes} reserva(s) pendiente(s) de pago`);
+    if (estadiasVigentes) motivos.push(`${estadiasVigentes} estadía(s) vigente(s) o futura(s)`);
+    if (liquidacionesPendientes) motivos.push(`${liquidacionesPendientes} liquidación(es) sin resolver`);
+    if (pagosSinConciliar) motivos.push(`${pagosSinConciliar} pago(s) sin conciliar con Mercado Pago`);
+
+    if (motivos.length) {
+      throw new ConflictException(
+        `No se puede dar de baja la cuenta porque tiene ${motivos.join(', ')}. ` +
+        'Primero resolvé las reservas, los pagos y las liquidaciones pendientes.',
+      );
     }
-
-    await this.usuariosRepo.eliminar(usuario);
-    return { mensaje: 'Usuario eliminado correctamente' };
   }
 
   /** Bloquea o habilita el acceso de un usuario desde el panel administrativo. */
@@ -238,6 +366,8 @@ export class UsuariosService {
       email: usuario.email,
       telefono: usuario.telefono,
       bloqueado: usuario.bloqueado,
+      activa: usuario.activa,
+      fecha_baja: usuario.fecha_baja,
       email_verificado: usuario.email_verificado,
       foto_url: usuario.foto_url,
       rol: usuario.rol

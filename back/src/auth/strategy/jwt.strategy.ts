@@ -23,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   async validate(payload: { sub: number; email: string; rol?: string }) {
     // Se consulta el estado actual para revocar inmediatamente el acceso de usuarios bloqueados.
     const usuario = await this.usuariosService.buscarPorId(payload.sub);
-    if (!usuario || usuario.bloqueado) {
+    if (!usuario || !usuario.activa || usuario.bloqueado) {
       throw new UnauthorizedException('La cuenta no está habilitada');
     }
 
