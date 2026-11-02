@@ -68,8 +68,13 @@ export class ReservasService {
   async crearPendiente(
     dto: CrearReservaDto,
     idUsuario: number,
-    condiciones?: CondicionesCobro,
+    condiciones: CondicionesCobro,
   ): Promise<Reserva> {
+    if (!condiciones) {
+      throw new BadRequestException(
+        'Primero debés cotizar y aceptar un presupuesto antes de pagar',
+      );
+    }
     // El DTO trae el rango; Reserva conserva el periodo y Fecha mantiene
     // cada dia para bloquearlo en el calendario.
     const inicio = new Date(dto.fecha_inicio);
@@ -124,23 +129,18 @@ export class ReservasService {
         'Esta integración solo admite cobros en ARS',
       );
     }
-    if (moneda === 'USD' && !condiciones)
-      throw new BadRequestException(
-        'Primero debés cotizar y aceptar la conversión a pesos',
-      );
     if (
-      condiciones &&
-      (condiciones.moneda_origen !== moneda ||
-        condiciones.total_origen !== original ||
-        condiciones.precio_unitario_origen !==
-          importeTexto(decimalEntero(publicacion.precio, 2)))
+      condiciones.moneda_origen !== moneda ||
+      condiciones.total_origen !== original ||
+      condiciones.precio_unitario_origen !==
+        importeTexto(decimalEntero(publicacion.precio, 2))
     ) {
       throw new ConflictException(
         'El precio o la moneda cambiaron. Solicitá un nuevo presupuesto.',
       );
     }
     const precioDiario = Number(publicacion.precio);
-    const montoCalculado = Number(condiciones?.total_cobro ?? original);
+    const montoCalculado = Number(condiciones.total_cobro);
 
     const usuario = await this.usuariosService.buscarPorId(idUsuario);
     if (!usuario) {
@@ -173,10 +173,7 @@ export class ReservasService {
             'La publicación cambió. Volvé a cotizar antes de pagar.',
           );
         }
-        if (
-          condiciones &&
-          new Date(condiciones.vence_en).getTime() <= Date.now()
-        ) {
+        if (new Date(condiciones.vence_en).getTime() <= Date.now()) {
           throw new ConflictException(
             'El presupuesto venció. Volvé a cotizar antes de pagar.',
           );
@@ -208,18 +205,14 @@ export class ReservasService {
           moneda_contratada: 'ARS',
           moneda_origen: moneda,
           importe_origen: Number(original),
-          cotizacion_dolar: condiciones?.cotizacion_id
+          cotizacion_dolar: condiciones.cotizacion_id
             ? Object.assign(new CotizacionDolar(), {
                 id: condiciones.cotizacion_id,
               })
             : null,
-          cotizacion_aceptada_en: condiciones ? new Date() : null,
-          presupuesto_emitido_en: condiciones
-            ? new Date(condiciones.emitida_en)
-            : null,
-          presupuesto_vence_en: condiciones
-            ? new Date(condiciones.vence_en)
-            : null,
+          cotizacion_aceptada_en: new Date(),
+          presupuesto_emitido_en: new Date(condiciones.emitida_en),
+          presupuesto_vence_en: new Date(condiciones.vence_en),
           fecha_pago: null,
           estado_pago: EstadoPagoReserva.PENDIENTE,
           estado_liquidacion: EstadoLiquidacionReserva.NO_APLICA,
@@ -230,9 +223,7 @@ export class ReservasService {
           fecha_resolucion_liquidacion: null,
           referencia_liquidacion: null,
           observacion_liquidacion: null,
-          pago_vencimiento: condiciones
-            ? new Date(condiciones.vence_en)
-            : new Date(Date.now() + 15 * 60 * 1000),
+          pago_vencimiento: new Date(condiciones.vence_en),
           fecha_inicio: inicio.toISOString().slice(0, 10),
           fecha_fin: fin.toISOString().slice(0, 10),
           usuario_nombre: usuario.nombre,

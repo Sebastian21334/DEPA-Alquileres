@@ -36,9 +36,11 @@ export class PagosService {
 
   async crearCheckout(dto: CrearCheckoutDto, idUsuario: number) {
     this.pasarela.validarConfiguracionCheckout();
-    const condiciones = dto.presupuesto_token
-      ? await this.presupuestos.validar(dto.presupuesto_token, dto, idUsuario)
-      : undefined;
+    const condiciones = await this.presupuestos.validar(
+      dto.presupuesto_token,
+      dto,
+      idUsuario,
+    );
     const reserva = await this.reservasService.crearPendiente(
       dto,
       idUsuario,
