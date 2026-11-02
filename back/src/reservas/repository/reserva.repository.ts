@@ -156,6 +156,7 @@ export class ReservaRepository implements IReservaRepository {
       where: {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
         estado_pago: EstadoPagoReserva.APROBADO,
+        cancelada: false,
       },
       relations: {
         reprogramaciones: true,
@@ -175,6 +176,7 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.find({
       where: {
         estado_pago: EstadoPagoReserva.PENDIENTE,
+        cancelada: false,
         pago_vencimiento: LessThan(fecha),
       },
     });
