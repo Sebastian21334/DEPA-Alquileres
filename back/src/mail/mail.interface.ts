@@ -49,6 +49,7 @@ export interface IMailService {
   ): Promise<void>;
   enviarVerificacion(destinatario: string, token: string): Promise<void>;
   enviarRecuperacion(destinatario: string, token: string): Promise<void>;
+  enviarCambioContrasenia(destinatario: string): Promise<void>;
   enviarResultadoVerificacion(
     destinatario: string,
     aprobada: boolean,

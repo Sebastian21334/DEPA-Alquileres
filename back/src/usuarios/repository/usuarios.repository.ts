@@ -74,4 +74,35 @@ export class UsuariosRepository implements IUsuariosRepository {
       .where('u.token_recuperacion = :token', { token })
       .getOne();
   }
+
+  buscarCredencialesPorId(id: number): Promise<Usuario | null> {
+    return this.repo.createQueryBuilder('u')
+      .addSelect('u.contrasenia')
+      .where('u.id = :id', { id })
+      .getOne();
+  }
+
+  async cambiarContrasenia(id: number, hashActual: string, nuevoHash: string): Promise<boolean> {
+    // Impide sobrescribir otro cambio concurrente e invalida los enlaces pendientes.
+    const resultado = await this.repo.createQueryBuilder()
+      .update(Usuario)
+      .set({ contrasenia: nuevoHash, token_recuperacion: null, token_recuperacion_expira: null })
+      .where('id_usuario = :id', { id })
+      .andWhere('contrasenia = :hashActual', { hashActual })
+      .andWhere('bloqueado = false')
+      .execute();
+    return resultado.affected === 1;
+  }
+
+  async restablecerContrasenia(token: string, nuevoHash: string): Promise<boolean> {
+    // El consumo del token y el cambio son atómicos: un enlace solo puede usarse una vez.
+    const resultado = await this.repo.createQueryBuilder()
+      .update(Usuario)
+      .set({ contrasenia: nuevoHash, token_recuperacion: null, token_recuperacion_expira: null })
+      .where('token_recuperacion = :token', { token })
+      .andWhere('token_recuperacion_expira > :ahora', { ahora: new Date() })
+      .andWhere('bloqueado = false')
+      .execute();
+    return resultado.affected === 1;
+  }
 }
