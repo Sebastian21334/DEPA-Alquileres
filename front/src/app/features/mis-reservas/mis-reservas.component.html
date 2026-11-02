@@ -88,7 +88,7 @@
               @if (editando()?.id === reserva.id) {
                 <form class="reschedule-form" (ngSubmit)="confirmarReprogramacion()" [attr.aria-busy]="ocupada() === reserva.id">
                   <h4>Cambiar fechas de la reserva #{{ reserva.id }}</h4>
-                  <p>Elegí otro inicio. Se mantienen los <strong>{{ dias(reserva) }} días</strong> y el total pagado de
+                  <p>Elegí otro inicio. El cambio se permite antes del inicio y sin código de ingreso validado. Se mantienen los <strong>{{ dias(reserva) }} días</strong> y el total pagado de
                     <strong>{{ monto(reserva.importe_contratado ?? reserva.monto_pago, reserva.moneda_contratada) }}</strong>, con la tarifa original.</p>
                   <p class="muted">Fechas actuales: {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}. Avisaremos al anunciante por correo cuando confirmes.</p>
                   <div class="reschedule-form__dates">
