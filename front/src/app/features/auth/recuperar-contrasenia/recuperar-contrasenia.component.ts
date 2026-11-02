@@ -3,7 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 
-// Caso de uso "Cambiar contraseña" (ID 4) — primer paso: pedir el link de
+// CU62 "Recuperar acceso" — primer paso: pedir el link de
 // restablecimiento (back/src/auth/service/auth.service.ts#solicitarRecuperacion).
 // El backend responde siempre el mismo mensaje neutro exista o no la cuenta
 // (RN anti-enumeración de emails), así que acá no hay estado de "error de

@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from '../service/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
@@ -6,6 +6,8 @@ import { LoginDto } from '../dto/login.dto';
 import { VerificarCuentaDto } from '../dto/verificar-cuenta.dto';
 import { RecuperarContraseniaDto } from '../dto/recuperar-contrasenia.dto';
 import { RestablecerContraseniaDto } from '../dto/restablecer-contrasenia.dto';
+import { CambiarContraseniaDto } from '../dto/cambiar-contrasenia.dto';
+import { JwtAuthGuard, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -46,5 +48,14 @@ export class AuthController {
       dto.token,
       dto.nuevaContrasenia,
     );
+  }
+
+  @Patch('cambiar-contrasenia')
+  @UseGuards(JwtAuthGuard)
+  cambiarContrasenia(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CambiarContraseniaDto,
+  ) {
+    return this.authService.cambiarContrasenia(req.user.id, dto);
   }
 }

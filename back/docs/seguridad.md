@@ -4,7 +4,7 @@
 
 - `SeguridadModule`: configuración compartida de JWT y Passport, `JwtAuthGuard`,
   `RolesGuard` y el decorador `Roles`. No consulta usuarios ni otros datos de negocio.
-- `AuthModule`: coordina registro, ingreso, verificación de correo y recuperación.
+- `AuthModule`: coordina registro, ingreso, verificación de correo, cambio de contraseña y recuperación.
   Registra una sola `JwtStrategy`, que consulta el estado y el rol actuales del usuario.
 - `UsuariosModule`: mantiene dos servicios sobre el mismo contrato de repositorio.
   `UsuariosService` administra alta, datos, perfil, fotos, roles y bloqueos.
@@ -32,7 +32,7 @@ Las utilidades de fechas e importes, el error de registro en uso y
 
 ## Política de contraseñas
 
-Registro y restablecimiento exigen la misma definición en front y back:
+Registro, cambio autenticado y restablecimiento exigen la misma definición en front y back:
 al menos 12 caracteres Unicode, una letra (incluidas letras con tilde), un
 número del 0 al 9 y un símbolo (puntuación o símbolo Unicode, incluidos emojis).
 No se permiten espacios ni caracteres de control o formato invisibles. No es
@@ -42,17 +42,52 @@ El máximo es 72 bytes en UTF-8 para impedir el truncamiento de bcrypt; no
 equivale necesariamente a 72 caracteres. La contraseña no se recorta ni se
 normaliza antes de validarla o guardarla.
 
-El back aplica `@ContraseniaSegura()` en `RegisterDto` y
+El back aplica `@ContraseniaSegura()` en `RegisterDto`, `CambiarContraseniaDto` y
 `RestablecerContraseniaDto`, mediante el `ValidationPipe` global. El front
-reutiliza `passwordSeguraValidator()` y el mismo mensaje en ambos formularios,
+reutiliza `passwordSeguraValidator()` y el mismo mensaje en los tres formularios,
 y exige que la confirmación coincida. El ingreso conserva la validación de
 credenciales existentes: esta política se exige al crear una contraseña nueva.
+El costo de bcrypt es configurable entre 12 y 31, con valor predeterminado 12;
+una configuración fuera de ese rango impide generar hashes.
+
+## Cambio y recuperación de contraseña
+
+Desde **Mi perfil → Seguridad de la cuenta → Cambiar contraseña**, el usuario
+autenticado informa la contraseña actual, una nueva distinta y su confirmación.
+El backend toma la identidad del JWT, verifica la contraseña actual con bcrypt
+y comprueba la política y la confirmación mediante los DTO. No usa un enlace
+de correo para autorizar este cambio.
+
+La recuperación es un proceso separado, sin sesión: el enlace vence en dos horas,
+es de un solo uso y se invalida al solicitar otro, restablecer la contraseña o
+cambiarla desde el perfil. Las cuentas bloqueadas no reciben enlaces y tampoco
+pueden utilizar enlaces anteriores. La solicitud devuelve el mismo mensaje para
+cuentas inexistentes, bloqueadas y habilitadas.
+
+Ambos procesos envían una notificación por Azure Mail después de guardar el hash.
+Si falla el correo, se registra el error y el cambio sigue siendo exitoso.
+No se incluyen contraseñas ni tokens en el aviso. El envío usa el proveedor y sus
+reintentos existentes; no se incorporó una cola persistente de notificaciones.
+Los JWT existentes conservan su vigencia; no se agregó revocación de sesiones.
+
+Rutas:
+
+- `PATCH /auth/cambiar-contrasenia` (JWT): `contraseniaActual`,
+  `nuevaContrasenia`, `confirmarContrasenia`.
+- `POST /auth/recuperar-contrasenia`: `email`.
+- `POST /auth/restablecer-contrasenia`: `token`, `nuevaContrasenia`,
+  `confirmarContrasenia`. La confirmación ahora es obligatoria también en la API.
+
+El cambio autenticado comprueba el hash anterior al actualizar. El restablecimiento
+consume el token y actualiza la contraseña en una misma operación condicional,
+para impedir su reutilización incluso con solicitudes simultáneas.
 
 ## Compatibilidad
 
-Las rutas, DTO y respuestas públicas no cambian. Se conservan `JWT_SECRET`,
-`JWT_EXPIRES_SEC`, su valor por defecto y `BCRYPT_COST`, los hashes existentes y
-los tokens almacenados. No cambia el esquema y no se necesita una migración.
+Se conservan `JWT_SECRET`, `JWT_EXPIRES_SEC`, su valor por defecto y los hashes
+existentes. `BCRYPT_COST` ahora exige un mínimo de 12. Los enlaces ya emitidos
+mantienen su vencimiento guardado; los nuevos vencen en dos horas. No cambia el
+esquema y no se necesita una migración.
 Los JWT de prueba de vida y los presupuestos firmados siguen utilizando sus
 validaciones y propósitos específicos.
 

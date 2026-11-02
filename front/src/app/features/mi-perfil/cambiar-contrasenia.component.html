@@ -1,0 +1,46 @@
+<section class="acct-card" aria-labelledby="seguridad-cuenta">
+  <div class="security-head">
+    <h2 id="seguridad-cuenta">Seguridad de la cuenta</h2>
+    @if (!abierto()) {
+      <button type="button" class="acct-btn acct-btn--ghost" (click)="abrir()">Cambiar contraseña</button>
+    }
+  </div>
+  <p class="security-description">Para cambiar tu contraseña, ingresá la actual y elegí una nueva. Te enviaremos un aviso por correo.</p>
+  @if (mensaje()) {
+    <div class="acct-alert acct-alert--success" role="status">{{ mensaje() }}</div>
+  }
+  @if (abierto()) {
+    <form [formGroup]="form" (ngSubmit)="guardar()" [attr.aria-busy]="guardando()" novalidate>
+      @if (error()) {
+        <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
+      }
+      <div class="acct-field">
+        <label for="contrasenia-actual">Contraseña actual</label>
+        <input id="contrasenia-actual" type="password" formControlName="contraseniaActual" autocomplete="current-password" />
+        @if (form.controls.contraseniaActual.touched && form.controls.contraseniaActual.invalid) {
+          <span class="acct-hint acct-hint--error">Ingresá tu contraseña actual.</span>
+        }
+      </div>
+      <div class="acct-field">
+        <label for="contrasenia-nueva">Nueva contraseña</label>
+        <input id="contrasenia-nueva" type="password" formControlName="contrasenia" autocomplete="new-password" aria-describedby="politica-contrasenia" />
+        <span id="politica-contrasenia" class="acct-hint" [class.acct-hint--error]="form.controls.contrasenia.touched && form.controls.contrasenia.invalid">{{ politica }}</span>
+      </div>
+      <div class="acct-field">
+        <label for="confirmar-nueva-contrasenia">Confirmar nueva contraseña</label>
+        <input id="confirmar-nueva-contrasenia" type="password" formControlName="confirmarContrasenia" autocomplete="new-password" />
+        @if (form.controls.confirmarContrasenia.touched) {
+          @if (form.controls.confirmarContrasenia.invalid) {
+            <span class="acct-hint acct-hint--error">Confirmá tu nueva contraseña.</span>
+          } @else if (form.hasError('contraseniasDistintas')) {
+            <span class="acct-hint acct-hint--error">Las contraseñas no coinciden.</span>
+          }
+        }
+      </div>
+      <div class="acct-actions">
+        <button type="button" class="acct-btn acct-btn--ghost" [disabled]="guardando()" (click)="cerrar()">Cancelar</button>
+        <button type="submit" class="acct-btn acct-btn--primary" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : 'Guardar nueva contraseña' }}</button>
+      </div>
+    </form>
+  }
+</section>

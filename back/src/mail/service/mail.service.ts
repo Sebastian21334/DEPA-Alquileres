@@ -72,8 +72,20 @@ export class MailService implements IMailService {
       'Restablecé tu contraseña de DEPA',
       `<p style="margin:0 0 16px">Recibimos una solicitud para cambiar la contraseña de tu cuenta.</p>
        ${this.plantillas.boton('Crear una contraseña nueva', link)}
-       <p style="margin:20px 0 0;color:#667085;font-size:13px">El enlace vence en una hora. Si no solicitaste el cambio, no hace falta que hagas nada.</p>`,
+       <p style="margin:20px 0 0;color:#667085;font-size:13px">El enlace vence en 2 horas y solo puede usarse una vez. Si pedís uno nuevo, el anterior deja de funcionar. Si no solicitaste recuperar el acceso, podés ignorar este mensaje.</p>`,
       'Usá este enlace seguro para recuperar el acceso a tu cuenta.',
+    );
+  }
+
+  async enviarCambioContrasenia(destinatario: string): Promise<void> {
+    await this.enviar(
+      destinatario,
+      'Se modificó la contraseña de tu cuenta de DEPA',
+      `<p>La contraseña de tu cuenta fue modificada correctamente.</p>
+       <p>Si realizaste este cambio, no necesitás hacer nada más.</p>
+       <p>Si no reconocés esta actividad, recuperá el acceso cuanto antes y comunicate con soporte.</p>
+       ${this.plantillas.boton('Recuperar acceso a mi cuenta', `${this.frontendUrl}/recuperar-contrasenia`)}`,
+      'Aviso de seguridad: se modificó la contraseña de tu cuenta.',
     );
   }
 
