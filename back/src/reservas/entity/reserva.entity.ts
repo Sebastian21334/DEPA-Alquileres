@@ -286,7 +286,39 @@ export class Reserva {
         ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
         : EstadoLiquidacionReserva.NO_APLICA;
     this.cancelar();
-    this.pago_vencimiento = null;
+    // Se conserva el vencimiento original para poder conciliar un pago
+    // aprobado que llegue después del cierre.
+  }
+
+  /** Indica si el pago fue aprobado antes de que venciera la reserva. */
+  pagoDentroDelPlazo(fechaPago: Date): boolean {
+    if (!this.pago_vencimiento) return false;
+    return (
+      new Date(fechaPago).getTime() <= new Date(this.pago_vencimiento).getTime()
+    );
+  }
+
+  /** Reactiva una reserva vencida y la confirma conservando sus condiciones. */
+  reactivarPago(fechaPago: Date, codigoAlojamiento: string): void {
+    this.cancelada = false;
+    this.fecha_cancelacion = null;
+    this.confirmarPago(fechaPago, codigoAlojamiento);
+  }
+
+  /**
+   * Registra un pago aprobado que no puede confirmarse porque la reserva ya
+   * fue cerrada o las fechas fueron reasignadas. Queda para revisión y devolución.
+   */
+  registrarPagoParaRevision(fechaPago: Date, motivo: string): void {
+    this.estado_pago = EstadoPagoReserva.APROBADO;
+    this.fecha_pago = fechaPago;
+    this.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+    this.observacion_liquidacion = motivo.trim();
+    this.fecha_resolucion_liquidacion = null;
+    this.codigo_alojamiento = null;
+    this.codigo_generado_en = null;
+    this.codigo_validado_en = null;
+    this.intentos_codigo = 0;
   }
 
   cancelar(): void {

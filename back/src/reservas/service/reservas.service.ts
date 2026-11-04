@@ -20,10 +20,13 @@ import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import {
   EstadoPagoReserva,
@@ -46,7 +49,13 @@ export type CondicionesCobro = {
 };
 
 @Injectable()
-export class ReservasService {
+export class ReservasService
+  implements OnApplicationBootstrap, OnModuleDestroy
+{
+  private readonly logger = new Logger(ReservasService.name);
+  private timer?: ReturnType<typeof setInterval>;
+  private expiracion?: Promise<number>;
+
   constructor(
     private readonly config: ConfigService,
     @Inject(TRANSACCION_CALENDARIO)
@@ -58,6 +67,78 @@ export class ReservasService {
     private readonly publicacionesService: PublicacionesService,
     private readonly notificacionesService: ReservaNotificacionesService,
   ) {}
+
+  /**
+   * Libera las reservas vencidas al iniciar y cada minuto. El estado se
+   * persiste en la base, por lo que un reinicio no pierde los vencimientos.
+   */
+  onApplicationBootstrap(): void {
+    void this.expirarPendientes().catch((error) =>
+      this.logger.error(
+        'No se pudieron liberar las reservas vencidas al iniciar',
+        error as Error,
+      ),
+    );
+    this.timer = setInterval(() => {
+      void this.expirarPendientes().catch((error) =>
+        this.logger.error(
+          'No se pudieron liberar las reservas vencidas',
+          error as Error,
+        ),
+      );
+    }, 60_000);
+    this.timer.unref();
+  }
+
+  onModuleDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  /**
+   * Cierra las reservas pendientes cuyo plazo de pago venció y libera sus
+   * fechas. Es idempotente: el bloqueo de cada reserva evita duplicados si
+   * el temporizador y una creación de reserva se ejecutan a la vez.
+   */
+  async expirarPendientes(): Promise<number> {
+    if (this.expiracion) return this.expiracion;
+    this.expiracion = this.ejecutarExpiracion();
+    try {
+      return await this.expiracion;
+    } finally {
+      this.expiracion = undefined;
+    }
+  }
+
+  private async ejecutarExpiracion(): Promise<number> {
+    let vencidas: Reserva[];
+    try {
+      vencidas = await this.reservaRepository.buscarPendientesVencidas(
+        new Date(),
+      );
+    } catch (error) {
+      this.logger.error(
+        'No se pudieron consultar las reservas vencidas',
+        error as Error,
+      );
+      return 0;
+    }
+
+    let cerradas = 0;
+    for (const reserva of vencidas) {
+      try {
+        await this.rechazarPago(reserva.id, EstadoPagoReserva.CANCELADO);
+        cerradas += 1;
+      } catch (error) {
+        this.logger.error(
+          `No se pudo liberar la reserva vencida ${reserva.id}`,
+          error as Error,
+        );
+      }
+    }
+    if (cerradas > 0)
+      this.logger.log(`Reservas vencidas liberadas: ${cerradas}`);
+    return cerradas;
+  }
 
   /**
    * Crea una reserva y conserva una copia del periodo y de los datos del
@@ -150,7 +231,7 @@ export class ReservasService {
     }
 
     // Una preferencia vencida no debe dejar bloqueado el calendario para siempre.
-    await this.liberarPendientesVencidas();
+    await this.expirarPendientes();
 
     return this.transaccion.ejecutar(
       async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
@@ -254,20 +335,80 @@ export class ReservasService {
   /** Confirma la reserva únicamente después de verificar el pago con Mercado Pago. */
   async confirmarPago(id: number, fechaPago: Date): Promise<Reserva> {
     const guardada = await this.transaccion.ejecutar(
-      async ({ reservas: reservaRepository }) => {
+      async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
-        if (reserva.cancelada)
-          throw new ConflictException('La reserva ya fue cancelada');
 
         // Mercado Pago puede notificar el mismo pago más de una vez.
         if (reserva.pagoAprobado()) return reserva;
+        if (reserva.liquidacionResuelta()) return reserva;
+
+        if (reserva.cancelada) {
+          const publicacion = reserva.publicacion;
+          const inicio = reserva.fecha_inicio;
+          const fin = reserva.fecha_fin;
+          const puedeReactivar =
+            reserva.estado_pago === EstadoPagoReserva.CANCELADO &&
+            reserva.pagoDentroDelPlazo(fechaPago) &&
+            publicacion != null &&
+            inicio != null &&
+            fin != null;
+
+          // Si el pago se aprobó dentro del plazo y las fechas siguen libres,
+          // se recupera la misma reserva. Si ya fueron tomadas, queda en revisión.
+          if (puedeReactivar && publicacion && inicio && fin) {
+            try {
+              await this.disponibilidadService.marcarComoReservadas(
+                publicacion.id,
+                new Date(inicio),
+                new Date(fin),
+                reserva.id,
+                fechaRepository,
+              );
+              reserva.reactivarPago(fechaPago, generarCodigoAlojamiento());
+              return reservaRepository.guardar(reserva);
+            } catch (error) {
+              if (
+                !(error instanceof ConflictException) &&
+                !(error instanceof NotFoundException)
+              ) {
+                throw error;
+              }
+            }
+          }
+
+          let motivo: string;
+          if (
+            reserva.estado_pago === EstadoPagoReserva.CANCELADO &&
+            reserva.pagoDentroDelPlazo(fechaPago)
+          ) {
+            motivo =
+              'Pago aprobado dentro del plazo, pero las fechas ya fueron reasignadas; requiere devolución';
+          } else if (reserva.estado_pago === EstadoPagoReserva.CANCELADO) {
+            motivo =
+              'Pago aprobado fuera del plazo de 15 minutos; requiere devolución';
+          } else {
+            motivo =
+              'Pago aprobado sobre una reserva cancelada; requiere revisión y devolución';
+          }
+          reserva.registrarPagoParaRevision(fechaPago, motivo);
+          this.logger.warn(
+            `La reserva ${reserva.id} recibió un pago aprobado que no puede confirmarse: ${motivo}`,
+          );
+          return reservaRepository.guardar(reserva);
+        }
+
         reserva.confirmarPago(fechaPago, generarCodigoAlojamiento());
         return reservaRepository.guardar(reserva);
       },
     );
-    await this.notificacionesService.enviarConfirmacion(guardada);
+
+    // Se reintentan únicamente los correos pendientes; los pagos en revisión
+    // no se presentan como una reserva confirmada.
+    if (guardada.estaConfirmada()) {
+      await this.notificacionesService.enviarConfirmacion(guardada);
+    }
     return guardada;
   }
 
@@ -384,15 +525,6 @@ export class ReservasService {
       throw new ForbiddenException(
         'No tenés permiso para consultar esta reserva',
       );
-    }
-  }
-
-  private async liberarPendientesVencidas(): Promise<void> {
-    const vencidas = await this.reservaRepository.buscarPendientesVencidas(
-      new Date(),
-    );
-    for (const reserva of vencidas) {
-      await this.rechazarPago(reserva.id, EstadoPagoReserva.CANCELADO);
     }
   }
 }
