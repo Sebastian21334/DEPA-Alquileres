@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import { Reserva } from '../../shared/services/reservation.service';
@@ -13,6 +13,14 @@ export interface AdminUser {
   bloqueado: boolean;
   email_verificado: boolean;
   rol: { id: number; nombre: string } | null;
+}
+
+export interface AdminPage<T> {
+  datos: T[];
+  pagina: number;
+  limite: number;
+  total: number;
+  totalPaginas: number;
 }
 
 export interface VerificationRequest {
@@ -59,16 +67,18 @@ export type CatalogKey =
 export class AdminService {
   private readonly http = inject(HttpClient);
   private readonly api = environment.apiUrl;
-  listarPublicaciones() {
-    return this.http.get<Publicacion[]>(`${this.api}/publicaciones/administracion`);
+  listarPublicaciones(pagina = 1, q = '') {
+    const params = new HttpParams().set('pagina', pagina).set('limite', 10).set('q', q);
+    return this.http.get<AdminPage<Publicacion>>(`${this.api}/publicaciones/administracion`, { params });
   }
   darDeBajaPublicacion(id: number, motivo: string) {
     return this.http.patch<{ publicacion: Publicacion; correoEnviado: boolean }>(
       `${this.api}/publicaciones/administracion/${id}/baja`, { motivo },
     );
   }
-  listarUsuarios() {
-    return this.http.get<AdminUser[]>(`${this.api}/usuarios`);
+  listarUsuarios(pagina = 1, q = '') {
+    const params = new HttpParams().set('pagina', pagina).set('limite', 10).set('q', q);
+    return this.http.get<AdminPage<AdminUser> & { totalRegistros: number }>(`${this.api}/usuarios/administracion`, { params });
   }
   listarPendientes() {
     return this.http.get<VerificationRequest[]>(`${this.api}/anunciantes/pendientes`);

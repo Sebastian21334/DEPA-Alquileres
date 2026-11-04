@@ -1,4 +1,6 @@
 import { Publicacion } from '../entity/publicacion.entity';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { Pagina } from '../../common/paginacion';
 
 export type CategoriaInicio =
   'recientes' | 'temporales' | 'largo-plazo' | 'villa-maria' | 'reservadas';
@@ -38,6 +40,7 @@ export interface IPublicacionesRepository {
   buscarPorId(id: number): Promise<Publicacion | null>;
   buscarTodasActivas(): Promise<Publicacion[]>;
   buscarTodas(): Promise<Publicacion[]>;
+  buscarAdministracion(consulta: ListarAdministracionDto): Promise<Pagina<Publicacion>>;
   buscarPaginadas(
     consulta: ConsultaPublicaciones,
   ): Promise<PaginaPublicaciones>;
