@@ -27,7 +27,12 @@ Se incluyen los dos extremos del período. La fecha de negocio se calcula en
 America/Argentina/Buenos_Aires, independientemente de la zona del servidor o del
 navegador. Un período hasta el 30 cambia de estado a las 00:00 del 31.
 Los estados de pago pendiente, rechazo, devolución y cancelación tienen prioridad.
-Los cierres manuales ya guardados se conservan.
+Los cierres manuales ya guardados se conservan. Una reserva cancelada por
+vencimiento que recibe un pago aprobado tardío conserva `estado_pago = APROBADO`
+y `estado_liquidacion = EN_REVISION`; `estado_estadia` devuelve `CANCELADA`
+mientras el administrador resuelve la devolución. El proceso de vencimiento se
+ejecuta al iniciar y cada minuto, y libera las fechas sin depender de una nueva
+reserva.
 
 El inquilino puede consultar su código antes del inicio y durante el período.
 El anunciante solo puede validarlo durante el período y una sola vez. Las reservas
