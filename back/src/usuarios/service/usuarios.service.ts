@@ -139,9 +139,11 @@ export class UsuariosService {
         .setLock('pessimistic_write')
         .getMany();
 
-      if (publicaciones.length > 0) {
-        await this.validarOperacionesResueltas(manager, idUsuario);
-      }
+      await this.validarOperacionesResueltas(
+        manager,
+        idUsuario,
+        publicaciones.length > 0,
+      );
 
       // UPDATE directo: conserva publicaciones, fechas, reservas, pagos e historial.
       await manager.createQueryBuilder()
@@ -158,14 +160,105 @@ export class UsuariosService {
   }
 
   /**
-   * La baja se rechaza si un anunciante tiene compromisos por resolver.
-   * Se ejecuta dentro de la transacción que bloquea sus publicaciones.
+   * La baja se rechaza si el usuario tiene compromisos por resolver, como
+   * Anunciante (si tiene publicaciones) o como Inquilino (cualquier usuario).
+   * Se ejecuta dentro de la transacción que bloquea la cuenta y sus publicaciones.
    * Los estados históricos (reservas cerradas y pagos conciliados) no bloquean.
    */
   private async validarOperacionesResueltas(
     manager: EntityManager,
     idUsuario: number,
+    tienePublicaciones: boolean,
   ): Promise<void> {
+    const pendientes: string[] = [];
+
+    const comoAnunciante = tienePublicaciones
+      ? await this.pendientesComoAnunciante(manager, idUsuario)
+      : [];
+    if (comoAnunciante.length) {
+      pendientes.push(`como Anunciante: ${comoAnunciante.join(', ')}`);
+    }
+
+    const comoInquilino = await this.pendientesComoInquilino(manager, idUsuario);
+    if (comoInquilino.length) {
+      pendientes.push(`como Inquilino: ${comoInquilino.join(', ')}`);
+    }
+
+    if (pendientes.length) {
+      throw new ConflictException(
+        'No se puede dar de baja la cuenta porque tiene operaciones sin resolver ' +
+        `(${pendientes.join('; ')}). ` +
+        'Primero resolvé las reservas, los pagos, las liquidaciones y los reclamos pendientes.',
+      );
+    }
+  }
+
+  /**
+   * Reservas que el usuario hizo como Inquilino y que todavía lo comprometen.
+   * Las estadías terminadas, canceladas o reembolsadas quedan como historial.
+   */
+  private async pendientesComoInquilino(
+    manager: EntityManager,
+    idUsuario: number,
+  ): Promise<string[]> {
+    const consultasReservas = () => manager.getRepository(Reserva)
+      .createQueryBuilder('reserva')
+      .where('reserva.id_usuario = :idUsuario', { idUsuario });
+
+    // Incluye checkouts cuyo plazo venció pero que todavía no se cerraron.
+    const reservasPendientes = await consultasReservas()
+      .andWhere('reserva.estado_pago = :pendiente', {
+        pendiente: EstadoPagoReserva.PENDIENTE,
+      })
+      .getCount();
+
+    const estadiasVigentes = await consultasReservas()
+      .andWhere('reserva.estado_pago = :aprobado', {
+        aprobado: EstadoPagoReserva.APROBADO,
+      })
+      .andWhere('reserva.cancelada = false')
+      .andWhere('reserva.finalizada = false')
+      .andWhere(`(
+        reserva.fecha_inicio IS NULL OR reserva.fecha_fin IS NULL
+        OR reserva.fecha_inicio > reserva.fecha_fin
+        OR reserva.fecha_fin >= :hoy
+      )`, { hoy: fechaArgentina() })
+      .getCount();
+
+    // Reclamos del Inquilino y cualquier otra liquidación que espera la
+    // decisión del Administrador sobre su dinero.
+    const reclamosEnRevision = await consultasReservas()
+      .andWhere('reserva.estado_liquidacion = :enRevision', {
+        enRevision: EstadoLiquidacionReserva.EN_REVISION,
+      })
+      .getCount();
+
+    // Un pago que Mercado Pago todavía procesa puede aprobarse después de la
+    // baja. Solo cuentan los pagos iniciados (con payment_id): un checkout
+    // abandonado queda en "pending" sin payment_id y su preferencia vence.
+    const pagosEnProceso = await manager.getRepository(Pago)
+      .createQueryBuilder('pago')
+      .innerJoin('pago.reserva', 'reserva')
+      .where('reserva.id_usuario = :idUsuario', { idUsuario })
+      .andWhere('pago.payment_id IS NOT NULL')
+      .andWhere('pago.status NOT IN (:...finales)', {
+        finales: ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'],
+      })
+      .getCount();
+
+    const motivos: string[] = [];
+    if (reservasPendientes) motivos.push(`${reservasPendientes} reserva(s) pendiente(s) de pago`);
+    if (pagosEnProceso) motivos.push(`${pagosEnProceso} pago(s) en proceso en Mercado Pago`);
+    if (estadiasVigentes) motivos.push(`${estadiasVigentes} estadía(s) vigente(s) o futura(s)`);
+    if (reclamosEnRevision) motivos.push(`${reclamosEnRevision} reclamo(s) en revisión`);
+    return motivos;
+  }
+
+  /** Compromisos sobre las reservas de las publicaciones del Anunciante. */
+  private async pendientesComoAnunciante(
+    manager: EntityManager,
+    idUsuario: number,
+  ): Promise<string[]> {
     const consultasReservas = () => manager.getRepository(Reserva)
       .createQueryBuilder('reserva')
       .innerJoin('reserva.publicacion', 'publicacion')
@@ -226,13 +319,7 @@ export class UsuariosService {
     if (estadiasVigentes) motivos.push(`${estadiasVigentes} estadía(s) vigente(s) o futura(s)`);
     if (liquidacionesPendientes) motivos.push(`${liquidacionesPendientes} liquidación(es) sin resolver`);
     if (pagosSinConciliar) motivos.push(`${pagosSinConciliar} pago(s) sin conciliar con Mercado Pago`);
-
-    if (motivos.length) {
-      throw new ConflictException(
-        `No se puede dar de baja la cuenta porque tiene ${motivos.join(', ')}. ` +
-        'Primero resolvé las reservas, los pagos y las liquidaciones pendientes.',
-      );
-    }
+    return motivos;
   }
 
   /** Bloquea o habilita el acceso de un usuario desde el panel administrativo. */
@@ -251,6 +338,13 @@ export class UsuariosService {
     const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
     if (!usuario) {
       throw new NotFoundException('Usuario no encontrado');
+    }
+    // La baja es definitiva y ya impide el acceso; bloquear o habilitar una
+    // cuenta dada de baja solo le enviaría un aviso sin efecto.
+    if (!usuario.activa) {
+      throw new ConflictException(
+        'La cuenta fue dada de baja: no se puede bloquear ni habilitar',
+      );
     }
 
     usuario.cambiarBloqueo(bloqueado);
