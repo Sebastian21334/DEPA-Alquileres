@@ -38,6 +38,8 @@ export class UsuariosCredencialesService {
     if (!user || !(await bcrypt.compare(contrasenia, user.contrasenia))) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
+    if (!user.activa)
+      throw new ForbiddenException('Tu cuenta está inactiva');
     if (user.bloqueado)
       throw new ForbiddenException('Tu usuario está bloqueado');
     return user;
@@ -70,7 +72,8 @@ export class UsuariosCredencialesService {
     email: string,
   ): Promise<{ token: string; usuario: Usuario } | null> {
     const usuario = await this.usuariosRepo.buscarPorEmail(email);
-    if (!usuario || usuario.bloqueado) return null;
+
+    if (!usuario || !usuario.activa || usuario.bloqueado) return null;
 
     const token = crypto.randomBytes(32).toString('hex');
     usuario.iniciarRecuperacion(token, new Date(Date.now() + 2 * 60 * 60 * 1000)); // RN-30: 2 horas

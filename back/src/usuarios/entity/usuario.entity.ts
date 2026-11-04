@@ -31,6 +31,13 @@ export class Usuario {
   @Column({ type: 'boolean', default: false })
   bloqueado: boolean;
 
+  // Baja lógica: la cuenta se conserva, pero no puede iniciar sesión.
+  @Column({ type: 'boolean', default: true })
+  activa: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  fecha_baja: Date | null;
+
   // Relación directa: Muchos usuarios pueden tener un mismo rol
   @ManyToOne(() => Rol, (rol) => rol.usuarios)
   @JoinColumn({ name: 'id_rol' })
@@ -71,6 +78,14 @@ export class Usuario {
     if (datos.nombre !== undefined) this.nombre = datos.nombre.trim();
     if (datos.apellido !== undefined) this.apellido = datos.apellido.trim();
     if (datos.telefono !== undefined) this.telefono = datos.telefono.trim();
+  }
+
+  darDeBaja(): void {
+    this.activa = false;
+    this.fecha_baja = new Date();
+    this.token_verificacion = null;
+    this.token_recuperacion = null;
+    this.token_recuperacion_expira = null;
   }
 
   cambiarBloqueo(bloqueado: boolean): void {

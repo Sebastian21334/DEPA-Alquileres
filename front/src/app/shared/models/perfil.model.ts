@@ -8,6 +8,8 @@ export interface PerfilUsuario {
   email: string;
   telefono: string;
   bloqueado: boolean;
+  activa: boolean;
+  fecha_baja: string | null;
   email_verificado: boolean;
   foto_url: string | null;
   rol: { id: number; nombre: string } | null;

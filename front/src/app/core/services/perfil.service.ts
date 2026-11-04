@@ -58,6 +58,11 @@ export class PerfilService {
       .pipe(tap((perfil) => this.usuario.set(perfil)));
   }
 
+  /** DELETE /usuarios/me — baja lógica de la cuenta autenticada. */
+  eliminarCuenta(): Observable<{ mensaje: string }> {
+    return this.http.delete<{ mensaje: string }>(`${this.api}/usuarios/me`);
+  }
+
   /** POST /usuarios/me/foto (multipart, campo "foto"). */
   subirFoto(archivo: File): Observable<PerfilUsuario> {
     const body = new FormData();
