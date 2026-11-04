@@ -19,7 +19,8 @@ function base() {
     CREATE TABLE reserva (id INTEGER PRIMARY KEY, id_usuario INTEGER, id_publicacion INTEGER,
       estado_pago TEXT, cancelada BOOLEAN, finalizada BOOLEAN, fecha_inicio TEXT, fecha_fin TEXT,
       estado_liquidacion TEXT);
-    CREATE TABLE pago (id INTEGER PRIMARY KEY, id_reserva INTEGER, payment_id TEXT, status TEXT);
+    CREATE TABLE pago (id INTEGER PRIMARY KEY, id_reserva INTEGER, payment_id TEXT, status TEXT,
+      created_at TEXT);
     INSERT INTO usuario VALUES (1, 1, 0, NULL), (2, 1, 0, NULL);
     INSERT INTO publicacion VALUES (10, 2, 1);
   `);
@@ -38,6 +39,14 @@ function reserva(db, datos) {
   return fila.id;
 }
 
+const HACE_DOS_DIAS = () => new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+const HACE_UN_MINUTO = () => new Date(Date.now() - 60 * 1000).toISOString();
+let ultimoPago = 0;
+function pago(db, idReserva, paymentId, status, creadoEn) {
+  db.prepare('INSERT INTO pago VALUES (?, ?, ?, ?, ?)').run(++ultimoPago, idReserva, paymentId, status, creadoEn);
+  return ultimoPago;
+}
+
 const JOINS = {
   'reserva.publicacion': 'INNER JOIN publicacion publicacion ON publicacion.id = reserva.id_publicacion',
   'pago.reserva': 'INNER JOIN reserva reserva ON reserva.id = pago.id_reserva',
@@ -53,7 +62,7 @@ function consulta(db, tabla, alias) {
     for (const [clave, valor] of Object.entries(params)) {
       if (Array.isArray(valor)) {
         texto = texto.replace(`:...${clave}`, valor.map((v) => `'${v}'`).join(', '));
-      } else simples[clave] = valor;
+      } else simples[clave] = valor instanceof Date ? valor.toISOString() : valor;
     }
     return [texto, simples];
   };
@@ -135,14 +144,41 @@ test('rechaza la baja con un reclamo en revisión aunque la estadía haya termin
 test('un pago iniciado en Mercado Pago bloquea la baja; un checkout abandonado no', async () => {
   const db = base();
   const abandonada = reserva(db, { estado_pago: 'CANCELADO', cancelada: 1, estado_liquidacion: 'NO_APLICA' });
-  db.prepare('INSERT INTO pago VALUES (1, ?, NULL, ?)').run(abandonada, 'pending');
+  pago(db, abandonada, null, 'pending', HACE_DOS_DIAS());
   const enProceso = reserva(db, { estado_pago: 'CANCELADO', cancelada: 1, estado_liquidacion: 'NO_APLICA' });
-  db.prepare('INSERT INTO pago VALUES (2, ?, ?, ?)').run(enProceso, 'mp-2', 'in_process');
+  const idPago = pago(db, enProceso, 'mp-2', 'in_process', HACE_DOS_DIAS());
   await rechazaBaja(db, 1, /como Inquilino: 1 pago\(s\) en proceso en Mercado Pago/);
 
-  db.prepare("UPDATE pago SET status = 'rejected' WHERE id = 2").run();
+  db.prepare("UPDATE pago SET status = 'rejected' WHERE id = ?").run(idPago);
   await servicioUsuarios(db).darDeBajaPropia(1);
   assert.equal(activa(db, 1), false);
+});
+
+test('un checkout reciente sin pago todavía bloquea la baja del Inquilino', async () => {
+  const db = base();
+  const vencida = reserva(db, { estado_pago: 'CANCELADO', cancelada: 1, estado_liquidacion: 'NO_APLICA' });
+  pago(db, vencida, null, 'pending', HACE_UN_MINUTO());
+  await rechazaBaja(db, 1, /como Inquilino: 1 pago\(s\) en proceso en Mercado Pago/);
+});
+
+test('un checkout abandonado en una publicación no bloquea para siempre la baja del Anunciante', async () => {
+  const db = base();
+  const abandonada = reserva(db, { id_usuario: 1, id_publicacion: 10, estado_pago: 'CANCELADO', cancelada: 1, estado_liquidacion: 'NO_APLICA' });
+  const idPago = pago(db, abandonada, null, 'pending', HACE_UN_MINUTO());
+  // Mientras la preferencia puede usarse o notificarse tarde, sigue pendiente.
+  await rechazaBaja(db, 2, /como Anunciante: 1 pago\(s\) sin conciliar con Mercado Pago/);
+
+  db.prepare('UPDATE pago SET created_at = ? WHERE id = ?').run(HACE_DOS_DIAS(), idPago);
+  await servicioUsuarios(db).darDeBajaPropia(2);
+  assert.equal(activa(db, 2), false);
+  assert.equal(db.prepare('SELECT activa FROM publicacion WHERE id = 10').get().activa, 0);
+});
+
+test('un pago iniciado sin conciliar bloquea al Anunciante aunque sea viejo', async () => {
+  const db = base();
+  const cancelada = reserva(db, { estado_pago: 'CANCELADO', cancelada: 1, estado_liquidacion: 'NO_APLICA' });
+  pago(db, cancelada, 'mp-9', 'in_process', HACE_DOS_DIAS());
+  await rechazaBaja(db, 2, /como Anunciante: 1 pago\(s\) sin conciliar con Mercado Pago/);
 });
 
 test('el historial cerrado no impide la baja del Inquilino', async () => {
