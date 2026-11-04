@@ -83,6 +83,12 @@ export class UsuariosController {
     return this.usuariosService.eliminarFoto(req.user.id);
   }
 
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  darDeBajaPropia(@Req() req: AuthenticatedRequest) {
+    return this.usuariosService.darDeBajaPropia(req.user.id);
+  }
+
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
   actualizarDatosPersonales(

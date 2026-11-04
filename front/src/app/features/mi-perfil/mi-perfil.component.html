@@ -161,6 +161,30 @@
       @if (solicitud()?.estado !== 'aprobada') {
         <div class="acct-actions profile-reservations"><a routerLink="/favoritos" class="acct-btn acct-btn--ghost">Mis favoritos</a><a routerLink="/mis-reservas" class="acct-btn acct-btn--ghost">Mis reservas</a></div>
       }
+
+      <section class="acct-card delete-account" aria-labelledby="titulo-baja-cuenta">
+        <h2 id="titulo-baja-cuenta">Eliminar mi cuenta</h2>
+        <p>Podés solicitar la baja de tu cuenta desde acá.</p>
+        @if (!mostrarConfirmacionBaja()) {
+          <button type="button" class="acct-btn acct-btn--danger" (click)="mostrarConfirmacionBaja.set(true)">
+            Eliminar cuenta
+          </button>
+        } @else {
+          <div class="delete-account__warning" role="alert">
+            <strong>¿Seguro que querés dar de baja tu cuenta?</strong>
+            <p>Perderás el acceso a DEPA. Si sos anunciante, todas tus publicaciones dejarán de estar disponibles. Las reservas y pagos registrados se conservarán como historial. Si tenés reservas, estadías, pagos o liquidaciones pendientes de resolver, no vas a poder dar de baja la cuenta hasta regularizarlos. Esta acción no cancela ni reembolsa operaciones.</p>
+            @if (errorBaja()) {
+              <p class="acct-alert acct-alert--error">{{ errorBaja() }}</p>
+            }
+            <div class="acct-actions">
+              <button type="button" class="acct-btn acct-btn--ghost" [disabled]="eliminandoCuenta()" (click)="mostrarConfirmacionBaja.set(false)">Cancelar</button>
+              <button type="button" class="acct-btn acct-btn--danger" [disabled]="eliminandoCuenta()" (click)="confirmarBajaCuenta()">
+                {{ eliminandoCuenta() ? 'Procesando…' : 'Sí, eliminar mi cuenta' }}
+              </button>
+            </div>
+          </div>
+        }
+      </section>
     }
   </div>
 </section>

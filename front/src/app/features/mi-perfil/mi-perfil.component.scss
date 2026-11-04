@@ -66,6 +66,19 @@
 .advertiser h2, .advertiser p { margin: 0; }
 .advertiser .acct-actions { justify-content: flex-start; }
 
+/* Sección de peligro con confirmación en dos pasos. */
+.delete-account { margin-top: 1.25rem; }
+.delete-account h2 { margin: 0 0 0.5rem; }
+.delete-account p { color: var(--color-text-muted); }
+.delete-account__warning {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-danger);
+  border-radius: 0.75rem;
+}
+.delete-account__warning strong { color: var(--color-danger); }
+.delete-account__warning .acct-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
 @media (max-width: 820px) {
   .profile-layout { grid-template-columns: 1fr; }
 }
