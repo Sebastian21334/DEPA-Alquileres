@@ -1,4 +1,5 @@
 import { UsuariosCredencialesService } from './usuarios-credenciales.service';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { ARCHIVO_REPOSITORY } from '../../common/almacenamiento/archivo.repository.interface';
 import type { IArchivoRepository } from '../../common/almacenamiento/archivo.repository.interface';
 import { randomUUID } from 'node:crypto';
@@ -347,6 +348,18 @@ export class UsuariosService {
     const usuarios = await this.usuariosRepo.listarTodos();
 
     return usuarios.map((usuario) => this.usuarioSinSecretos(usuario));
+  }
+
+  async listarAdministracion(consulta: ListarAdministracionDto) {
+    const [resultado, totalRegistros] = await Promise.all([
+      this.usuariosRepo.listarAdministracion(consulta),
+      this.usuariosRepo.contarUsuarios(),
+    ]);
+    return {
+      ...resultado,
+      datos: resultado.datos.map((usuario) => this.usuarioSinSecretos(usuario)),
+      totalRegistros,
+    };
   }
 
   /** Correos de las cuentas con permiso de administración para notificaciones internas. */

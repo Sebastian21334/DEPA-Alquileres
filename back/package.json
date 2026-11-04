@@ -16,6 +16,7 @@
     "db:calendario-unico": "node scripts/calendario-unico.cjs --aplicar",
     "build": "nest build",
     "test:condiciones-economicas": "npm run build && node --test test/condiciones-economicas.test.cjs",
+    "test:paginacion-admin": "npm run build && node --test test/paginacion-admin.test.cjs",
     "db:retirar-metodo-pago": "node scripts/retirar-metodo-pago.cjs --aplicar",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\"",

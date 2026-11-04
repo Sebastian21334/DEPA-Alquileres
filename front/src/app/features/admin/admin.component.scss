@@ -375,6 +375,24 @@ dd {
 .table-wrap {
   overflow-x: auto;
 }
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #edf0f2;
+  color: #60727c;
+  font-size: 0.88rem;
+}
+.pagination__actions {
+  display: flex;
+  gap: 8px;
+}
+.pagination .button:disabled {
+  cursor: not-allowed;
+}
 table {
   width: 100%;
   border-collapse: collapse;

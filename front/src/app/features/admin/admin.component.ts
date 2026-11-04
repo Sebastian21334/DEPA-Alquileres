@@ -1,7 +1,8 @@
 import { isPlatformBrowser } from '@angular/common';
-import { Component, computed, inject, PLATFORM_ID, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Subscription } from 'rxjs';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
 import {
@@ -47,24 +48,30 @@ interface CatalogSection {
 })
 export class AdminComponent {
   private readonly api = inject(AdminService);
+  private readonly destroyRef = inject(DestroyRef);
+  private publicationsRequest?: Subscription;
+  private usersRequest?: Subscription;
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   protected readonly users = signal<AdminUser[]>([]);
   protected readonly publications = signal<Publicacion[]>([]);
   protected readonly publicationQuery = signal('');
   protected readonly bajaId = signal<number | null>(null);
   protected bajaReason = '';
-  protected readonly filteredPublications = computed(() => {
-    const q = this.publicationQuery().trim().toLowerCase();
-    return this.publications().filter((p) => {
-      const user = p.anunciante?.usuario;
-      return `${p.id} ${p.titulo} ${user?.nombre ?? ''} ${user?.apellido ?? ''} ${user?.email ?? ''}`
-        .toLowerCase()
-        .includes(q);
-    });
-  });
+  protected readonly publicationsPage = signal(1);
+  protected readonly publicationsTotal = signal(0);
+  protected readonly publicationsPages = signal(1);
+  protected readonly publicationsLoading = signal(true);
+  protected readonly usersPage = signal(1);
+  protected readonly usersTotal = signal(0);
+  protected readonly usersPages = signal(1);
+  protected readonly usersLoading = signal(true);
+  protected readonly registeredUsers = signal(0);
   protected readonly requests = signal<VerificationRequest[]>([]);
   protected readonly settlements = signal<AdminSettlement[]>([]);
-  protected readonly loading = signal(true);
+  protected readonly otherLoading = signal(true);
+  protected readonly loading = computed(() =>
+    this.otherLoading() || this.publicationsLoading() || this.usersLoading(),
+  );
   protected readonly error = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
   protected readonly query = signal('');
@@ -89,12 +96,6 @@ export class AdminComponent {
   protected readonly roles = computed(
     () => this.catalogs().find((s) => s.key === 'roles')?.items ?? [],
   );
-  protected readonly filteredUsers = computed(() => {
-    const q = this.query().trim().toLowerCase();
-    return q
-      ? this.users().filter((u) => `${u.nombre} ${u.apellido} ${u.email}`.toLowerCase().includes(q))
-      : this.users();
-  });
 
   constructor() {
     if (this.isBrowser) {
@@ -104,32 +105,14 @@ export class AdminComponent {
     }
   }
   protected reload(): void {
-    this.loading.set(true);
+    this.otherLoading.set(true);
     this.error.set(null);
-    let pending = 4;
+    this.loadPublications(this.publicationsPage());
+    this.loadUsers(this.usersPage());
+    let pending = 2;
     const done = () => {
-      if (--pending === 0) this.loading.set(false);
+      if (--pending === 0) this.otherLoading.set(false);
     };
-    this.api.listarPublicaciones().subscribe({
-      next: (v) => {
-        this.publications.set(v);
-        done();
-      },
-      error: (e: Error) => {
-        this.error.set(e.message);
-        done();
-      },
-    });
-    this.api.listarUsuarios().subscribe({
-      next: (v) => {
-        this.users.set(v);
-        done();
-      },
-      error: (e: Error) => {
-        this.error.set(e.message);
-        done();
-      },
-    });
     this.api.listarPendientes().subscribe({
       next: (v) => {
         this.requests.set(v);
@@ -150,6 +133,68 @@ export class AdminComponent {
         done();
       },
     });
+  }
+
+  protected searchPublications(value: string): void {
+    this.publicationQuery.set(value);
+    this.loadPublications(1);
+  }
+
+  protected searchUsers(value: string): void {
+    this.query.set(value);
+    this.loadUsers(1);
+  }
+
+  protected loadPublications(page: number): void {
+    if (page < 1 || page > this.publicationsPages()) return;
+    this.publicationsRequest?.unsubscribe();
+    this.publicationsLoading.set(true);
+    this.error.set(null);
+    this.bajaId.set(null);
+    this.publicationsRequest = this.api.listarPublicaciones(page, this.publicationQuery().trim())
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: (result) => {
+          this.publications.set(result.datos);
+          this.publicationsPage.set(result.pagina);
+          this.publicationsTotal.set(result.total);
+          this.publicationsPages.set(result.totalPaginas);
+          this.publicationsLoading.set(false);
+        },
+        error: (e: Error) => {
+          this.publications.set([]);
+          this.publicationsTotal.set(0);
+          this.publicationsPage.set(1);
+          this.publicationsPages.set(1);
+          this.error.set(e.message);
+          this.publicationsLoading.set(false);
+        },
+      });
+  }
+
+  protected loadUsers(page: number): void {
+    if (page < 1 || page > this.usersPages()) return;
+    this.usersRequest?.unsubscribe();
+    this.usersLoading.set(true);
+    this.error.set(null);
+    this.usersRequest = this.api.listarUsuarios(page, this.query().trim())
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: (result) => {
+          this.users.set(result.datos);
+          this.usersPage.set(result.pagina);
+          this.usersTotal.set(result.total);
+          this.usersPages.set(result.totalPaginas);
+          this.registeredUsers.set(result.totalRegistros);
+          this.usersLoading.set(false);
+        },
+        error: (e: Error) => {
+          this.users.set([]);
+          this.usersTotal.set(0);
+          this.usersPage.set(1);
+          this.usersPages.set(1);
+          this.error.set(e.message);
+          this.usersLoading.set(false);
+        },
+      });
   }
 
   protected openBaja(publication: Publicacion): void {

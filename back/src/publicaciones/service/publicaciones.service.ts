@@ -1,3 +1,4 @@
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -231,8 +232,8 @@ export class PublicacionesService {
   }
 
   /** Incluye publicaciones activas e inactivas de todos los anunciantes. */
-  listarAdministracion() {
-    return this.publicacionesRepo.buscarTodas();
+  listarAdministracion(consulta: ListarAdministracionDto) {
+    return this.publicacionesRepo.buscarAdministracion(consulta);
   }
 
   /** El controller restringe esta operación al rol Administrador. */

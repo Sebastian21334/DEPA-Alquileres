@@ -12,7 +12,10 @@ import {
   ParseIntPipe,
   UploadedFile,
   UseInterceptors,
+  Query,
+  ValidationPipe,
 } from '@nestjs/common';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 
 const TIPOS_FOTO = [
@@ -40,6 +43,13 @@ export class UsuariosController {
   @Roles('Administrador')
   listarTodos() {
     return this.usuariosService.listarTodos();
+  }
+
+  @Get('administracion')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarAdministracionDto) {
+    return this.usuariosService.listarAdministracion(consulta);
   }
 
   @Get('me')

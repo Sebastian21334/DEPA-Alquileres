@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { paginar } from '../../common/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Usuario } from '../entity/usuario.entity';
@@ -32,6 +34,19 @@ export class UsuariosRepository implements IUsuariosRepository {
       relations: { rol: true },
       order: { id: 'ASC' },
     });
+  }
+
+  listarAdministracion(consulta: ListarAdministracionDto) {
+    const query = this.repo.createQueryBuilder('usuario')
+      .leftJoinAndSelect('usuario.rol', 'rol')
+      .orderBy('usuario.id', 'ASC');
+    if (consulta.q?.trim()) {
+      query.andWhere(
+        "POSITION(:q IN LOWER(CONCAT_WS(' ', usuario.nombre, usuario.apellido, usuario.email))) > 0",
+        { q: consulta.q.trim().toLowerCase() },
+      );
+    }
+    return paginar(query, consulta);
   }
 
   async buscarPorId(id: number): Promise<Usuario | null> {

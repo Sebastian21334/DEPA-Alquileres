@@ -21,7 +21,7 @@
     <article>
       <svg lucideUsers [size]="25"></svg>
       <div>
-        <strong>{{ users().length }}</strong
+        <strong>{{ registeredUsers() }}</strong
         ><span>Usuarios registrados</span>
       </div>
     </article>
@@ -51,17 +51,17 @@
       <label class="search">
         <svg lucideSearch [size]="18"></svg>
         <input type="search" aria-label="Buscar publicaciones" placeholder="Buscar por título, ID o anunciante"
-          [ngModel]="publicationQuery()" (ngModelChange)="publicationQuery.set($event)" />
+          [ngModel]="publicationQuery()" (ngModelChange)="searchPublications($event)" maxlength="200" />
       </label>
     </div>
-    @if (loading()) {
+    @if (publicationsLoading()) {
       <p class="empty">Cargando publicaciones…</p>
     } @else {
       <div class="table-wrap">
         <table>
           <thead><tr><th>Publicación</th><th>Anunciante</th><th>Estado</th><th class="right">Acciones</th></tr></thead>
           <tbody>
-            @for (publication of filteredPublications(); track publication.id) {
+            @for (publication of publications(); track publication.id) {
               <tr>
                 <td><strong>{{ publication.titulo }}</strong><small>#{{ publication.id }} · {{ publication.direccion }}</small></td>
                 <td>{{ publication.anunciante?.usuario?.nombre }} {{ publication.anunciante?.usuario?.apellido }}<small>{{ publication.anunciante?.usuario?.email }}</small></td>
@@ -96,6 +96,15 @@
         </table>
       </div>
     }
+    <nav class="pagination" aria-label="Paginación de publicaciones">
+      <span role="status">{{ publicationsTotal() }} publicaciones · Página {{ publicationsPage() }} de {{ publicationsPages() }}</span>
+      <div class="pagination__actions">
+        <button type="button" class="button button--ghost" (click)="loadPublications(publicationsPage() - 1)"
+          [disabled]="publicationsLoading() || busy() !== null || publicationsPage() <= 1">Anterior</button>
+        <button type="button" class="button button--ghost" (click)="loadPublications(publicationsPage() + 1)"
+          [disabled]="publicationsLoading() || busy() !== null || publicationsPage() >= publicationsPages()">Siguiente</button>
+      </div>
+    </nav>
   </section>
 
   <section class="panel">
@@ -106,7 +115,7 @@
       </div>
       <span class="counter">{{ settlements().length }}</span>
     </div>
-    @if (loading()) {
+    @if (otherLoading()) {
       <p class="empty">Cargando liquidaciones…</p>
     } @else if (!settlements().length) {
       <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
@@ -153,7 +162,7 @@
       </div>
       <span class="counter">{{ requests().length }}</span>
     </div>
-    @if (loading()) {
+    @if (otherLoading()) {
       <p class="empty">Cargando solicitudes…</p>
     } @else if (!requests().length) {
       <p class="empty">No hay solicitudes pendientes.</p>
@@ -280,9 +289,11 @@
         ><svg lucideSearch [size]="18"></svg
         ><input
           type="search"
+          aria-label="Buscar usuarios"
+          maxlength="200"
           placeholder="Buscar por nombre o email"
           [ngModel]="query()"
-          (ngModelChange)="query.set($event)"
+          (ngModelChange)="searchUsers($event)"
       /></label>
     </div>
     <div class="table-wrap">
@@ -297,7 +308,10 @@
           </tr>
         </thead>
         <tbody>
-          @for (user of filteredUsers(); track user.id) {
+          @if (usersLoading()) {
+            <tr><td colspan="5" class="empty">Cargando usuarios…</td></tr>
+          } @else {
+          @for (user of users(); track user.id) {
             <tr>
               <td>
                 <strong>{{ user.nombre }} {{ user.apellido }}</strong
@@ -341,9 +355,19 @@
               <td colspan="5" class="empty">No se encontraron usuarios.</td>
             </tr>
           }
+          }
         </tbody>
       </table>
     </div>
+    <nav class="pagination" aria-label="Paginación de usuarios">
+      <span role="status">{{ usersTotal() }} usuarios · Página {{ usersPage() }} de {{ usersPages() }}</span>
+      <div class="pagination__actions">
+        <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() - 1)"
+          [disabled]="usersLoading() || busy() !== null || usersPage() <= 1">Anterior</button>
+        <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() + 1)"
+          [disabled]="usersLoading() || busy() !== null || usersPage() >= usersPages()">Siguiente</button>
+      </div>
+    </nav>
   </section>
   <section class="panel management">
     <div class="panel__title">

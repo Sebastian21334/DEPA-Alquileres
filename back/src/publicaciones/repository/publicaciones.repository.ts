@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { paginar } from '../../common/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
@@ -64,6 +66,23 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       relations: { anunciante: { usuario: true }, ciudad: true, provincia: true },
       order: { fecha_publicacion: 'DESC', id: 'DESC' },
     });
+  }
+
+  buscarAdministracion(consulta: ListarAdministracionDto) {
+    const query = this.repo.createQueryBuilder('publicacion')
+      .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
+      .leftJoinAndSelect('anunciante.usuario', 'usuario')
+      .leftJoinAndSelect('publicacion.ciudad', 'ciudad')
+      .leftJoinAndSelect('publicacion.provincia', 'provincia')
+      .orderBy('publicacion.fecha_publicacion', 'DESC')
+      .addOrderBy('publicacion.id', 'DESC');
+    if (consulta.q?.trim()) {
+      query.andWhere(
+        "POSITION(:q IN LOWER(CONCAT_WS(' ', publicacion.id, publicacion.titulo, usuario.nombre, usuario.apellido, usuario.email))) > 0",
+        { q: consulta.q.trim().toLowerCase() },
+      );
+    }
+    return paginar(query, consulta);
   }
 
   buscarTodasActivas(): Promise<Publicacion[]> {

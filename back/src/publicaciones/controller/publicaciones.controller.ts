@@ -1,4 +1,5 @@
 import { ListarPublicacionesDto } from '../dto/listar-publicaciones.dto';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guard';
 import {
   Controller,
@@ -49,8 +50,8 @@ export class PublicacionesController {
   @Get('administracion')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  listarAdministracion() {
-    return this.publicacionesService.listarAdministracion();
+  listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarAdministracionDto) {
+    return this.publicacionesService.listarAdministracion(consulta);
   }
 
   @Patch('administracion/:id/baja')
