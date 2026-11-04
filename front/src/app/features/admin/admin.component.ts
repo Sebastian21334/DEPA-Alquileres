@@ -1,4 +1,4 @@
-import { isPlatformBrowser } from '@angular/common';
+import { DatePipe, isPlatformBrowser } from '@angular/common';
 import { Component, computed, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -35,6 +35,7 @@ interface CatalogSection {
   standalone: true,
   imports: [
     CotizacionesAdminComponent,
+    DatePipe,
     FormsModule,
     LucideUsers,
     LucideShieldCheck,

@@ -56,10 +56,6 @@ export class UsuariosRepository implements IUsuariosRepository {
     });
   }
 
-  eliminar(usuario: Usuario): Promise<Usuario> {
-    return this.repo.remove(usuario);
-  }
-
   async buscarParaLogin(email: string): Promise<Usuario | null> {
     // La contraseña tiene select:false en la entidad y debe pedirse explícitamente solo aquí.
     return (

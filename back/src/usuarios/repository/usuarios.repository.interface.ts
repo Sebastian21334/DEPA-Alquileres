@@ -12,7 +12,6 @@ export interface IUsuariosRepository {
   listarTodos(): Promise<Usuario[]>;
   listarAdministracion(consulta: ListarAdministracionDto): Promise<Pagina<Usuario>>;
   buscarPorId(id: number): Promise<Usuario | null>;
-  eliminar(usuario: Usuario): Promise<Usuario>;
   buscarParaLogin(email: string): Promise<Usuario | null>;
   buscarPorTokenVerificacion(token: string): Promise<Usuario | null>;
   buscarPorTokenRecuperacion(token: string): Promise<Usuario | null>;
