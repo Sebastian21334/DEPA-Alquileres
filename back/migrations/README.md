@@ -94,3 +94,30 @@ npm run db:orden-imagenes
 Usa `DATABASE_URL` (entorno o `back/.env`). Agrega `imagen.orden` y conserva el orden
 histórico por ID, incluida la portada. Es reejecutable y no borra fotos ni cambia
 órdenes guardados previamente. Aplicar también después de inicializar una base nueva.
+
+# CUIT/CUIL y email únicos entre cuentas vigentes (RN-37)
+
+Una cuenta dada de baja libera su email y, si es Anunciante, su CUIT/CUIL, para
+que la persona pueda registrarse de nuevo. Los valores originales se conservan en
+`usuario.email_historico` y `anunciante.cuit_cuil_historico`, y siguen
+identificándola en el historial (por ejemplo, en el detalle de una reserva).
+
+La migración `20261104-cuit-email-historicos.sql`:
+
+- agrega `anunciante.cuit_cuil_historico` y `usuario.email_historico`, y permite
+  `usuario.email` en null;
+- mueve al histórico el email y el CUIT/CUIL de las cuentas que ya estaban dadas de baja;
+- crea el índice único `uq_anunciante_cuit_cuil_digitos`, que compara solo los
+  dígitos del CUIT/CUIL (con o sin guiones), también para inmobiliarias.
+
+Si encuentra CUIT/CUIL repetidos entre cuentas vigentes, se revierte y los lista:
+nunca fusiona ni modifica esos datos. Con el back detenido, desde `back`:
+
+```sh
+node scripts/cuit-email-historicos.cjs
+npm run db:cuit-email-historicos
+```
+
+El primer comando informa qué se movería y si hay repetidos, sin cambios. El
+segundo aplica la migración en una transacción. Es repetible. En una base nueva,
+aplicarla después de `npm run db:inicializar`.

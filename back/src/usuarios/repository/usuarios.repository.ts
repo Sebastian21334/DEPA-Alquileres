@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { paginar } from '../../common/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { Usuario } from '../entity/usuario.entity';
+import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { IUsuariosRepository } from './usuarios.repository.interface';
 
 @Injectable()
@@ -39,11 +40,31 @@ export class UsuariosRepository implements IUsuariosRepository {
   listarAdministracion(consulta: ListarAdministracionDto) {
     const query = this.repo.createQueryBuilder('usuario')
       .leftJoinAndSelect('usuario.rol', 'rol')
+      // RN-37: el CUIT/CUIL (vigente o histórico) relaciona las cuentas de una misma persona.
+      .leftJoinAndMapOne(
+        'usuario.anunciante',
+        Anunciante,
+        'anunciante',
+        'anunciante.id_usuario = usuario.id',
+      )
       .orderBy('usuario.id', 'ASC');
-    if (consulta.q?.trim()) {
+    const q = consulta.q?.trim();
+    if (q) {
+      const digitos = Anunciante.digitosCuit(q);
       query.andWhere(
-        "POSITION(:q IN LOWER(CONCAT_WS(' ', usuario.nombre, usuario.apellido, usuario.email))) > 0",
-        { q: consulta.q.trim().toLowerCase() },
+        new Brackets((busqueda) => {
+          busqueda.where(
+            "POSITION(:q IN LOWER(CONCAT_WS(' ', usuario.nombre, usuario.apellido, usuario.email, usuario.email_historico))) > 0",
+            { q: q.toLowerCase() },
+          );
+          // Un CUIT/CUIL se encuentra con o sin guiones, vigente o histórico.
+          if (digitos.length >= 3) {
+            busqueda.orWhere(
+              "POSITION(:digitos IN regexp_replace(CONCAT_WS(' ', anunciante.cuit_cuil, anunciante.cuit_cuil_historico), '[^0-9 ]', '', 'g')) > 0",
+              { digitos },
+            );
+          }
+        }),
       );
     }
     return paginar(query, consulta);

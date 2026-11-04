@@ -3,6 +3,8 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideArrowLeft, LucideEye, LucideEyeOff } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { ApiError } from '../../../core/interceptors/api-error';
 import { contraseniasIgualesValidator, MENSAJE_CONTRASENIA_SEGURA, passwordSeguraValidator } from '../../../shared/validators/password.validators';
 
 // RF1 (alta de usuario) + caso de uso "Crear Cuenta" (ID 1 del documento):
@@ -28,9 +30,12 @@ export class RegisterComponent {
   protected readonly politicaContrasenia = MENSAJE_CONTRASENIA_SEGURA;
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
+  private readonly toast = inject(ToastService);
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
+  /** RN-37: el email ya pertenece a otra cuenta vigente (409 del backend). */
+  protected readonly errorEmail = signal<string | null>(null);
   protected readonly mensajeExito = signal<string | null>(null);
   protected readonly verContrasenia = signal(false);
   protected readonly verConfirmacion = signal(false);
@@ -55,6 +60,7 @@ export class RegisterComponent {
 
     this.enviando.set(true);
     this.error.set(null);
+    this.errorEmail.set(null);
 
     const { confirmarContrasenia, ...dto } = this.form.getRawValue();
     const email = dto.email.trim().toLowerCase();
@@ -67,6 +73,11 @@ export class RegisterComponent {
       },
       error: (err: Error) => {
         this.enviando.set(false);
+        if (err instanceof ApiError && err.status === 409) {
+          this.errorEmail.set('Ese email ya está registrado en otra cuenta. Iniciá sesión o usá otro.');
+          this.toast.mostrar('El email ingresado ya está registrado en otra cuenta.');
+          return;
+        }
         this.error.set(err.message);
       },
     });
