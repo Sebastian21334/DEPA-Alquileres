@@ -27,7 +27,14 @@ export type EstadoEstadia =
   | 'CANCELADA'
   | 'REEMBOLSADA'
   | 'PAGO_RECHAZADO'
+  | 'EN_DISPUTA'
   | 'FECHAS_A_REVISAR';
+
+export type ActorCancelacion =
+  | 'INQUILINO'
+  | 'ANUNCIANTE'
+  | 'ADMINISTRADOR'
+  | 'SISTEMA';
 
 export enum EstadoPagoReserva {
   PENDIENTE = 'PENDIENTE',
@@ -35,6 +42,7 @@ export enum EstadoPagoReserva {
   RECHAZADO = 'RECHAZADO',
   CANCELADO = 'CANCELADO',
   REEMBOLSADO = 'REEMBOLSADO',
+  CONTRACARGO = 'CONTRACARGO',
 }
 
 export enum EstadoLiquidacionReserva {
@@ -44,6 +52,7 @@ export enum EstadoLiquidacionReserva {
   EN_REVISION = 'EN_REVISION',
   PAGADO_PROPIETARIO = 'PAGADO_PROPIETARIO',
   DEVUELTO_INQUILINO = 'DEVUELTO_INQUILINO',
+  DEVUELTO_PARCIAL_INQUILINO = 'DEVUELTO_PARCIAL_INQUILINO',
 }
 
 @Entity('reserva')
@@ -58,6 +67,8 @@ export class Reserva {
 
   /** Estado derivado: no modifica el pago, la liquidación ni el calendario. */
   calcularEstadoEstadia(ahora = new Date()): EstadoEstadia {
+    if (this.estado_pago === EstadoPagoReserva.CONTRACARGO)
+      return 'EN_DISPUTA';
     if (this.estado_pago === EstadoPagoReserva.REEMBOLSADO)
       return 'REEMBOLSADA';
     if (this.estado_pago === EstadoPagoReserva.RECHAZADO)
@@ -99,6 +110,12 @@ export class Reserva {
 
   @Column({ type: 'timestamp', nullable: true })
   fecha_cancelacion: Date | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  motivo_cancelacion: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  cancelada_por: ActorCancelacion | null;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   monto_pago: number;
@@ -321,9 +338,11 @@ export class Reserva {
     this.intentos_codigo = 0;
   }
 
-  cancelar(): void {
+  cancelar(actor?: ActorCancelacion, motivo?: string): void {
     this.cancelada = true;
     this.fecha_cancelacion = new Date();
+    if (actor) this.cancelada_por = actor;
+    if (motivo?.trim()) this.motivo_cancelacion = motivo.trim();
   }
 
   /** Terminó la estadía. Las fechas no se liberan: quedan como historial. */
@@ -399,6 +418,7 @@ export class Reserva {
     return [
       EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
       EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+      EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
     ].includes(this.estado_liquidacion);
   }
 
@@ -425,8 +445,36 @@ export class Reserva {
     if (estado === EstadoLiquidacionReserva.RETENIDO) this.intentos_codigo = 0;
     if (estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO) {
       this.estado_pago = EstadoPagoReserva.REEMBOLSADO;
-      this.cancelar();
+      this.cancelar('ADMINISTRADOR');
     }
+    if (estado === EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO) {
+      // El pago conserva su estado; el reembolso parcial vive en la entidad Reembolso.
+      this.fecha_resolucion_liquidacion = new Date();
+    }
+  }
+
+  /** Marca la reserva mientras Mercado Pago tramita un contracargo. */
+  marcarContracargo(): void {
+    this.estado_pago = EstadoPagoReserva.CONTRACARGO;
+  }
+
+  /** Restaura el pago aprobado cuando el contracargo se resuelve a favor del Anunciante. */
+  restaurarPagoAprobado(): void {
+    if (this.estado_pago === EstadoPagoReserva.CONTRACARGO)
+      this.estado_pago = EstadoPagoReserva.APROBADO;
+  }
+
+  /** Aplica un reembolso total confirmado. */
+  aplicarReembolsoTotal(): void {
+    this.estado_pago = EstadoPagoReserva.REEMBOLSADO;
+    this.estado_liquidacion = EstadoLiquidacionReserva.DEVUELTO_INQUILINO;
+    this.fecha_resolucion_liquidacion = new Date();
+  }
+
+  /** Registra el resultado de un reembolso parcial sin alterar el pago aprobado. */
+  aplicarReembolsoParcial(): void {
+    this.estado_liquidacion = EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
+    this.fecha_resolucion_liquidacion = new Date();
   }
 
   // --- Avisos ---

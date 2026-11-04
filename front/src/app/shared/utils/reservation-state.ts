@@ -10,6 +10,7 @@ export type EstadoEstadia =
   | 'CANCELADA'
   | 'REEMBOLSADA'
   | 'PAGO_RECHAZADO'
+  | 'EN_DISPUTA'
   | 'FECHAS_A_REVISAR';
 
 export const etiquetasEstadia: Record<EstadoEstadia, string> = {
@@ -22,6 +23,7 @@ export const etiquetasEstadia: Record<EstadoEstadia, string> = {
   CANCELADA: 'Cancelada',
   REEMBOLSADA: 'Reembolsada',
   PAGO_RECHAZADO: 'Pago rechazado',
+  EN_DISPUTA: 'En disputa',
   FECHAS_A_REVISAR: 'Fechas pendientes de revisión',
 };
 

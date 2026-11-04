@@ -1,5 +1,3 @@
-import { MercadoPagoAdapter } from './repository/mercado-pago.adapter';
-import { PASARELA_PAGOS } from './repository/pasarela-pagos.interface';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Pago } from './entity/pago.entity';
@@ -14,6 +12,9 @@ import { PresupuestosService } from './service/presupuestos.service';
 
 import { PagosRepository } from './repository/pagos.repository';
 import { PAGOS_REPOSITORY } from './repository/pagos.repository.interface';
+import { PasarelaModule } from './pasarela.module';
+import { ReembolsosModule } from '../reembolsos/reembolsos.module';
+import { DisputasModule } from '../disputas/disputas.module';
 
 @Module({
   imports: [
@@ -23,11 +24,12 @@ import { PAGOS_REPOSITORY } from './repository/pagos.repository.interface';
     CotizacionesModule,
     PublicacionesModule,
     DisponibilidadModule,
+    PasarelaModule,
+    ReembolsosModule,
+    DisputasModule,
   ],
   controllers: [PagosController],
   providers: [
-    MercadoPagoAdapter,
-    { provide: PASARELA_PAGOS, useExisting: MercadoPagoAdapter },
     PagosService,
     PresupuestosService,
     PagosRepository,

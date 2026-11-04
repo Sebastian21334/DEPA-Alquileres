@@ -1,3 +1,16 @@
+# Cancelaciones, devoluciones, reclamos y contracargos
+
+Para habilitar el circuito del ítem 14, con el backend detenido y sobre una
+copia o base descartable, aplicar `20261104-cancelaciones-devoluciones.sql`.
+La migración es repetible y agrega las tablas `solicitud_cancelacion`,
+`reembolso`, `disputa`, `reclamo_reserva`, `reclamo_evidencia` y
+`reclamo_mensaje`, además de las columnas de cancelación y reembolso.
+
+La ejecución automática de devoluciones por Mercado Pago queda apagada por
+defecto con `MP_REFUNDS_ENABLED=false`. En ese modo el Administrador registra
+la devolución manualmente con una referencia. Para el contenedor privado de
+evidencias configurar `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
+
 # Inicializar una base nueva desde back/.env
 
 Para una base vacía (por ejemplo, una base de pruebas en Neon), configurar

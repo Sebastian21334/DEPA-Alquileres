@@ -216,7 +216,8 @@ export class UsuariosService {
       .innerJoin('reserva.publicacion', 'publicacion')
       .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
       .andWhere('pago.status NOT IN (:...finales)', {
-        finales: ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'],
+        // Un charged_back abierto sigue siendo una operación sin conciliar.
+        finales: ['approved', 'rejected', 'cancelled', 'refunded'],
       })
       .getCount();
 

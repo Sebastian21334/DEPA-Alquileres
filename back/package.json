@@ -13,6 +13,7 @@
     "db:verificacion-identidad": "node scripts/verificacion-identidad.cjs --aplicar",
     "db:cotizaciones-cobros": "node scripts/cotizaciones-cobros.cjs --aplicar",
     "db:reprogramacion-reservas": "node scripts/reprogramacion-reservas.cjs --aplicar",
+    "db:cancelaciones-devoluciones": "node scripts/cancelaciones-devoluciones.cjs --aplicar",
     "db:calendario-unico": "node scripts/calendario-unico.cjs --aplicar",
     "build": "nest build",
     "test:condiciones-economicas": "npm run build && node --test test/condiciones-economicas.test.cjs",

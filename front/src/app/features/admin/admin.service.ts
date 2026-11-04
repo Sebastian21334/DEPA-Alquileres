@@ -1,7 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { Reserva } from '../../shared/services/reservation.service';
+import {
+  Reclamo,
+  ReclamoMensaje,
+  Reserva,
+} from '../../shared/services/reservation.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 
 export interface AdminUser {
@@ -48,6 +52,34 @@ export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
 export type AdminSettlement = Reserva;
+
+export interface AdminReembolso {
+  id: number;
+  tipo: 'TOTAL' | 'PARCIAL' | 'CONTRACARGO';
+  origen: string;
+  importe: number;
+  moneda: string;
+  estado: 'PENDIENTE' | 'EN_PROCESO' | 'APROBADO' | 'RECHAZADO' | 'FALLIDO' | 'CANCELADO';
+  motivo: string;
+  creado_en: string;
+  reserva?: { id: number; publicacion?: { titulo?: string } | null } | null;
+}
+
+export interface AdminCancellationRequest {
+  id: number;
+  motivo: string;
+  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'VENCIDA';
+  creada_en: string;
+  reserva?: {
+    id: number;
+    monto_pago: number;
+    moneda_contratada?: string | null;
+    fecha_inicio?: string | null;
+    fecha_fin?: string | null;
+    publicacion?: { titulo?: string } | null;
+    usuario?: { nombre?: string; apellido?: string } | null;
+  } | null;
+}
 export type CatalogKey =
   | 'roles'
   | 'tipos-anunciante'
@@ -84,6 +116,61 @@ export class AdminService {
   ) {
     return this.http.patch<AdminSettlement>(`${this.api}/reservas/${id}/liquidacion`, {
       estado,
+      referencia,
+      observacion,
+    });
+  }
+  listarReembolsos() {
+    return this.http.get<AdminReembolso[]>(`${this.api}/reembolsos/administracion`);
+  }
+  listarSolicitudesCancelacion() {
+    return this.http.get<AdminCancellationRequest[]>(
+      `${this.api}/reservas/cancelaciones/administracion`,
+    );
+  }
+  resolverSolicitudCancelacion(
+    idReserva: number,
+    idSolicitud: number,
+    decision: 'APROBADA' | 'RECHAZADA',
+    observacion?: string,
+  ) {
+    return this.http.patch<{
+      solicitud: AdminCancellationRequest;
+      reembolso: { id: number; importe: number; moneda: string } | null;
+    }>(`${this.api}/reservas/${idReserva}/cancelacion/${idSolicitud}`, {
+      decision,
+      observacion,
+    });
+  }
+  registrarReembolso(id: number, referencia: string) {
+    return this.http.patch(`${this.api}/reservas/reembolsos/${id}/manual`, {
+      referencia,
+    });
+  }
+  listarReclamos() {
+    return this.http.get<Reclamo[]>(`${this.api}/reclamos/administracion`);
+  }
+  urlEvidenciaReclamo(idReclamo: number, idEvidencia: number) {
+    return this.http.get<{ url: string }>(
+      `${this.api}/reclamos/${idReclamo}/evidencias/${idEvidencia}/url`,
+    );
+  }
+  responderReclamo(id: number, texto: string) {
+    return this.http.post<ReclamoMensaje>(`${this.api}/reclamos/${id}/mensajes`, {
+      texto,
+      visible_para: 'TODOS',
+    });
+  }
+  resolverReclamo(
+    id: number,
+    resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL',
+    importe?: number,
+    referencia?: string,
+    observacion?: string,
+  ) {
+    return this.http.patch<Reclamo>(`${this.api}/reclamos/${id}/resolver`, {
+      resolucion,
+      importe,
       referencia,
       observacion,
     });

@@ -46,14 +46,21 @@ export interface Reserva {
   finalizada: boolean;
   cancelada: boolean;
   fecha_cancelacion: string | null;
-  estado_pago: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'CANCELADO' | 'REEMBOLSADO';
+  estado_pago:
+    | 'PENDIENTE'
+    | 'APROBADO'
+    | 'RECHAZADO'
+    | 'CANCELADO'
+    | 'REEMBOLSADO'
+    | 'CONTRACARGO';
   estado_liquidacion:
     | 'NO_APLICA'
     | 'RETENIDO'
     | 'PENDIENTE_PAGO_PROPIETARIO'
     | 'EN_REVISION'
     | 'PAGADO_PROPIETARIO'
-    | 'DEVUELTO_INQUILINO';
+    | 'DEVUELTO_INQUILINO'
+    | 'DEVUELTO_PARCIAL_INQUILINO';
   codigo_generado_en: string | null;
   codigo_validado_en: string | null;
   intentos_codigo: number;
@@ -122,6 +129,55 @@ export interface ResumenReserva {
   pago: PagoResumen | null;
 }
 
+export interface SolicitudCancelacion {
+  id: number;
+  motivo: string;
+  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'VENCIDA';
+  decidida_en: string | null;
+  observacion: string | null;
+  creada_en: string;
+}
+
+export interface Reembolso {
+  id: number;
+  tipo: 'TOTAL' | 'PARCIAL' | 'CONTRACARGO';
+  origen: 'CANCELACION' | 'RECLAMO' | 'CONTRACARGO' | 'PAGO_TARDIO' | 'AJUSTE_ADMIN';
+  importe: number;
+  moneda: string;
+  estado: 'PENDIENTE' | 'EN_PROCESO' | 'APROBADO' | 'RECHAZADO' | 'FALLIDO' | 'CANCELADO';
+  motivo: string;
+  creado_en: string;
+}
+
+export interface Reclamo {
+  id: number;
+  reserva?: { id: number; publicacion?: { titulo?: string } | null } | null;
+  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO';
+  descripcion: string;
+  estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
+  resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | null;
+  importe_reembolso: number | null;
+  creado_en: string;
+  resuelto_en: string | null;
+  evidencias?: ReclamoEvidencia[];
+  mensajes?: ReclamoMensaje[];
+}
+
+export interface ReclamoEvidencia {
+  id: number;
+  url: string;
+  nombre_archivo: string;
+  tipo: string;
+}
+
+export interface ReclamoMensaje {
+  id: number;
+  texto: string;
+  visible_para: 'TODOS' | 'ADMIN';
+  creado_en: string;
+  autor?: { id: number; nombre?: string; apellido?: string };
+}
+
 @Injectable({ providedIn: 'root' })
 export class ReservationService {
   private readonly http = inject(HttpClient);
@@ -179,5 +235,46 @@ export class ReservationService {
 
   reportProblem(id: number, motivo: string): Observable<Reserva> {
     return this.http.patch<Reserva>(`${this.baseUrl}/${id}/reportar-problema`, { motivo });
+  }
+
+  requestCancellation(id: number, motivo: string): Observable<SolicitudCancelacion> {
+    return this.http.post<SolicitudCancelacion>(`${this.baseUrl}/${id}/cancelacion`, { motivo });
+  }
+
+  cancellationRequest(id: number): Observable<SolicitudCancelacion | null> {
+    return this.http.get<SolicitudCancelacion | null>(`${this.baseUrl}/${id}/cancelacion`);
+  }
+
+  refunds(id: number): Observable<Reembolso[]> {
+    return this.http.get<Reembolso[]>(`${this.baseUrl}/${id}/reembolsos`);
+  }
+
+  createClaim(payload: {
+    id_reserva: number;
+    categoria: Reclamo['categoria'];
+    descripcion: string;
+  }): Observable<Reclamo> {
+    return this.http.post<Reclamo>(`${environment.apiUrl}/reclamos`, payload);
+  }
+
+  myClaims(): Observable<Reclamo[]> {
+    return this.http.get<Reclamo[]>(`${environment.apiUrl}/reclamos/mios`);
+  }
+
+  uploadClaimEvidence(id: number, archivos: File[]): Observable<ReclamoEvidencia[]> {
+    const datos = new FormData();
+    archivos.forEach((archivo) => datos.append('evidencias', archivo));
+    return this.http.post<ReclamoEvidencia[]>(`${environment.apiUrl}/reclamos/${id}/evidencias`, datos);
+  }
+
+  claimMessages(id: number): Observable<ReclamoMensaje[]> {
+    return this.http.get<ReclamoMensaje[]>(`${environment.apiUrl}/reclamos/${id}/mensajes`);
+  }
+
+  sendClaimMessage(id: number, texto: string): Observable<ReclamoMensaje> {
+    return this.http.post<ReclamoMensaje>(`${environment.apiUrl}/reclamos/${id}/mensajes`, {
+      texto,
+      visible_para: 'TODOS',
+    });
   }
 }
