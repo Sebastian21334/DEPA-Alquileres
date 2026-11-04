@@ -118,15 +118,6 @@ export class ReservasController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @Patch(':id/finalizar')
-  finalizar(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    return this.reservasService.finalizar(id, req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard)
   @Patch(':id/cancelar')
   cancelar(
     @Param('id', ParseIntPipe) id: number,

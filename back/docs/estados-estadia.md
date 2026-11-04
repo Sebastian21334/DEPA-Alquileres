@@ -3,7 +3,7 @@
 La API serializa `estado_estadia` en cada Reserva, tanto en listados como en
 detalles, respuestas de acciones y resúmenes de pagos. Se calcula con las fechas
 del período y el ingreso validado. No se almacena otra columna ni se requiere
-una migración para esta funcionalidad. `finalizada` conserva los cierres manuales;
+una migración para esta funcionalidad. `finalizada` conserva los cierres manuales existentes y registra los automáticos;
 para saber si la estadía sigue vigente se usa `estado_estadia`.
 
 El cálculo pertenece a la entidad `Reserva`, mediante `calcularEstadoEstadia()`.
@@ -34,13 +34,13 @@ El anunciante solo puede validarlo durante el período y una sola vez. Las reser
 cerradas o con ingreso no verificado no admiten validar códigos ni reprogramar.
 La reprogramación se permite antes del inicio, sin ingreso validado, conservando
 los controles de disponibilidad, duración, importes y transacciones existentes.
-El cierre manual se permite en una estadía en curso con ingreso validado.
+La finalización se guarda automáticamente después del último día para reservas aprobadas, no canceladas, con fechas válidas e ingreso validado. Se revisa al iniciar el servidor y luego cada minuto; si el servidor estuvo detenido, se recuperan los cierres pendientes al iniciar. Las reservas sin ingreso validado quedan en INGRESO_NO_VERIFICADO.
 
 Mis reservas, el resumen y el panel vuelven a consultar cada minuto mientras la
 página es visible y al recuperar el foco. Las consultas se descartan al salir.
 La pantalla de gestión no refresca durante una escritura; el servidor vuelve a
 validar el estado dentro de la transacción y bajo el bloqueo existente.
 
-El paso del tiempo no modifica pagos, liquidaciones, fechas ocupadas ni envía
+La finalización automática no modifica pagos, liquidaciones, fechas ocupadas ni envía
 correos. Ingreso no verificado no demuestra ausencia del huésped: puede requerir
 revisión a través del flujo de reclamos existente.

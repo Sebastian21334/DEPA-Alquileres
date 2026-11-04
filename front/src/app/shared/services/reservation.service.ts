@@ -169,10 +169,6 @@ export class ReservationService {
     );
   }
 
-  finish(id: number): Observable<Reserva> {
-    return this.http.patch<Reserva>(`${this.baseUrl}/${id}/finalizar`, {});
-  }
-
   lodgingCode(id: number): Observable<CodigoAlojamiento> {
     return this.http.get<CodigoAlojamiento>(`${this.baseUrl}/${id}/codigo-alojamiento`);
   }

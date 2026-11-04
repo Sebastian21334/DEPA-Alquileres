@@ -158,7 +158,6 @@
               <div class="reservation__actions">
                 <a class="acct-btn acct-btn--primary acct-btn--sm" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">Ver detalle y contactar</a>
                 @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
-                @if (reserva.estado_estadia === 'EN_CURSO') { <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="finalizar(reserva)">Finalizar estadía</button> }
               </div>
             </article>
           } @empty {

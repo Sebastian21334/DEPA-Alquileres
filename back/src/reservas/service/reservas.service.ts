@@ -346,51 +346,6 @@ export class ReservasService {
     return reserva;
   }
 
-  /**
-   * Marca la reserva como finalizada (ej: terminó la estadía).
-   * No libera las fechas: quedan como historial de que ese período
-   * ya fue efectivamente ocupado.
-   */
-  async finalizar(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
-    return this.transaccion.ejecutar(
-      async ({ reservas: reservaRepository }) => {
-        const reserva = await reservaRepository.buscarPorId(id);
-        if (!reserva)
-          throw new NotFoundException(`No se encontró la reserva ${id}`);
-
-        // Finalizar es una acción de gestión de la estadía; la realiza el
-        // anunciante dueño. El inquilino puede consultar su propia reserva.
-        if (!reserva.esDelAnunciante(idUsuarioQueOpera)) {
-          throw new ForbiddenException(
-            'Solo el anunciante de la publicación puede finalizar la reserva',
-          );
-        }
-        if (reserva.cancelada)
-          throw new BadRequestException(
-            'No se puede finalizar una reserva cancelada',
-          );
-        if (!reserva.pagoAprobado()) {
-          throw new BadRequestException(
-            'No se puede finalizar una reserva cuyo pago no fue aprobado',
-          );
-        }
-        if (!reserva.codigoValidado()) {
-          throw new BadRequestException(
-            'No se puede finalizar la estadía antes de validar el código de alojamiento',
-          );
-        }
-        const estado = reserva.estado_estadia;
-        if (estado !== 'EN_CURSO' && estado !== 'FINALIZADA') {
-          throw new BadRequestException(
-            'La estadía todavía no comenzó o sus fechas requieren revisión',
-          );
-        }
-        reserva.finalizar();
-        return reservaRepository.guardar(reserva);
-      },
-    );
-  }
-
   /** El inquilino participante o el anunciante dueño pueden cancelar. */
   async cancelar(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
     return this.transaccion.ejecutar(

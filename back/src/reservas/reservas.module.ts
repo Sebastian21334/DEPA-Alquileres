@@ -1,3 +1,4 @@
+import { ReservaFinalizacionService } from './service/reserva-finalizacion.service';
 import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
 import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
 import { ReservaReprogramacionService } from './service/reserva-reprogramacion.service';
@@ -28,6 +29,7 @@ import { MailModule } from '../mail/mail.module';
   ],
   controllers: [ReservasController],
   providers: [
+    ReservaFinalizacionService,
     ReservaLiquidacionesService,
     ReservaNotificacionesService,
     ReservaReprogramacionService,
