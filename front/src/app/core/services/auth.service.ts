@@ -88,10 +88,19 @@ export class AuthService {
   }
 
   /** POST /auth/restablecer-contrasenia — consume el token del link y fija la nueva contraseña. */
-  restablecerContrasenia(token: string, nuevaContrasenia: string): Observable<MensajeResponse> {
+  restablecerContrasenia(token: string, nuevaContrasenia: string, confirmarContrasenia: string): Observable<MensajeResponse> {
     return this.http.post<MensajeResponse>(`${this.baseUrl}/restablecer-contrasenia`, {
       token,
       nuevaContrasenia,
+      confirmarContrasenia,
+    });
+  }
+
+  cambiarContrasenia(contraseniaActual: string, nuevaContrasenia: string, confirmarContrasenia: string): Observable<MensajeResponse> {
+    return this.http.patch<MensajeResponse>(`${this.baseUrl}/cambiar-contrasenia`, {
+      contraseniaActual,
+      nuevaContrasenia,
+      confirmarContrasenia,
     });
   }
 

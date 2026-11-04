@@ -12,6 +12,7 @@
     "db:reprogramacion-reservas": "node scripts/reprogramacion-reservas.cjs --aplicar",
     "db:calendario-unico": "node scripts/calendario-unico.cjs --aplicar",
     "build": "nest build",
+    "test:condiciones-economicas": "npm run build && node --test test/condiciones-economicas.test.cjs",
     "db:retirar-metodo-pago": "node scripts/retirar-metodo-pago.cjs --aplicar",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\"",

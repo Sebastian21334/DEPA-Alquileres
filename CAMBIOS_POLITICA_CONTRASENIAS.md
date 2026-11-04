@@ -4,7 +4,7 @@ Fecha: 30/10/2026.
 
 ## Objetivo
 
-Aplicar las mismas condiciones de contraseña en el frontend y el backend durante el registro y el restablecimiento, y reflejarlas en los mensajes de los formularios.
+Aplicar las mismas condiciones de contraseña en el frontend y el backend durante el registro, el cambio autenticado y el restablecimiento, y reflejarlas en los mensajes de los formularios.
 
 ## Situación anterior
 
@@ -31,15 +31,15 @@ Las contraseñas no se recortan ni se normalizan antes de validarse o guardarse.
 ## Cambios en el backend
 
 - Se agregó el decorador reutilizable `@ContraseniaSegura()`, basado en `class-validator`.
-- Se aplicó en `RegisterDto.contrasenia` y `RestablecerContraseniaDto.nuevaContrasenia`.
+- Se aplicó en `RegisterDto.contrasenia`, `CambiarContraseniaDto.nuevaContrasenia` y `RestablecerContraseniaDto.nuevaContrasenia`.
 - La validación se ejecuta mediante el `ValidationPipe` global existente, incluso si la solicitud se realiza directamente a la API.
 - Se incorporó un mensaje que describe la política completa.
 
 ## Cambios en el frontend
 
 - Se actualizó `passwordSeguraValidator()` con las mismas condiciones que el backend.
-- Registro y restablecimiento reutilizan ese validador.
-- Se centralizó el texto de ayuda y error de ambos formularios en `MENSAJE_CONTRASENIA_SEGURA`.
+- Registro, cambio desde el perfil y restablecimiento reutilizan ese validador.
+- Se centralizó el texto de ayuda y error de los formularios en `MENSAJE_CONTRASENIA_SEGURA`.
 - Se eliminaron las indicaciones anteriores de un mínimo de 8 caracteres.
 
 La política es la misma en ambas capas. El backend reutiliza un único decorador entre sus DTO y el frontend un único validador entre sus formularios; no se incorporó un paquete compartido entre las dos aplicaciones.
@@ -50,18 +50,26 @@ El proyecto ya utilizaba bcrypt y conserva ese mecanismo. Las contraseñas se al
 
 El factor de costo se obtiene de `BCRYPT_COST`, con **12 como valor predeterminado**, y el archivo `.env.example` indica `BCRYPT_COST=12`.
 
-**Aclaración sobre el RNF:** el código actual permite configurar otro costo y no fuerza un mínimo de 12. Por eso, corresponde describirlo como valor predeterminado. Si el requisito exige un mínimo obligatorio de 12, queda pendiente agregar una restricción sobre esa configuración. El cambio de política realizado no modificó el servicio de hash.
+El servicio de hash ahora exige que el costo configurado sea un entero entre 12 y 31. Se cumple así el mínimo de 12 exigido por RNF5; si la configuración no es válida, no se genera el hash.
 
 ## Redacción del RNF acorde con la implementación
 
-> Las contraseñas deberán contener como mínimo 12 caracteres, al menos una letra, un número y un símbolo; no deberán incluir espacios ni caracteres de control o formato invisibles y tendrán un máximo de 72 bytes en UTF-8. Estas condiciones se validarán tanto en el frontend como en el backend durante el registro y el restablecimiento de contraseña. Las contraseñas se almacenarán exclusivamente como hashes generados mediante bcrypt, con una sal aleatoria por contraseña y un factor de costo configurable, cuyo valor predeterminado será 12; nunca se almacenarán en texto plano.
+> Las contraseñas deberán contener como mínimo 12 caracteres, al menos una letra, un número y un símbolo; no deberán incluir espacios ni caracteres de control o formato invisibles y tendrán un máximo de 72 bytes en UTF-8. Estas condiciones se validarán tanto en el frontend como en el backend durante el registro, el cambio y el restablecimiento de contraseña. Las contraseñas se almacenarán exclusivamente como hashes generados mediante bcrypt, con una sal aleatoria por contraseña y un factor de costo mínimo de 12; nunca se almacenarán en texto plano.
 
 ## Compatibilidad y alcance
 
-- Las contraseñas existentes siguen funcionando para iniciar sesión. La nueva política se exige al crear o restablecer una contraseña.
-- No se modificaron las rutas ni los nombres de los campos de la API.
+- Las contraseñas existentes siguen funcionando para iniciar sesión. La nueva política se exige al crear, cambiar o restablecer una contraseña.
+- Se agregó `PATCH /auth/cambiar-contrasenia` y la confirmación obligatoria en el DTO de restablecimiento.
 - No se requieren cambios en el esquema de la base de datos ni migraciones.
-- El flujo existente de recuperación conserva su token aleatorio, su vencimiento de una hora y su consumo al restablecer la contraseña.
+- El flujo de recuperación usa tokens aleatorios de un solo uso, ahora con vencimiento de dos horas. Pedir otro enlace o cambiar la contraseña invalida el anterior.
+
+## Cambio desde el perfil y notificaciones (ítem 8)
+
+En **Mi perfil → Seguridad de la cuenta → Cambiar contraseña** se solicita la contraseña actual, una nueva distinta y su confirmación. La identidad se toma del JWT y no de un identificador enviado por el formulario. El backend verifica la contraseña actual con bcrypt antes de actualizarla.
+
+El cambio autenticado y el restablecimiento por enlace notifican por correo a la dirección de la cuenta después de guardar el hash. Si falla el correo, se registra el error sin revertir el cambio. Las cuentas bloqueadas no reciben enlaces de recuperación ni pueden utilizar uno emitido previamente; la solicitud conserva una respuesta genérica.
+
+Los JWT ya emitidos conservan su vigencia. No se requieren migraciones. Los enlaces anteriores a esta actualización mantienen el vencimiento con el que fueron emitidos.
 
 ## Verificación realizada
 

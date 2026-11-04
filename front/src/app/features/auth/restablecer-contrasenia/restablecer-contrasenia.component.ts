@@ -4,7 +4,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { contraseniasIgualesValidator, MENSAJE_CONTRASENIA_SEGURA, passwordSeguraValidator } from '../../../shared/validators/password.validators';
 
-// Segundo paso del caso de uso "Cambiar contraseña" (ID 4): consume el link
+// Segundo paso de CU62 "Recuperar acceso": consume el link
 // que llega por mail (back/src/mail/mail.service.ts#enviarRecuperacion, que
 // arma "${frontendUrl}/restablecer-contrasena?token=...") y fija la nueva
 // contraseña. OJO: la ruta del link usa "restablecer-contrasena" (sin la
@@ -61,16 +61,19 @@ export class RestablecerContraseniaComponent implements OnInit {
     this.enviando.set(true);
     this.error.set(null);
 
-    const { contrasenia } = this.form.getRawValue();
+    const { contrasenia, confirmarContrasenia } = this.form.getRawValue();
 
-    this.authService.restablecerContrasenia(this.token, contrasenia).subscribe({
+    this.authService.restablecerContrasenia(this.token, contrasenia, confirmarContrasenia).subscribe({
       next: (res) => {
         this.enviando.set(false);
         this.mensajeExito.set(res.mensaje);
+        this.form.reset();
+        this.token = null;
       },
       error: (err: Error) => {
         this.enviando.set(false);
         this.error.set(err.message);
+        if (err.message.includes('Token inválido o expirado')) this.tokenValido.set(false);
       },
     });
   }

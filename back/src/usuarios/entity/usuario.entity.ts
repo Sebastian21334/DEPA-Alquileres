@@ -127,7 +127,7 @@ export class Usuario {
   recuperacionVigente(ahora = new Date()): boolean {
     return (
       !!this.token_recuperacion_expira &&
-      this.token_recuperacion_expira >= ahora
+      this.token_recuperacion_expira > ahora
     );
   }
 
