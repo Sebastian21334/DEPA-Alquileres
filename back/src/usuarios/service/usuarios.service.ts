@@ -31,6 +31,12 @@ import { fechaArgentina } from '../../common/utils/fechas';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 
+/**
+ * Tiempo durante el cual un checkout sin pago iniciado sigue impidiendo la
+ * baja: cubre los 15 minutos de la preferencia y notificaciones demoradas.
+ */
+const MARGEN_CHECKOUT_SIN_PAGO_MS = 24 * 60 * 60 * 1000;
+
 /** Datos admitidos por el alta; el rol y los secretos se asignan en el servicio. */
 type CrearUsuarioDatos = {
   nombre: string;
@@ -234,17 +240,12 @@ export class UsuariosService {
       .getCount();
 
     // Un pago que Mercado Pago todavía procesa puede aprobarse después de la
-    // baja. Solo cuentan los pagos iniciados (con payment_id): un checkout
-    // abandonado queda en "pending" sin payment_id y su preferencia vence.
-    const pagosEnProceso = await manager.getRepository(Pago)
-      .createQueryBuilder('pago')
-      .innerJoin('pago.reserva', 'reserva')
-      .where('reserva.id_usuario = :idUsuario', { idUsuario })
-      .andWhere('pago.payment_id IS NOT NULL')
-      .andWhere('pago.status NOT IN (:...finales)', {
-        finales: ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'],
-      })
-      .getCount();
+    // baja, aunque la reserva ya se haya cancelado por vencimiento.
+    const pagosEnProceso = await this.contarPagosSinConciliar(
+      manager,
+      idUsuario,
+      'Inquilino',
+    );
 
     const motivos: string[] = [];
     if (reservasPendientes) motivos.push(`${reservasPendientes} reserva(s) pendiente(s) de pago`);
@@ -252,6 +253,47 @@ export class UsuariosService {
     if (estadiasVigentes) motivos.push(`${estadiasVigentes} estadía(s) vigente(s) o futura(s)`);
     if (reclamosEnRevision) motivos.push(`${reclamosEnRevision} reclamo(s) en revisión`);
     return motivos;
+  }
+
+  /**
+   * Pagos que Mercado Pago todavía puede aprobar, de las reservas que hizo el
+   * usuario (Inquilino) o de las de sus publicaciones (Anunciante).
+   *
+   * Un Pago nace en "pending" al crear el checkout y solo cambia cuando llega
+   * una notificación. Si el checkout se abandona queda así para siempre, sin
+   * payment_id. Ese checkout solo puede convertirse en un pago mientras su
+   * preferencia está vigente (15 minutos), así que deja de contarse pasado un
+   * margen para notificaciones demoradas. Con payment_id cuenta siempre.
+   */
+  private contarPagosSinConciliar(
+    manager: EntityManager,
+    idUsuario: number,
+    rol: 'Anunciante' | 'Inquilino',
+    ahora = new Date(),
+  ): Promise<number> {
+    const consulta = manager.getRepository(Pago)
+      .createQueryBuilder('pago')
+      .innerJoin('pago.reserva', 'reserva');
+    if (rol === 'Anunciante') {
+      consulta
+        .innerJoin('reserva.publicacion', 'publicacion')
+        .where('publicacion.id_anunciante = :idUsuario', { idUsuario });
+    } else {
+      consulta.where('reserva.id_usuario = :idUsuario', { idUsuario });
+    }
+    return consulta
+      .andWhere('pago.status NOT IN (:...finales)', {
+        finales: ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'],
+      })
+      .andWhere(
+        '(pago.payment_id IS NOT NULL OR pago.created_at > :limiteCheckout)',
+        {
+          limiteCheckout: new Date(
+            ahora.getTime() - MARGEN_CHECKOUT_SIN_PAGO_MS,
+          ),
+        },
+      )
+      .getCount();
   }
 
   /** Compromisos sobre las reservas de las publicaciones del Anunciante. */
@@ -304,15 +346,11 @@ export class UsuariosService {
 
     // Evita dar de baja al anunciante si Mercado Pago aún puede notificar
     // una aprobación tardía, aun cuando la reserva ya se haya cancelado.
-    const pagosSinConciliar = await manager.getRepository(Pago)
-      .createQueryBuilder('pago')
-      .innerJoin('pago.reserva', 'reserva')
-      .innerJoin('reserva.publicacion', 'publicacion')
-      .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
-      .andWhere('pago.status NOT IN (:...finales)', {
-        finales: ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'],
-      })
-      .getCount();
+    const pagosSinConciliar = await this.contarPagosSinConciliar(
+      manager,
+      idUsuario,
+      'Anunciante',
+    );
 
     const motivos: string[] = [];
     if (reservasPendientes) motivos.push(`${reservasPendientes} reserva(s) pendiente(s) de pago`);
