@@ -11,6 +11,9 @@ export interface AdminUser {
   email: string;
   telefono: string;
   bloqueado: boolean;
+  /** Baja lógica: false cuando la cuenta fue dada de baja. */
+  activa: boolean;
+  fecha_baja: string | null;
   email_verificado: boolean;
   rol: { id: number; nombre: string } | null;
 }
