@@ -2,7 +2,11 @@ import { SelectorUbicacionComponent } from '../../shared/components/selector-ubi
 import { Component, inject, signal } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { finalize, map, of, switchMap } from 'rxjs';
+import { concatMap, finalize, from, map, of, switchMap } from 'rxjs';
+import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
+import { Imagen } from '../../shared/models/imagen.model';
+import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
+import { moverImagen } from '../../shared/utils/orden-imagenes';
 import { ApiError } from '../../core/interceptors/api-error';
 import { ListingService } from '../home/listing.service';
 import {
@@ -31,6 +35,7 @@ import {
     SpinnerComponent,
     LocationPickerComponent,
     SelectorUbicacionComponent,
+    GaleriaImagenesComponent,
   ],
   providers: [PublicacionFormulario],
   templateUrl: './publication-form.component.html',
@@ -40,6 +45,7 @@ export class PublicationFormComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly listings = inject(ListingService);
+  private readonly gestion = inject(GestionPublicacionesService);
   private readonly availabilityApi = inject(AvailabilityService);
   private readonly auth = inject(AuthService);
   protected readonly formulario = inject(PublicacionFormulario);
@@ -48,6 +54,9 @@ export class PublicationFormComponent {
   private readonly publicationId = Number(this.route.snapshot.paramMap.get('id'));
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
+  protected readonly imagesBusy = signal(false);
+  protected readonly images = signal<Imagen[]>([]);
+  protected readonly imageError = signal('');
   protected readonly error = signal('');
   protected readonly availability = signal<FechaDisponibleAdministracion[]>([]);
   protected readonly availabilityStart = signal<string | null>(null);
@@ -84,6 +93,7 @@ export class PublicationFormComponent {
   }
 
   protected submit(): void {
+    if (this.saving() || this.imagesBusy() || this.form.disabled) return;
     this.error.set('');
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -133,6 +143,55 @@ export class PublicationFormComponent {
     if (this.error().startsWith('Confirmá la ubicación')) this.error.set('');
   }
 
+  protected reorderImages({ desde, hasta }: { desde: number; hasta: number }): void {
+    if (this.saving() || this.imagesBusy() || this.form.disabled) return;
+    const imagenes = moverImagen(this.images(), desde, hasta);
+    this.imagesBusy.set(true);
+    this.imageError.set('');
+    this.gestion.ordenarImagenes(this.publicationId, imagenes.map((imagen) => imagen.id)).pipe(
+      finalize(() => this.imagesBusy.set(false)),
+    ).subscribe({
+      next: (ordenadas) => this.images.set(ordenadas),
+      error: (err: ApiError) => this.imageError.set(err.message),
+    });
+  }
+
+  protected uploadImages(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const archivos = Array.from(input.files ?? []);
+    input.value = '';
+    if (this.saving() || this.imagesBusy() || this.form.disabled) return;
+    const validos = archivos.filter((archivo) =>
+      ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(archivo.type) &&
+      archivo.size <= 10 * 1024 * 1024,
+    );
+    this.imageError.set(validos.length < archivos.length
+      ? 'Se descartaron archivos: usá imágenes JPG, PNG, WEBP o HEIC de hasta 10 MB.' : '');
+    if (!validos.length) return;
+    this.imagesBusy.set(true);
+    from(validos).pipe(
+      concatMap((archivo) => this.gestion.subirImagen(this.publicationId, archivo)),
+      finalize(() => this.imagesBusy.set(false)),
+    ).subscribe({
+      next: (imagen) => this.images.update((lista) => [...lista, imagen]),
+      error: (err: ApiError) => this.imageError.set(err.message),
+    });
+  }
+
+  protected removeImage(index: number): void {
+    if (this.saving() || this.imagesBusy() || this.form.disabled || this.images().length <= 1) return;
+    const imagen = this.images()[index];
+    if (!imagen) return;
+    this.imagesBusy.set(true);
+    this.imageError.set('');
+    this.gestion.eliminarImagen(imagen.id).pipe(
+      finalize(() => this.imagesBusy.set(false)),
+    ).subscribe({
+      next: () => this.images.update((lista) => lista.filter((item) => item.id !== imagen.id)),
+      error: (err: ApiError) => this.imageError.set(err.message),
+    });
+  }
+
   private loadPublication(id: number): void {
     this.listings
       .getById(id)
@@ -145,6 +204,7 @@ export class PublicationFormComponent {
             return;
           }
           this.formulario.cargar(item);
+          this.images.set(item.imagenes ?? []);
           this.availabilityApi.getForAdministration(id).subscribe({
             next: (dates) => this.availability.set(dates),
           });

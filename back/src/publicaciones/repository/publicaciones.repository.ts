@@ -56,8 +56,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         tipoPropiedad: true,
         imagenes: true,
       },
-      // La primera foto cargada es la portada; sin orden SQL el join puede invertir la galería.
-      order: { imagenes: { id: 'ASC' } },
+      // La primera foto según el orden elegido es la portada; el ID desempata datos históricos.
+      order: { imagenes: { orden: 'ASC', id: 'ASC' } },
     });
   }
 
@@ -99,7 +99,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         imagenes: true,
         anunciante: { usuario: true, tipoAnunciante: true },
       },
-      order: { imagenes: { id: 'ASC' } },
+      order: { imagenes: { orden: 'ASC', id: 'ASC' } },
     });
   }
 
@@ -235,7 +235,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
             imagenes: true,
             anunciante: { usuario: true, tipoAnunciante: true },
           },
-          order: { imagenes: { id: 'ASC' } },
+          order: { imagenes: { orden: 'ASC', id: 'ASC' } },
         })
       : [];
     const porId = new Map(
@@ -351,7 +351,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         imagenes: true,
         anunciante: { usuario: true, tipoAnunciante: true },
       },
-      order: { fecha_publicacion: 'DESC', imagenes: { id: 'ASC' } },
+      order: { fecha_publicacion: 'DESC', imagenes: { orden: 'ASC', id: 'ASC' } },
     });
   }
 

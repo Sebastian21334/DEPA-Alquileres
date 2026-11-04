@@ -82,3 +82,15 @@ Aplicar la migración antes de arrancar esta versión. El proyecto usa
 `synchronize: false`: los cambios de esquema requieren migraciones explícitas.
 
 Para documentación diferenciada de inmobiliarias, ver [el flujo y su migración](../docs/documentacion-inmobiliaria.md).
+
+# Portada y orden de imágenes (2026-11-04)
+
+Antes de desplegar el backend con esta funcionalidad, ejecutar desde `back`:
+
+```sh
+npm run db:orden-imagenes
+```
+
+Usa `DATABASE_URL` (entorno o `back/.env`). Agrega `imagen.orden` y conserva el orden
+histórico por ID, incluida la portada. Es reejecutable y no borra fotos ni cambia
+órdenes guardados previamente. Aplicar también después de inicializar una base nueva.

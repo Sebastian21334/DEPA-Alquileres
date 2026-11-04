@@ -2,6 +2,8 @@ import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guar
 import {
   Controller,
   Post,
+  Patch,
+  Body,
   Delete,
   Get,
   Param,
@@ -16,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ImagenesService } from '../service/imagenes.service';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { AnuncianteGuard } from '../../anunciantes/guards/anunciante.guard';
+import { OrdenarImagenesDto } from '../dto/ordenar-imagenes.dto';
 
 const TIPOS_PERMITIDOS = [
   'image/jpeg',
@@ -57,6 +60,16 @@ export class ImagenesController {
   ) {
     if (!archivo) throw new BadRequestException('No se envió ningún archivo');
     return this.imagenesService.subir(idPublicacion, req.anunciante, archivo);
+  }
+
+  @Patch('publicacion/:idPublicacion/orden')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  ordenar(
+    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
+    @Body() dto: OrdenarImagenesDto,
+    @Req() req: AnuncianteRequest,
+  ) {
+    return this.imagenesService.ordenar(idPublicacion, dto.ids, req.anunciante);
   }
 
   @Get('publicacion/:idPublicacion')
