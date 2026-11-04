@@ -1,12 +1,14 @@
+import { CurrencyPipe } from '@angular/common';
 import { rentalDays, isRentalRangeAvailable } from '../../shared/utils/rental-dates';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin, Subscription } from 'rxjs';
+import { catchError, forkJoin, of, Subscription } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
   Reserva,
   ReprogramacionReserva,
+  Reclamo,
 } from '../../shared/services/reservation.service';
 import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
@@ -18,7 +20,7 @@ import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo } from '../../sha
 @Component({
   selector: 'app-mis-reservas',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, FormsModule],
+  imports: [RouterLink, SpinnerComponent, FormsModule, CurrencyPipe],
   templateUrl: './mis-reservas.component.html',
   styleUrl: './mis-reservas.component.scss',
 })
@@ -38,11 +40,17 @@ export class MisReservasComponent {
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
   protected readonly ocupada = signal<number | null>(null);
-  protected readonly vista = signal<'realizadas' | 'recibidas'>('realizadas');
+  protected readonly vista = signal<'realizadas' | 'recibidas' | 'reclamos'>('realizadas');
+  protected readonly reclamos = signal<Reclamo[]>([]);
   protected readonly codigos = signal<Record<number, string>>({});
   protected codigoIngresado: Record<number, string> = {};
   protected readonly mensaje = signal('');
   protected readonly editando = signal<Reserva | null>(null);
+  protected readonly reclamoAbierto = signal<Reserva | null>(null);
+  protected readonly reclamoCategoria = signal<Reclamo['categoria']>('OTRO');
+  protected readonly reclamoDescripcion = signal('');
+  protected readonly reclamoArchivos = signal<File[]>([]);
+  protected readonly reclamoEnviando = signal(false);
   protected readonly inicioNuevo = signal('');
   protected readonly calendario = signal<FechaDisponible[]>([]);
   protected readonly cargandoCalendario = signal(false);
@@ -101,10 +109,12 @@ export class MisReservasComponent {
     this.consultaReservas = forkJoin({
       propias: this.reservasApi.mine(),
       recibidas: this.reservasApi.received(),
+      reclamos: this.reservasApi.myClaims().pipe(catchError(() => of([]))),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ propias, recibidas }) => {
+      next: ({ propias, recibidas, reclamos }) => {
         this.propias.set(propias);
         this.recibidas.set(recibidas);
+        this.reclamos.set(reclamos);
         this.codigos.update((codigos) => Object.fromEntries(
           Object.entries(codigos).filter(([id]) => propias.some((r) => r.id === +id && puedeConsultarCodigo(r))),
         ));
@@ -261,6 +271,50 @@ export class MisReservasComponent {
     });
   }
 
+  protected puedeSolicitarCancelacion(reserva: Reserva): boolean {
+    return (
+      reserva.estado_pago === 'APROBADO' &&
+      !reserva.cancelada &&
+      !reserva.finalizada &&
+      reserva.estado_estadia === 'CONFIRMADA' &&
+      !reserva.codigo_validado_en &&
+      reserva.estado_liquidacion !== 'EN_REVISION' &&
+      reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' &&
+      reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' &&
+      reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO'
+    );
+  }
+
+  protected solicitarCancelacion(reserva: Reserva): void {
+    const motivo = window
+      .prompt(
+        'Motivo de la cancelación. La solicitud será revisada por un administrador:',
+      )
+      ?.trim();
+    if (!motivo) return;
+    if (motivo.length < 10) {
+      this.error.set('El motivo debe tener al menos diez caracteres.');
+      return;
+    }
+    this.iniciarOperacion(reserva.id);
+    this.error.set('');
+    this.reservasApi
+      .requestCancellation(reserva.id, motivo)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.mensaje.set(
+            'Solicitud de cancelación enviada. Un administrador revisará la devolución.',
+          );
+          this.ocupada.set(null);
+        },
+        error: (err: ApiError) => {
+          this.error.set(err.message);
+          this.ocupada.set(null);
+        },
+      });
+  }
+
   protected verCodigo(reserva: Reserva): void {
     if (!puedeConsultarCodigo(reserva)) return;
     this.iniciarOperacion(reserva.id);
@@ -298,24 +352,109 @@ export class MisReservasComponent {
     });
   }
 
-  protected reportarProblema(reserva: Reserva): void {
-    const motivo = window
-      .prompt('Contanos qué ocurrió. La liquidación quedará en revisión administrativa:')
-      ?.trim();
-    if (!motivo) return;
-    if (motivo.length < 10) {
-      this.error.set('El motivo debe tener al menos diez caracteres.');
+  protected abrirReclamo(reserva: Reserva): void {
+    this.reclamoAbierto.set(reserva);
+    this.reclamoCategoria.set('OTRO');
+    this.reclamoDescripcion.set('');
+    this.reclamoArchivos.set([]);
+    this.error.set('');
+  }
+
+  protected cerrarReclamo(): void {
+    if (this.reclamoEnviando()) return;
+    this.reclamoAbierto.set(null);
+  }
+
+  protected seleccionarArchivos(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const archivos = Array.from(input.files ?? []);
+    if (archivos.some((archivo) => !['image/jpeg', 'image/png'].includes(archivo.type))) {
+      this.error.set('Solo se admiten imágenes JPEG o PNG.');
+      input.value = '';
       return;
     }
-    this.iniciarOperacion(reserva.id);
+    if (archivos.some((archivo) => archivo.size > 5 * 1024 * 1024)) {
+      this.error.set('Cada imagen puede pesar hasta 5 MB.');
+      input.value = '';
+      return;
+    }
+    if (archivos.length > 5) {
+      this.error.set('Podés adjuntar hasta 5 imágenes.');
+      input.value = '';
+      return;
+    }
     this.error.set('');
-    this.reservasApi.reportProblem(reserva.id, motivo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (actualizada) => this.reemplazar(actualizada),
-      error: (err: ApiError) => {
-        this.error.set(err.message);
-        this.ocupada.set(null);
-      },
-    });
+    this.reclamoArchivos.set(archivos);
+  }
+
+  protected enviarReclamo(): void {
+    const reserva = this.reclamoAbierto();
+    if (!reserva || this.reclamoEnviando()) return;
+    const descripcion = this.reclamoDescripcion().trim();
+    if (descripcion.length < 20) {
+      this.error.set('La descripción debe tener al menos veinte caracteres.');
+      return;
+    }
+    this.reclamoEnviando.set(true);
+    this.error.set('');
+    this.reservasApi
+      .createClaim({
+        id_reserva: reserva.id,
+        categoria: this.reclamoCategoria(),
+        descripcion,
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reclamo) => {
+          const archivos = this.reclamoArchivos();
+          if (!archivos.length) {
+            this.finalizarReclamo();
+            return;
+          }
+          this.reservasApi
+            .uploadClaimEvidence(reclamo.id, archivos)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe({
+              next: () => this.finalizarReclamo(),
+              error: (err: ApiError) => {
+                this.error.set(
+                  `El reclamo se creó, pero no se pudieron subir las imágenes: ${err.message}`,
+                );
+                this.reclamoEnviando.set(false);
+              },
+            });
+        },
+        error: (err: ApiError) => {
+          this.error.set(err.message);
+          this.reclamoEnviando.set(false);
+        },
+      });
+  }
+
+  protected responderReclamo(reclamo: Reclamo): void {
+    const texto = window.prompt('Mensaje para el hilo del reclamo:')?.trim();
+    if (!texto) return;
+    this.error.set('');
+    this.reservasApi
+      .sendClaimMessage(reclamo.id, texto)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.mensaje.set('Mensaje enviado al hilo del reclamo.');
+          this.cargarReservas(true);
+        },
+        error: (err: ApiError) => this.error.set(err.message),
+      });
+  }
+
+  private finalizarReclamo(): void {
+    this.reclamoEnviando.set(false);
+    this.reclamoAbierto.set(null);
+    this.reclamoArchivos.set([]);
+    this.mensaje.set(
+      'Reclamo enviado. Un administrador puede contactarte por el hilo del reclamo.',
+    );
+    this.cargarReservas(true);
   }
 
   protected estado(reserva: Reserva): string {
@@ -330,6 +469,7 @@ export class MisReservasComponent {
       EN_REVISION: 'En revisión administrativa',
       PAGADO_PROPIETARIO: 'Pago al propietario registrado',
       DEVUELTO_INQUILINO: 'Devolución al inquilino registrada',
+      DEVUELTO_PARCIAL_INQUILINO: 'Devolución parcial al inquilino registrada',
     };
     return etiquetas[reserva.estado_liquidacion] ?? 'Estado no disponible';
   }

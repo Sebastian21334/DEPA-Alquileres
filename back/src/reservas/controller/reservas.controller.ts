@@ -6,6 +6,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Body,
   Param,
   ParseIntPipe,
@@ -20,6 +21,9 @@ import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ValidarCodigoAlojamientoDto } from '../dto/validar-codigo-alojamiento.dto';
 import { ReportarProblemaReservaDto } from '../dto/reportar-problema-reserva.dto';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
+import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
+import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
+import { RegistrarReembolsoManualDto } from '../../reembolsos/dto/registrar-reembolso-manual.dto';
 
 @Controller('reservas')
 export class ReservasController {
@@ -47,6 +51,13 @@ export class ReservasController {
   @Get('liquidaciones/administracion')
   listarLiquidacionesAdministracion() {
     return this.liquidacionesService.listarLiquidacionesAdministracion();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  @Get('cancelaciones/administracion')
+  listarSolicitudesCancelacion() {
+    return this.reservasService.listarSolicitudesCancelacion();
   }
 
   @UseGuards(JwtAuthGuard)
@@ -113,8 +124,9 @@ export class ReservasController {
   resolverLiquidacion(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ResolverLiquidacionDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.liquidacionesService.resolverLiquidacion(id, dto);
+    return this.liquidacionesService.resolverLiquidacion(id, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -124,6 +136,66 @@ export class ReservasController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.reservasService.cancelar(id, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/cancelacion')
+  solicitarCancelacion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SolicitarCancelacionDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.reservasService.solicitarCancelacion(id, dto, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/cancelacion')
+  consultarSolicitudCancelacion(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.reservasService.consultarSolicitudCancelacion(id, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  @Patch(':id/cancelacion/:idSolicitud')
+  resolverSolicitudCancelacion(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('idSolicitud', ParseIntPipe) idSolicitud: number,
+    @Body() dto: ResolverSolicitudCancelacionDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.reservasService.resolverSolicitudCancelacion(
+      id,
+      idSolicitud,
+      dto,
+      req.user.id,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  @Patch('reembolsos/:id/manual')
+  registrarReembolsoManual(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: RegistrarReembolsoManualDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.reservasService.registrarReembolsoManual(
+      id,
+      dto.referencia,
+      req.user.id,
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/reembolsos')
+  listarReembolsos(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.reservasService.listarReembolsosReserva(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)

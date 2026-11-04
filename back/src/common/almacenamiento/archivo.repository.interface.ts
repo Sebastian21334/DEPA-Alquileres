@@ -1,5 +1,5 @@
 export const ARCHIVO_REPOSITORY = 'ARCHIVO_REPOSITORY';
-export type ContenedorArchivos = 'imagenes' | 'verificaciones';
+export type ContenedorArchivos = 'imagenes' | 'verificaciones' | 'reclamos';
 
 export interface IArchivoRepository {
   subir(
@@ -10,5 +10,6 @@ export interface IArchivoRepository {
   ): Promise<string>;
   eliminarImagenPropia(url: string): Promise<void>;
   firmarDocumento(url: string): Promise<string>;
+  firmarArchivo(contenedor: ContenedorArchivos, url: string): Promise<string>;
   eliminarDocumentoPropio(url: string): Promise<void>;
 }

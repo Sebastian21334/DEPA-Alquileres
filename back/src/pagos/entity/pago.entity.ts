@@ -50,6 +50,16 @@ export class Pago {
   @Column({ type: 'timestamp', nullable: true })
   approved_at: Date | null;
 
+  // Agregado de los reembolsos aprobados. La fuente de verdad es la tabla reembolso.
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  amount_refunded: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  refunded_at: Date | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  chargeback_id: string | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   created_at: Date;
 
@@ -87,5 +97,18 @@ export class Pago {
     this.status_detail = resultado.statusDetail;
     this.payment_method_id = resultado.paymentMethodId;
     this.approved_at = resultado.approvedAt;
+  }
+
+  saldoReembolsable(): number {
+    return Math.max(0, Number(this.amount) - Number(this.amount_refunded ?? 0));
+  }
+
+  acumularReembolso(importe: number): void {
+    this.amount_refunded = Number(this.amount_refunded ?? 0) + importe;
+    if (this.amount_refunded >= Number(this.amount)) {
+      this.amount_refunded = Number(this.amount);
+      this.status = 'refunded';
+      this.refunded_at = new Date();
+    }
   }
 }

@@ -28,6 +28,9 @@
         <button type="button" role="tab" [attr.aria-selected]="vista() === 'recibidas'" [class.is-active]="vista() === 'recibidas'" (click)="vista.set('recibidas')">
           Reservas recibidas <span>{{ recibidas().length }}</span>
         </button>
+        <button type="button" role="tab" [attr.aria-selected]="vista() === 'reclamos'" [class.is-active]="vista() === 'reclamos'" (click)="vista.set('reclamos')">
+          Reclamos <span>{{ reclamos().length }}</span>
+        </button>
       </div>
 
       @if (vista() === 'realizadas') {
@@ -78,11 +81,14 @@
                   <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="ocupada() !== null" (click)="abrirReprogramacion(reserva)">Cambiar fechas</button>
                 }
                 @if (!reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE') { <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="cancelar(reserva)">Cancelar reserva</button> }
+                @if (puedeSolicitarCancelacion(reserva)) {
+                  <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="solicitarCancelacion(reserva)">Solicitar cancelación</button>
+                }
                 @if (puedeConsultarCodigo(reserva)) {
                   <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
                 }
-                @if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION') {
-                  <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="reportarProblema(reserva)">Reportar un problema</button>
+                @if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION') {
+                  <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="abrirReclamo(reserva)">Reportar un problema</button>
                 }
               </div>
               @if (editando()?.id === reserva.id) {
@@ -111,12 +117,65 @@
                   </div>
                 </form>
               }
+              @if (reclamoAbierto()?.id === reserva.id) {
+                <form class="reschedule-form" (ngSubmit)="enviarReclamo()" [attr.aria-busy]="reclamoEnviando()">
+                  <h4>Reportar un problema en la reserva #{{ reserva.id }}</h4>
+                  <p class="muted">La liquidación quedará en revisión. Podés adjuntar hasta cinco imágenes JPEG o PNG de hasta 5 MB.</p>
+                  <label for="categoria-reclamo-{{ reserva.id }}">Categoría
+                    <select
+                      id="categoria-reclamo-{{ reserva.id }}"
+                      name="categoriaReclamo"
+                      [ngModel]="reclamoCategoria()"
+                      (ngModelChange)="reclamoCategoria.set($event)"
+                      [disabled]="reclamoEnviando()"
+                    >
+                      <option value="LIMPIEZA">Limpieza</option>
+                      <option value="MANTENIMIENTO">Mantenimiento</option>
+                      <option value="INGRESO">Ingreso</option>
+                      <option value="DESCRIPCION">La propiedad no coincide</option>
+                      <option value="OTRO">Otro</option>
+                    </select>
+                  </label>
+                  <label for="descripcion-reclamo-{{ reserva.id }}">Descripción
+                    <textarea
+                      id="descripcion-reclamo-{{ reserva.id }}"
+                      name="descripcionReclamo"
+                      rows="4"
+                      minlength="20"
+                      maxlength="1000"
+                      required
+                      [ngModel]="reclamoDescripcion()"
+                      (ngModelChange)="reclamoDescripcion.set($event)"
+                      [disabled]="reclamoEnviando()"
+                    ></textarea>
+                  </label>
+                  <label for="evidencias-reclamo-{{ reserva.id }}">Imágenes
+                    <input
+                      id="evidencias-reclamo-{{ reserva.id }}"
+                      type="file"
+                      accept="image/jpeg,image/png"
+                      multiple
+                      (change)="seleccionarArchivos($event)"
+                      [disabled]="reclamoEnviando()"
+                    />
+                  </label>
+                  @if (reclamoArchivos().length) {
+                    <p class="muted">{{ reclamoArchivos().length }} imagen(es) seleccionada(s).</p>
+                  }
+                  <div class="reschedule-form__actions">
+                    <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="reclamoEnviando()">
+                      {{ reclamoEnviando() ? 'Enviando reclamo…' : 'Enviar reclamo' }}
+                    </button>
+                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="reclamoEnviando()" (click)="cerrarReclamo()">Cerrar</button>
+                  </div>
+                </form>
+              }
             </article>
           } @empty {
             <div class="acct-card empty">Todavía no realizaste reservas.</div>
           }
         </section>
-      } @else {
+      } @else if (vista() === 'recibidas') {
         <section class="reservation-section" role="tabpanel">
           <div class="section-heading">
             <h2>Reservas recibidas</h2>
@@ -158,10 +217,52 @@
               <div class="reservation__actions">
                 <a class="acct-btn acct-btn--primary acct-btn--sm" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">Ver detalle y contactar</a>
                 @if (reserva.publicacion) { <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', reserva.publicacion.id]">Ver publicación</a> }
+                @if (puedeSolicitarCancelacion(reserva)) {
+                  <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="solicitarCancelacion(reserva)">Solicitar cancelación</button>
+                }
               </div>
             </article>
           } @empty {
             <div class="acct-card empty">No recibiste reservas todavía.</div>
+          }
+        </section>
+      } @else {
+        <section class="reservation-section" role="tabpanel">
+          <div class="section-heading">
+            <h2>Reclamos</h2>
+            <p>Seguimiento de los reclamos en los que participás como Inquilino o Anunciante.</p>
+          </div>
+          @for (reclamo of reclamos(); track reclamo.id) {
+            <article class="acct-card reservation">
+              <div class="reservation__body">
+                <span class="acct-badge" [class.acct-badge--error]="reclamo.estado === 'ABIERTO'" [class.acct-badge--ok]="reclamo.estado === 'RESUELTO_INQUILINO' || reclamo.estado === 'RESUELTO_ANUNCIANTE'">{{ reclamo.estado }}</span>
+                <h3>Reclamo #{{ reclamo.id }} · Reserva #{{ reclamo.reserva?.id ?? '—' }}</h3>
+                <p><strong>{{ reclamo.categoria }}</strong> · {{ reclamo.descripcion }}</p>
+                <p class="muted">{{ reclamo.evidencias?.length ?? 0 }} imagen(es) · {{ reclamo.mensajes?.length ?? 0 }} mensaje(s)</p>
+                @if (reclamo.resolucion) {
+                  <p class="settlement-state">Resolución: {{ reclamo.resolucion }}
+                    @if (reclamo.importe_reembolso) { · {{ reclamo.importe_reembolso | currency: 'ARS' }} }
+                  </p>
+                }
+                @if (reclamo.mensajes?.length) {
+                  <details>
+                    <summary>Ver mensajes</summary>
+                    <ul>
+                      @for (mensaje of reclamo.mensajes; track mensaje.id) {
+                        <li><strong>{{ mensaje.autor?.nombre ?? 'Usuario' }}:</strong> {{ mensaje.texto }}</li>
+                      }
+                    </ul>
+                  </details>
+                }
+              </div>
+              <div class="reservation__actions">
+                @if (reclamo.estado !== 'CERRADO') {
+                  <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="responderReclamo(reclamo)">Responder</button>
+                }
+              </div>
+            </article>
+          } @empty {
+            <div class="acct-card empty">No tenés reclamos registrados.</div>
           }
         </section>
       }

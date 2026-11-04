@@ -29,14 +29,27 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import {
+  ActorCancelacion,
   EstadoPagoReserva,
   Reserva,
   EstadoLiquidacionReserva,
 } from '../entity/reserva.entity';
+import {
+  EstadoSolicitudCancelacion,
+  SolicitudCancelacion,
+} from '../entity/solicitud-cancelacion.entity';
 import { CrearReservaDto } from '../dto/crear-reserva.dto';
+import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
+import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
+import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
+import {
+  OrigenReembolso,
+  Reembolso,
+  TipoReembolso,
+} from '../../reembolsos/entity/reembolso.entity';
 
 export type CondicionesCobro = {
   precio_unitario_origen: string;
@@ -66,6 +79,7 @@ export class ReservasService
     private readonly usuariosService: UsuariosService,
     private readonly publicacionesService: PublicacionesService,
     private readonly notificacionesService: ReservaNotificacionesService,
+    private readonly reembolsosService: ReembolsosService,
   ) {}
 
   /**
@@ -502,11 +516,16 @@ export class ReservasService
         if (reserva.cancelada) return reserva;
         if (reserva.pagoAprobado()) {
           throw new BadRequestException(
-            'La reserva está pagada. Primero debe implementarse y procesarse su devolución en Mercado Pago.',
+            'La reserva está pagada. Solicitá la cancelación con devolución desde el detalle de la reserva.',
           );
         }
 
-        reserva.cancelar();
+        reserva.cancelar(
+          reserva.esDelInquilino(idUsuarioQueOpera)
+            ? 'INQUILINO'
+            : 'ANUNCIANTE',
+          'Cancelación de reserva pendiente de pago',
+        );
         const guardada = await reservaRepository.guardar(reserva);
         await this.disponibilidadService.liberarReserva(
           reserva.id,
@@ -515,6 +534,280 @@ export class ReservasService
         return guardada;
       },
     );
+  }
+
+  /**
+   * Crea el pedido de cancelación de una reserva pagada. La reserva no se
+   * cancela hasta que el Administrador resuelva y, si corresponde, se registre
+   * el reembolso.
+   */
+  async solicitarCancelacion(
+    id: number,
+    dto: SolicitarCancelacionDto,
+    idUsuario: number,
+  ): Promise<SolicitudCancelacion> {
+    const reserva = await this.reservaRepository.buscarPorId(id);
+    if (!reserva)
+      throw new NotFoundException(`No se encontró la reserva ${id}`);
+    this.verificarParticipanteOPropietario(reserva, idUsuario);
+    if (!reserva.pagoAprobado())
+      throw new BadRequestException(
+        'La reserva no está pagada. Usá la cancelación inmediata de la reserva pendiente.',
+      );
+    if (reserva.cancelada)
+      throw new ConflictException('La reserva ya está cancelada');
+    if (reserva.finalizada)
+      throw new BadRequestException(
+        'La reserva ya finalizó. Solo podés abrir un reclamo.',
+      );
+    const hoy = fechaArgentina();
+    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
+      throw new BadRequestException(
+        'La estadía ya comenzó. Para una devolución después del inicio, abrí un reclamo.',
+      );
+    if (reserva.codigoValidado())
+      throw new BadRequestException(
+        'No se puede cancelar una reserva con ingreso ya validado',
+      );
+
+    const activa =
+      await this.reservaRepository.buscarSolicitudCancelacionActiva(id);
+    if (activa) return activa;
+
+    const solicitud = this.reservaRepository.crearSolicitudCancelacion({
+      reserva,
+      solicitante: Object.assign({}, { id: idUsuario }) as never,
+      motivo: dto.motivo.trim(),
+      estado: EstadoSolicitudCancelacion.PENDIENTE,
+      decidida_por: null,
+      decidida_en: null,
+      observacion: null,
+    });
+    return this.reservaRepository.guardarSolicitudCancelacion(solicitud);
+  }
+
+  async consultarSolicitudCancelacion(
+    id: number,
+    idUsuario: number,
+  ): Promise<SolicitudCancelacion | null> {
+    const reserva = await this.reservaRepository.buscarPorId(id);
+    if (!reserva)
+      throw new NotFoundException(`No se encontró la reserva ${id}`);
+    this.verificarParticipanteOPropietario(reserva, idUsuario);
+    return this.reservaRepository.buscarSolicitudCancelacionActiva(id);
+  }
+
+  async listarSolicitudesCancelacion(): Promise<SolicitudCancelacion[]> {
+    return this.reservaRepository.listarSolicitudesCancelacionAdministracion();
+  }
+
+  /**
+   * Resuelve el pedido. Si se aprueba, calcula la devolución con la política
+   * vigente y crea el reembolso. Las fechas se liberan recién cuando el
+   * reembolso queda aprobado (o de inmediato si el porcentaje es 0).
+   */
+  async resolverSolicitudCancelacion(
+    idReserva: number,
+    idSolicitud: number,
+    dto: ResolverSolicitudCancelacionDto,
+    idAdmin: number,
+  ): Promise<{
+    solicitud: SolicitudCancelacion;
+    reembolso: Reembolso | null;
+  }> {
+    const solicitud =
+      await this.reservaRepository.buscarSolicitudCancelacion(
+        idSolicitud,
+        idReserva,
+      );
+    if (!solicitud)
+      throw new NotFoundException('No se encontró la solicitud de cancelación');
+    if (solicitud.estado !== EstadoSolicitudCancelacion.PENDIENTE)
+      throw new ConflictException('La solicitud ya fue resuelta');
+
+    const reserva = solicitud.reserva;
+    const hoy = fechaArgentina();
+    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy) {
+      solicitud.estado = EstadoSolicitudCancelacion.VENCIDA;
+      solicitud.decidida_por = { id: idAdmin } as never;
+      solicitud.decidida_en = new Date();
+      solicitud.observacion =
+        'La estadía comenzó antes de resolver la solicitud';
+      await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
+      throw new ConflictException(
+        'La estadía ya comenzó; la solicitud quedó vencida',
+      );
+    }
+
+    solicitud.decidida_por = { id: idAdmin } as never;
+    solicitud.decidida_en = new Date();
+    solicitud.observacion = dto.observacion?.trim() || null;
+
+    if (dto.decision === 'RECHAZADA') {
+      solicitud.estado = EstadoSolicitudCancelacion.RECHAZADA;
+      return {
+        solicitud:
+          await this.reservaRepository.guardarSolicitudCancelacion(solicitud),
+        reembolso: null,
+      };
+    }
+
+    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+    const porcentaje = this.porcentajeCancelacion(reserva, actor, hoy);
+    const importe = this.redondear(
+      (Number(reserva.monto_pago) * porcentaje) / 100,
+    );
+
+    if (importe > 0) {
+      // Se crea primero el reembolso para no aprobar una solicitud sin
+      // registro económico si falla la creación.
+      const pago = await this.reembolsosService.buscarPagoPorReserva(idReserva);
+      if (!pago)
+        throw new ConflictException('La reserva no tiene un pago registrado');
+      const reembolso = await this.reembolsosService.crearSolicitud({
+        reserva,
+        pago,
+        tipo:
+          porcentaje >= 100 ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL,
+        origen: OrigenReembolso.CANCELACION,
+        importe,
+        motivo: `Cancelación de reserva: ${solicitud.motivo}`,
+        idSolicitadoPor: idAdmin,
+      });
+      solicitud.estado = EstadoSolicitudCancelacion.APROBADA;
+      const solicitudGuardada =
+        await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
+      return { solicitud: solicitudGuardada, reembolso };
+    }
+
+    // Sin devolución: la reserva se cancela y las fechas se liberan.
+    solicitud.estado = EstadoSolicitudCancelacion.APROBADA;
+    const solicitudGuardada =
+      await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
+    await this.transaccion.ejecutar(
+      async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
+        const actual = await reservaRepository.buscarPorId(idReserva);
+        if (!actual) return;
+        actual.cancelar(actor, solicitud.motivo);
+        actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+        actual.observacion_liquidacion =
+          'Cancelación con retención total; liquidación pendiente de revisión';
+        await reservaRepository.guardar(actual);
+        await this.disponibilidadService.liberarReserva(
+          idReserva,
+          fechaRepository,
+        );
+      },
+    );
+    return { solicitud: solicitudGuardada, reembolso: null };
+  }
+
+  /** Registra manualmente la devolución y aplica el resultado a la reserva. */
+  async registrarReembolsoManual(
+    idReembolso: number,
+    referencia: string | undefined,
+    idAdmin: number,
+  ): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
+    await this.reembolsosService.registrarOejecutar(
+      idReembolso,
+      referencia,
+      idAdmin,
+    );
+    return this.aplicarReembolsoConfirmado(idReembolso);
+  }
+
+  /** Aplica a la reserva un reembolso ya aprobado por el módulo de reembolsos. */
+  async aplicarReembolsoConfirmado(
+    idReembolso: number,
+  ): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
+    const reembolso = await this.reembolsosService.buscar(idReembolso);
+    const reserva = await this.reservaRepository.buscarPorId(
+      reembolso.reserva.id,
+    );
+    if (!reserva)
+      throw new NotFoundException('No se encontró la reserva del reembolso');
+
+    const hoy = fechaArgentina();
+    const puedeLiberarFechas =
+      !!reserva.fecha_inicio &&
+      reserva.fecha_inicio > hoy &&
+      !reserva.codigoValidado();
+
+    const cancelaReserva =
+      reembolso.origen === OrigenReembolso.CANCELACION ||
+      ((reembolso.origen === OrigenReembolso.CONTRACARGO ||
+        reembolso.origen === OrigenReembolso.AJUSTE_ADMIN) &&
+        reembolso.esTotal &&
+        puedeLiberarFechas);
+
+    if (reembolso.esTotal) {
+      reserva.aplicarReembolsoTotal();
+      if (cancelaReserva) {
+        reserva.cancelar('ADMINISTRADOR', reembolso.motivo);
+      }
+    } else {
+      if (reembolso.origen === OrigenReembolso.CONTRACARGO)
+        reserva.restaurarPagoAprobado();
+      reserva.aplicarReembolsoParcial();
+      if (cancelaReserva) {
+        reserva.cancelar('ADMINISTRADOR', reembolso.motivo);
+      }
+    }
+
+    const guardada = await this.reservaRepository.guardar(reserva);
+    if (cancelaReserva && puedeLiberarFechas) {
+      await this.transaccion.ejecutar(
+        async ({ fechas: fechaRepository }) => {
+          await this.disponibilidadService.liberarReserva(
+            reserva.id,
+            fechaRepository,
+          );
+        },
+      );
+    }
+    return { reembolso, reserva: guardada };
+  }
+
+  async listarReembolsosReserva(
+    idReserva: number,
+    idUsuario: number,
+  ): Promise<Reembolso[]> {
+    const reserva = await this.reservaRepository.buscarPorId(idReserva);
+    if (!reserva)
+      throw new NotFoundException(`No se encontró la reserva ${idReserva}`);
+    this.verificarParticipanteOPropietario(reserva, idUsuario);
+    return this.reembolsosService.listarPorReserva(idReserva);
+  }
+
+  /** Política: el Anunciante/Administrador solo devuelve antes del inicio. */
+  private actorDeCancelacion(
+    reserva: Reserva,
+    idSolicitante?: number,
+  ): ActorCancelacion {
+    if (idSolicitante && reserva.esDelInquilino(idSolicitante))
+      return 'INQUILINO';
+    if (idSolicitante && reserva.esDelAnunciante(idSolicitante))
+      return 'ANUNCIANTE';
+    return 'ADMINISTRADOR';
+  }
+
+  private porcentajeCancelacion(
+    reserva: Reserva,
+    actor: ActorCancelacion,
+    hoy: string,
+  ): number {
+    if (actor !== 'INQUILINO') return 100;
+    if (!reserva.fecha_inicio) return 0;
+    const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
+    const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
+    const dias = Math.ceil((inicio - ahora) / 86_400_000);
+    if (dias >= 7) return 100;
+    if (dias >= 2) return 50;
+    return 0;
+  }
+
+  private redondear(valor: number): number {
+    return Math.round((valor + Number.EPSILON) * 100) / 100;
   }
 
   private verificarParticipanteOPropietario(

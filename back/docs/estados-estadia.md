@@ -22,6 +22,10 @@ Con pago aprobado y sin cancelación ni cierre manual:
 | Después del fin, con código validado | FINALIZADA |
 | Después del fin, sin código validado | INGRESO_NO_VERIFICADO |
 | Fechas ausentes, inválidas o invertidas | FECHAS_A_REVISAR |
+| Pago con contracargo abierto | EN_DISPUTA |
+
+`EN_DISPUTA` solo se usa para contracargos. Un reclamo interno mantiene el
+estado de la estadía y pasa la liquidación a `EN_REVISION`.
 
 Se incluyen los dos extremos del período. La fecha de negocio se calcula en
 America/Argentina/Buenos_Aires, independientemente de la zona del servidor o del

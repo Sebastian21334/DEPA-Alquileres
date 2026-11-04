@@ -1,9 +1,21 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { EstadoLiquidacionReserva } from '../entity/reserva.entity';
 
 export class ResolverLiquidacionDto {
   @IsEnum(EstadoLiquidacionReserva)
   estado: EstadoLiquidacionReserva;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  importe?: number;
 
   @IsOptional()
   @IsString()
