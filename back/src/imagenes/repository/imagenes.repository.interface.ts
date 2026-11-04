@@ -5,6 +5,7 @@ export interface IImagenesRepository {
   guardar(imagen: Imagen): Promise<Imagen>;
   buscarPorId(id: number): Promise<Imagen | null>;
   buscarPorPublicacion(idPublicacion: number): Promise<Imagen[]>;
+  ordenar(idPublicacion: number, ids: number[]): Promise<Imagen[]>;
   eliminar(imagen: Imagen): Promise<Imagen>;
 }
 

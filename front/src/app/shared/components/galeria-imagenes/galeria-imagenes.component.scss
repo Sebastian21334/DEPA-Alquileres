@@ -1,0 +1,20 @@
+:host { display: block; min-width: 0; }
+.help { margin: 0 0 14px; color: var(--color-text-muted, #667085); font-size: .85rem; }
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
+.photo { margin: 0; overflow: hidden; border: 1px solid #dfe5ed; border-radius: 10px; background: white; }
+.photo[draggable='true'] { cursor: grab; }
+.photo--cover { border-color: var(--color-primary, #e14414); }
+.photo--dragging { opacity: .5; }
+.preview { position: relative; }
+img { display: block; width: 100%; height: 140px; object-fit: cover; }
+.badge { position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 5px; background: #102a3ae8; color: white; font-size: .75rem; font-weight: 700; }
+.photo--cover .badge { background: var(--color-primary, #e14414); }
+figcaption { display: grid; gap: 8px; padding: 10px; }
+button { min-height: 36px; border: 1px solid #d0d5dd; border-radius: 6px; background: white; color: #344054; font: inherit; font-size: .8rem; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--color-secondary, #12529b); outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.cover { font-weight: 700; }
+.actions { display: flex; gap: 6px; }
+.actions button { flex: 1; }
+.actions .remove { flex: 2; color: #b42318; }
+@media (max-width: 420px) { .photos { grid-template-columns: 1fr; } img { height: 190px; } }

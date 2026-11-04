@@ -6,6 +6,8 @@ import { AuthService } from '../../core/services/auth.service';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
+import { moverImagen } from '../../shared/utils/orden-imagenes';
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_IMAGEN = 10 * 1024 * 1024;
@@ -15,7 +17,7 @@ const MAX_IMAGEN = 10 * 1024 * 1024;
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, SpinnerComponent, GaleriaImagenesComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
@@ -98,6 +100,20 @@ export class MisPublicacionesComponent {
     this.gestion.eliminarImagen(idImagen).subscribe({
       next: () => {
         this.actualizar(pub.id, (p) => ({ ...p, imagenes: (p.imagenes ?? []).filter((i) => i.id !== idImagen) }));
+        this.ocupada.set(null);
+      },
+      error: (err: Error) => this.fallo(pub.id, err),
+    });
+  }
+
+  protected ordenarImagenes(pub: Publicacion, cambio: { desde: number; hasta: number }): void {
+    if (this.ocupada() === pub.id) return;
+    const imagenes = moverImagen(pub.imagenes ?? [], cambio.desde, cambio.hasta);
+    this.ocupada.set(pub.id);
+    this.errorFila.set(null);
+    this.gestion.ordenarImagenes(pub.id, imagenes.map((imagen) => imagen.id)).subscribe({
+      next: (ordenadas) => {
+        this.actualizar(pub.id, (p) => ({ ...p, imagenes: ordenadas }));
         this.ocupada.set(null);
       },
       error: (err: Error) => this.fallo(pub.id, err),

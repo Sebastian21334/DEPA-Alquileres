@@ -4,7 +4,9 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { concatMap, from, of, toArray, catchError } from 'rxjs';
-import { LucideImagePlus, LucideX } from '@lucide/angular';
+import { LucideImagePlus } from '@lucide/angular';
+import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
+import { moverImagen } from '../../shared/utils/orden-imagenes';
 import { ApiError } from '../../core/interceptors/api-error';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { AvailabilityService } from '../../shared/services/availability.service';
@@ -23,7 +25,7 @@ const MAX_IMAGENES = 15;
 
 interface ImagenSeleccionada {
   archivo: File;
-  preview: string;
+  url: string;
 }
 
 // Alta de publicación para anunciantes verificados: POST /publicaciones con los
@@ -40,7 +42,7 @@ interface ImagenSeleccionada {
     LocationPickerComponent,
     SelectorUbicacionComponent,
     LucideImagePlus,
-    LucideX,
+    GaleriaImagenesComponent,
   ],
   providers: [PublicacionFormulario],
   templateUrl: './crear-publicacion.component.html',
@@ -75,7 +77,7 @@ export class CrearPublicacionComponent {
     });
 
     inject(DestroyRef).onDestroy(() =>
-      this.imagenes().forEach((img) => URL.revokeObjectURL(img.preview)),
+      this.imagenes().forEach((img) => URL.revokeObjectURL(img.url)),
     );
   }
 
@@ -100,6 +102,7 @@ export class CrearPublicacionComponent {
   }
 
   private agregarImagenes(files: FileList | null): void {
+    if (this.enviando()) return;
     const nuevas: ImagenSeleccionada[] = [];
     let descartadas = 0;
 
@@ -108,11 +111,11 @@ export class CrearPublicacionComponent {
         descartadas++;
         continue;
       }
-      nuevas.push({ archivo, preview: URL.createObjectURL(archivo) });
+      nuevas.push({ archivo, url: URL.createObjectURL(archivo) });
     }
 
     const total = [...this.imagenes(), ...nuevas];
-    total.slice(MAX_IMAGENES).forEach((img) => URL.revokeObjectURL(img.preview));
+    total.slice(MAX_IMAGENES).forEach((img) => URL.revokeObjectURL(img.url));
     this.imagenes.set(total.slice(0, MAX_IMAGENES));
     if (this.imagenes().length) {
       this.faltanFotos.set(false);
@@ -130,9 +133,15 @@ export class CrearPublicacionComponent {
   }
 
   protected quitarImagen(index: number): void {
+    if (this.enviando()) return;
     const img = this.imagenes()[index];
-    URL.revokeObjectURL(img.preview);
+    URL.revokeObjectURL(img.url);
     this.imagenes.update((lista) => lista.filter((_, i) => i !== index));
+  }
+
+  protected ordenarImagenes(cambio: { desde: number; hasta: number }): void {
+    if (this.enviando()) return;
+    this.imagenes.update((lista) => moverImagen(lista, cambio.desde, cambio.hasta));
   }
 
   protected seleccionarDisponibilidad(range: RentalDateRange): void {

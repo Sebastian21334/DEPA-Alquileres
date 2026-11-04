@@ -34,6 +34,11 @@ export class GestionPublicacionesService {
     return this.http.post<Imagen>(`${this.api}/imagenes/publicacion/${idPublicacion}`, body);
   }
 
+  /** La primera imagen del orden completo será la portada. */
+  ordenarImagenes(idPublicacion: number, ids: number[]): Observable<Imagen[]> {
+    return this.http.patch<Imagen[]>(`${this.api}/imagenes/publicacion/${idPublicacion}/orden`, { ids });
+  }
+
   /** DELETE /imagenes/:id */
   eliminarImagen(id: number) {
     return this.http.delete(`${this.api}/imagenes/${id}`);

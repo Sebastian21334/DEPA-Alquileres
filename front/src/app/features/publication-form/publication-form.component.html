@@ -123,10 +123,27 @@
         </div>
       </section>
 
+      <section class="form-card form-card--calendar">
+        <div class="card-heading">
+          <span>3</span>
+          <div><h2>Fotos de la propiedad</h2><p>La primera foto es la portada. Los cambios en las fotos se guardan automáticamente.</p></div>
+        </div>
+        <label class="image-upload">
+          Agregar fotos
+          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            [disabled]="saving() || imagesBusy() || form.disabled" (change)="uploadImages($event)" />
+        </label>
+        @if (imagesBusy()) { <p role="status">Procesando fotos…</p> }
+        <app-galeria-imagenes [fotos]="images()" [minimo]="1"
+          [disabled]="saving() || imagesBusy() || form.disabled"
+          (reordenar)="reorderImages($event)" (quitar)="removeImage($event)" />
+        @if (imageError()) { <p class="form-error" role="alert">{{ imageError() }}</p> }
+      </section>
+
       @if (formulario.esTemporaria()) {
         <section class="form-card form-card--calendar">
           <div class="card-heading">
-            <span>3</span>
+            <span>4</span>
             <div>
               <h2>Calendario de disponibilidad</h2>
               <p>
@@ -159,7 +176,7 @@
       }
       <footer class="form-actions">
         <a routerLink="/">Cancelar</a
-        ><button type="submit" [disabled]="saving() || form.disabled">
+        ><button type="submit" [disabled]="saving() || imagesBusy() || form.disabled">
           {{ saving() ? 'Guardando…' : 'Guardar cambios' }}
         </button>
       </footer>

@@ -1,0 +1,31 @@
+<p class="help">Elegí una portada y ordená las fotos arrastrándolas o usando las flechas.</p>
+<div class="photos" role="list" aria-label="Fotos de la publicación, en orden">
+  @for (foto of fotos(); track foto.url; let i = $index) {
+    <figure class="photo" role="listitem" [class.photo--cover]="i === 0"
+      [class.photo--dragging]="arrastrada() === i" [draggable]="!disabled()"
+      (dragstart)="iniciar($event, i)" (dragover)="permitir($event)"
+      (drop)="soltar($event, i)" (dragend)="arrastrada.set(null)">
+      <div class="preview">
+        <img [src]="foto.url" [alt]="'Foto ' + (i + 1) + (i === 0 ? ', portada' : '')" draggable="false" />
+        <span class="badge">{{ i === 0 ? 'Portada' : 'Foto ' + (i + 1) }}</span>
+      </div>
+      <figcaption>
+        <button type="button" class="cover" [disabled]="disabled() || i === 0"
+          [attr.aria-label]="'Elegir foto ' + (i + 1) + ' como portada'"
+          (click)="reordenar.emit({ desde: i, hasta: 0 })">{{ i === 0 ? 'Portada elegida' : 'Elegir portada' }}</button>
+        <div class="actions">
+          <button type="button" [disabled]="disabled() || i === 0"
+            [attr.aria-label]="'Mover foto ' + (i + 1) + ' antes'"
+            (click)="reordenar.emit({ desde: i, hasta: i - 1 })">←</button>
+          <button type="button" [disabled]="disabled() || i === fotos().length - 1"
+            [attr.aria-label]="'Mover foto ' + (i + 1) + ' después'"
+            (click)="reordenar.emit({ desde: i, hasta: i + 1 })">→</button>
+          <button type="button" class="remove" [disabled]="disabled() || fotos().length <= minimo()"
+            [attr.aria-label]="'Quitar foto ' + (i + 1)" (click)="quitar.emit(i)">Quitar</button>
+        </div>
+      </figcaption>
+    </figure>
+  } @empty {
+    <p class="help">Todavía no hay fotos cargadas.</p>
+  }
+</div>
