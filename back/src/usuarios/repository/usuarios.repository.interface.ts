@@ -13,4 +13,7 @@ export interface IUsuariosRepository {
   buscarParaLogin(email: string): Promise<Usuario | null>;
   buscarPorTokenVerificacion(token: string): Promise<Usuario | null>;
   buscarPorTokenRecuperacion(token: string): Promise<Usuario | null>;
+  buscarCredencialesPorId(id: number): Promise<Usuario | null>;
+  cambiarContrasenia(id: number, hashActual: string, nuevoHash: string): Promise<boolean>;
+  restablecerContrasenia(token: string, nuevoHash: string): Promise<boolean>;
 }

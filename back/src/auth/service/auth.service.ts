@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
+import { CambiarContraseniaDto } from '../dto/cambiar-contrasenia.dto';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 
@@ -153,10 +154,28 @@ export class AuthService {
   }
 
   async restablecerContrasenia(token: string, nuevaContrasenia: string) {
-    await this.credencialesService.restablecerContrasenia(
+    const usuario = await this.credencialesService.restablecerContrasenia(
       token,
       nuevaContrasenia,
     );
+    await this.notificarCambioContrasenia(usuario.email);
     return { mensaje: 'Contraseña restablecida correctamente' };
+  }
+
+  async cambiarContrasenia(idUsuario: number, dto: CambiarContraseniaDto) {
+    const usuario = await this.credencialesService.cambiarContrasenia(
+      idUsuario, dto.contraseniaActual, dto.nuevaContrasenia,
+    );
+    await this.notificarCambioContrasenia(usuario.email);
+    return { mensaje: 'Contraseña actualizada correctamente' };
+  }
+
+  private async notificarCambioContrasenia(email: string): Promise<void> {
+    try {
+      await this.mailService.enviarCambioContrasenia(email);
+    } catch {
+      // La contraseña ya se guardó. No revertirla ni registrar datos sensibles del envío.
+      this.logger.error('No se pudo enviar la notificación de cambio de contraseña');
+    }
   }
 }

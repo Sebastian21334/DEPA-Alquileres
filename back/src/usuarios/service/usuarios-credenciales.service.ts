@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -26,6 +27,9 @@ export class UsuariosCredencialesService {
     const rounds = Number(
       this.configService.get<string>('BCRYPT_COST') ?? '12',
     );
+    if (!Number.isInteger(rounds) || rounds < 12 || rounds > 31) {
+      throw new Error('BCRYPT_COST debe ser un entero entre 12 y 31');
+    }
     return bcrypt.hash(contrasenia, rounds);
   }
 
@@ -68,10 +72,11 @@ export class UsuariosCredencialesService {
     email: string,
   ): Promise<{ token: string; usuario: Usuario } | null> {
     const usuario = await this.usuariosRepo.buscarPorEmail(email);
-    if (!usuario || !usuario.activa) return null;
+
+    if (!usuario || !usuario.activa || usuario.bloqueado) return null;
 
     const token = crypto.randomBytes(32).toString('hex');
-    usuario.iniciarRecuperacion(token, new Date(Date.now() + 60 * 60 * 1000)); // 1 hora
+    usuario.iniciarRecuperacion(token, new Date(Date.now() + 2 * 60 * 60 * 1000)); // RN-30: 2 horas
     await this.usuariosRepo.guardar(usuario);
 
     return { token, usuario };
@@ -81,14 +86,44 @@ export class UsuariosCredencialesService {
   async restablecerContrasenia(
     token: string,
     nuevaContrasenia: string,
-  ): Promise<void> {
+  ): Promise<{ email: string }> {
     const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
 
-    if (!usuario?.recuperacionVigente()) {
+    if (!usuario?.recuperacionVigente() || usuario.bloqueado) {
       throw new BadRequestException('Token inválido o expirado');
     }
 
-    usuario.cambiarContrasenia(await this.hashearContrasenia(nuevaContrasenia));
-    await this.usuariosRepo.guardar(usuario);
+    const actualizado = await this.usuariosRepo.restablecerContrasenia(
+      token,
+      await this.hashearContrasenia(nuevaContrasenia),
+    );
+    if (!actualizado) throw new BadRequestException('Token inválido o expirado');
+    return { email: usuario.email };
+  }
+
+  async cambiarContrasenia(
+    id: number,
+    contraseniaActual: string,
+    nuevaContrasenia: string,
+  ): Promise<{ email: string }> {
+    const usuario = await this.usuariosRepo.buscarCredencialesPorId(id);
+    if (!usuario || usuario.bloqueado) {
+      throw new ForbiddenException('No podés cambiar la contraseña de esta cuenta');
+    }
+    if (!(await bcrypt.compare(contraseniaActual, usuario.contrasenia))) {
+      throw new BadRequestException('La contraseña actual es incorrecta');
+    }
+    if (await bcrypt.compare(nuevaContrasenia, usuario.contrasenia)) {
+      throw new BadRequestException('La nueva contraseña debe ser distinta de la actual');
+    }
+    const actualizado = await this.usuariosRepo.cambiarContrasenia(
+      id,
+      usuario.contrasenia,
+      await this.hashearContrasenia(nuevaContrasenia),
+    );
+    if (!actualizado) {
+      throw new ConflictException('La cuenta cambió mientras guardabas. Volvé a intentarlo.');
+    }
+    return { email: usuario.email };
   }
 }

@@ -58,12 +58,26 @@ vence a los quince minutos y se firma con una clave derivada independiente de
 los tokens de autenticación. Queda ligado al usuario, publicación, fechas,
 tarifa, monedas, importes y registro de cotización.
 
-`POST /pagos/checkout` recibe `presupuesto_token`. El servidor valida firma y
-vencimiento y vuelve a comprobar precio, moneda y disponibilidad bajo el bloqueo
-del calendario. La reserva guarda precio unitario original, moneda e importe
-originales, importe y moneda del cobro, referencia a la cotización, emisión,
-vencimiento y fecha de aceptación. La preferencia vence con el presupuesto.
-Para clientes anteriores se admite checkout sin token únicamente en ARS.
+`POST /pagos/checkout` requiere `presupuesto_token` tanto para ARS como para USD.
+El servidor valida firma y vencimiento y vuelve a comprobar precio, moneda y
+disponibilidad bajo el bloqueo del calendario. La reserva guarda precio unitario
+original, moneda e importe originales, importe y moneda del cobro, referencia a
+la cotización, emisión, vencimiento y fecha de aceptación. La preferencia vence
+con el presupuesto.
+Las solicitudes sin presupuesto se rechazan antes de crear una reserva o un pago.
+
+### Conservación de condiciones económicas (RN-35)
+
+La consulta inicial de una publicación no fija su precio. Si la tarifa o moneda
+cambian antes de iniciar el pago, se rechaza el presupuesto anterior y se exige
+generar y aceptar otro, tanto para aumentos como para disminuciones. Un presupuesto
+vencido también requiere una nueva aceptación. Su vigencia se cuenta desde la
+emisión y no se reinicia al crear el checkout.
+
+Al iniciar el pago se conservan las condiciones aceptadas en la reserva pendiente.
+Los cambios posteriores de la publicación o del dólar no recalculan esa operación
+durante su vigencia ni las reservas confirmadas. Una variación del dólar por sí
+sola tampoco invalida la conversión de un presupuesto vigente.
 
 Una respuesta tardía del pago se valida contra su importe ARS histórico, nunca
 contra la cotización del día. Las verificaciones existentes de estado de reserva
@@ -72,6 +86,14 @@ importes y conversión; los avisos y comprobantes incluyen la referencia origina
 La liquidación se calcula sobre los pesos cobrados y sus comisiones: no promete
 entregar al anunciante una cantidad futura de USD. Las devoluciones no deben
 recalcularse al dólar actual.
+
+## Pruebas de las condiciones económicas
+
+Desde `back`, ejecutar `npm run test:condiciones-economicas`. La suite verifica
+presupuestos obligatorios en ARS y USD, aumentos y disminuciones de tarifa,
+cambios de moneda, vencimiento y conservación de las condiciones al aprobar
+el pago. Usa servicios reales con repositorios y pasarela de prueba, sin acceder
+a la base de datos ni generar cobros en Mercado Pago.
 
 ## Administración y despliegue
 

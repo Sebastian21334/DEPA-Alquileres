@@ -133,7 +133,7 @@ export class ReservationService {
   }
 
   createCheckout(
-    payload: CrearReservaPayload & { presupuesto_token?: string },
+    payload: CrearReservaPayload & { presupuesto_token: string },
   ): Observable<CheckoutCreado> {
     return this.http.post<CheckoutCreado>(`${this.paymentUrl}/checkout`, payload);
   }
