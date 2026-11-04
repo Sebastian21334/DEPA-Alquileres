@@ -6,6 +6,9 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "db:inicializar": "node scripts/inicializar-base.cjs --aplicar",
+    "db:datos-rnf8": "node scripts/datos-rnf8.cjs",
+    "db:verificar-datos-rnf8": "node scripts/verificar-datos-rnf8.cjs",
     "db:documentacion-inmobiliaria": "node scripts/documentacion-inmobiliaria.cjs --aplicar",
     "db:verificacion-identidad": "node scripts/verificacion-identidad.cjs --aplicar",
     "db:cotizaciones-cobros": "node scripts/cotizaciones-cobros.cjs --aplicar",

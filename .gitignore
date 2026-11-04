@@ -20,3 +20,6 @@ node_modules/
 .codex/
 .claude/
 /datos/georef/
+
+# Configuracion y resultados locales de las pruebas de rendimiento
+/back/performance/local/

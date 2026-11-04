@@ -1,3 +1,29 @@
+# Inicializar una base nueva desde back/.env
+
+Para una base vacía (por ejemplo, una base de pruebas en Neon), configurar
+`DATABASE_URL` en `back/.env` y ejecutar desde `back`:
+
+```sh
+npm run db:inicializar
+```
+
+El comando lee la conexión directamente de ese archivo y aplica
+`20261102-esquema-inicial.sql` en una transacción. Crea 21 tablas con sus tipos,
+secuencias, índices y relaciones, sin cargar registros. Incluye el retiro del
+catálogo obsoleto de métodos de pago. No necesita `pg_dump` ni `psql` instalados.
+
+Solo admite un esquema `public` vacío. Si ya encuentra tablas u otros objetos,
+rechaza la operación sin reemplazarlos. No ejecutar esta inicialización sobre
+una base existente; para ella corresponden las migraciones incrementales.
+
+Para consultar el estado sin cambios, ejecutar `node scripts/inicializar-base.cjs`.
+Para probar la creación completa y revertirla al finalizar, ejecutar
+`node scripts/inicializar-base.cjs --verificar`.
+
+La migración inicial es una copia de la estructura disponible al 02/11/2026.
+Después de inicializar, se deben cargar catálogos y datos ficticios para RNF8.
+Se conserva `synchronize: false` en la aplicación.
+
 # Unicidad del calendario y concurrencia de reservas
 
 Para separar la prueba de vida de la revisión manual de identidad, aplicar
