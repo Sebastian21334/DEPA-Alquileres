@@ -335,19 +335,29 @@
                 </select>
               </td>
               <td>
-                <span class="status" [class.status--blocked]="user.bloqueado">{{
-                  user.bloqueado ? 'Bloqueado' : 'Activo'
-                }}</span>
+                @if (!user.activa) {
+                  <span class="status status--deleted">Dada de baja</span>
+                  @if (user.fecha_baja) {
+                    <small>{{ user.fecha_baja | date: 'dd/MM/yyyy' }}</small>
+                  }
+                } @else if (user.bloqueado) {
+                  <span class="status status--blocked">Bloqueada</span>
+                } @else {
+                  <span class="status">Activa</span>
+                }
               </td>
               <td class="right">
-                <button
-                  type="button"
-                  class="link-button"
-                  (click)="toggleUser(user)"
-                  [disabled]="busy() === 'user-' + user.id"
-                >
-                  {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
-                </button>
+                <!-- La baja es definitiva: bloquear o habilitar no aplica. -->
+                @if (user.activa) {
+                  <button
+                    type="button"
+                    class="link-button"
+                    (click)="toggleUser(user)"
+                    [disabled]="busy() === 'user-' + user.id"
+                  >
+                    {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
+                  </button>
+                }
               </td>
             </tr>
           } @empty {
