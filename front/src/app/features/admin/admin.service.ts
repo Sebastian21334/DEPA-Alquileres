@@ -8,7 +8,12 @@ export interface AdminUser {
   id: number;
   nombre: string;
   apellido: string;
-  email: string;
+  /** null cuando la cuenta se dio de baja (RN-37). */
+  email: string | null;
+  email_historico: string | null;
+  /** Solo si la cuenta tiene perfil de Anunciante. */
+  cuit_cuil?: string | null;
+  cuit_cuil_historico?: string | null;
   telefono: string;
   bloqueado: boolean;
   /** Baja lógica: false cuando la cuenta fue dada de baja. */

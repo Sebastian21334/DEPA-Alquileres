@@ -114,7 +114,8 @@ export class MensajesService {
     });
 
     const guardado = await this.mensajeRepository.guardar(mensaje);
-    if (remitente) {
+    // El destinatario está activo (se validó arriba), así que tiene email vigente.
+    if (remitente && destinatario.email) {
       try {
         await this.mailService.enviarMensajeNuevo(
           destinatario.email,
