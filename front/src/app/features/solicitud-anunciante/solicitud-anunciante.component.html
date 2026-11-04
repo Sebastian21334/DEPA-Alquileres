@@ -69,7 +69,7 @@
               </div>
             }
             <p class="intro">
-              Por seguridad, las tres fotos se toman ahora desde la cámara. Después vas a completar una prueba breve de movimientos; la documentación se envía a revisión y un administrador compara la captura con el DNI.
+              Primero vas a fotografiar el frente y el dorso del DNI. Después te guiamos con una prueba breve de movimientos y una foto de frente. Al finalizar, podés enviar la documentación para que un administrador la revise.
             </p>
 
             @if (esInmobiliaria()) {
@@ -85,11 +85,22 @@
             @if (enviando()) {
               <div class="acct-state"><app-spinner /><p>Enviando la documentación para revisión…</p></div>
             } @else if (!esInmobiliaria() || (empresaForm.valid && matricula() && constanciaCuit())) {
-              <app-captura-identidad
-                (pruebaVidaCompletada)="enviarDocumentos($event)"
-                (fallo)="mostrarErrorCaptura($event)"
-                (reintento)="limpiarErrorCaptura()"
-              />
+              <div class="identity-start">
+                <h3>Verificá tu identidad paso a paso</h3>
+                <p>Tené el DNI a mano, buscá buena luz y ubicáte donde estés solo. Vamos a fotografiar ambas caras del DNI y guiarte con movimientos sencillos.</p>
+                <p>La cámara se abre en una ventana centrada. Vas a ver las indicaciones y el resultado en el momento.</p>
+                @if (documentosPendientes(); as pendientes) {
+                  <button type="button" class="acct-btn acct-btn--primary" (click)="enviarDocumentos(pendientes)">Reintentar envío de documentación</button>
+                }
+                <button type="button" class="acct-btn" [class.acct-btn--primary]="!documentosPendientes()" [class.acct-btn--ghost]="!!documentosPendientes()" (click)="abrirCaptura()">{{ documentosPendientes() ? 'Hacer una nueva captura' : 'Comenzar verificación' }}</button>
+              </div>
+              @if (capturaAbierta()) {
+                <app-captura-identidad
+                  (pruebaVidaCompletada)="enviarDocumentos($event)"
+                  (cerrar)="capturaAbierta.set(false)"
+                  (reintento)="limpiarErrorCaptura()"
+                />
+              }
             } @else { <p>Completá los datos y adjuntá ambas constancias para comenzar la captura.</p> }
           </section>
         }

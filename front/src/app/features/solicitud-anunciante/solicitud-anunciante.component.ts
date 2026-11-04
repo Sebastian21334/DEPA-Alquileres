@@ -36,6 +36,8 @@ export class SolicitudAnuncianteComponent {
   protected readonly enviando = signal(false);
   protected readonly error = signal('');
   protected readonly exito = signal('');
+  protected readonly capturaAbierta = signal(false);
+  protected readonly documentosPendientes = signal<IdentidadCapturada | null>(null);
 
   /** Paso actual del flujo según el estado persistido en el backend. */
   protected readonly paso = computed<'datos' | 'documentos' | 'revision' | 'aprobada'>(() => {
@@ -124,7 +126,8 @@ export class SolicitudAnuncianteComponent {
 
   protected enviarDocumentos(documentos: IdentidadCapturada): void {
     if (this.enviando()) return;
-
+    this.documentosPendientes.set(documentos);
+    this.capturaAbierta.set(false);
     this.enviando.set(true);
     this.error.set('');
     const reenvio = this.solicitud()?.estado === 'rechazada';
@@ -142,6 +145,7 @@ export class SolicitudAnuncianteComponent {
       ...(this.esInmobiliaria() ? { matricula: this.matricula()!, constancia_cuit: this.constanciaCuit()! } : {}),
     }, reenvio))).subscribe({
       next: () => {
+        this.documentosPendientes.set(null);
         this.enviando.set(false);
         this.exito.set('Prueba de vida completada y documentación enviada. Un administrador revisará tu solicitud.');
         this.recargar();
@@ -159,6 +163,12 @@ export class SolicitudAnuncianteComponent {
 
   protected limpiarErrorCaptura(): void {
     this.error.set('');
+  }
+
+  protected abrirCaptura(): void {
+    this.documentosPendientes.set(null);
+    this.error.set('');
+    this.capturaAbierta.set(true);
   }
 
   protected fecha(valor: string): string {

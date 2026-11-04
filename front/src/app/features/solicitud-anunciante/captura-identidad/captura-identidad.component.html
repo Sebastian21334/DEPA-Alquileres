@@ -1,144 +1,106 @@
-<section class="capture-flow" aria-label="Captura de identidad">
-  <div class="capture-progress">
-    <article [class.done]="frentePreview()">
-      <span>1</span><strong>DNI frente</strong>
-      @if (frentePreview(); as preview) { <img [src]="preview" alt="Frente del DNI capturado" /> }
-    </article>
-    <article [class.done]="dorsoPreview()">
-      <span>2</span><strong>DNI dorso</strong>
-      @if (dorsoPreview(); as preview) { <img [src]="preview" alt="Dorso del DNI capturado" /> }
-    </article>
-    <article [class.done]="fase() === 'complete'">
-      <span>3</span><strong>Prueba facial</strong>
-      <small>{{ fase() === 'complete' ? 'Validada' : 'Pendiente' }}</small>
-    </article>
-  </div>
-
-  <div
-    class="camera-shell"
-    [hidden]="paso() === 'complete' || fotoPendientePreview() || !cameraReady()"
-    [style.aspect-ratio]="cameraAspectRatio()"
-  >
-    <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
-    <canvas #overlay></canvas>
-  </div>
-  @if (fotoPendientePreview(); as preview) {
-    <figure class="photo-review">
-      <img [src]="preview" [alt]="paso() === 'dni_frente' ? 'Frente del DNI para revisar' : 'Dorso del DNI para revisar'" />
-      <figcaption>¿La foto se ve completa, enfocada y sin reflejos?</figcaption>
-    </figure>
-  }
-  <canvas #capture hidden></canvas>
-
-  <p class="capture-message" aria-live="polite">{{ mensaje() }}</p>
-
-  @if (paso() === 'liveness' && instrucciones().length) {
-    @if (fase() === 'actions' && instruccionActual(); as instruction) {
-      <div class="gesture-guide" [attr.data-gesture]="instruction.type">
-        <div class="gesture-guide__visual" aria-hidden="true">
-          <span class="gesture-guide__head">●</span>
-          @switch (instruction.type) {
-            @case ('TURN_LEFT') { <span class="gesture-guide__arrow">←</span> }
-            @case ('TURN_RIGHT') { <span class="gesture-guide__arrow">→</span> }
-            @case ('TILT_HEAD') { <span class="gesture-guide__arrow gesture-guide__arrow--tilt">↷</span> }
-            @case ('OPEN_MOUTH') { <span class="gesture-guide__mouth">○</span> }
+<dialog #dialog class="identity-dialog" aria-labelledby="identity-title" aria-describedby="identity-description" (cancel)="cancelar($event)">
+  <header class="dialog-header">
+    <div>
+      <p class="eyebrow">Verificación de identidad</p>
+      <h2 id="identity-title">{{ tituloPaso() }}</h2>
+      <p id="identity-description">Seguí un paso a la vez. Te vamos indicando cómo hacerlo.</p>
+    </div>
+    <button type="button" class="close-dialog" aria-label="Cerrar verificación y apagar la cámara" (click)="cancelar()" autofocus>×</button>
+  </header>
+  <ol class="capture-progress" aria-label="Pasos de la captura">
+    <li [class.done]="frentePreview()" [attr.aria-current]="paso() === 'dni_frente' ? 'step' : null"><span>{{ frentePreview() ? '✓' : '1' }}</span> DNI frente</li>
+    <li [class.done]="dorsoPreview()" [attr.aria-current]="paso() === 'dni_dorso' ? 'step' : null"><span>{{ dorsoPreview() ? '✓' : '2' }}</span> DNI dorso</li>
+    <li [class.done]="fase() === 'complete'" [attr.aria-current]="paso() === 'liveness' ? 'step' : null"><span>{{ fase() === 'complete' ? '✓' : '3' }}</span> Prueba de vida</li>
+  </ol>
+  <div class="dialog-body">
+    <div class="capture-layout" [class.capture-layout--face]="paso() === 'liveness'">
+      <div class="camera-column">
+        <div class="camera-shell" [hidden]="paso() === 'complete' || !!fotoPendientePreview() || !cameraReady()" [style.aspect-ratio]="cameraAspectRatio()" [style.--camera-ratio]="cameraAspectRatio()">
+          <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
+          <canvas #overlay></canvas>
+          @if (paso() === 'liveness') { <span class="camera-label">Tu cámara · vista espejo</span> }
+        </div>
+        @if (!cameraReady() && !fotoPendientePreview() && fase() !== 'complete' && fase() !== 'error') {
+          <div class="camera-placeholder" role="status">
+            <span class="spinner" aria-hidden="true"></span>
+            <strong>{{ fase() === 'validating' ? 'Comprobando tus movimientos…' : 'Preparando la cámara…' }}</strong>
+            <p>{{ fase() === 'validating' ? 'Ya tomamos las fotos. Podés relajarte.' : 'Si el navegador te lo pide, permití el acceso a la cámara.' }}</p>
+          </div>
+        }
+        @if (fotoPendientePreview(); as preview) {
+          <figure class="photo-review"><img [src]="preview" alt="Foto del DNI para revisar" /><figcaption>¿Se ve completo, nítido y sin reflejos?</figcaption></figure>
+        }
+        <canvas #capture hidden></canvas>
+        @if (paso() === 'dni_frente' || paso() === 'dni_dorso') {
+          <p class="document-hint">Apoyá el DNI sobre una superficie lisa. Acercá la cámara hasta que el documento entre en el recuadro.</p>
+          <p class="capture-message" role="status">{{ mensaje() }}</p>
+        }
+        @if (paso() === 'liveness' && cameraReady() && fase() !== 'error') {
+          <div class="live-feedback" [class.live-feedback--ok]="estadoEnVivo() === 'detected'" [class.live-feedback--adjust]="estadoEnVivo() === 'adjust'" role="status" aria-live="polite">
+            <span aria-hidden="true">{{ estadoEnVivo() === 'detected' ? '✓' : '◉' }}</span><p>{{ feedback() }}</p>
+          </div>
+          <div class="capture-meter" role="progressbar" aria-label="Tiempo manteniendo la posición" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="progresoGesto()">
+            <span [style.width.%]="progresoGesto()"></span>
+          </div>
+          <p class="meter-label">{{ progresoGesto() > 0 ? 'Mantené la posición hasta completar la barra' : 'La barra avanza cuando la posición es correcta' }}</p>
+        }
+      </div>
+      @if (paso() === 'liveness' && instrucciones().length) {
+        <aside class="gesture-panel">
+          <p class="eyebrow">{{ fase() === 'calibrating' ? 'Preparación' : 'Movimiento ' + (indiceInstruccion() + 1) + ' de ' + instrucciones().length }}</p>
+          @if (fase() === 'actions' && instruccionActual(); as instruction) {
+            <div class="gesture-visual" [attr.data-gesture]="instruction.type" aria-hidden="true">
+              @switch (instruction.type) {
+                @case ('TURN_LEFT') { <span>←</span> }
+                @case ('TURN_RIGHT') { <span>→</span> }
+                @case ('TILT_HEAD') { <span>↷</span> }
+                @case ('OPEN_MOUTH') { <span>○</span> }
+              }
+            </div>
+            <h3>{{ instruction.label }}</h3><p>{{ ayudaGesto() }}</p>
+          } @else if (fase() === 'calibrating') {
+            <h3>Mirá de frente</h3><p>Ubicá tu cara dentro del óvalo y mantené la cabeza derecha. No hace falta tocar ningún botón.</p>
+          } @else if (fase() === 'recentering') {
+            <h3>Gesto capturado ✓</h3><p>Volvé a mirar al centro. El próximo movimiento empieza solo.</p>
+          } @else if (fase() === 'centering' || fase() === 'capturing') {
+            <h3>Ahora, de frente</h3><p>Cerrá la boca y mirá a la cámara. La foto final se toma automáticamente.</p>
+          } @else if (fase() === 'validating') {
+            <h3>Comprobación final</h3><p>Estamos verificando que las capturas correspondan a la misma persona y que los movimientos sean válidos.</p>
           }
-        </div>
-        <div>
-          <strong>{{ instruction.label }}</strong>
-          <p>{{ ayudaGesto() }}</p>
-        </div>
-      </div>
-    }
-    @if (fase() === 'recentering') {
-      <div class="gesture-guide gesture-guide--validated" role="status">
-        <div class="gesture-guide__check" aria-hidden="true">✓</div>
-        <div>
-          <strong>¡Gesto validado!</strong>
-          <p>Volvé a mirar al centro para continuar.</p>
-        </div>
-      </div>
-    }
-    <ol class="challenge-list">
-      @for (instruction of instrucciones(); track instruction.type; let index = $index) {
-        <li
-          [class.done]="index < indiceInstruccion() || (fase() === 'recentering' && index === indiceInstruccion()) || fase() === 'centering' || fase() === 'validating' || fase() === 'complete'"
-          [class.current]="fase() === 'actions' && index === indiceInstruccion()"
-        >{{ instruction.label }}</li>
+          <ol class="challenge-list">
+            @for (instruction of instrucciones(); track instruction.type; let index = $index) {
+              <li [class.done]="index < indiceInstruccion() || (fase() === 'recentering' && index === indiceInstruccion()) || fase() === 'centering' || fase() === 'capturing' || fase() === 'validating'" [attr.aria-current]="fase() === 'actions' && index === indiceInstruccion() ? 'step' : null">{{ instruction.label }}</li>
+            }
+          </ol>
+          <p class="explanation">El indicador te orienta en vivo. La validez de la prueba se confirma al finalizar.</p>
+          @if (segundosRestantes() > 0 && fase() !== 'complete') { <p class="challenge-timer">Tiempo disponible: {{ tiempoRestante() }}</p> }
+          @if (fase() !== 'capturing' && fase() !== 'validating') {
+            <button type="button" class="text-button" (click)="cambiarGestos()" [disabled]="cambiandoDesafio() || procesando()">{{ cambiandoDesafio() ? 'Preparando…' : fase() === 'error' ? 'Reintentar prueba de vida' : 'Probar otros movimientos' }}</button>
+          }
+        </aside>
       }
-      <li
-        [class.done]="fase() === 'capturing' || fase() === 'validating' || fase() === 'complete'"
-        [class.current]="fase() === 'centering' || fase() === 'capturing'"
-      >Mirar a la cámara para la foto final</li>
-    </ol>
-    @if (fase() !== 'complete') {
-      @if (segundosRestantes() > 0) {
-        <p class="challenge-timer" role="status">El desafío vence en {{ tiempoRestante() }}</p>
-      } @else if (instrucciones().length) {
-        <p class="challenge-timer challenge-timer--expired" role="status">El desafío venció. Cambiá los gestos o reintentá.</p>
-      }
+    </div>
+    @if (fase() === 'complete') {
+      <div class="result result--success" role="status"><span class="result-icon" aria-hidden="true">✓</span><h3>Prueba de vida válida</h3><p>{{ mensaje() }}</p><p>El DNI y la documentación serán revisados por un administrador.</p></div>
     }
-    @if (fase() !== 'capturing' && fase() !== 'validating' && fase() !== 'complete') {
-      <button
-        type="button"
-        class="change-challenge"
-        (click)="cambiarGestos()"
-        [disabled]="cambiandoDesafio() || procesando()"
-      >{{ cambiandoDesafio() ? 'Buscando otros gestos…' : (fase() === 'error' ? 'Cambiar gestos y reintentar' : 'Cambiar estos gestos') }}</button>
-    }
-  }
-
-  @if (fase() === 'validating') {
-    <div class="identity-validation" role="status" aria-live="assertive">
-      <span class="identity-validation__spinner" aria-hidden="true"></span>
-      <div>
-        <strong>Estamos comprobando la prueba de vida</strong>
-        <p>La foto ya fue tomada y la cámara está cerrada. Esto puede demorar unos segundos.</p>
+    @if (error()) {
+      <div class="result result--error" role="alert"><h3>No se pudo completar este intento</h3><p>{{ error() }}</p>
+        @if (paso() === 'liveness') { <p>Podés repetir los movimientos sin volver a fotografiar el DNI.</p> }
+        @if (paso() === 'liveness' && !instrucciones().length) { <button type="button" class="acct-btn acct-btn--primary" (click)="cambiarGestos()" [disabled]="procesando() || cambiandoDesafio()">Reintentar prueba de vida</button> }
       </div>
-    </div>
-  }
-
-  @if (fase() === 'centering' || fase() === 'capturing') {
-    <div
-      class="capture-meter"
-      role="progressbar"
-      aria-label="Preparación de la captura final"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      [attr.aria-valuenow]="progresoCapturaFinal()"
-    >
-      <span [style.width.%]="progresoCapturaFinal()"></span>
-    </div>
-    <small class="capture-meter__label">
-      {{ fase() === 'capturing' ? 'Capturando foto…' : 'Mantené la posición' }}
-    </small>
-  }
-
-  @if (error()) {
-    <div class="capture-error" role="alert">
-      <strong>No pudimos validar la identidad.</strong>
-      <p>{{ error() }}</p>
-      <p>Revisá la luz, mantené una sola cara dentro del óvalo y repetí el gesto.</p>
-    </div>
-  }
-
-  <div class="capture-actions">
+    }
+  </div>
+  <footer class="capture-actions">
     @if ((paso() === 'dni_frente' || paso() === 'dni_dorso') && !fotoPendientePreview()) {
-      <button type="button" class="acct-btn acct-btn--primary" (click)="capturarDocumento()" [disabled]="!cameraReady() || procesando()">
-        {{ procesando() ? 'Capturando…' : (paso() === 'dni_frente' ? 'Sacar foto del frente' : 'Sacar foto del dorso') }}
-      </button>
-      @if (puedeCambiarCamara()) {
-        <button type="button" class="acct-btn acct-btn--ghost" (click)="cambiarCamara()" [disabled]="procesando()">Cambiar cámara</button>
-      }
+      <button type="button" class="acct-btn acct-btn--primary" (click)="capturarDocumento()" [disabled]="!cameraReady() || procesando()">{{ procesando() ? 'Capturando…' : paso() === 'dni_frente' ? 'Sacar foto del frente' : 'Sacar foto del dorso' }}</button>
+      @if (puedeCambiarCamara()) { <button type="button" class="acct-btn acct-btn--ghost" (click)="cambiarCamara()" [disabled]="procesando()">Cambiar cámara</button> }
     }
     @if (fotoPendientePreview()) {
-      <button type="button" class="acct-btn acct-btn--primary" (click)="confirmarDocumento()" [disabled]="procesando()">
-        {{ procesando() ? 'Preparando…' : 'Usar esta foto' }}
-      </button>
+      <button type="button" class="acct-btn acct-btn--primary" (click)="confirmarDocumento()" [disabled]="procesando()">Usar esta foto</button>
       <button type="button" class="acct-btn acct-btn--ghost" (click)="repetirDocumento()" [disabled]="procesando()">Repetir foto</button>
     }
-    @if (frentePreview() || dorsoPreview() || error()) {
-      <button type="button" class="acct-btn acct-btn--ghost" (click)="reiniciar()" [disabled]="procesando()">Reiniciar capturas</button>
-    }
-  </div>
-</section>
+    @if (fase() === 'complete') { <button type="button" class="acct-btn acct-btn--primary" (click)="enviarCapturas()">Enviar documentación</button> }
+    @if (fase() !== 'complete') { <button type="button" class="acct-btn acct-btn--ghost" (click)="reiniciar()" [disabled]="procesando() || cambiandoDesafio()">Volver a empezar</button> }
+    <button type="button" class="text-button" (click)="cancelar()">Continuar más tarde</button>
+  </footer>
+</dialog>

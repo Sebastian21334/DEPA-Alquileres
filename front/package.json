@@ -5,6 +5,7 @@
     "ng": "ng",
     "start": "node scripts/start.cjs",
     "build": "ng build",
+    "test:vitalidad": "node --test test/vitalidad.test.cjs",
     "watch": "ng build --watch --configuration development"
   },
   "private": true,
