@@ -261,17 +261,6 @@ export class MisReservasComponent {
     });
   }
 
-  protected finalizar(reserva: Reserva): void {
-    this.iniciarOperacion(reserva.id);
-    this.reservasApi.finish(reserva.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (actualizada) => this.reemplazar(actualizada),
-      error: (err: ApiError) => {
-        this.error.set(err.message);
-        this.ocupada.set(null);
-      },
-    });
-  }
-
   protected verCodigo(reserva: Reserva): void {
     if (!puedeConsultarCodigo(reserva)) return;
     this.iniciarOperacion(reserva.id);

@@ -2,6 +2,14 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+@font-face {
+  font-family: 'Figtree';
+  src: url('/fonts/figtree-variable.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+
 /*
  * Design tokens (paleta del logo DEPA):
  * Rojo como color principal (CTAs, badges de "Largo Plazo"), azul como color
