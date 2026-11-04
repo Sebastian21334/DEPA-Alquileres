@@ -1,0 +1,9 @@
+{
+  "name": "depa-alquileres",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/dev.cjs",
+    "dev": "node scripts/dev.cjs"
+  }
+}
