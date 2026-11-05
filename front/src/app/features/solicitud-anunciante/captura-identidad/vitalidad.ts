@@ -2,6 +2,18 @@ export interface PuntoFacial { x: number; y: number }
 export interface PoseFacial { yaw: number; roll: number }
 export type GestoVitalidad = 'TURN_LEFT' | 'TURN_RIGHT' | 'TILT_HEAD' | 'OPEN_MOUTH';
 
+// Las coordenadas son normalizadas; convertir X a unidades de altura evita
+// medir aperturas distintas según la cámara sea vertical u horizontal.
+export function medirAperturaBoca(puntos: readonly PuntoFacial[], aspecto: number): number | null {
+  const labios = [puntos[13], puntos[14], puntos[61], puntos[291]];
+  if (!Number.isFinite(aspecto) || aspecto <= 0 || labios.some(p =>
+    !p || !Number.isFinite(p.x) || !Number.isFinite(p.y))) return null;
+  const distancia = (a: PuntoFacial, b: PuntoFacial) => Math.hypot((a.x - b.x) * aspecto, a.y - b.y);
+  const ancho = distancia(puntos[61], puntos[291]);
+  if (ancho < .01) return null;
+  return distancia(puntos[13], puntos[14]) / ancho;
+}
+
 export function evaluarEncuadre(caras: readonly (readonly PuntoFacial[])[]): string | null {
   if (!caras.length) return 'No vemos tu cara. Mirá a la cámara y ubicate dentro del óvalo.';
   if (caras.length !== 1) return 'Hay más de una cara. La prueba debe hacerse de a una persona.';
@@ -24,14 +36,22 @@ export function evaluarEncuadre(caras: readonly (readonly PuntoFacial[])[]): str
 }
 
 export function detectarGesto(accion: GestoVitalidad | null, pose: PoseFacial,
-  neutral: PoseFacial | null, boca: number): boolean {
+  neutral: PoseFacial | null, boca: number,
+  apertura: number | null = null, aperturaNeutral: number | null = null): boolean {
   if (!accion || !neutral) return false;
   const yaw = pose.yaw - neutral.yaw;
   const roll = pose.roll - neutral.roll;
   if (accion === 'TURN_LEFT') return yaw >= .07;
   if (accion === 'TURN_RIGHT') return yaw <= -.07;
   if (accion === 'TILT_HEAD') return Math.abs(roll) >= .18;
-  return boca >= .45 && Math.abs(yaw) <= .06 && Math.abs(roll) <= .12;
+  const abierta = apertura !== null && aperturaNeutral !== null
+    ? apertura >= .16 && apertura >= aperturaNeutral + .06
+    : boca >= .45;
+  return abierta && Math.abs(yaw) <= .12 && Math.abs(roll) <= .22;
+}
+
+export function bocaEnReposo(apertura: number | null, neutral: number | null, puntaje: number): boolean {
+  return apertura !== null ? apertura <= Math.max(.12, (neutral ?? 0) + .04) : puntaje < .25;
 }
 
 // Exige una posición continua por tiempo, independientemente de los FPS.
@@ -44,7 +64,8 @@ export class PosicionEstable {
 
   progreso(cumple: boolean, ahora: number, duracion: number): number {
     if (!cumple) { this.reiniciar(); return 0; }
-    if (this.anterior === null || ahora - this.anterior > 350 || ahora < this.anterior) this.inicio = ahora;
+    // Acepta también equipos que analizan a 2 FPS; una pausa mayor reinicia.
+    if (this.anterior === null || ahora - this.anterior > 600 || ahora < this.anterior) this.inicio = ahora;
     this.anterior = ahora;
     return Math.min(100, Math.round((ahora - this.inicio!) / duracion * 100));
   }

@@ -108,6 +108,8 @@ button {
 .acct-heading p { margin: 0.25rem 0 0; color: var(--color-text-muted); }
 
 .acct-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -133,7 +135,7 @@ button {
   background: #fff;
   color: var(--color-text);
   font: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 .acct-field textarea { min-height: 120px; resize: vertical; }
 .acct-field input:focus,
@@ -198,7 +200,10 @@ button {
 @media (max-width: 640px) {
   .acct-grid, .acct-grid--3 { grid-template-columns: 1fr; }
   .acct-card { padding: 1.15rem; }
-  .acct-actions > * { flex: 1; }
+  .acct-actions > * { flex: 1 1 160px; min-width: 0; max-width: 100%; }
+  .acct-field input, .acct-field select, .acct-field textarea { min-width: 0; max-width: 100%; }
+  .acct-btn { min-height: 44px; padding-block: .55rem; line-height: 1.35; white-space: normal; }
+  .acct-heading > div { min-width: 0; }
 }
 
 /* ============================================================

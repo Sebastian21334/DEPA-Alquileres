@@ -91,6 +91,14 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "responsive-preview": {
+              "browser": "test/responsive-main.ts",
+              "tsConfig": "tsconfig.preview.json",
+              "outputPath": "dist/responsive-preview",
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
             }
           },
           "defaultConfiguration": "production"
@@ -106,6 +114,9 @@
             },
             "development": {
               "buildTarget": "front:build:development"
+            },
+            "responsive-preview": {
+              "buildTarget": "front:build:responsive-preview"
             }
           },
           "defaultConfiguration": "development"

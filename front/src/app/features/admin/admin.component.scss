@@ -390,6 +390,42 @@ dd {
   display: flex;
   gap: 8px;
 }
+
+@media (max-width: 700px) {
+  .responsive-table,
+  .responsive-table tbody,
+  .responsive-table tr,
+  .responsive-table td { display: block; width: 100%; }
+  .responsive-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .responsive-table tr { padding: 14px; border-bottom: 1px solid #dfe6ea; }
+  .responsive-table td { padding: 6px 0; border: 0; text-align: left; overflow-wrap: anywhere; }
+  .responsive-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: #60727c;
+    font-size: .72rem;
+    font-weight: 750;
+  }
+  .responsive-table td .button,
+  .responsive-table td select { width: 100%; min-height: 44px; white-space: normal; }
+  .responsive-table .link-button { min-height: 44px; padding-inline: 12px; }
+  .reject-box div { flex-direction: column; }
+  .pagination { padding: 14px; }
+  .pagination__actions { width: 100%; }
+  .pagination__actions .button { flex: 1; min-height: 44px; }
+  .panel__title > div { min-width: 0; }
+  .request, .settlement-card, .catalog-card { overflow-wrap: anywhere; }
+  .requests { grid-template-columns: minmax(0, 1fr); }
+}
 .pagination .button:disabled {
   cursor: not-allowed;
 }

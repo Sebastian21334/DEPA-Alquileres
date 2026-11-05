@@ -6,7 +6,8 @@
     "start": "node scripts/start.cjs",
     "build": "ng build",
     "test:vitalidad": "node --test test/vitalidad.test.cjs",
-    "watch": "ng build --watch --configuration development"
+    "watch": "ng build --watch --configuration development",
+    "preview:responsive": "node scripts/start.cjs --configuration responsive-preview --port 4318"
   },
   "private": true,
   "packageManager": "npm@11.17.0",

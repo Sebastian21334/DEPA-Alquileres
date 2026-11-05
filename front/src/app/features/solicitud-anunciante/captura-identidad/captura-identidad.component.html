@@ -69,10 +69,11 @@
           }
           <ol class="challenge-list">
             @for (instruction of instrucciones(); track instruction.type; let index = $index) {
-              <li [class.done]="index < indiceInstruccion() || (fase() === 'recentering' && index === indiceInstruccion()) || fase() === 'centering' || fase() === 'capturing' || fase() === 'validating'" [attr.aria-current]="fase() === 'actions' && index === indiceInstruccion() ? 'step' : null">{{ instruction.label }}</li>
+              <li [class.done]="index < indiceInstruccion() || (fase() === 'recentering' && index === indiceInstruccion()) || fase() === 'centering' || fase() === 'capturing' || fase() === 'validating'" [attr.aria-label]="instruction.label" [attr.aria-current]="fase() === 'actions' && index === indiceInstruccion() ? 'step' : null">
+                {{ index < indiceInstruccion() || (fase() === 'recentering' && index === indiceInstruccion()) || fase() === 'centering' || fase() === 'capturing' || fase() === 'validating' ? '✓' : index + 1 }}
+              </li>
             }
           </ol>
-          <p class="explanation">El indicador te orienta en vivo. La validez de la prueba se confirma al finalizar.</p>
           @if (segundosRestantes() > 0 && fase() !== 'complete') { <p class="challenge-timer">Tiempo disponible: {{ tiempoRestante() }}</p> }
           @if (fase() !== 'capturing' && fase() !== 'validating') {
             <button type="button" class="text-button" (click)="cambiarGestos()" [disabled]="cambiandoDesafio() || procesando()">{{ cambiandoDesafio() ? 'Preparando…' : fase() === 'error' ? 'Reintentar prueba de vida' : 'Probar otros movimientos' }}</button>
