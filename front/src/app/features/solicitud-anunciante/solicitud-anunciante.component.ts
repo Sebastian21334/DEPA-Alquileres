@@ -6,6 +6,8 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideBadgeCheck, LucideClock } from '@lucide/angular';
 import { PerfilService } from '../../core/services/perfil.service';
+import { ToastService } from '../../core/services/toast.service';
+import { ApiError } from '../../core/interceptors/api-error';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { TipoAnunciante } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
@@ -29,12 +31,15 @@ export class SolicitudAnuncianteComponent {
   private readonly fb = inject(FormBuilder);
   private readonly perfilService = inject(PerfilService);
   private readonly catalogos = inject(CatalogoService);
+  private readonly toast = inject(ToastService);
 
   protected readonly solicitud = this.perfilService.solicitud;
   protected readonly tipos = signal<TipoAnunciante[]>([]);
   protected readonly cargando = signal(true);
   protected readonly enviando = signal(false);
   protected readonly error = signal('');
+  /** RN-37: el CUIT/CUIL ya pertenece a otra cuenta vigente (409 del backend). */
+  protected readonly errorCuit = signal('');
   protected readonly exito = signal('');
   protected readonly capturaAbierta = signal(false);
   protected readonly documentosPendientes = signal<IdentidadCapturada | null>(null);
@@ -109,6 +114,7 @@ export class SolicitudAnuncianteComponent {
     }
     this.enviando.set(true);
     this.error.set('');
+    this.errorCuit.set('');
     const valor = this.form.getRawValue();
     this.perfilService
       .solicitarAnunciante({ ...valor, ...(this.esInmobiliaria() ? this.empresaForm.getRawValue() : {}), cuit: valor.cuit.trim(), numero_contacto: valor.numero_contacto.trim() })
@@ -119,6 +125,11 @@ export class SolicitudAnuncianteComponent {
         },
         error: (err: Error) => {
           this.enviando.set(false);
+          if (err instanceof ApiError && err.status === 409 && /CUIT\/CUIL/.test(err.message)) {
+            this.errorCuit.set(err.message);
+            this.toast.mostrar('El CUIT/CUIL ingresado ya está registrado en otra cuenta.');
+            return;
+          }
           this.error.set(err.message);
         },
       });

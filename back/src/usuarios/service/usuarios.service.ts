@@ -20,6 +20,7 @@ import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import sharp from 'sharp';
 import { DataSource, EntityManager } from 'typeorm';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import {
   EstadoLiquidacionReserva,
   EstadoPagoReserva,
@@ -158,6 +159,15 @@ export class UsuariosService {
         .where('id_anunciante = :idUsuario', { idUsuario })
         .execute();
 
+      // RN-37: libera el CUIT/CUIL para una cuenta nueva y conserva el original
+      // en cuit_cuil_historico. PostgreSQL evalúa ambos SET con la fila anterior.
+      await manager.createQueryBuilder()
+        .update(Anunciante)
+        .set({ cuit_cuil_historico: () => 'cuit_cuil', cuit_cuil: null })
+        .where('id_usuario = :idUsuario AND cuit_cuil IS NOT NULL', { idUsuario })
+        .execute();
+
+      // También mueve el email a email_historico (Usuario.darDeBaja).
       usuario.darDeBaja();
       await manager.getRepository(Usuario).save(usuario);
     });
@@ -388,17 +398,20 @@ export class UsuariosService {
     usuario.cambiarBloqueo(bloqueado);
     await this.usuariosRepo.guardar(usuario);
 
-    try {
-      await this.mailService.enviarCambioBloqueo(
-        usuario.email,
-        bloqueado,
-        motivo?.trim(),
-      );
-    } catch (error) {
-      this.logger.error(
-        `No se pudo notificar el cambio de acceso a ${usuario.email}`,
-        error as Error,
-      );
+    // Una cuenta activa siempre tiene email; la condición solo lo hace explícito.
+    if (usuario.email) {
+      try {
+        await this.mailService.enviarCambioBloqueo(
+          usuario.email,
+          bloqueado,
+          motivo?.trim(),
+        );
+      } catch (error) {
+        this.logger.error(
+          `No se pudo notificar el cambio de acceso a ${usuario.email}`,
+          error as Error,
+        );
+      }
     }
 
     return {
@@ -500,15 +513,23 @@ export class UsuariosService {
     return usuarios
       .filter((usuario) => usuario.rol?.nombre === 'Administrador')
       .map((usuario) => usuario.email)
-      .filter(Boolean);
+      .filter((email): email is string => !!email);
   }
 
   private usuarioSinSecretos(usuario: Usuario) {
+    // El listado administrativo agrega el anunciante con leftJoinAndMapOne.
+    const anunciante = (usuario as Usuario & { anunciante?: Anunciante | null })
+      .anunciante;
     return {
       id: usuario.id,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       email: usuario.email,
+      email_historico: usuario.email_historico,
+      ...(anunciante !== undefined && {
+        cuit_cuil: anunciante?.cuit_cuil ?? null,
+        cuit_cuil_historico: anunciante?.cuit_cuil_historico ?? null,
+      }),
       telefono: usuario.telefono,
       bloqueado: usuario.bloqueado,
       activa: usuario.activa,

@@ -9,4 +9,6 @@ export interface IAnunciantesRepository {
   buscarPendientes(): Promise<Anunciante[]>;
   eliminar(anunciante: Anunciante): Promise<Anunciante>;
   buscarPorId(id: number): Promise<Anunciante | null>;
+  /** true si una cuenta vigente ya usa ese CUIT/CUIL (se comparan solo los dígitos). */
+  existeCuitVigente(cuit: string): Promise<boolean>;
 }
