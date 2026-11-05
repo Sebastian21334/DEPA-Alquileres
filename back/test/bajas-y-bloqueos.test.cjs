@@ -99,10 +99,18 @@ function servicioUsuarios(db) {
     },
     createQueryBuilder() {
       const b = {
-        update() { return b; },
-        set(valores) { assert.deepEqual(valores, { activa: false }); return b; },
+        update(entidad) { b.entidad = entidad.name; return b; },
+        set(valores) {
+          // Publicaciones inactivas; el CUIT/CUIL se prueba en cuit-email-historicos.test.cjs.
+          if (b.entidad === 'Publicacion') assert.deepEqual(valores, { activa: false });
+          return b;
+        },
         where(_sql, { idUsuario }) { b.id = idUsuario; return b; },
-        async execute() { db.prepare('UPDATE publicacion SET activa = 0 WHERE id_anunciante = ?').run(b.id); },
+        async execute() {
+          if (b.entidad === 'Publicacion') {
+            db.prepare('UPDATE publicacion SET activa = 0 WHERE id_anunciante = ?').run(b.id);
+          }
+        },
       };
       return b;
     },

@@ -24,8 +24,15 @@ export class Anunciante {
   // Solo los anunciantes verificados pueden publicar o administrar imágenes.
   verificado: boolean;
 
+  // Único entre las cuentas activas, comparando solo los dígitos (índice
+  // uq_anunciante_cuit_cuil_digitos de la migración 20261104). Al dar de baja la
+  // cuenta queda en null para que la persona pueda volver a registrarlo (RN-37).
   @Column({ type: 'varchar', length: 15, nullable: true })
-  cuit_cuil: string;
+  cuit_cuil: string | null;
+
+  // CUIT/CUIL original de una cuenta dada de baja; la sigue identificando en el historial.
+  @Column({ type: 'varchar', length: 15, nullable: true })
+  cuit_cuil_historico: string | null;
 
   @Column({ type: 'varchar', length: 20 })
   numero_contacto: string;
@@ -33,6 +40,11 @@ export class Anunciante {
   @ManyToOne(() => TipoAnunciante)
   @JoinColumn({ name: 'id_tipo_anunciante' })
   tipoAnunciante: Relation<TipoAnunciante>;
+
+  /** Dígitos del CUIT/CUIL: «20-12345678-9» y «20123456789» son el mismo. */
+  static digitosCuit(cuit: string): string {
+    return cuit.replace(/\D/g, '');
+  }
 
   /** Habilita a publicar después de aprobar la identidad. */
   verificar(): void {
@@ -43,8 +55,14 @@ export class Anunciante {
     return this.usuario?.nombreCompleto() ?? '';
   }
 
+  /** Correo vigente de la cuenta; undefined si no tiene (por ejemplo, si se dio de baja). */
   email(): string | undefined {
-    return this.usuario?.email;
+    return this.usuario?.email ?? undefined;
+  }
+
+  /** CUIT/CUIL para mostrar: el vigente o, si la cuenta se dio de baja, el original. */
+  cuitParaHistorial(): string | null {
+    return this.cuit_cuil ?? this.cuit_cuil_historico ?? null;
   }
 
   /** Teléfono que el anunciante informó para contacto o, si falta, el de su cuenta. */

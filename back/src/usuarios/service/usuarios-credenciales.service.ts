@@ -86,7 +86,7 @@ export class UsuariosCredencialesService {
   async restablecerContrasenia(
     token: string,
     nuevaContrasenia: string,
-  ): Promise<{ email: string }> {
+  ): Promise<{ email: string | null }> {
     const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
 
     if (!usuario?.recuperacionVigente() || usuario.bloqueado) {
@@ -105,7 +105,7 @@ export class UsuariosCredencialesService {
     id: number,
     contraseniaActual: string,
     nuevaContrasenia: string,
-  ): Promise<{ email: string }> {
+  ): Promise<{ email: string | null }> {
     const usuario = await this.usuariosRepo.buscarCredencialesPorId(id);
     if (!usuario || usuario.bloqueado) {
       throw new ForbiddenException('No podés cambiar la contraseña de esta cuenta');
