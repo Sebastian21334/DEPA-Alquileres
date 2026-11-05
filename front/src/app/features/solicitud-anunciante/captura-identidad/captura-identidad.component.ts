@@ -19,7 +19,7 @@ import {
 } from '@mediapipe/tasks-vision';
 import { firstValueFrom } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { detectarGesto, evaluarEncuadre, PosicionEstable } from './vitalidad';
+import { bocaEnReposo, detectarGesto, evaluarEncuadre, medirAperturaBoca, PosicionEstable } from './vitalidad';
 import {
   AccionVitalidad,
   DesafioVitalidad,
@@ -162,6 +162,9 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   private destroyed = false;
   private busyFrame = false;
   private neutralPose: HeadPose | null = null;
+  private aperturaNeutral: number | null = null;
+  private sumaApertura = 0;
+  private muestrasApertura = 0;
   private calibrationYaw = 0;
   private calibrationRoll = 0;
   private calibrationCount = 0;
@@ -341,6 +344,8 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     this.actionPhotos = [];
     this.challengeToken = '';
     this.neutralPose = null;
+    this.aperturaNeutral = null;
+    this.sumaApertura = this.muestrasApertura = 0;
     this.calibrationYaw = 0;
     this.calibrationRoll = 0;
     this.calibrationCount = 0;
@@ -541,6 +546,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     if (problema || !pose || !blendshapes) {
       this.posicionEstable.reiniciar();
       this.calibrationYaw = this.calibrationRoll = this.calibrationCount = 0;
+      this.sumaApertura = this.muestrasApertura = 0;
       this.progresoGesto.set(0);
       this.progresoCapturaFinal.set(0);
       this.estadoEnVivo.set('adjust');
@@ -548,10 +554,11 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const scores = new Map(blendshapes.categories.map(({ categoryName, score }) => [categoryName, score]));
+    const apertura = medirAperturaBoca(landmarks, this.cameraAspectRatio());
     const ahora = performance.now();
     if (this.fase() === 'calibrating') {
       const quieto = Math.abs(pose.yaw) <= .12 && Math.abs(pose.roll) <= .16 &&
-        (scores.get('jawOpen') ?? 0) < .25 &&
+        bocaEnReposo(apertura, null, scores.get('jawOpen') ?? 0) &&
         (!this.calibrationCount || (
           Math.abs(pose.yaw - this.calibrationYaw / this.calibrationCount) <= .025 &&
           Math.abs(pose.roll - this.calibrationRoll / this.calibrationCount) <= .06));
@@ -559,12 +566,17 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       this.progresoGesto.set(progreso);
       this.estadoEnVivo.set(quieto ? 'detected' : 'adjust');
       this.feedback.set(quieto ? 'Bien encuadrado. Quedate quieto un momento…' : 'Mirá de frente, con la cabeza derecha y la boca cerrada.');
-      if (!quieto || progreso === 0) this.calibrationYaw = this.calibrationRoll = this.calibrationCount = 0;
+      if (!quieto || progreso === 0) {
+        this.calibrationYaw = this.calibrationRoll = this.calibrationCount = 0;
+        this.sumaApertura = this.muestrasApertura = 0;
+      }
       if (!quieto) return;
       this.calibrationYaw += pose.yaw;
       this.calibrationRoll += pose.roll;
       this.calibrationCount++;
+      if (apertura !== null) { this.sumaApertura += apertura; this.muestrasApertura++; }
       if (progreso === 100) {
+        this.aperturaNeutral = this.muestrasApertura ? this.sumaApertura / this.muestrasApertura : null;
         this.neutralPose = {
           yaw: this.calibrationYaw / this.calibrationCount,
           roll: this.calibrationRoll / this.calibrationCount,
@@ -587,7 +599,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
 
     if (this.fase() === 'recentering' || this.fase() === 'centering') {
       const final = this.fase() === 'centering';
-      const centered = this.isCentered(pose) && (scores.get('jawOpen') ?? 0) < .25;
+      const centered = this.isCentered(pose) && bocaEnReposo(apertura, this.aperturaNeutral, scores.get('jawOpen') ?? 0);
       const progreso = this.posicionEstable.progreso(centered, ahora, final ? HOLD_FINAL_MS : HOLD_CENTER_MS);
       this.estadoEnVivo.set(centered ? 'detected' : 'adjust');
       this.feedback.set(centered ? 'Perfecto. Mantené la mirada en la cámara…' : 'Volvé a mirar de frente y cerrá la boca.');
@@ -607,14 +619,19 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const accion = this.instruccionActual()?.type ?? null;
-    const detected = this.isActionDetected(accion, pose, scores);
+    const detected = this.isActionDetected(accion, pose, scores, apertura);
     const progreso = this.posicionEstable.progreso(detected, ahora, HOLD_ACTION_MS);
     this.progresoGesto.set(progreso);
     this.estadoEnVivo.set(detected ? 'detected' : 'adjust');
     const yaw = pose.yaw - (this.neutralPose?.yaw ?? 0);
     const contrario = (accion === 'TURN_LEFT' && yaw < -.04) || (accion === 'TURN_RIGHT' && yaw > .04);
+    const bocaAbierta = apertura !== null && this.aperturaNeutral !== null &&
+      apertura >= .16 && apertura >= this.aperturaNeutral + .06;
     this.feedback.set(detected ? '¡Bien! Gesto detectado. Mantenelo hasta completar la barra.' :
-      contrario ? 'Estás girando hacia el otro lado. Seguí la flecha.' : this.ayudaGesto());
+      contrario ? 'Estás girando hacia el otro lado. Seguí la flecha.' :
+      accion === 'OPEN_MOUTH' ? (bocaAbierta
+        ? 'Vemos tu boca abierta. Mirá de frente para completar el gesto.'
+        : 'Separá un poco más los labios, como al decir «A».') : this.ayudaGesto());
     if (progreso === 100) await this.completeAction();
   }
 
@@ -625,8 +642,10 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     const blendshapes = result.faceBlendshapes[0];
     if (!pose || !blendshapes) return false;
     const scores = new Map(blendshapes.categories.map(({ categoryName, score }) => [categoryName, score]));
-    return final ? this.isCentered(pose) && (scores.get('jawOpen') ?? 0) < .25 :
-      this.isActionDetected(this.instruccionActual()?.type ?? null, pose, scores);
+    return final ? this.isCentered(pose) && bocaEnReposo(
+      medirAperturaBoca(result.faceLandmarks[0], this.cameraAspectRatio()), this.aperturaNeutral, scores.get('jawOpen') ?? 0) :
+      this.isActionDetected(this.instruccionActual()?.type ?? null, pose, scores,
+        medirAperturaBoca(result.faceLandmarks[0], this.cameraAspectRatio()));
   }
 
   private async completeAction(): Promise<void> {
@@ -750,6 +769,8 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     this.livePhoto = null;
     this.actionPhotos = [];
     this.neutralPose = null;
+    this.aperturaNeutral = null;
+    this.sumaApertura = this.muestrasApertura = 0;
     this.calibrationYaw = 0;
     this.calibrationRoll = 0;
     this.calibrationCount = 0;
@@ -814,8 +835,8 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-  private isActionDetected(action: AccionVitalidad | null, pose: HeadPose, scores: ReadonlyMap<string, number>): boolean {
-    return detectarGesto(action, pose, this.neutralPose, scores.get('jawOpen') ?? 0);
+  private isActionDetected(action: AccionVitalidad | null, pose: HeadPose, scores: ReadonlyMap<string, number>, apertura: number | null = null): boolean {
+    return detectarGesto(action, pose, this.neutralPose, scores.get('jawOpen') ?? 0, apertura, this.aperturaNeutral);
   }
 
   private isCentered(pose: HeadPose): boolean {
@@ -860,10 +881,6 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     context.ellipse(width / 2, height * 0.53, width * 0.2, height * 0.36, 0, 0, Math.PI * 2);
     context.stroke();
     context.setLineDash([]);
-    const label = ['calibrating', 'recentering', 'centering', 'capturing'].includes(this.fase())
-      ? 'MIRÁ DE FRENTE'
-      : this.instruccionActual()?.label.toUpperCase() ?? 'UBICÁ TU CARA';
-    this.drawLabel(context, label);
     if (this.fase() === 'actions') this.drawActionArrow(context, this.instruccionActual()?.type ?? null, detected);
   }
 
@@ -883,11 +900,7 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     const centerX = width / 2;
     const centerY = height / 2;
     if (action === 'OPEN_MOUTH') {
-      context.strokeStyle = detected ? '#22c55e' : '#ff9800';
-      context.lineWidth = Math.max(5, width / 110);
-      context.beginPath();
-      context.ellipse(centerX, centerY + height * 0.18, width * 0.045, height * 0.055, 0, 0, Math.PI * 2);
-      context.stroke();
+      // No tapar los labios con un dibujo en una posición fija.
       return;
     }
     if (action === 'TURN_LEFT') this.arrow(context, centerX + width * 0.2, centerY, centerX - width * 0.2, centerY, detected);

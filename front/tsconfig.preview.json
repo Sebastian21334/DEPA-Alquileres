@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.app.json",
+  "files": ["test/responsive-main.ts"],
+  "include": ["src/**/*.d.ts"]
+}

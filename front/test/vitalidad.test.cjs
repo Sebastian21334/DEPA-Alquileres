@@ -28,6 +28,33 @@ function resultado(yaw = 0, roll = 0, boca = 0) {
   return { faceLandmarks: [cara(yaw, roll)], faceBlendshapes: [{ categories: [{ categoryName: 'jawOpen', score: boca }] }] };
 }
 
+function conBoca(puntos, apertura, aspecto) {
+  const copia = puntos.map(p => ({ ...p }));
+  copia[61] = { x: .44, y: .62 }; copia[291] = { x: .56, y: .62 };
+  copia[13] = { x: .5, y: .62 - apertura * .12 * aspecto / 2 };
+  copia[14] = { x: .5, y: .62 + apertura * .12 * aspecto / 2 };
+  return copia;
+}
+
+test('la apertura de labios se mide igual en cámara vertical, cuadrada y horizontal', () => {
+  for (const aspecto of [.5625, 1, 16 / 9]) {
+    const medida = util.medirAperturaBoca(conBoca(cara(), .24, aspecto), aspecto);
+    assert.ok(Math.abs(medida - .24) < 1e-9);
+  }
+  assert.equal(util.medirAperturaBoca([], 16 / 9), null);
+  assert.equal(util.medirAperturaBoca(cara(), 16 / 9), null);
+});
+
+test('la boca geométricamente abierta funciona con puntaje bajo y una postura natural', () => {
+  const neutral = { yaw: 0, roll: 0 };
+  assert.equal(util.detectarGesto('OPEN_MOUTH', { yaw: .09, roll: .15 }, neutral, .1, .24, .02), true);
+  assert.equal(util.detectarGesto('OPEN_MOUTH', neutral, neutral, .9, .04, .02), false);
+  assert.equal(util.detectarGesto('OPEN_MOUTH', neutral, neutral, .9, .17, .14), false);
+  assert.equal(util.detectarGesto('OPEN_MOUTH', { yaw: .2, roll: 0 }, neutral, .9, .24, .02), false);
+  assert.equal(util.bocaEnReposo(.04, .02, .6), true);
+  assert.equal(util.bocaEnReposo(.24, .02, .1), false);
+});
+
 test('el encuadre detecta caras ausentes, múltiples, lejanas, cortadas y fuera del centro', () => {
   assert.equal(util.evaluarEncuadre([cara()]), null);
   assert.match(util.evaluarEncuadre([]), /No vemos tu cara/);
@@ -54,7 +81,7 @@ test('los gestos distinguen dirección, inclinación y boca sin aceptar la cabez
 });
 
 test('el avance depende del tiempo sostenido y se reinicia al perder la cara o pausar la pestaña', () => {
-  for (const intervalo of [40, 100, 200]) {
+  for (const intervalo of [40, 100, 200, 500]) {
     const p = new util.PosicionEstable();
     for (let t = 0; t < 900; t += intervalo) assert.ok(p.progreso(true, t, 900) < 100);
     assert.equal(p.progreso(true, 1000, 900), 100);
@@ -123,6 +150,21 @@ test('un giro contrario no avanza; el giro sostenido captura y exige volver al c
   assert.equal(c.fase(), 'recentering'); assert.equal(c.indiceInstruccion(), 0);
   for (let t = 900; t <= 1500; t += 100) await tick(t, resultado());
   assert.equal(c.fase(), 'actions'); assert.equal(c.indiceInstruccion(), 1);
+});
+
+test('captura la boca abierta por labios sin depender de jawOpen y vuelve a centrar al cerrarla', async () => {
+  const { c, tick } = escenario();
+  c.fase.set('actions'); c.neutralPose = { yaw: 0, roll: 0 }; c.aperturaNeutral = .02;
+  c.indiceInstruccion.set(1); c.cameraAspectRatio.set(16 / 9);
+  const abierta = resultado(.09, .15, .1);
+  abierta.faceLandmarks = [conBoca(cara(.09, .15), .24, 16 / 9)];
+  for (let t = 0; t <= 700; t += 100) await tick(t, abierta);
+  assert.equal(c.actionPhotos.length, 1);
+  assert.equal(c.fase(), 'centering');
+  const cerrada = resultado(0, 0, .6);
+  cerrada.faceLandmarks = [conBoca(cara(), .04, 16 / 9)];
+  await tick(800, cerrada);
+  assert.equal(c.estadoEnVivo(), 'detected');
 });
 
 test('el resultado válido espera confirmación del servidor y no envía documentos automáticamente', async () => {

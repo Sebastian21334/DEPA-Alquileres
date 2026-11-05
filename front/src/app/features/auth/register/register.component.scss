@@ -121,6 +121,7 @@
 }
 
 .auth__field {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -133,10 +134,12 @@
 }
 
 .auth__field input {
+  min-width: 0;
+  width: 100%;
   padding: 0.7rem 0.9rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: var(--color-text);
   background: #fff;
 }
@@ -208,7 +211,7 @@
   border: none;
   font-weight: 700;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .btn--primary {

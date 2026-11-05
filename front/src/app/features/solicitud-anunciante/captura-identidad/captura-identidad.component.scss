@@ -1,23 +1,24 @@
 :host { display: contents; }
-.identity-dialog { width: min(1040px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 20px; background: #fff; color: #102a3a; box-shadow: 0 24px 90px #0005; overflow: auto; overscroll-behavior: contain; }
+.identity-dialog { position: fixed; inset: 0; margin: auto; width: min(960px, calc(100vw - 40px)); height: min(660px, calc(100dvh - 40px)); max-width: none; max-height: calc(100dvh - 40px); padding: 0; border: 0; border-radius: 20px; background: #fff; color: #102a3a; box-shadow: 0 24px 90px #0005; overflow: hidden; overscroll-behavior: contain; }
+.identity-dialog[open] { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
 .identity-dialog::backdrop { background: #101828b8; backdrop-filter: blur(5px); }
-.dialog-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 24px 28px 18px; }
+.dialog-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 18px 22px 12px; }
 h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2; }
 .dialog-header p:last-child { margin: 0; color: #667085; font-size: .9rem; }
 .eyebrow { margin: 0; color: #b54708; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .close-dialog { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid #e4e7ec; border-radius: 50%; color: #344054; background: #f9fafb; font-size: 1.6rem; cursor: pointer; }
-.capture-progress { display: flex; list-style: none; gap: 12px; padding: 0 28px 18px; margin: 0; border-bottom: 1px solid #eaecf0; }
+.capture-progress { display: flex; list-style: none; gap: 12px; padding: 0 22px 12px; margin: 0; border-bottom: 1px solid #eaecf0; }
 .capture-progress li { display: flex; align-items: center; gap: 7px; color: #667085; font-size: .8rem; }
 .capture-progress span { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: #f2f4f7; font-weight: 800; }
 .capture-progress li[aria-current] { color: #b54708; font-weight: 800; }
 .capture-progress li[aria-current] span { background: #fff4e5; }
 .capture-progress .done { color: #15803d; }
 .capture-progress .done span { background: #dcfce7; }
-.dialog-body { padding: 22px 28px; }
-.capture-layout { display: grid; gap: 22px; }
+.dialog-body { min-height: 0; overflow: auto; padding: 16px 22px; overscroll-behavior: contain; }
+.capture-layout { display: grid; gap: 18px; }
 .capture-layout--face { grid-template-columns: minmax(0, 1.7fr) minmax(230px, 1fr); align-items: start; }
 .camera-column { min-width: 0; }
-.camera-shell { position: relative; width: min(100%, 660px, calc(44dvh * var(--camera-ratio, 1.3333))); margin-inline: auto; overflow: hidden; border-radius: 14px; background: #101820; aspect-ratio: 4 / 3; }
+.camera-shell { position: relative; width: min(100%, 660px, calc(36dvh * var(--camera-ratio, 1.3333))); margin-inline: auto; overflow: hidden; border-radius: 14px; background: #101820; aspect-ratio: 4 / 3; }
 .camera-shell[hidden] { display: none; }
 .camera-shell video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .camera-shell video.mirrored { transform: scaleX(-1); }
@@ -43,11 +44,11 @@ h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2;
 .gesture-panel { padding: 18px; border: 1px solid #eaecf0; border-radius: 14px; background: #fafbfc; }
 .gesture-panel h3 { margin: 10px 0 8px; font-size: 1.05rem; }
 .gesture-panel p { line-height: 1.45; font-size: .85rem; }
-.gesture-visual { text-align: center; color: #c2410c; font-size: 3.5rem; line-height: 1.3; }
-.challenge-list { margin: 18px 0; padding-left: 20px; color: #667085; font-size: .8rem; }
-.challenge-list li { padding: 5px 0; }
-.challenge-list li[aria-current] { color: #102a3a; font-weight: 800; }
-.challenge-list .done { color: #15803d; text-decoration: line-through; }
+.gesture-visual { text-align: center; color: #c2410c; font-size: 2.6rem; line-height: 1.3; }
+.challenge-list { display: flex; gap: 8px; list-style: none; margin: 14px 0; padding: 0; color: #667085; font-size: .8rem; }
+.challenge-list li { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #eaecf0; }
+.challenge-list li[aria-current] { color: #9a3412; background: #ffedd5; font-weight: 800; }
+.challenge-list .done { color: #15803d; background: #dcfce7; }
 .explanation { color: #667085; }
 .challenge-timer { color: #667085; }
 .text-button { border: 0; background: transparent; color: #344054; font: inherit; font-size: .85rem; text-decoration: underline; cursor: pointer; }
@@ -58,7 +59,7 @@ h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2;
 .result--success { text-align: center; background: #f0fdf4; border-color: #86efac; color: #166534; }
 .result-icon { display: grid; place-items: center; width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 50%; background: #16a34a; color: white; font-size: 2rem; }
 .result--error { margin-top: 18px; background: #fef2f2; border-color: #fecaca; color: #991b1b; }
-.capture-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; justify-content: end; gap: 10px; padding: 16px 28px; border-top: 1px solid #eaecf0; background: white; }
+.capture-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 10px; padding: 14px 22px; border-top: 1px solid #eaecf0; background: white; }
 button:focus-visible { outline: 3px solid #175cd3; outline-offset: 3px; }
 @media (max-width: 700px) { .identity-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 14px; }.dialog-header { padding: 18px 16px 14px; }.dialog-body { padding: 16px; }.capture-progress { padding: 0 16px 14px; gap: 8px; justify-content: space-between; }.capture-progress li { font-size: .7rem; }.capture-progress span { width: 21px; height: 21px; }.capture-layout--face { grid-template-columns: 1fr; }.gesture-panel { padding: 14px; }.gesture-visual { float: right; font-size: 2.5rem; }.capture-actions { padding: 14px 16px; justify-content: center; }.capture-actions .acct-btn { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; }.capture-meter span { transition: none; } }
