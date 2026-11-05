@@ -191,9 +191,21 @@ export class ReservaResultadoComponent {
   protected emailContacto(): string {
     const reserva = this.reserva();
     if (!reserva) return 'No informado';
+    // RN-37: si la cuenta se dio de baja, se muestra el email que tenía (histórico).
+    const anunciante = reserva.publicacion?.anunciante?.usuario;
     return this.esInquilino()
-      ? (reserva.publicacion?.anunciante?.usuario?.email ?? 'No informado')
+      ? (anunciante?.email ?? anunciante?.email_historico ?? 'No informado')
       : (reserva.usuario_email ?? reserva.usuario?.email ?? 'No informado');
+  }
+
+  /**
+   * CUIT/CUIL del anunciante para el comprobante del Inquilino. Si el anunciante
+   * se dio de baja, el histórico lo sigue identificando (RN-37).
+   */
+  protected cuitAnunciante(): string | null {
+    const anunciante = this.reserva()?.publicacion?.anunciante;
+    if (!this.esInquilino() || !anunciante) return null;
+    return anunciante.cuit_cuil ?? anunciante.cuit_cuil_historico ?? null;
   }
 
   protected telefonoContacto(): string {

@@ -87,13 +87,15 @@ export class VerificacionAnuncianteService {
       ...datosEmpresa,
     });
     await this.verificacionRepo.guardarSolicitud(solicitud);
-    try {
-      await this.mailService.enviarSolicitudAnunciante(usuario.email);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo confirmar la solicitud de anunciante a ${usuario.email}`,
-        error as Error,
-      );
+    if (usuario.email) {
+      try {
+        await this.mailService.enviarSolicitudAnunciante(usuario.email);
+      } catch (error) {
+        this.logger.error(
+          `No se pudo confirmar la solicitud de anunciante a ${usuario.email}`,
+          error as Error,
+        );
+      }
     }
     return anunciante;
   }

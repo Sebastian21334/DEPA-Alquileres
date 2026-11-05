@@ -41,9 +41,12 @@
 
         <div class="auth__field">
           <label for="email">Email</label>
-          <input id="email" type="email" formControlName="email" autocomplete="email" />
+          <input id="email" type="email" formControlName="email" autocomplete="email"
+            [attr.aria-invalid]="!!errorEmail() || null" (input)="errorEmail.set(null)" />
           @if (form.controls.email.invalid && form.controls.email.touched) {
             <span class="auth__hint auth__hint--error">Ingresá un email válido.</span>
+          } @else if (errorEmail()) {
+            <span class="auth__hint auth__hint--error" role="alert">{{ errorEmail() }}</span>
           }
         </div>
 
