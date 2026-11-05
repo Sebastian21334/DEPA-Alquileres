@@ -50,10 +50,10 @@ export class AuthService {
     // hizo: solo el mail no salió, y el usuario puede pedir uno nuevo más
     // tarde. Se loguea para que quede auditado sin romper la respuesta.
     try {
-      await this.mailService.enviarVerificacion(usuario.email, token);
+      await this.mailService.enviarVerificacion(email, token);
     } catch (error) {
       this.logger.error(
-        `No se pudo enviar el mail de verificación a ${usuario.email}`,
+        `No se pudo enviar el mail de verificación a ${email}`,
         error as Error,
       );
     }
@@ -105,10 +105,10 @@ export class AuthService {
 
     const token = await this.credencialesService.generarTokenVerificacion(user);
     try {
-      await this.mailService.enviarVerificacion(user.email, token);
+      await this.mailService.enviarVerificacion(email, token);
     } catch (error) {
       this.logger.error(
-        `No se pudo reenviar el mail de verificación a ${user.email}`,
+        `No se pudo reenviar el mail de verificación a ${email}`,
         error as Error,
       );
     }
@@ -130,7 +130,8 @@ export class AuthService {
     );
 
     // Si no existe el usuario, igual devolvemos éxito (evita enumeración de emails)
-    if (resultado) {
+    // Las cuentas dadas de baja no tienen email vigente y no llegan hasta acá (RN-37).
+    if (resultado?.usuario.email) {
       // Mismo criterio que en register(): el token ya quedó persistido, así
       // que una falla del proveedor de mail no debe convertirse en un error
       // para el cliente (ver nota en register()).
@@ -170,7 +171,8 @@ export class AuthService {
     return { mensaje: 'Contraseña actualizada correctamente' };
   }
 
-  private async notificarCambioContrasenia(email: string): Promise<void> {
+  private async notificarCambioContrasenia(email: string | null): Promise<void> {
+    if (!email) return;
     try {
       await this.mailService.enviarCambioContrasenia(email);
     } catch {

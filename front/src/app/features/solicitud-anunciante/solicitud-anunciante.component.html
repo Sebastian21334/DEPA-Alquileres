@@ -37,9 +37,12 @@
               </div>
               <div class="acct-field">
                 <label for="cuit">{{ esInmobiliaria() ? 'CUIT de la inmobiliaria' : 'CUIT / CUIL personal' }}</label>
-                <input id="cuit" formControlName="cuit" inputmode="numeric" placeholder="20-12345678-9" />
+                <input id="cuit" formControlName="cuit" inputmode="numeric" placeholder="20-12345678-9"
+                  [attr.aria-invalid]="!!errorCuit() || null" (input)="errorCuit.set('')" />
                 @if (form.controls.cuit.invalid && form.controls.cuit.touched) {
                   <span class="acct-hint acct-hint--error">Ingresá un CUIT/CUIL válido (11 dígitos).</span>
+                } @else if (errorCuit()) {
+                  <span class="acct-hint acct-hint--error" role="alert">{{ errorCuit() }}</span>
                 }
               </div>
               <div class="acct-field">

@@ -136,6 +136,12 @@
               <dt>Fecha</dt>
               <dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd>
             </div>
+            @if (cuitAnunciante(); as cuit) {
+              <div>
+                <dt>CUIT/CUIL del anunciante</dt>
+                <dd>{{ cuit }}</dd>
+              </div>
+            }
           </dl>
           @if (item.cotizacion_dolar; as dolar) {
             <div class="conversion-detail">

@@ -291,7 +291,7 @@
           type="search"
           aria-label="Buscar usuarios"
           maxlength="200"
-          placeholder="Buscar por nombre o email"
+          placeholder="Buscar por nombre, email o CUIT/CUIL"
           [ngModel]="query()"
           (ngModelChange)="searchUsers($event)"
       /></label>
@@ -318,13 +318,17 @@
                 ><small>{{ user.email_verificado ? 'Email verificado' : 'Email pendiente' }}</small>
               </td>
               <td data-label="Contacto">
-                {{ user.email }}<small>{{ user.telefono }}</small>
+                <!-- RN-37: una cuenta dada de baja conserva su email y CUIT/CUIL como históricos. -->
+                {{ user.email ?? user.email_historico }}<small>{{ user.telefono }}</small>
+                @if (user.cuit_cuil ?? user.cuit_cuil_historico; as cuit) {
+                  <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
+                }
               </td>
               <td data-label="Rol">
                 <select
                   (change)="changeRole(user, $any($event.target))"
                   [disabled]="busy() === 'user-' + user.id || !roles().length"
-                  [attr.aria-label]="'Rol de ' + user.email"
+                  [attr.aria-label]="'Rol de ' + (user.email ?? user.email_historico)"
                 >
                   @if (!user.rol) {
                     <option value="" selected disabled>Sin rol</option>

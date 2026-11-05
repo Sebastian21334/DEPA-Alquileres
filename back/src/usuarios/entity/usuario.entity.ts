@@ -19,8 +19,14 @@ export class Usuario {
   @Column({ type: 'varchar', length: 100 })
   apellido: string;
 
-  @Column({ type: 'varchar', length: 150, unique: true })
-  email: string;
+  // Único entre las cuentas que lo tienen. Al dar de baja la cuenta queda en
+  // null para que la persona pueda registrarse de nuevo con el mismo correo (RN-37).
+  @Column({ type: 'varchar', length: 150, unique: true, nullable: true })
+  email: string | null;
+
+  // Correo que tenía la cuenta al darse de baja; identifica a la persona en el historial.
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  email_historico: string | null;
 
   @Column({ type: 'varchar', length: 20 })
   telefono: string;
@@ -80,9 +86,22 @@ export class Usuario {
     if (datos.telefono !== undefined) this.telefono = datos.telefono.trim();
   }
 
+  /** Correo para mostrar: el vigente o, si la cuenta se dio de baja, el que tenía. */
+  emailParaHistorial(): string | null {
+    return this.email ?? this.email_historico ?? null;
+  }
+
+  /**
+   * Baja lógica (RN-36 y RN-37). Libera el correo para una cuenta nueva y
+   * conserva el original en email_historico.
+   */
   darDeBaja(): void {
     this.activa = false;
     this.fecha_baja = new Date();
+    if (this.email) {
+      this.email_historico = this.email;
+      this.email = null;
+    }
     this.token_verificacion = null;
     this.token_recuperacion = null;
     this.token_recuperacion_expira = null;
