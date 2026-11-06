@@ -48,7 +48,24 @@ export class AzureArchivoRepository implements IArchivoRepository {
     const nombre = this.nombrePropio(url, contenedor.url);
     if (nombre === null)
       throw new Error('Documento ajeno al almacenamiento privado');
-    await contenedor.getBlobClient(nombre).deleteIfExists();
+    await contenedor
+      .getBlobClient(nombre)
+      .deleteIfExists({ deleteSnapshots: 'include' });
+    // Azure puede devolver éxito y conservar copias recuperables. No confirmar
+    // el trabajo mientras exista el blob, una versión o una instantánea.
+    for await (const copia of contenedor.listBlobsFlat({
+      prefix: nombre,
+      includeDeleted: true,
+      includeSnapshots: true,
+      includeVersions: true,
+      includeDeletedWithVersions: true,
+    })) {
+      if (copia.name === nombre) {
+        throw new Error(
+          'Azure conserva copias del documento; revisar protección de datos',
+        );
+      }
+    }
   }
 
   private contenedor(tipo: ContenedorArchivos) {
