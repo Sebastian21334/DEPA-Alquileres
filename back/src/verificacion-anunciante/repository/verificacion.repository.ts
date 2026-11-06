@@ -11,6 +11,7 @@ import {
   SolicitudVerificacion,
 } from '../entity/solicitud-verificacion.entity';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
+import { EliminacionDocumento } from '../entity/eliminacion-documento.entity';
 
 @Injectable()
 export class VerificacionRepository implements IVerificacionRepository {
@@ -47,12 +48,63 @@ export class VerificacionRepository implements IVerificacionRepository {
         .setLock('pessimistic_write', undefined, ['solicitud'])
         .getOne();
       return operacion(solicitud, {
+        programarEliminacionDocumentos: async (urls) => {
+          if (!urls.length) return;
+          await manager
+            .getRepository(EliminacionDocumento)
+            .createQueryBuilder()
+            .insert()
+            .values([...new Set(urls)].map((url) => ({ url })))
+            .orIgnore()
+            .execute();
+        },
         guardarSolicitud: (actual) => solicitudes.save(actual),
         guardarAnunciante: (actual) =>
           manager.getRepository(Anunciante).save(actual),
         guardarRevision: (revision) =>
           manager.getRepository(RevisionVerificacion).save(revision),
       });
+    });
+  }
+
+  /** Solo bloquea la cola; no mantiene bloqueada la solicitud durante Azure. */
+  procesarEliminacionesPendientes(
+    eliminar: (url: string) => Promise<void>,
+    ahora = new Date(),
+  ): Promise<{ eliminados: number; fallidos: number }> {
+    return this.dataSource.transaction(async (manager) => {
+      const cola = manager.getRepository(EliminacionDocumento);
+      const documentos = await cola
+        .createQueryBuilder('documento')
+        .where('documento.proximo_intento <= :ahora', { ahora })
+        .orderBy('documento.proximo_intento', 'ASC')
+        .addOrderBy('documento.id', 'ASC')
+        .take(25)
+        .setLock('pessimistic_write')
+        .setOnLocked('skip_locked')
+        .getMany();
+      let eliminados = 0;
+      let fallidos = 0;
+      for (const documento of documentos) {
+        try {
+          await eliminar(documento.url);
+        } catch {
+          documento.intentos += 1;
+          // Reintenta sin vencimiento, con espera creciente hasta una hora.
+          const espera = Math.min(
+            3_600_000,
+            30_000 * 2 ** Math.min(documento.intentos - 1, 7),
+          );
+          documento.proximo_intento = new Date(ahora.getTime() + espera);
+          await cola.save(documento);
+          fallidos += 1;
+          continue;
+        }
+        // Si falla el COMMIT, repetir el borrado es seguro (deleteIfExists).
+        await cola.delete(documento.id);
+        eliminados += 1;
+      }
+      return { eliminados, fallidos };
     });
   }
 

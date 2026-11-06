@@ -15,10 +15,16 @@ import { VERIFICACION_REPOSITORY } from './repository/verificacion.repository.in
 import { VerificacionRepository } from './repository/verificacion.repository';
 import { PruebaVidaService } from './service/prueba-vida.service';
 import { VerificacionAnuncianteService } from './service/verificacion-anunciante.service';
+import { EliminacionDocumento } from './entity/eliminacion-documento.entity';
+import { EliminacionDocumentosService } from './service/eliminacion-documentos.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SolicitudVerificacion, RevisionVerificacion]),
+    TypeOrmModule.forFeature([
+      SolicitudVerificacion,
+      RevisionVerificacion,
+      EliminacionDocumento,
+    ]),
     AnunciantesModule,
     SeguridadModule,
     CatalogosModule,
@@ -29,6 +35,7 @@ import { VerificacionAnuncianteService } from './service/verificacion-anunciante
   controllers: [VerificacionAnuncianteController],
   providers: [
     VerificacionAnuncianteService,
+    EliminacionDocumentosService,
     PruebaVidaService,
     VerificacionRepository,
     { provide: VERIFICACION_REPOSITORY, useExisting: VerificacionRepository },
