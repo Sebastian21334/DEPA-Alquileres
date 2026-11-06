@@ -6,6 +6,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "db:eliminacion-documentos": "node scripts/eliminacion-documentos.cjs --aplicar",
+    "test:eliminacion-documentos": "npm run build && node --test test/eliminacion-documentos.test.cjs",
     "db:inicializar": "node scripts/inicializar-base.cjs --aplicar",
     "db:datos-rnf8": "node scripts/datos-rnf8.cjs",
     "db:verificar-datos-rnf8": "node scripts/verificar-datos-rnf8.cjs",
@@ -61,6 +63,7 @@
     "typeorm": "^1.1.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "@nestjs/cli": "^12.0.0",
     "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
