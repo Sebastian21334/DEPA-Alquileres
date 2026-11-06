@@ -58,6 +58,9 @@ fuera de la transacción y solo actualizan sus indicadores de envío.
 
 # Retiro del catálogo de métodos de pago
 
+Para la política por eventos de eliminación de DNI, rostro y constancias,
+ver [preparación, migración y requisitos de Azure](../docs/eliminacion-documentos.md).
+
 Los pagos se gestionan mediante Mercado Pago Checkout Pro. El medio confirmado
 se conserva en `pago.payment_method_id`; ya no existe un catálogo propio ni una
 relación desde `reserva`.

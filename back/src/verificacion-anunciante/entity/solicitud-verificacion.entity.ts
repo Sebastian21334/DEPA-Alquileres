@@ -151,6 +151,28 @@ export class SolicitudVerificacion {
     return !!(this.dni_frente_url && this.dni_dorso_url && this.rostro_url);
   }
 
+  /** Retira los adjuntos y autorizaciones; conserva la decisión y su auditoría. */
+  retirarDocumentos(): string[] {
+    const documentos = [
+      this.dni_frente_url,
+      this.dni_dorso_url,
+      this.rostro_url,
+      this.matricula_url,
+      this.constancia_cuit_url,
+    ].filter((url): url is string => !!url);
+    this.dni_frente_url = null;
+    this.dni_dorso_url = null;
+    this.rostro_url = null;
+    this.matricula_url = null;
+    this.constancia_cuit_url = null;
+    this.prueba_vida_desafio = null;
+    this.prueba_vida_revision = null;
+    this.prueba_vida_rostro_hash = null;
+    this.prueba_vida_vence_en = null;
+    this.prueba_vida_consumida_en = null;
+    return [...new Set(documentos)];
+  }
+
   puedeRecibirDocumentos(reenvio: boolean): boolean {
     return reenvio
       ? this.estaRechazada()
