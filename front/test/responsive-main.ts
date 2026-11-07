@@ -180,7 +180,10 @@ const interceptor: HttpInterceptorFn = (req) => {
           }),
       );
   } else if (p === '/usuarios/me') body = user;
-  else if (p === '/anunciantes/mi-solicitud') body = solicitud;
+  else if (p === '/anunciantes/mi-solicitud')
+    body = params.get('anunciante') === 'no'
+      ? null
+      : { ...solicitud, estado: params.get('anunciante') === 'pendiente' ? 'pendiente' : solicitud.estado };
   else if (p === '/anunciantes/pendientes')
     body = [
       {
@@ -200,7 +203,14 @@ const interceptor: HttpInterceptorFn = (req) => {
   else if (p === '/usuarios/administracion')
     body = page([user, { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true }]);
   else if (p === '/publicaciones/administracion') body = page(publicaciones);
-  else if (p.startsWith('/publicaciones/anunciante/')) body = publicaciones;
+  else if (p.startsWith('/publicaciones/anunciante/')) {
+    const requestedCount = Number(params.get('publicacionesPerfil') ?? publicaciones.length);
+    const count = Number.isSafeInteger(requestedCount) && requestedCount >= 0
+      ? Math.min(requestedCount, 60) : publicaciones.length;
+    body = Array.from({ length: count }, (_, i) => ({
+      ...publicaciones[i % publicaciones.length], id: i + 1,
+    }));
+  }
   else if (p === '/publicaciones') body = page(publicaciones);
   else if (/^\/publicaciones\/\d+$/.test(p)) body = publicaciones[0];
   else if (p.startsWith('/disponibilidad/')) body = fechas;

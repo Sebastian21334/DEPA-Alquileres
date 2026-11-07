@@ -2,6 +2,20 @@
   "installCommand": "npm --prefix front ci",
   "buildCommand": "npm --prefix front run build",
   "outputDirectory": "front/dist/front/browser",
+  "images": {
+    "sizes": [320, 640, 1024],
+    "qualities": [70],
+    "formats": ["image/webp"],
+    "minimumCacheTTL": 86400,
+    "localPatterns": [],
+    "remotePatterns": [{
+      "protocol": "https",
+      "hostname": "^seminario1integrador\\.blob\\.core\\.windows\\.net$",
+      "port": "",
+      "pathname": "^/(imagenes|rnf8-[^/]+)/publicaciones/[^/]+\\.(jpg|jpeg|png|webp)$",
+      "search": ""
+    }]
+  },
   "rewrites": [
     {
       "source": "/(.*)",

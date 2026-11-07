@@ -1,7 +1,7 @@
 import { rentalDays, isRentalRangeAvailable } from '../../shared/utils/rental-dates';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin, Subscription } from 'rxjs';
+import { forkJoin, of, Subscription, switchMap } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
@@ -14,6 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo } from '../../shared/utils/reservation-state';
+import { PerfilService } from '../../core/services/perfil.service';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -24,6 +25,7 @@ import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo } from '../../sha
 })
 export class MisReservasComponent {
   private readonly reservasApi = inject(ReservationService);
+  private readonly perfil = inject(PerfilService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly calendarioApi = inject(AvailabilityService);
@@ -32,6 +34,7 @@ export class MisReservasComponent {
   private consultaReservas?: Subscription;
   protected readonly estadiaActiva = estadiaActiva;
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
+  protected readonly esAnunciante = this.perfil.esAnuncianteVerificado;
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
@@ -100,7 +103,9 @@ export class MisReservasComponent {
     this.consultaReservas?.unsubscribe();
     this.consultaReservas = forkJoin({
       propias: this.reservasApi.mine(),
-      recibidas: this.reservasApi.received(),
+      recibidas: this.perfil.esAnunciante().pipe(
+        switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received() : of<Reserva[]>([])),
+      ),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ propias, recibidas }) => {
         this.propias.set(propias);
