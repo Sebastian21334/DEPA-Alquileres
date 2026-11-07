@@ -100,6 +100,11 @@ export class MensajesService {
         'No podés enviarle mensajes a esta cuenta porque fue dada de baja',
       );
     }
+    if (destinatario.bloqueado || !remitente?.activa || remitente.bloqueado) {
+      throw new ConflictException(
+        'El contacto está suspendido porque una cuenta está bloqueada o inactiva. Para reservas anteriores, contactá a soporte.',
+      );
+    }
 
     const mensaje = this.mensajeRepository.crear({
       texto: dto.texto,

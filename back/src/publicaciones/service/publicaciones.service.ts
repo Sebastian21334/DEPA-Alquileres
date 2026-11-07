@@ -1,4 +1,5 @@
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { cuentaAnuncianteHabilitada, publicacionVisible } from '../politica-publicacion';
 import {
   BadRequestException,
   ForbiddenException,
@@ -84,6 +85,14 @@ export class PublicacionesService {
     return publicacion;
   }
 
+  /** El acceso interno conserva el historial; el enlace público respeta el bloqueo. */
+  async buscarPublicaPorId(id: number) {
+    const publicacion = await this.buscarPorId(id);
+    if (!cuentaAnuncianteHabilitada(publicacion))
+      throw new NotFoundException('Publicación no disponible');
+    return publicacion;
+  }
+
   /**
    * Único punto que autoriza operar sobre una publicación ajena: 404 si no
    * existe y 403 si pertenece a otro anunciante. Cada caso de uso informa su mensaje.
@@ -102,7 +111,7 @@ export class PublicacionesService {
   /** Registra una apertura real del detalle; el cliente evita repetirla durante la misma sesión. */
   async registrarVisualizacion(id: number) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
-    if (!publicacion || !publicacion.activa)
+    if (!publicacion || !publicacionVisible(publicacion))
       throw new NotFoundException('Publicación no encontrada');
     await this.publicacionesRepo.incrementarVisualizaciones(id);
     return { visualizaciones: Number(publicacion.visualizaciones ?? 0) + 1 };
@@ -168,14 +177,8 @@ export class PublicacionesService {
       soloActivas,
     );
     // El dueño ve todas (para poder completarlas); la vista pública solo las que cumplen la regla.
-    return soloActivas
-      ? publicaciones.filter((p) => this.tieneImagenes(p))
-      : publicaciones;
-  }
-
-  /** Regla de negocio: una publicación sin imágenes nunca se muestra públicamente. */
-  private tieneImagenes(publicacion: Publicacion): boolean {
-    return (publicacion.imagenes?.length ?? 0) > 0;
+    return publicaciones.filter((p) => cuentaAnuncianteHabilitada(p) &&
+      (!soloActivas || publicacionVisible(p)));
   }
 
   /** Modifica una publicación conservando la fecha original y validando propiedad. */

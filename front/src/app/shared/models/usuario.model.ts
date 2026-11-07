@@ -3,6 +3,8 @@
 
 export interface Usuario {
   id: number;
+  activa?: boolean;
+  bloqueado?: boolean;
   nombre: string;
   apellido: string;
   /** null cuando la cuenta se dio de baja; el original queda en email_historico (RN-37). */

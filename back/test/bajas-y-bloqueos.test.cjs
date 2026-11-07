@@ -91,8 +91,8 @@ function servicioUsuarios(db) {
       return {
         createQueryBuilder: (alias) => consulta(db, tabla, alias),
         async save(usuario) {
-          db.prepare('UPDATE usuario SET activa = ?, fecha_baja = ? WHERE id = ?')
-            .run(usuario.activa ? 1 : 0, usuario.fecha_baja?.toISOString() ?? null, usuario.id);
+          db.prepare('UPDATE usuario SET activa = ?, bloqueado = ?, fecha_baja = ? WHERE id = ?')
+            .run(usuario.activa ? 1 : 0, usuario.bloqueado ? 1 : 0, usuario.fecha_baja?.toISOString() ?? null, usuario.id);
           return usuario;
         },
       };
@@ -116,8 +116,33 @@ function servicioUsuarios(db) {
     },
   };
   const dataSource = { transaction: (fn) => fn(manager) };
-  return new UsuariosService({}, {}, {}, dataSource, {}, {});
+  return new UsuariosService({
+    buscarPorId: async (id) => {
+      const fila = db.prepare('SELECT * FROM usuario WHERE id = ?').get(id);
+      return fila && Object.assign(new Usuario(), { ...fila, activa: !!fila.activa, bloqueado: !!fila.bloqueado });
+    },
+  }, {}, {}, dataSource, {}, {});
 }
+
+test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de publicaciones', async () => {
+  const db = base();
+  reserva(db, { estado_pago: 'PENDIENTE', estado_liquidacion: 'NO_APLICA' });
+  reserva(db, { estado_liquidacion: 'RETENIDO', fecha_fin: FUTURO });
+  reserva(db, { estado_liquidacion: 'EN_REVISION' });
+  reserva(db, { estado_liquidacion: 'PENDIENTE_PAGO_PROPIETARIO' });
+  db.exec('INSERT INTO publicacion VALUES (11, 2, 0)');
+  const antes = db.prepare('SELECT * FROM reserva').all();
+  const publicaciones = db.prepare('SELECT * FROM publicacion').all();
+  const servicio = servicioUsuarios(db);
+  await servicio.cambiarBloqueo(2, true, 99, 'Moderación');
+  assert.equal(db.prepare('SELECT bloqueado FROM usuario WHERE id = 2').get().bloqueado, 1);
+  assert.deepEqual(db.prepare('SELECT * FROM reserva').all(), antes);
+  assert.deepEqual(db.prepare('SELECT * FROM publicacion').all(), publicaciones);
+  await servicio.cambiarBloqueo(2, false, 99);
+  assert.equal(db.prepare('SELECT bloqueado FROM usuario WHERE id = 2').get().bloqueado, 0);
+  assert.deepEqual(db.prepare('SELECT * FROM reserva').all(), antes);
+  assert.deepEqual(db.prepare('SELECT * FROM publicacion').all(), publicaciones);
+});
 
 const activa = (db, id) => !!db.prepare('SELECT activa FROM usuario WHERE id = ?').get(id).activa;
 
@@ -243,6 +268,21 @@ function servicioMensajes(usuarios) {
 
 const persona = (id, datos = {}) =>
   Object.assign(new Usuario(), { id, nombre: `U${id}`, apellido: '', email: `u${id}@depa.test`, activa: true, ...datos });
+
+for (const bloqueado of [1, 2]) {
+  test(`no guarda ni notifica mensajes cuando la cuenta ${bloqueado} está bloqueada`, async () => {
+    const { servicio, guardados, correos } = servicioMensajes({
+      1: persona(1, { bloqueado: bloqueado === 1 }),
+      2: persona(2, { bloqueado: bloqueado === 2 }),
+    });
+    await assert.rejects(
+      servicio.enviar({ id_publicacion: 10, id_destino_usuario: 2, texto: 'hola' }, 1),
+      (error) => error instanceof ConflictException && /suspendido/.test(error.message),
+    );
+    assert.equal(guardados.length, 0);
+    assert.equal(correos.length, 0);
+  });
+}
 
 test('no se le puede escribir a una cuenta dada de baja ni le llega el correo', async () => {
   const { servicio, guardados, correos } = servicioMensajes({

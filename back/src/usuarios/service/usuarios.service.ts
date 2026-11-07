@@ -395,8 +395,26 @@ export class UsuariosService {
       );
     }
 
-    usuario.cambiarBloqueo(bloqueado);
-    await this.usuariosRepo.guardar(usuario);
+    // Serializa el bloqueo con la creación de reservas, que toma la misma
+    // fila de publicación y vuelve a leer el estado de la cuenta antes de guardar.
+    await this.dataSource.transaction(async (manager) => {
+      const actual = await manager.getRepository(Usuario)
+        .createQueryBuilder('usuario')
+        .where('usuario.id = :idUsuario', { idUsuario })
+        .setLock('pessimistic_write')
+        .getOne();
+      if (!actual) throw new NotFoundException('Usuario no encontrado');
+      if (!actual.activa) throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
+      await manager.getRepository(Publicacion)
+        .createQueryBuilder('publicacion')
+        .select('publicacion.id')
+        .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
+        .orderBy('publicacion.id', 'ASC')
+        .setLock('pessimistic_write')
+        .getMany();
+      actual.cambiarBloqueo(bloqueado);
+      await manager.getRepository(Usuario).save(actual);
+    });
 
     // Una cuenta activa siempre tiene email; la condición solo lo hace explícito.
     if (usuario.email) {

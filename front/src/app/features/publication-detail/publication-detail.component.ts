@@ -156,7 +156,7 @@ export class PublicationDetailComponent {
             this.loadAvailability(publication.id);
           }
         },
-        error: () => this.error.set('No pudimos encontrar esta publicación.'),
+        error: () => this.error.set('Esta publicación no está disponible para consultas ni nuevas reservas. Si ya tenés una reserva, podés consultarla en Mis reservas y acudir a soporte.'),
       });
   }
 

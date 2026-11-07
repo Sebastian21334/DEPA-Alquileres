@@ -56,15 +56,21 @@ export class ReservaResultadoComponent {
   protected readonly codigoValidado = computed(() =>
     Boolean(this.reserva()?.codigo_validado_en || this.codigo()?.validado_en),
   );
+  protected readonly contactoSuspendido = computed(() => {
+    const reserva = this.reserva();
+    const otro = this.esInquilino()
+      ? reserva?.publicacion?.anunciante?.usuario : reserva?.usuario;
+    return otro?.bloqueado === true || otro?.activa === false;
+  });
   protected readonly contactoDisponible = computed(() => {
     const reserva = this.reserva();
     return (
-      reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
+      !this.contactoSuspendido() && reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
     );
   });
   protected readonly whatsappUrl = computed(() => {
     const reserva = this.reserva();
-    if (!reserva) return null;
+    if (!reserva || this.contactoSuspendido()) return null;
     const telefono = this.esInquilino()
       ? (reserva.publicacion?.anunciante?.numero_contacto ??
         reserva.publicacion?.anunciante?.usuario?.telefono)
@@ -149,7 +155,7 @@ export class ReservaResultadoComponent {
   protected abrirChat(): void {
     const reserva = this.reserva();
     const idOtroUsuario = this.otroUsuarioId();
-    if (!reserva?.publicacion || !idOtroUsuario) return;
+    if (!reserva?.publicacion || !idOtroUsuario || !this.contactoDisponible()) return;
     this.chat.abrir({
       idPublicacion: reserva.publicacion.id,
       idOtroUsuario,

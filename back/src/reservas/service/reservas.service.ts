@@ -37,6 +37,7 @@ import { CrearReservaDto } from '../dto/crear-reserva.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
+import { cuentaAnuncianteHabilitada } from '../../publicaciones/politica-publicacion';
 
 export type CondicionesCobro = {
   precio_unitario_origen: string;
@@ -170,9 +171,9 @@ export class ReservasService
     const publicacion = await this.publicacionesService.buscarPorId(
       dto.id_publicacion,
     );
-    if (!publicacion.activa) {
+    if (!publicacion.activa || !cuentaAnuncianteHabilitada(publicacion)) {
       throw new BadRequestException(
-        'No se puede reservar una publicación inactiva',
+        'No se puede reservar: la publicación no está disponible',
       );
     }
     if (publicacion.perteneceA(idUsuario)) {
@@ -247,6 +248,7 @@ export class ReservasService
         }
         if (
           !actual?.activa ||
+          !cuentaAnuncianteHabilitada(actual) ||
           Number(actual.precio) !== precioDiario ||
           monedaActual !== moneda
         ) {

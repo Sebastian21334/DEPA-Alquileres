@@ -89,7 +89,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     // Se agregan imagenes y anunciante porque el listado público (home) necesita
     // mostrar la imagen principal y el estado "verificado" del anunciante por cada tarjeta.
     return this.repo.find({
-      where: { activa: true },
+      where: { activa: true, anunciante: { usuario: { activa: true, bloqueado: false } } },
       relations: {
         tipoPropiedad: true,
         ciudad: true,
@@ -138,6 +138,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .leftJoin('anunciante.usuario', 'usuario')
       .leftJoin('anunciante.tipoAnunciante', 'tipoAnunciante')
       .where('publicacion.activa = :activa', { activa: true })
+      .andWhere('usuario.activa = true AND usuario.bloqueado = false')
       .distinct(true);
 
     this.aplicarCategoria(base, categoria);
@@ -225,7 +226,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const ids = filas.map((fila) => Number(fila.id));
     const publicaciones = ids.length
       ? await this.repo.find({
-          where: ids.map((id) => ({ id, activa: true })),
+          where: ids.map((id) => ({ id, activa: true,
+            anunciante: { usuario: { activa: true, bloqueado: false } } })),
           relations: {
             tipoPropiedad: true,
             ciudad: true,
