@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output, inject, input, signal } from '@angular/core';
+import { Component, EventEmitter, Output, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { Publicacion } from '../../models/publicacion.model';
@@ -15,6 +15,8 @@ import {
 import { AuthService } from '../../../core/services/auth.service';
 import { FavoritesService } from '../../services/favorites.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
+import { environment } from '../../../../environments/environment';
+import { homeCardImage, HOME_CARD_IMAGE_SIZES } from '../../utils/home-card-image';
 
 // Tarjeta reutilizable de una publicación (prototipo "Card"): foto con badge de
 // modalidad y tipo de anunciante, título + ubicación, columna de características
@@ -32,8 +34,21 @@ export class ListingCardComponent {
   private readonly router = inject(Router);
 
   readonly publicacion = input.required<Publicacion>();
+  readonly miniaturaInicio = input(false);
   @Output() readonly favoriteChange = new EventEmitter<boolean>();
   protected readonly savingFavorite = signal(false);
+  private readonly falloMiniatura = signal<string | null>(null);
+  protected readonly imageSizes = HOME_CARD_IMAGE_SIZES;
+  protected readonly imagenTarjeta = computed(() => {
+    const url = this.publicacion().imagenes?.[0]?.url;
+    return url ? homeCardImage(
+      url, this.miniaturaInicio() && environment.production && this.falloMiniatura() !== url,
+    ) : null;
+  });
+
+  protected usarImagenOriginal(): void {
+    if (this.imagenTarjeta()?.srcset) this.falloMiniatura.set(this.imagenPrincipal);
+  }
 
   protected get isFavorite(): boolean {
     return this.favorites.isFavorite(this.publicacion().id);

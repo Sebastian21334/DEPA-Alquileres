@@ -48,7 +48,7 @@
   --color-dark-text-muted: #9ca0ae;
 
   /*
-   * Foto de fondo de Iniciar sesión y Crear cuenta. Para cambiarla, reemplazá
+   * Foto de fondo de las pantallas de autenticación. Para cambiarla, reemplazá
    * public/images/login-bg.webp (o apuntá esta variable a otro archivo).
    */
   --auth-bg-image: url("/images/login-bg.webp");

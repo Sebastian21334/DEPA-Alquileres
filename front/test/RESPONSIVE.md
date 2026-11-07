@@ -13,6 +13,11 @@ Los mapas y las imágenes externas pueden seguir requiriendo conexión.
 
 Parámetros opcionales: `?sesion=no` muestra la navegación de invitado,
 `?rol=Usuario` cambia el rol simulado y `?estado=error` simula errores de la API.
+`?anunciante=no` simula un inquilino sin solicitud de anunciante y
+`?anunciante=pendiente` simula una solicitud aún sin aprobar. En ambos casos,
+Mis reservas debe mostrar únicamente las reservas realizadas.
+`?publicacionesPerfil=14` muestra 14 propiedades en el perfil del anunciante para
+probar su paginación (6 por página). Acepta entre 0 y 60; `pagina=2` abre la segunda página.
 
 Revisión realizada el 5 de noviembre de 2026:
 
