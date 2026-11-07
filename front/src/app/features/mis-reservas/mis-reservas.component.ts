@@ -130,10 +130,16 @@ export class MisReservasComponent {
       reserva.estado_estadia === 'CONFIRMADA' &&
       !reserva.codigo_validado_en &&
       reserva.estado_pago === 'APROBADO' &&
+      reserva.estado_liquidacion !== 'EN_REVISION' &&
+      reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' &&
+      reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' &&
       !!reserva.publicacion &&
       !!reserva.fecha_inicio &&
       !!reserva.fecha_fin &&
-      this.dias(reserva) > 0
+      this.dias(reserva) > 0 &&
+      (reserva.precio_unitario_contratado ?? 0) > 0 &&
+      (reserva.importe_contratado ?? 0) > 0 &&
+      !!reserva.moneda_contratada
     );
   }
 

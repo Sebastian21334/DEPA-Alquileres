@@ -68,25 +68,50 @@ export class ReservaReprogramacionService {
             'Solo se pueden reprogramar reservas antes del inicio de la estadía y sin ingreso validado',
           );
         }
+        if (reserva.liquidacionEnRevision()) {
+          throw new BadRequestException(
+            'No se puede reprogramar una reserva con un reclamo o liquidación en revisión',
+          );
+        }
+        if (reserva.liquidacionResuelta()) {
+          throw new BadRequestException(
+            'No se puede reprogramar una reserva con una liquidación resuelta',
+          );
+        }
         if (!reserva.publicacion)
           throw new BadRequestException(
             'La publicación de la reserva ya no está disponible',
           );
+        // La reserva ya está confirmada: se permite reprogramar aunque la
+        // publicación esté inactiva, siempre que las fechas sigan disponibles.
         if (
           !reserva.fecha_inicio ||
           !reserva.fecha_fin ||
+          reserva.precio_unitario_contratado == null ||
           reserva.importe_contratado == null ||
-          !reserva.moneda_contratada
+          !reserva.moneda_contratada ||
+          !['ARS', 'USD'].includes(reserva.moneda_contratada)
         ) {
           throw new ConflictException(
             'La reserva requiere revisar sus condiciones originales antes de reprogramar. Contactá a soporte.',
           );
         }
+        const precioUnitario = Number(reserva.precio_unitario_contratado);
+        const importeContratado = Number(reserva.importe_contratado);
+        const montoPago = Number(reserva.monto_pago);
         if (
-          Math.abs(
-            Number(reserva.monto_pago) - Number(reserva.importe_contratado),
-          ) > 0.009
+          !Number.isFinite(precioUnitario) ||
+          precioUnitario <= 0 ||
+          !Number.isFinite(importeContratado) ||
+          importeContratado <= 0 ||
+          !Number.isFinite(montoPago) ||
+          montoPago <= 0
         ) {
+          throw new ConflictException(
+            'La reserva requiere revisar sus condiciones originales antes de reprogramar. Contactá a soporte.',
+          );
+        }
+        if (Math.abs(montoPago - importeContratado) > 0.009) {
           throw new ConflictException(
             'El importe registrado no coincide con el contratado. Contactá a soporte antes de reprogramar.',
           );
