@@ -5,6 +5,25 @@ publicación existente. El nuevo rango debe contener exactamente la misma cantid
 de días (se incluyen ambos extremos) y estar disponible. Puede conservar días del
 rango propio. La operación cambia reserva y calendario en una sola transacción.
 
+## Estados y condiciones
+
+- Solo puede reprogramar el Inquilino que realizó la reserva.
+- La reserva debe estar pagada, `CONFIRMADA`, no cancelada, no finalizada y antes
+  de la fecha de inicio.
+- No debe tener el código de alojamiento validado.
+- No debe tener un reclamo o liquidación `EN_REVISION`, ni una liquidación
+  resuelta (`PAGADO_PROPIETARIO` o `DEVUELTO_INQUILINO`).
+- La publicación debe existir. Se permite reprogramar aunque esté inactiva,
+  porque la reserva ya fue confirmada; las fechas nuevas deben seguir disponibles.
+- El nuevo inicio no puede ser anterior a hoy y el nuevo fin no puede ser anterior
+  al inicio.
+- Deben existir condiciones económicas verificables: precio unitario, importe,
+  monto pagado y moneda contratada. Si falta alguna o el monto no coincide con el
+  importe contratado, se rechaza y se solicita revisión.
+- No se limita la cantidad de reprogramaciones: cada una debe cumplir las mismas
+  condiciones. Tampoco se exige una anticipación mínima adicional; el límite es
+  el inicio de la estadía.
+
 La reprogramación conserva el total pagado, la tarifa y la moneda contratadas.
 Nunca toma el precio actual de la publicación ni genera cobros o devoluciones.
 Cambiar la duración requiere un futuro flujo de ajuste económico y aceptación;
@@ -29,6 +48,11 @@ el aviso pendiente y reintentarlo desde Mis reservas, incluso tras recargar.
 Los reintentos no vuelven a modificar el calendario y se serializan por aviso.
 Repetir las mismas fechas no crea otro evento. Si el proveedor entrega el correo
 pero falla la confirmación local, un reintento podría repetir ese correo.
+
+El destinatario del aviso es el Anunciante. El Inquilino ve el cambio y su
+historial en la interfaz; no se envía un correo al Inquilino ni al Administrador.
+Si el Anunciante no tiene correo registrado, el aviso queda pendiente y la
+operación de fechas no se revierte.
 
 ## Organización del código
 
