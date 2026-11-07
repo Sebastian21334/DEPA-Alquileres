@@ -23,6 +23,7 @@
     "test:condiciones-economicas": "npm run build && node --test test/condiciones-economicas.test.cjs",
     "test:paginacion-admin": "npm run build && node --test test/paginacion-admin.test.cjs",
     "test:bajas-y-bloqueos": "npm run build && node --test test/bajas-y-bloqueos.test.cjs",
+    "test:publicaciones-bloqueadas": "npm run build && node --test test/publicaciones-cuentas-bloqueadas.test.cjs test/bajas-y-bloqueos.test.cjs test/condiciones-economicas.test.cjs",
     "test:cuit-email-historicos": "npm run build && node --test test/cuit-email-historicos.test.cjs",
     "db:retirar-metodo-pago": "node scripts/retirar-metodo-pago.cjs --aplicar",
     "deploy": "nest deploy",

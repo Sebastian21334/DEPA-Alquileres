@@ -35,6 +35,9 @@
       <p class="chat__error" role="alert">{{ error() }}</p>
     }
 
+    @if (contactoSuspendido()) {
+      <p class="chat__error" role="status">Contacto suspendido: la cuenta no está disponible. El historial se conserva. Para reservas anteriores, contactá a soporte.</p>
+    }
     <form class="chat__form" (ngSubmit)="enviar()">
       <input
         name="texto"
@@ -42,9 +45,9 @@
         maxlength="250"
         placeholder="Escribí un mensaje…"
         autocomplete="off"
-        [disabled]="enviando()"
+        [disabled]="enviando() || contactoSuspendido()"
       />
-      <button type="submit" aria-label="Enviar" [disabled]="enviando() || !texto.trim()">
+      <button type="submit" aria-label="Enviar" [disabled]="enviando() || contactoSuspendido() || !texto.trim()">
         <svg lucideSend [size]="18"></svg>
       </button>
     </form>

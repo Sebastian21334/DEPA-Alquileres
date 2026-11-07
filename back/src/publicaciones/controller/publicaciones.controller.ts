@@ -91,7 +91,7 @@ export class PublicacionesController {
 
   @Get(':id')
   async buscarPorId(@Param('id', ParseIntPipe) id: number) {
-    return this.publicacionesService.buscarPorId(id);
+    return this.publicacionesService.buscarPublicaPorId(id);
   }
 
   @Post()
