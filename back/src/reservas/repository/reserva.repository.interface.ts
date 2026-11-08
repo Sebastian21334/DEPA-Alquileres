@@ -1,5 +1,6 @@
 import { Reserva } from '../entity/reserva.entity';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
+import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 import type { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
 export const RESERVA_REPOSITORY = 'RESERVA_REPOSITORY';
@@ -38,4 +39,18 @@ export interface IReservaRepository {
     idUsuarioInquilino: number,
   ): Promise<boolean>;
   buscarLiquidacionesAdministracion(): Promise<Reserva[]>;
+  crearSolicitudCancelacion(
+    datos: Partial<SolicitudCancelacion>,
+  ): SolicitudCancelacion;
+  guardarSolicitudCancelacion(
+    solicitud: SolicitudCancelacion,
+  ): Promise<SolicitudCancelacion>;
+  buscarSolicitudCancelacion(
+    id: number,
+    idReserva: number,
+  ): Promise<SolicitudCancelacion | null>;
+  buscarSolicitudCancelacionActiva(
+    idReserva: number,
+  ): Promise<SolicitudCancelacion | null>;
+  listarSolicitudesCancelacionAdministracion(): Promise<SolicitudCancelacion[]>;
 }

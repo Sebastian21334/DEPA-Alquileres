@@ -71,6 +71,7 @@ function escenario(moneda = 'ARS') {
     { buscarPorId: async () => ({ nombre: 'Prueba', apellido: 'Reserva' }) },
     publicaciones,
     { enviarConfirmacion: async () => {} },
+    { crearSolicitud: async () => ({}) },
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },
@@ -86,7 +87,10 @@ function escenario(moneda = 'ARS') {
       },
       buscarPorReferencia: async (referencia) => estado.pagos.find(p => p.external_reference === referencia),
     },
-    reservas, config,
+    reservas,
+    { registrarDesdeWebhook: async () => ({}), registrarManual: async () => ({}) },
+    { registrarContracargo: async () => ({}) },
+    config,
     {
       validarConfiguracionCheckout: () => {},
       crearCheckout: async (reserva, referencia, clave, currency) => {

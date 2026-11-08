@@ -31,12 +31,17 @@ export class AzureArchivoRepository implements IArchivoRepository {
   }
 
   async firmarDocumento(url: string): Promise<string> {
-    const contenedor = this.contenedor('verificaciones');
+    return this.firmarArchivo('verificaciones', url);
+  }
+
+  async firmarArchivo(
+    tipo: ContenedorArchivos,
+    url: string,
+  ): Promise<string> {
+    const contenedor = this.contenedor(tipo);
     const nombre = this.nombrePropio(url, contenedor.url);
     if (nombre === null)
-      throw new Error(
-        'El documento no pertenece al contenedor de verificaciones',
-      );
+      throw new Error('El archivo no pertenece al contenedor indicado');
     return contenedor.getBlobClient(nombre).generateSasUrl({
       permissions: BlobSASPermissions.parse('r'),
       expiresOn: new Date(Date.now() + 15 * 60 * 1000),
@@ -75,7 +80,9 @@ export class AzureArchivoRepository implements IArchivoRepository {
     const variable =
       tipo === 'imagenes'
         ? 'AZURE_STORAGE_CONTAINER'
-        : 'AZURE_VERIFICACION_CONTAINER';
+        : tipo === 'verificaciones'
+          ? 'AZURE_VERIFICACION_CONTAINER'
+          : 'AZURE_RECLAMOS_CONTAINER';
     const nombre = this.config.get<string>(variable) ?? tipo;
     return BlobServiceClient.fromConnectionString(conexion).getContainerClient(
       nombre,

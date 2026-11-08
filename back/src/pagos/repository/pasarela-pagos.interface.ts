@@ -12,6 +12,7 @@ export interface PagoExterno {
   status_detail?: string;
   payment_method_id?: string;
   date_approved?: string;
+  chargeback_id?: string;
 }
 
 export interface IPasarelaPagos {

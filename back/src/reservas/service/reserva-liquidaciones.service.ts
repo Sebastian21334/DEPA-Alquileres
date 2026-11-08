@@ -18,6 +18,12 @@ import { EstadoLiquidacionReserva, Reserva } from '../entity/reserva.entity';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 import { generarCodigoAlojamiento } from './reservas.utils';
+import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
+import {
+  OrigenReembolso,
+  TipoReembolso,
+} from '../../reembolsos/entity/reembolso.entity';
+import { fechaArgentina } from '../../common/utils/fechas';
 
 @Injectable()
 export class ReservaLiquidacionesService {
@@ -27,6 +33,7 @@ export class ReservaLiquidacionesService {
     @Inject(RESERVA_REPOSITORY)
     private readonly reservaRepository: IReservaRepository,
     private readonly disponibilidadService: DisponibilidadService,
+    private readonly reembolsosService: ReembolsosService,
   ) {}
 
   /** Devuelve el código únicamente al inquilino que realizó la reserva. */
@@ -167,12 +174,14 @@ export class ReservaLiquidacionesService {
   async resolverLiquidacion(
     id: number,
     dto: ResolverLiquidacionDto,
+    idAdmin: number,
   ): Promise<Reserva> {
     return this.transaccion.ejecutar(
       async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
         const permitidos = [
           EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
           EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+          EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
           EstadoLiquidacionReserva.EN_REVISION,
           EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
           EstadoLiquidacionReserva.RETENIDO,
@@ -198,13 +207,65 @@ export class ReservaLiquidacionesService {
             'No se puede registrar el pago al propietario sin validar el código',
           );
         }
+        const esDevolucion =
+          dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO ||
+          dto.estado === EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
+        if (esDevolucion) {
+          if (!this.reembolsosService.ejecucionAutomaticaHabilitada && !dto.referencia?.trim())
+            throw new BadRequestException('La referencia del comprobante de devolución es obligatoria');
+          const pago = await this.reembolsosService.buscarPagoPorReserva(id);
+          if (!pago)
+            throw new ConflictException(
+              'La reserva no tiene un pago registrado para devolver',
+            );
+          const saldo = pago.saldoReembolsable();
+          const importe =
+            dto.importe ??
+            (dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO
+              ? saldo
+              : 0);
+          if (!Number.isFinite(importe) || importe <= 0)
+            throw new BadRequestException(
+              'Indicá el importe de la devolución parcial',
+            );
+          if (importe > saldo + 0.009)
+            throw new ConflictException(
+              `La devolución supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
+            );
+          const reembolso = await this.reembolsosService.crearSolicitud({
+            reserva,
+            pago,
+            tipo:
+              dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO
+                ? TipoReembolso.TOTAL
+                : TipoReembolso.PARCIAL,
+            origen: OrigenReembolso.AJUSTE_ADMIN,
+            importe,
+            motivo:
+              dto.observacion?.trim() ||
+              'Resolución administrativa de la liquidación',
+            idSolicitadoPor: idAdmin,
+          });
+          await this.reembolsosService.registrarOejecutar(
+            reembolso.id,
+            dto.referencia?.trim(),
+            idAdmin,
+          );
+        }
+
         reserva.resolverLiquidacion(
           dto.estado,
           dto.referencia,
           dto.observacion,
         );
-        // Devolver el dinero cancela la reserva y libera sus días.
-        if (dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO) {
+        // Solo se liberan fechas futuras de una reserva que todavía no comenzó.
+        const hoy = fechaArgentina();
+        if (
+          dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO &&
+          reserva.fecha_inicio &&
+          reserva.fecha_inicio > hoy &&
+          !reserva.codigoValidado()
+        ) {
           await this.disponibilidadService.liberarReserva(
             reserva.id,
             fechaRepository,

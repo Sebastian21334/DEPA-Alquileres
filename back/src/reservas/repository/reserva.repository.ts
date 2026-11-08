@@ -9,6 +9,10 @@ import {
 } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
+import {
+  EstadoSolicitudCancelacion,
+  SolicitudCancelacion,
+} from '../entity/solicitud-cancelacion.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 
 @Injectable()
@@ -213,6 +217,68 @@ export class ReservaRepository implements IReservaRepository {
         },
       },
       order: { codigo_validado_en: 'ASC', id: 'DESC' },
+    });
+  }
+
+  private solicitudes() {
+    return this.repository.manager.getRepository(SolicitudCancelacion);
+  }
+
+  crearSolicitudCancelacion(
+    datos: Partial<SolicitudCancelacion>,
+  ): SolicitudCancelacion {
+    return this.solicitudes().create(datos);
+  }
+
+  guardarSolicitudCancelacion(
+    solicitud: SolicitudCancelacion,
+  ): Promise<SolicitudCancelacion> {
+    return this.solicitudes().save(solicitud);
+  }
+
+  buscarSolicitudCancelacion(
+    id: number,
+    idReserva: number,
+  ): Promise<SolicitudCancelacion | null> {
+    return this.solicitudes().findOne({
+      where: { id, reserva: { id: idReserva } },
+      relations: {
+        solicitante: true,
+        decidida_por: true,
+        reserva: {
+          usuario: true,
+          publicacion: { anunciante: { usuario: true } },
+        },
+      },
+    });
+  }
+
+  buscarSolicitudCancelacionActiva(
+    idReserva: number,
+  ): Promise<SolicitudCancelacion | null> {
+    return this.solicitudes().findOne({
+      where: {
+        reserva: { id: idReserva },
+        estado: EstadoSolicitudCancelacion.PENDIENTE,
+      },
+      relations: { solicitante: true, decidida_por: true },
+      order: { id: 'DESC' },
+    });
+  }
+
+  listarSolicitudesCancelacionAdministracion(): Promise<
+    SolicitudCancelacion[]
+  > {
+    return this.solicitudes().find({
+      where: { estado: EstadoSolicitudCancelacion.PENDIENTE },
+      relations: {
+        solicitante: true,
+        reserva: {
+          usuario: true,
+          publicacion: { anunciante: { usuario: true } },
+        },
+      },
+      order: { id: 'ASC' },
     });
   }
 }

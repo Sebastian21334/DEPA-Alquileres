@@ -7,15 +7,22 @@ import { ConfigService } from '@nestjs/config';
 import {
   MercadoPagoConfig,
   Payment,
+  PaymentRefund,
   Preference,
   WebhookSignatureValidator,
 } from 'mercadopago';
 import { IPasarelaPagos, PagoExterno } from './pasarela-pagos.interface';
+import type {
+  IPasarelaReembolsos,
+  ResultadoReembolsoExterno,
+} from '../../reembolsos/ports/pasarela-reembolsos.interface';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 import type { WebhookEntrada } from '../dto/webhook-pago.dto';
 
 @Injectable()
-export class MercadoPagoAdapter implements IPasarelaPagos {
+export class MercadoPagoAdapter
+  implements IPasarelaPagos, IPasarelaReembolsos
+{
   constructor(private readonly config: ConfigService) {}
 
   validarConfiguracionCheckout(): void {
@@ -81,6 +88,30 @@ export class MercadoPagoAdapter implements IPasarelaPagos {
 
   consultarPago(id: string): Promise<PagoExterno> {
     return new Payment(this.crearCliente()).get({ id });
+  }
+
+  async reembolsar(
+    paymentId: string,
+    importe: number,
+    idempotencyKey: string,
+  ): Promise<ResultadoReembolsoExterno> {
+    const client = this.crearCliente();
+    return new PaymentRefund(client).create({
+      payment_id: paymentId,
+      body: { amount: importe },
+      requestOptions: { idempotencyKey },
+    });
+  }
+
+  consultarReembolso(
+    paymentId: string,
+    refundId: string,
+  ): Promise<ResultadoReembolsoExterno> {
+    const client = this.crearCliente();
+    return new PaymentRefund(client).get({
+      payment_id: paymentId,
+      refund_id: refundId,
+    });
   }
 
   validarWebhook(entrada: WebhookEntrada): void {

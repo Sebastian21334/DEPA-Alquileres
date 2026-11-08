@@ -237,6 +237,8 @@ export class ReservaResultadoComponent {
       INGRESO_NO_VERIFICADO: 'El período de la estadía terminó sin un código de ingreso validado. Podés reportar un problema si necesitás revisión.',
       FECHAS_A_REVISAR: 'Esta reserva no tiene un período válido registrado. Contactá a soporte para revisarla.',
       CANCELADA: 'La reserva fue cancelada.',
+      REEMBOLSADA: 'La reserva fue reembolsada. Consultá el detalle de la devolución.',
+      EN_DISPUTA: 'Mercado Pago abrió un contracargo. La liquidación queda congelada hasta que se resuelva.',
     };
     const descripcion = descripciones[reserva.estado_estadia];
     if (descripcion) return descripcion;
