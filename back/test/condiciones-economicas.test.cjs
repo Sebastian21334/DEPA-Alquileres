@@ -27,6 +27,7 @@ function escenario(moneda = 'ARS') {
   const publicacion = {
     id: 1,
     activa: true,
+    anunciante: { usuario: { activa: true, bloqueado: false } },
     precio: moneda === 'USD' ? 50 : 100,
     tipoMoneda: { nombre: moneda },
     modalidad: { permite_reservas_por_fecha: true },
@@ -110,6 +111,18 @@ function sinOperaciones(estado) {
   assert.equal(estado.checkouts.length, 0);
 }
 
+test('bloquear impide nuevos presupuestos y checkout con presupuesto anterior', async () => {
+  const e = escenario();
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  e.publicacion.anunciante.usuario.bloqueado = true;
+  await assert.rejects(e.presupuestos.cotizar(solicitud, USUARIO), /no admite reservas/);
+  await assert.rejects(
+    e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO),
+    /no está disponible/,
+  );
+  sinOperaciones(e.estado);
+});
+
 for (const token of [undefined, null, '', 123]) {
   test(`checkout rechaza presupuesto ausente o invalido: ${token}`, async () => {
     const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
@@ -177,6 +190,8 @@ for (const moneda of ['ARS', 'USD']) {
       reserva.importe_contratado, reserva.moneda_contratada, reserva.cotizacion_dolar,
     ]);
     e.publicacion.precio *= 3;
+    // El bloqueo posterior no impide conciliar una operación ya iniciada.
+    e.publicacion.anunciante.usuario.bloqueado = true;
     e.publicacion.tipoMoneda.nombre = moneda === 'ARS' ? 'USD' : 'ARS';
     e.cotizacion.venta = '2000.000000';
     e.cotizacion.id = 11;
@@ -204,13 +219,14 @@ test('USD: una variacion del dolar no invalida la conversion de un presupuesto v
   assert.equal(e.estado.reservas[0].cotizacion_dolar.id, 10);
 });
 
-for (const cambio of ['precio', 'moneda', 'vencimiento']) {
+for (const cambio of ['precio', 'moneda', 'vencimiento', 'bloqueo']) {
   test(`revalida ${cambio} despues de esperar el bloqueo del calendario`, async (t) => {
     const e = escenario();
     const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
     e.estado.alBloquear = () => {
       if (cambio === 'precio') e.publicacion.precio = 200;
       if (cambio === 'moneda') e.publicacion.tipoMoneda.nombre = 'USD';
+      if (cambio === 'bloqueo') e.publicacion.anunciante.usuario.bloqueado = true;
       if (cambio === 'vencimiento') t.mock.timers.setTime(new Date(presupuesto.vence_en).getTime());
     };
     await assert.rejects(

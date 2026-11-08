@@ -3,6 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Anunciante } from '../entity/anunciante.entity';
 import { IAnunciantesRepository } from './anunciantes.repository.interface';
+import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
+
+/** Índice único de la migración 20261104-cuit-email-historicos.sql. */
+export const RESTRICCION_CUIT_UNICO = 'uq_anunciante_cuit_cuil_digitos';
 
 @Injectable()
 export class AnunciantesRepository implements IAnunciantesRepository {
@@ -16,7 +20,22 @@ export class AnunciantesRepository implements IAnunciantesRepository {
   }
 
   guardar(anunciante: Anunciante): Promise<Anunciante> {
-    return this.repo.save(anunciante);
+    // El índice único resuelve dos solicitudes simultáneas con el mismo CUIT/CUIL.
+    return guardarSinDuplicados(
+      () => this.repo.save(anunciante),
+      [RESTRICCION_CUIT_UNICO],
+    );
+  }
+
+  existeCuitVigente(cuit: string): Promise<boolean> {
+    // Las cuentas dadas de baja tienen cuit_cuil en null, por eso no cuentan.
+    return this.repo
+      .createQueryBuilder('anunciante')
+      .where(
+        "regexp_replace(anunciante.cuit_cuil, '[^0-9]', '', 'g') = :digitos",
+        { digitos: Anunciante.digitosCuit(cuit) },
+      )
+      .getExists();
   }
 
   buscarPorUsuario(idUsuario: number): Promise<Anunciante | null> {

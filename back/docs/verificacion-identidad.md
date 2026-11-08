@@ -36,7 +36,7 @@ La decisión, el responsable autenticado y la habilitación del anunciante se
 guardan en una misma transacción. Las operaciones usan un bloqueo de la solicitud;
 la carga externa de archivos y los correos quedan fuera del bloqueo. Una
 presentación fallida intenta borrar solo los archivos que acaba de subir. Esto
-no implementa la política general de retención o eliminación de DNI.
+se complementa con la [eliminación por resolución administrativa](eliminacion-documentos.md).
 
 ## Preparación de una base existente
 

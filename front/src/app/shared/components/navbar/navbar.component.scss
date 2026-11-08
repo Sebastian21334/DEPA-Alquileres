@@ -262,6 +262,11 @@
 .drawer__muted--error { color: var(--color-danger); }
 
 @media (max-width: 480px) {
+  .navbar__avatar--placeholder { display: none; }
+  .navbar__start { gap: .5rem; }
+  .navbar__menu, .drawer__close { min-width: 40px; min-height: 44px; }
+  .navbar__menu { font-size: 1.7rem; }
+  .navbar__link { font-size: .85rem; }
   .navbar__owner-cta {
     display: none;
   }
@@ -284,6 +289,12 @@
     padding: 0.5rem 0.9rem;
     font-size: 0.9rem;
   }
+}
+@media (max-width: 360px) {
+  .navbar__inner { gap: .35rem; padding-inline: .5rem; }
+  .navbar__logo-img { height: 27px; }
+  .navbar__end .btn { min-height: 44px; padding-inline: .65rem; }
+  .navbar__start { gap: .25rem; }
 }
 /* Detalles y animaciones */
 .navbar { transition: box-shadow .3s ease; animation: depa-fade-in .5s ease both; }

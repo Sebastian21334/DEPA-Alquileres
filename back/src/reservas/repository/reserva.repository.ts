@@ -29,7 +29,7 @@ export class ReservaRepository implements IReservaRepository {
   buscarCondicionesPublicacion(id: number): Promise<Publicacion | null> {
     return this.repository.manager
       .getRepository(Publicacion)
-      .findOne({ where: { id }, relations: { tipoMoneda: true } });
+      .findOne({ where: { id }, relations: { tipoMoneda: true, anunciante: { usuario: true } } });
   }
 
   guardarReprogramacion(

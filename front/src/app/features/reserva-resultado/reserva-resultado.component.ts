@@ -56,15 +56,21 @@ export class ReservaResultadoComponent {
   protected readonly codigoValidado = computed(() =>
     Boolean(this.reserva()?.codigo_validado_en || this.codigo()?.validado_en),
   );
+  protected readonly contactoSuspendido = computed(() => {
+    const reserva = this.reserva();
+    const otro = this.esInquilino()
+      ? reserva?.publicacion?.anunciante?.usuario : reserva?.usuario;
+    return otro?.bloqueado === true || otro?.activa === false;
+  });
   protected readonly contactoDisponible = computed(() => {
     const reserva = this.reserva();
     return (
-      reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
+      !this.contactoSuspendido() && reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
     );
   });
   protected readonly whatsappUrl = computed(() => {
     const reserva = this.reserva();
-    if (!reserva) return null;
+    if (!reserva || this.contactoSuspendido()) return null;
     const telefono = this.esInquilino()
       ? (reserva.publicacion?.anunciante?.numero_contacto ??
         reserva.publicacion?.anunciante?.usuario?.telefono)
@@ -149,7 +155,7 @@ export class ReservaResultadoComponent {
   protected abrirChat(): void {
     const reserva = this.reserva();
     const idOtroUsuario = this.otroUsuarioId();
-    if (!reserva?.publicacion || !idOtroUsuario) return;
+    if (!reserva?.publicacion || !idOtroUsuario || !this.contactoDisponible()) return;
     this.chat.abrir({
       idPublicacion: reserva.publicacion.id,
       idOtroUsuario,
@@ -191,9 +197,21 @@ export class ReservaResultadoComponent {
   protected emailContacto(): string {
     const reserva = this.reserva();
     if (!reserva) return 'No informado';
+    // RN-37: si la cuenta se dio de baja, se muestra el email que tenía (histórico).
+    const anunciante = reserva.publicacion?.anunciante?.usuario;
     return this.esInquilino()
-      ? (reserva.publicacion?.anunciante?.usuario?.email ?? 'No informado')
+      ? (anunciante?.email ?? anunciante?.email_historico ?? 'No informado')
       : (reserva.usuario_email ?? reserva.usuario?.email ?? 'No informado');
+  }
+
+  /**
+   * CUIT/CUIL del anunciante para el comprobante del Inquilino. Si el anunciante
+   * se dio de baja, el histórico lo sigue identificando (RN-37).
+   */
+  protected cuitAnunciante(): string | null {
+    const anunciante = this.reserva()?.publicacion?.anunciante;
+    if (!this.esInquilino() || !anunciante) return null;
+    return anunciante.cuit_cuil ?? anunciante.cuit_cuil_historico ?? null;
   }
 
   protected telefonoContacto(): string {

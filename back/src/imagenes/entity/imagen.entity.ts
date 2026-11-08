@@ -17,6 +17,10 @@ export class Imagen {
   @Column({ type: 'varchar', length: 250 })
   url: string;
 
+  // La primera imagen por orden es la portada de la publicación.
+  @Column({ type: 'integer', default: 0 })
+  orden: number;
+
   // La relación inversa permite cargar todas las imágenes de una publicación.
   @ManyToOne(() => Publicacion, (publicacion) => publicacion.imagenes, {
     onDelete: 'CASCADE',

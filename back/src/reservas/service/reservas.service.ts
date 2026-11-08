@@ -50,6 +50,7 @@ import {
   Reembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
+import { cuentaAnuncianteHabilitada } from '../../publicaciones/politica-publicacion';
 
 export type CondicionesCobro = {
   precio_unitario_origen: string;
@@ -184,9 +185,9 @@ export class ReservasService
     const publicacion = await this.publicacionesService.buscarPorId(
       dto.id_publicacion,
     );
-    if (!publicacion.activa) {
+    if (!publicacion.activa || !cuentaAnuncianteHabilitada(publicacion)) {
       throw new BadRequestException(
-        'No se puede reservar una publicación inactiva',
+        'No se puede reservar: la publicación no está disponible',
       );
     }
     if (publicacion.perteneceA(idUsuario)) {
@@ -261,6 +262,7 @@ export class ReservasService
         }
         if (
           !actual?.activa ||
+          !cuentaAnuncianteHabilitada(actual) ||
           Number(actual.precio) !== precioDiario ||
           monedaActual !== moneda
         ) {

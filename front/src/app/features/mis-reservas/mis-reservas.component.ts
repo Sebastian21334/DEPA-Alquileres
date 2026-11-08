@@ -2,7 +2,7 @@ import { CurrencyPipe } from '@angular/common';
 import { rentalDays, isRentalRangeAvailable } from '../../shared/utils/rental-dates';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, forkJoin, of, Subscription } from 'rxjs';
+import { catchError, forkJoin, of, Subscription, switchMap } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
@@ -16,6 +16,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo } from '../../shared/utils/reservation-state';
+import { PerfilService } from '../../core/services/perfil.service';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -26,6 +27,7 @@ import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo } from '../../sha
 })
 export class MisReservasComponent {
   private readonly reservasApi = inject(ReservationService);
+  private readonly perfil = inject(PerfilService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly calendarioApi = inject(AvailabilityService);
@@ -34,6 +36,7 @@ export class MisReservasComponent {
   private consultaReservas?: Subscription;
   protected readonly estadiaActiva = estadiaActiva;
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
+  protected readonly esAnunciante = this.perfil.esAnuncianteVerificado;
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
@@ -108,7 +111,9 @@ export class MisReservasComponent {
     this.consultaReservas?.unsubscribe();
     this.consultaReservas = forkJoin({
       propias: this.reservasApi.mine(),
-      recibidas: this.reservasApi.received(),
+      recibidas: this.perfil.esAnunciante().pipe(
+        switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received() : of<Reserva[]>([])),
+      ),
       reclamos: this.reservasApi.myClaims().pipe(catchError(() => of([]))),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ propias, recibidas, reclamos }) => {
@@ -140,10 +145,16 @@ export class MisReservasComponent {
       reserva.estado_estadia === 'CONFIRMADA' &&
       !reserva.codigo_validado_en &&
       reserva.estado_pago === 'APROBADO' &&
+      reserva.estado_liquidacion !== 'EN_REVISION' &&
+      reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' &&
+      reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' &&
       !!reserva.publicacion &&
       !!reserva.fecha_inicio &&
       !!reserva.fecha_fin &&
-      this.dias(reserva) > 0
+      this.dias(reserva) > 0 &&
+      (reserva.precio_unitario_contratado ?? 0) > 0 &&
+      (reserva.importe_contratado ?? 0) > 0 &&
+      !!reserva.moneda_contratada
     );
   }
 

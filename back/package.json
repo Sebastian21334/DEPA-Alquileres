@@ -6,6 +6,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "db:eliminacion-documentos": "node scripts/eliminacion-documentos.cjs --aplicar",
+    "test:eliminacion-documentos": "npm run build && node --test test/eliminacion-documentos.test.cjs",
     "db:inicializar": "node scripts/inicializar-base.cjs --aplicar",
     "db:datos-rnf8": "node scripts/datos-rnf8.cjs",
     "db:verificar-datos-rnf8": "node scripts/verificar-datos-rnf8.cjs",
@@ -15,8 +17,15 @@
     "db:reprogramacion-reservas": "node scripts/reprogramacion-reservas.cjs --aplicar",
     "db:cancelaciones-devoluciones": "node scripts/cancelaciones-devoluciones.cjs --aplicar",
     "db:calendario-unico": "node scripts/calendario-unico.cjs --aplicar",
+    "db:orden-imagenes": "node scripts/orden-imagenes.cjs --aplicar",
+    "db:cuit-email-historicos": "node scripts/cuit-email-historicos.cjs --aplicar",
+    "test:orden-imagenes": "npm run build && node --test test/orden-imagenes.test.cjs",
     "build": "nest build",
     "test:condiciones-economicas": "npm run build && node --test test/condiciones-economicas.test.cjs",
+    "test:paginacion-admin": "npm run build && node --test test/paginacion-admin.test.cjs",
+    "test:bajas-y-bloqueos": "npm run build && node --test test/bajas-y-bloqueos.test.cjs",
+    "test:publicaciones-bloqueadas": "npm run build && node --test test/publicaciones-cuentas-bloqueadas.test.cjs test/bajas-y-bloqueos.test.cjs test/condiciones-economicas.test.cjs",
+    "test:cuit-email-historicos": "npm run build && node --test test/cuit-email-historicos.test.cjs",
     "db:retirar-metodo-pago": "node scripts/retirar-metodo-pago.cjs --aplicar",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -56,6 +65,7 @@
     "typeorm": "^1.1.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
     "@nestjs/cli": "^12.0.0",
     "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",

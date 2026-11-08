@@ -136,6 +136,12 @@
               <dt>Fecha</dt>
               <dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd>
             </div>
+            @if (cuitAnunciante(); as cuit) {
+              <div>
+                <dt>CUIT/CUIL del anunciante</dt>
+                <dd>{{ cuit }}</dd>
+              </div>
+            }
           </dl>
           @if (item.cotizacion_dolar; as dolar) {
             <div class="conversion-detail">
@@ -158,7 +164,11 @@
           <div>
             <span class="eyebrow">Comunicación de la reserva</span>
             <h2>Contactá a {{ nombreContacto() }}</h2>
-            <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
+            @if (contactoSuspendido()) {
+              <p>El contacto está suspendido porque la cuenta no está disponible. Tu reserva conserva su estado; para asistencia, reclamos o gestiones pendientes, contactá a soporte.</p>
+            } @else {
+              <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
+            }
           </div>
           <div class="contact-actions">
             <button

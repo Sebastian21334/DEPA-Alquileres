@@ -10,6 +10,7 @@ import { createHmac } from 'node:crypto';
 import { CotizacionesService } from '../../cotizaciones/service/cotizaciones.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
+import { cuentaAnuncianteHabilitada } from '../../publicaciones/politica-publicacion';
 import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   decimalEntero,
@@ -66,7 +67,7 @@ export class PresupuestosService {
     const publicacion = await this.publicaciones.buscarPorId(
       dto.id_publicacion,
     );
-    if (!publicacion.activa || !admiteReservaPorFecha(publicacion.modalidad))
+    if (!publicacion.activa || !cuentaAnuncianteHabilitada(publicacion) || !admiteReservaPorFecha(publicacion.modalidad))
       throw new BadRequestException('Esta publicación no admite reservas');
     if (publicacion.perteneceA(idUsuario))
       throw new BadRequestException('No podés reservar tu propia publicación');

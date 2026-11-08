@@ -25,7 +25,7 @@ export class FavoritosRepository implements IFavoritosRepository {
           anunciante: { usuario: true, tipoAnunciante: true },
         },
       },
-      order: { creado_en: 'DESC' },
+      order: { creado_en: 'DESC', publicacion: { imagenes: { orden: 'ASC', id: 'ASC' } } },
     });
   }
 

@@ -1,4 +1,5 @@
 import { UsuariosCredencialesService } from './usuarios-credenciales.service';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { ARCHIVO_REPOSITORY } from '../../common/almacenamiento/archivo.repository.interface';
 import type { IArchivoRepository } from '../../common/almacenamiento/archivo.repository.interface';
 import { randomUUID } from 'node:crypto';
@@ -19,6 +20,7 @@ import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import sharp from 'sharp';
 import { DataSource, EntityManager } from 'typeorm';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import {
   EstadoLiquidacionReserva,
   EstadoPagoReserva,
@@ -29,6 +31,12 @@ import { fechaArgentina } from '../../common/utils/fechas';
 
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
+
+/**
+ * Tiempo durante el cual un checkout sin pago iniciado sigue impidiendo la
+ * baja: cubre los 15 minutos de la preferencia y notificaciones demoradas.
+ */
+const MARGEN_CHECKOUT_SIN_PAGO_MS = 24 * 60 * 60 * 1000;
 
 /** Datos admitidos por el alta; el rol y los secretos se asignan en el servicio. */
 type CrearUsuarioDatos = {
@@ -138,9 +146,11 @@ export class UsuariosService {
         .setLock('pessimistic_write')
         .getMany();
 
-      if (publicaciones.length > 0) {
-        await this.validarOperacionesResueltas(manager, idUsuario);
-      }
+      await this.validarOperacionesResueltas(
+        manager,
+        idUsuario,
+        publicaciones.length > 0,
+      );
 
       // UPDATE directo: conserva publicaciones, fechas, reservas, pagos e historial.
       await manager.createQueryBuilder()
@@ -149,6 +159,15 @@ export class UsuariosService {
         .where('id_anunciante = :idUsuario', { idUsuario })
         .execute();
 
+      // RN-37: libera el CUIT/CUIL para una cuenta nueva y conserva el original
+      // en cuit_cuil_historico. PostgreSQL evalúa ambos SET con la fila anterior.
+      await manager.createQueryBuilder()
+        .update(Anunciante)
+        .set({ cuit_cuil_historico: () => 'cuit_cuil', cuit_cuil: null })
+        .where('id_usuario = :idUsuario AND cuit_cuil IS NOT NULL', { idUsuario })
+        .execute();
+
+      // También mueve el email a email_historico (Usuario.darDeBaja).
       usuario.darDeBaja();
       await manager.getRepository(Usuario).save(usuario);
     });
@@ -157,14 +176,142 @@ export class UsuariosService {
   }
 
   /**
-   * La baja se rechaza si un anunciante tiene compromisos por resolver.
-   * Se ejecuta dentro de la transacción que bloquea sus publicaciones.
+   * La baja se rechaza si el usuario tiene compromisos por resolver, como
+   * Anunciante (si tiene publicaciones) o como Inquilino (cualquier usuario).
+   * Se ejecuta dentro de la transacción que bloquea la cuenta y sus publicaciones.
    * Los estados históricos (reservas cerradas y pagos conciliados) no bloquean.
    */
   private async validarOperacionesResueltas(
     manager: EntityManager,
     idUsuario: number,
+    tienePublicaciones: boolean,
   ): Promise<void> {
+    const pendientes: string[] = [];
+
+    const comoAnunciante = tienePublicaciones
+      ? await this.pendientesComoAnunciante(manager, idUsuario)
+      : [];
+    if (comoAnunciante.length) {
+      pendientes.push(`como Anunciante: ${comoAnunciante.join(', ')}`);
+    }
+
+    const comoInquilino = await this.pendientesComoInquilino(manager, idUsuario);
+    if (comoInquilino.length) {
+      pendientes.push(`como Inquilino: ${comoInquilino.join(', ')}`);
+    }
+
+    if (pendientes.length) {
+      throw new ConflictException(
+        'No se puede dar de baja la cuenta porque tiene operaciones sin resolver ' +
+        `(${pendientes.join('; ')}). ` +
+        'Primero resolvé las reservas, los pagos, las liquidaciones y los reclamos pendientes.',
+      );
+    }
+  }
+
+  /**
+   * Reservas que el usuario hizo como Inquilino y que todavía lo comprometen.
+   * Las estadías terminadas, canceladas o reembolsadas quedan como historial.
+   */
+  private async pendientesComoInquilino(
+    manager: EntityManager,
+    idUsuario: number,
+  ): Promise<string[]> {
+    const consultasReservas = () => manager.getRepository(Reserva)
+      .createQueryBuilder('reserva')
+      .where('reserva.id_usuario = :idUsuario', { idUsuario });
+
+    // Incluye checkouts cuyo plazo venció pero que todavía no se cerraron.
+    const reservasPendientes = await consultasReservas()
+      .andWhere('reserva.estado_pago = :pendiente', {
+        pendiente: EstadoPagoReserva.PENDIENTE,
+      })
+      .getCount();
+
+    const estadiasVigentes = await consultasReservas()
+      .andWhere('reserva.estado_pago = :aprobado', {
+        aprobado: EstadoPagoReserva.APROBADO,
+      })
+      .andWhere('reserva.cancelada = false')
+      .andWhere('reserva.finalizada = false')
+      .andWhere(`(
+        reserva.fecha_inicio IS NULL OR reserva.fecha_fin IS NULL
+        OR reserva.fecha_inicio > reserva.fecha_fin
+        OR reserva.fecha_fin >= :hoy
+      )`, { hoy: fechaArgentina() })
+      .getCount();
+
+    // Reclamos del Inquilino y cualquier otra liquidación que espera la
+    // decisión del Administrador sobre su dinero.
+    const reclamosEnRevision = await consultasReservas()
+      .andWhere('reserva.estado_liquidacion = :enRevision', {
+        enRevision: EstadoLiquidacionReserva.EN_REVISION,
+      })
+      .getCount();
+
+    // Un pago que Mercado Pago todavía procesa puede aprobarse después de la
+    // baja, aunque la reserva ya se haya cancelado por vencimiento.
+    const pagosEnProceso = await this.contarPagosSinConciliar(
+      manager,
+      idUsuario,
+      'Inquilino',
+    );
+
+    const motivos: string[] = [];
+    if (reservasPendientes) motivos.push(`${reservasPendientes} reserva(s) pendiente(s) de pago`);
+    if (pagosEnProceso) motivos.push(`${pagosEnProceso} pago(s) en proceso en Mercado Pago`);
+    if (estadiasVigentes) motivos.push(`${estadiasVigentes} estadía(s) vigente(s) o futura(s)`);
+    if (reclamosEnRevision) motivos.push(`${reclamosEnRevision} reclamo(s) en revisión`);
+    return motivos;
+  }
+
+  /**
+   * Pagos que Mercado Pago todavía puede aprobar, de las reservas que hizo el
+   * usuario (Inquilino) o de las de sus publicaciones (Anunciante).
+   *
+   * Un Pago nace en "pending" al crear el checkout y solo cambia cuando llega
+   * una notificación. Si el checkout se abandona queda así para siempre, sin
+   * payment_id. Ese checkout solo puede convertirse en un pago mientras su
+   * preferencia está vigente (15 minutos), así que deja de contarse pasado un
+   * margen para notificaciones demoradas. Con payment_id cuenta siempre.
+   */
+  private contarPagosSinConciliar(
+    manager: EntityManager,
+    idUsuario: number,
+    rol: 'Anunciante' | 'Inquilino',
+    ahora = new Date(),
+  ): Promise<number> {
+    const consulta = manager.getRepository(Pago)
+      .createQueryBuilder('pago')
+      .innerJoin('pago.reserva', 'reserva');
+    if (rol === 'Anunciante') {
+      consulta
+        .innerJoin('reserva.publicacion', 'publicacion')
+        .where('publicacion.id_anunciante = :idUsuario', { idUsuario });
+    } else {
+      consulta.where('reserva.id_usuario = :idUsuario', { idUsuario });
+    }
+    return consulta
+      .andWhere('pago.status NOT IN (:...finales)', {
+        // Un charged_back abierto sigue siendo una operación sin conciliar.
+        finales: ['approved', 'rejected', 'cancelled', 'refunded'],
+      })
+      .andWhere(
+        '(pago.payment_id IS NOT NULL OR pago.created_at > :limiteCheckout)',
+        {
+          limiteCheckout: new Date(
+            ahora.getTime() - MARGEN_CHECKOUT_SIN_PAGO_MS,
+          ),
+        },
+      )
+      .getCount();
+  }
+
+  /** Compromisos sobre las reservas de las publicaciones del Anunciante. */
+  private async pendientesComoAnunciante(
+    manager: EntityManager,
+    idUsuario: number,
+  ): Promise<string[]> {
     const consultasReservas = () => manager.getRepository(Reserva)
       .createQueryBuilder('reserva')
       .innerJoin('reserva.publicacion', 'publicacion')
@@ -204,35 +351,25 @@ export class UsuariosService {
         resueltas: [
           EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
           EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+          EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
         ],
       })
       .getCount();
 
     // Evita dar de baja al anunciante si Mercado Pago aún puede notificar
     // una aprobación tardía, aun cuando la reserva ya se haya cancelado.
-    const pagosSinConciliar = await manager.getRepository(Pago)
-      .createQueryBuilder('pago')
-      .innerJoin('pago.reserva', 'reserva')
-      .innerJoin('reserva.publicacion', 'publicacion')
-      .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
-      .andWhere('pago.status NOT IN (:...finales)', {
-        // Un charged_back abierto sigue siendo una operación sin conciliar.
-        finales: ['approved', 'rejected', 'cancelled', 'refunded'],
-      })
-      .getCount();
+    const pagosSinConciliar = await this.contarPagosSinConciliar(
+      manager,
+      idUsuario,
+      'Anunciante',
+    );
 
     const motivos: string[] = [];
     if (reservasPendientes) motivos.push(`${reservasPendientes} reserva(s) pendiente(s) de pago`);
     if (estadiasVigentes) motivos.push(`${estadiasVigentes} estadía(s) vigente(s) o futura(s)`);
     if (liquidacionesPendientes) motivos.push(`${liquidacionesPendientes} liquidación(es) sin resolver`);
     if (pagosSinConciliar) motivos.push(`${pagosSinConciliar} pago(s) sin conciliar con Mercado Pago`);
-
-    if (motivos.length) {
-      throw new ConflictException(
-        `No se puede dar de baja la cuenta porque tiene ${motivos.join(', ')}. ` +
-        'Primero resolvé las reservas, los pagos y las liquidaciones pendientes.',
-      );
-    }
+    return motivos;
   }
 
   /** Bloquea o habilita el acceso de un usuario desde el panel administrativo. */
@@ -252,21 +389,49 @@ export class UsuariosService {
     if (!usuario) {
       throw new NotFoundException('Usuario no encontrado');
     }
-
-    usuario.cambiarBloqueo(bloqueado);
-    await this.usuariosRepo.guardar(usuario);
-
-    try {
-      await this.mailService.enviarCambioBloqueo(
-        usuario.email,
-        bloqueado,
-        motivo?.trim(),
+    // La baja es definitiva y ya impide el acceso; bloquear o habilitar una
+    // cuenta dada de baja solo le enviaría un aviso sin efecto.
+    if (!usuario.activa) {
+      throw new ConflictException(
+        'La cuenta fue dada de baja: no se puede bloquear ni habilitar',
       );
-    } catch (error) {
-      this.logger.error(
-        `No se pudo notificar el cambio de acceso a ${usuario.email}`,
-        error as Error,
-      );
+    }
+
+    // Serializa el bloqueo con la creación de reservas, que toma la misma
+    // fila de publicación y vuelve a leer el estado de la cuenta antes de guardar.
+    await this.dataSource.transaction(async (manager) => {
+      const actual = await manager.getRepository(Usuario)
+        .createQueryBuilder('usuario')
+        .where('usuario.id = :idUsuario', { idUsuario })
+        .setLock('pessimistic_write')
+        .getOne();
+      if (!actual) throw new NotFoundException('Usuario no encontrado');
+      if (!actual.activa) throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
+      await manager.getRepository(Publicacion)
+        .createQueryBuilder('publicacion')
+        .select('publicacion.id')
+        .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
+        .orderBy('publicacion.id', 'ASC')
+        .setLock('pessimistic_write')
+        .getMany();
+      actual.cambiarBloqueo(bloqueado);
+      await manager.getRepository(Usuario).save(actual);
+    });
+
+    // Una cuenta activa siempre tiene email; la condición solo lo hace explícito.
+    if (usuario.email) {
+      try {
+        await this.mailService.enviarCambioBloqueo(
+          usuario.email,
+          bloqueado,
+          motivo?.trim(),
+        );
+      } catch (error) {
+        this.logger.error(
+          `No se pudo notificar el cambio de acceso a ${usuario.email}`,
+          error as Error,
+        );
+      }
     }
 
     return {
@@ -350,21 +515,41 @@ export class UsuariosService {
     return usuarios.map((usuario) => this.usuarioSinSecretos(usuario));
   }
 
+  async listarAdministracion(consulta: ListarAdministracionDto) {
+    const [resultado, totalRegistros] = await Promise.all([
+      this.usuariosRepo.listarAdministracion(consulta),
+      this.usuariosRepo.contarUsuarios(),
+    ]);
+    return {
+      ...resultado,
+      datos: resultado.datos.map((usuario) => this.usuarioSinSecretos(usuario)),
+      totalRegistros,
+    };
+  }
+
   /** Correos de las cuentas con permiso de administración para notificaciones internas. */
   async emailsAdministradores(): Promise<string[]> {
     const usuarios = await this.usuariosRepo.listarTodos();
     return usuarios
       .filter((usuario) => usuario.rol?.nombre === 'Administrador')
       .map((usuario) => usuario.email)
-      .filter(Boolean);
+      .filter((email): email is string => !!email);
   }
 
   private usuarioSinSecretos(usuario: Usuario) {
+    // El listado administrativo agrega el anunciante con leftJoinAndMapOne.
+    const anunciante = (usuario as Usuario & { anunciante?: Anunciante | null })
+      .anunciante;
     return {
       id: usuario.id,
       nombre: usuario.nombre,
       apellido: usuario.apellido,
       email: usuario.email,
+      email_historico: usuario.email_historico,
+      ...(anunciante !== undefined && {
+        cuit_cuil: anunciante?.cuit_cuil ?? null,
+        cuit_cuil_historico: anunciante?.cuit_cuil_historico ?? null,
+      }),
       telefono: usuario.telefono,
       bloqueado: usuario.bloqueado,
       activa: usuario.activa,

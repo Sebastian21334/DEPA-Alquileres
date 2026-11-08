@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { paginar } from '../../common/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
@@ -54,8 +56,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         tipoPropiedad: true,
         imagenes: true,
       },
-      // La primera foto cargada es la portada; sin orden SQL el join puede invertir la galería.
-      order: { imagenes: { id: 'ASC' } },
+      // La primera foto según el orden elegido es la portada; el ID desempata datos históricos.
+      order: { imagenes: { orden: 'ASC', id: 'ASC' } },
     });
   }
 
@@ -66,11 +68,28 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
+  buscarAdministracion(consulta: ListarAdministracionDto) {
+    const query = this.repo.createQueryBuilder('publicacion')
+      .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
+      .leftJoinAndSelect('anunciante.usuario', 'usuario')
+      .leftJoinAndSelect('publicacion.ciudad', 'ciudad')
+      .leftJoinAndSelect('publicacion.provincia', 'provincia')
+      .orderBy('publicacion.fecha_publicacion', 'DESC')
+      .addOrderBy('publicacion.id', 'DESC');
+    if (consulta.q?.trim()) {
+      query.andWhere(
+        "POSITION(:q IN LOWER(CONCAT_WS(' ', publicacion.id, publicacion.titulo, usuario.nombre, usuario.apellido, usuario.email))) > 0",
+        { q: consulta.q.trim().toLowerCase() },
+      );
+    }
+    return paginar(query, consulta);
+  }
+
   buscarTodasActivas(): Promise<Publicacion[]> {
     // Se agregan imagenes y anunciante porque el listado público (home) necesita
     // mostrar la imagen principal y el estado "verificado" del anunciante por cada tarjeta.
     return this.repo.find({
-      where: { activa: true },
+      where: { activa: true, anunciante: { usuario: { activa: true, bloqueado: false } } },
       relations: {
         tipoPropiedad: true,
         ciudad: true,
@@ -80,7 +99,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         imagenes: true,
         anunciante: { usuario: true, tipoAnunciante: true },
       },
-      order: { imagenes: { id: 'ASC' } },
+      order: { imagenes: { orden: 'ASC', id: 'ASC' } },
     });
   }
 
@@ -119,6 +138,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .leftJoin('anunciante.usuario', 'usuario')
       .leftJoin('anunciante.tipoAnunciante', 'tipoAnunciante')
       .where('publicacion.activa = :activa', { activa: true })
+      .andWhere('usuario.activa = true AND usuario.bloqueado = false')
       .distinct(true);
 
     this.aplicarCategoria(base, categoria);
@@ -206,7 +226,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const ids = filas.map((fila) => Number(fila.id));
     const publicaciones = ids.length
       ? await this.repo.find({
-          where: ids.map((id) => ({ id, activa: true })),
+          where: ids.map((id) => ({ id, activa: true,
+            anunciante: { usuario: { activa: true, bloqueado: false } } })),
           relations: {
             tipoPropiedad: true,
             ciudad: true,
@@ -216,7 +237,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
             imagenes: true,
             anunciante: { usuario: true, tipoAnunciante: true },
           },
-          order: { imagenes: { id: 'ASC' } },
+          order: { imagenes: { orden: 'ASC', id: 'ASC' } },
         })
       : [];
     const porId = new Map(
@@ -332,7 +353,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         imagenes: true,
         anunciante: { usuario: true, tipoAnunciante: true },
       },
-      order: { fecha_publicacion: 'DESC', imagenes: { id: 'ASC' } },
+      order: { fecha_publicacion: 'DESC', imagenes: { orden: 'ASC', id: 'ASC' } },
     });
   }
 

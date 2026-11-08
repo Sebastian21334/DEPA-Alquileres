@@ -1,4 +1,5 @@
 import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { publicacionVisible } from '../../publicaciones/politica-publicacion';
 import { FAVORITOS_REPOSITORY } from '../repository/favoritos.repository.interface';
 import type { IFavoritosRepository } from '../repository/favoritos.repository.interface';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
@@ -18,13 +19,13 @@ export class FavoritosService {
       .map((favorito) => favorito.publicacion)
       .filter(
         (publicacion) =>
-          publicacion.activa && (publicacion.imagenes?.length ?? 0) > 0,
+          publicacionVisible(publicacion),
       );
   }
 
   async agregar(idUsuario: number, idPublicacion: number) {
     const publicacion = await this.publicaciones.buscarPorId(idPublicacion);
-    if (!publicacion.activa || !(publicacion.imagenes?.length ?? 0)) {
+    if (!publicacionVisible(publicacion)) {
       throw new ConflictException('La publicación no está disponible');
     }
 

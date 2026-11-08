@@ -46,6 +46,13 @@ export class ChatWindowComponent implements OnInit {
   protected readonly error = signal('');
   protected texto = '';
   protected readonly miId = computed(() => Number(this.auth.currentUser()?.sub));
+  protected readonly contactoSuspendido = computed(() => {
+    const mensaje = this.mensajes()[0];
+    if (!mensaje) return false;
+    const otro = mensaje.origenUsuario.id === this.miId()
+      ? mensaje.destinoUsuario : mensaje.origenUsuario;
+    return otro.bloqueado === true || otro.activa === false;
+  });
 
   constructor() {
     if (isPlatformBrowser(inject(PLATFORM_ID))) {
@@ -91,7 +98,7 @@ export class ChatWindowComponent implements OnInit {
 
   protected enviar(): void {
     const texto = this.texto.trim();
-    if (!texto || this.enviando()) return;
+    if (!texto || this.enviando() || this.contactoSuspendido()) return;
 
     this.enviando.set(true);
     this.error.set('');
