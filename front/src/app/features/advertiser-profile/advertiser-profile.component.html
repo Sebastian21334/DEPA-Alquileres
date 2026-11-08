@@ -28,15 +28,25 @@
       </aside>
 
       <main>
-        <div class="heading" appReveal="right">
+        <div class="heading" #publicationsHeading appReveal="right">
           <h2>Publicaciones de {{ owner.usuario?.nombre ?? name() }}</h2>
           <span>{{ publications().length }} {{ publications().length === 1 ? 'Propiedad' : 'Propiedades' }}</span>
         </div>
+        @if (totalPages() > 1) {
+          <p class="listings-range" role="status">Mostrando {{ firstPublication() }}–{{ lastPublication() }} de {{ publications().length }} publicaciones</p>
+        }
         <div class="listings">
-          @for (item of publications(); track item.id; let i = $index) {
+          @for (item of visiblePublications(); track item.id; let i = $index) {
             <app-listing-card [publicacion]="item" appReveal="zoom" [revealDelay]="(i % 3) * 100" />
           }
         </div>
+        @if (totalPages() > 1) {
+          <nav class="pagination" aria-label="Paginación de publicaciones del anunciante">
+            <button type="button" (click)="goToPage(page() - 1)" [disabled]="page() === 1">Anterior</button>
+            <span>Página {{ page() }} de {{ totalPages() }}</span>
+            <button type="button" (click)="goToPage(page() + 1)" [disabled]="page() === totalPages()">Siguiente</button>
+          </nav>
+        }
       </main>
     </div>
   }

@@ -31,6 +31,7 @@ import { PruebaVidaService } from './prueba-vida.service';
 import { DatosInmobiliariaDto } from '../dto/datos-inmobiliaria.dto';
 import type { RevisarVerificacionDto } from '../dto/revisar-verificacion.dto';
 import sharp from 'sharp';
+import { EliminacionDocumentosService } from './eliminacion-documentos.service';
 
 @Injectable()
 export class VerificacionAnuncianteService {
@@ -47,6 +48,7 @@ export class VerificacionAnuncianteService {
     @Inject(ARCHIVO_REPOSITORY)
     private readonly archivosRepo: IArchivoRepository,
     private readonly pruebaVidaService: PruebaVidaService,
+    private readonly eliminacionDocumentos: EliminacionDocumentosService,
   ) {}
 
   /** Guarda los datos como borrador y evita que un usuario tenga dos solicitudes. */
@@ -87,13 +89,15 @@ export class VerificacionAnuncianteService {
       ...datosEmpresa,
     });
     await this.verificacionRepo.guardarSolicitud(solicitud);
-    try {
-      await this.mailService.enviarSolicitudAnunciante(usuario.email);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo confirmar la solicitud de anunciante a ${usuario.email}`,
-        error as Error,
-      );
+    if (usuario.email) {
+      try {
+        await this.mailService.enviarSolicitudAnunciante(usuario.email);
+      } catch (error) {
+        this.logger.error(
+          `No se pudo confirmar la solicitud de anunciante a ${usuario.email}`,
+          error as Error,
+        );
+      }
     }
     return anunciante;
   }
@@ -334,6 +338,7 @@ export class VerificacionAnuncianteService {
       dto.numero_revision,
       EstadoVerificacion.APROBADA,
     );
+    await this.eliminacionDocumentos.ejecutar();
     await this.notificarResolucion(solicitud, true);
     return solicitud.anunciante;
   }
@@ -356,6 +361,7 @@ export class VerificacionAnuncianteService {
       EstadoVerificacion.RECHAZADA,
       motivo,
     );
+    await this.eliminacionDocumentos.ejecutar();
     await this.notificarResolucion(solicitud, false);
     return { mensaje: 'Solicitud de verificación rechazada' };
   }
@@ -407,6 +413,11 @@ export class VerificacionAnuncianteService {
         } else {
           solicitud.rechazar(motivo!);
         }
+        // La cola y la resolución se confirman juntas. Azure se procesa después
+        // del COMMIT: una transacción fallida nunca borra evidencia pendiente.
+        await persistencia.programarEliminacionDocumentos(
+          solicitud.retirarDocumentos(),
+        );
         await persistencia.guardarSolicitud(solicitud);
         await persistencia.guardarRevision(
           this.verificacionRepo.crearRevision({

@@ -1,8 +1,10 @@
 <article class="card" [class.card--temporary]="esTemporaria">
   <div class="card__top">
     <a class="card__media" [routerLink]="['/publicaciones', publicacion().id]" tabindex="-1" aria-hidden="true">
-      @if (imagenPrincipal) {
-        <img [src]="imagenPrincipal" [alt]="publicacion().titulo" loading="lazy" />
+      @if (imagenTarjeta(); as imagen) {
+        <img [src]="imagen.src" [attr.srcset]="imagen.srcset" [attr.sizes]="imagen.srcset ? imageSizes : null"
+          [attr.width]="miniaturaInicio() ? 572 : null" [attr.height]="miniaturaInicio() ? 400 : null"
+          [alt]="publicacion().titulo" loading="lazy" decoding="async" (error)="usarImagenOriginal()" />
       } @else {
         <div class="card__media-placeholder">Sin imagen</div>
       }

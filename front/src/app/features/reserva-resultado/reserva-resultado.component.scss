@@ -4,6 +4,7 @@
   background: linear-gradient(180deg, #f8fafc 0, #f5f6f8 45%);
 }
 .receipt-wrap {
+  grid-template-columns: minmax(0, 1fr);
   max-width: 1040px;
   margin: 0 auto;
   display: grid;
@@ -19,6 +20,8 @@
 }
 .receipt-card,
 .receipt-hero {
+  min-width: 0;
+  overflow-wrap: anywhere;
   border: 1px solid var(--color-border);
   border-radius: 18px;
   background: #fff;
@@ -78,6 +81,7 @@
   color: var(--color-text-muted);
 }
 .receipt-grid {
+  min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.75fr);
   gap: 1.2rem;
@@ -86,6 +90,7 @@
   padding: 1.5rem;
 }
 .section-title {
+  flex-wrap: wrap;
   display: flex;
   justify-content: space-between;
   gap: 1rem;
@@ -370,7 +375,7 @@
     grid-column: 1 / -1;
   }
   .receipt-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .contact-card {
     grid-template-columns: 1fr;
@@ -389,7 +394,7 @@
     padding: 1.15rem;
   }
   .receipt-hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .date-grid {
     grid-template-columns: 1fr;

@@ -6,6 +6,8 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideBadgeCheck, LucideClock } from '@lucide/angular';
 import { PerfilService } from '../../core/services/perfil.service';
+import { ToastService } from '../../core/services/toast.service';
+import { ApiError } from '../../core/interceptors/api-error';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { TipoAnunciante } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
@@ -29,13 +31,18 @@ export class SolicitudAnuncianteComponent {
   private readonly fb = inject(FormBuilder);
   private readonly perfilService = inject(PerfilService);
   private readonly catalogos = inject(CatalogoService);
+  private readonly toast = inject(ToastService);
 
   protected readonly solicitud = this.perfilService.solicitud;
   protected readonly tipos = signal<TipoAnunciante[]>([]);
   protected readonly cargando = signal(true);
   protected readonly enviando = signal(false);
   protected readonly error = signal('');
+  /** RN-37: el CUIT/CUIL ya pertenece a otra cuenta vigente (409 del backend). */
+  protected readonly errorCuit = signal('');
   protected readonly exito = signal('');
+  protected readonly capturaAbierta = signal(false);
+  protected readonly documentosPendientes = signal<IdentidadCapturada | null>(null);
 
   /** Paso actual del flujo según el estado persistido en el backend. */
   protected readonly paso = computed<'datos' | 'documentos' | 'revision' | 'aprobada'>(() => {
@@ -107,6 +114,7 @@ export class SolicitudAnuncianteComponent {
     }
     this.enviando.set(true);
     this.error.set('');
+    this.errorCuit.set('');
     const valor = this.form.getRawValue();
     this.perfilService
       .solicitarAnunciante({ ...valor, ...(this.esInmobiliaria() ? this.empresaForm.getRawValue() : {}), cuit: valor.cuit.trim(), numero_contacto: valor.numero_contacto.trim() })
@@ -117,6 +125,11 @@ export class SolicitudAnuncianteComponent {
         },
         error: (err: Error) => {
           this.enviando.set(false);
+          if (err instanceof ApiError && err.status === 409 && /CUIT\/CUIL/.test(err.message)) {
+            this.errorCuit.set(err.message);
+            this.toast.mostrar('El CUIT/CUIL ingresado ya está registrado en otra cuenta.');
+            return;
+          }
           this.error.set(err.message);
         },
       });
@@ -124,7 +137,8 @@ export class SolicitudAnuncianteComponent {
 
   protected enviarDocumentos(documentos: IdentidadCapturada): void {
     if (this.enviando()) return;
-
+    this.documentosPendientes.set(documentos);
+    this.capturaAbierta.set(false);
     this.enviando.set(true);
     this.error.set('');
     const reenvio = this.solicitud()?.estado === 'rechazada';
@@ -142,6 +156,7 @@ export class SolicitudAnuncianteComponent {
       ...(this.esInmobiliaria() ? { matricula: this.matricula()!, constancia_cuit: this.constanciaCuit()! } : {}),
     }, reenvio))).subscribe({
       next: () => {
+        this.documentosPendientes.set(null);
         this.enviando.set(false);
         this.exito.set('Prueba de vida completada y documentación enviada. Un administrador revisará tu solicitud.');
         this.recargar();
@@ -159,6 +174,12 @@ export class SolicitudAnuncianteComponent {
 
   protected limpiarErrorCaptura(): void {
     this.error.set('');
+  }
+
+  protected abrirCaptura(): void {
+    this.documentosPendientes.set(null);
+    this.error.set('');
+    this.capturaAbierta.set(true);
   }
 
   protected fecha(valor: string): string {

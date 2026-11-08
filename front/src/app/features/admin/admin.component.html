@@ -21,7 +21,7 @@
     <article>
       <svg lucideUsers [size]="25"></svg>
       <div>
-        <strong>{{ users().length }}</strong
+        <strong>{{ registeredUsers() }}</strong
         ><span>Usuarios registrados</span>
       </div>
     </article>
@@ -51,24 +51,24 @@
       <label class="search">
         <svg lucideSearch [size]="18"></svg>
         <input type="search" aria-label="Buscar publicaciones" placeholder="Buscar por título, ID o anunciante"
-          [ngModel]="publicationQuery()" (ngModelChange)="publicationQuery.set($event)" />
+          [ngModel]="publicationQuery()" (ngModelChange)="searchPublications($event)" maxlength="200" />
       </label>
     </div>
-    @if (loading()) {
+    @if (publicationsLoading()) {
       <p class="empty">Cargando publicaciones…</p>
     } @else {
       <div class="table-wrap">
-        <table>
+        <table class="responsive-table" role="table">
           <thead><tr><th>Publicación</th><th>Anunciante</th><th>Estado</th><th class="right">Acciones</th></tr></thead>
           <tbody>
-            @for (publication of filteredPublications(); track publication.id) {
+            @for (publication of publications(); track publication.id) {
               <tr>
-                <td><strong>{{ publication.titulo }}</strong><small>#{{ publication.id }} · {{ publication.direccion }}</small></td>
-                <td>{{ publication.anunciante?.usuario?.nombre }} {{ publication.anunciante?.usuario?.apellido }}<small>{{ publication.anunciante?.usuario?.email }}</small></td>
-                <td><span class="status" [class.status--blocked]="!publication.activa">{{ publication.motivo_baja_admin ? 'Desactivada por un administrador' : publication.activa ? 'Activa' : 'Inactiva' }}</span>
+                <td data-label="Publicación"><strong>{{ publication.titulo }}</strong><small>#{{ publication.id }} · {{ publication.direccion }}</small></td>
+                <td data-label="Anunciante">{{ publication.anunciante?.usuario?.nombre }} {{ publication.anunciante?.usuario?.apellido }}<small>{{ publication.anunciante?.usuario?.email }}</small></td>
+                <td data-label="Estado"><span class="status" [class.status--blocked]="!publication.activa">{{ publication.motivo_baja_admin ? 'Desactivada por un administrador' : publication.activa ? 'Activa' : 'Inactiva' }}</span>
                   @if (publication.motivo_baja_admin) { <small>Motivo: {{ publication.motivo_baja_admin }}</small> }
                 </td>
-                <td class="right"><button type="button" class="button button--danger-outline"
+                <td data-label="Acciones" class="right"><button type="button" class="button button--danger-outline"
                   [disabled]="busy() !== null" (click)="openBaja(publication)">
                   {{ publication.motivo_baja_admin ? 'Actualizar baja / reenviar aviso' : 'Dar de baja' }}
                 </button></td>
@@ -96,6 +96,15 @@
         </table>
       </div>
     }
+    <nav class="pagination" aria-label="Paginación de publicaciones">
+      <span role="status">{{ publicationsTotal() }} publicaciones · Página {{ publicationsPage() }} de {{ publicationsPages() }}</span>
+      <div class="pagination__actions">
+        <button type="button" class="button button--ghost" (click)="loadPublications(publicationsPage() - 1)"
+          [disabled]="publicationsLoading() || busy() !== null || publicationsPage() <= 1">Anterior</button>
+        <button type="button" class="button button--ghost" (click)="loadPublications(publicationsPage() + 1)"
+          [disabled]="publicationsLoading() || busy() !== null || publicationsPage() >= publicationsPages()">Siguiente</button>
+      </div>
+    </nav>
   </section>
 
   <section class="panel">
@@ -106,7 +115,7 @@
       </div>
       <span class="counter">{{ settlements().length }}</span>
     </div>
-    @if (loading()) {
+    @if (otherLoading()) {
       <p class="empty">Cargando liquidaciones…</p>
     } @else if (!settlements().length) {
       <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
@@ -288,7 +297,7 @@
       </div>
       <span class="counter">{{ requests().length }}</span>
     </div>
-    @if (loading()) {
+    @if (otherLoading()) {
       <p class="empty">Cargando solicitudes…</p>
     } @else if (!requests().length) {
       <p class="empty">No hay solicitudes pendientes.</p>
@@ -415,13 +424,15 @@
         ><svg lucideSearch [size]="18"></svg
         ><input
           type="search"
-          placeholder="Buscar por nombre o email"
+          aria-label="Buscar usuarios"
+          maxlength="200"
+          placeholder="Buscar por nombre, email o CUIT/CUIL"
           [ngModel]="query()"
-          (ngModelChange)="query.set($event)"
+          (ngModelChange)="searchUsers($event)"
       /></label>
     </div>
     <div class="table-wrap">
-      <table>
+      <table class="responsive-table" role="table">
         <thead>
           <tr>
             <th>Usuario</th>
@@ -432,20 +443,27 @@
           </tr>
         </thead>
         <tbody>
-          @for (user of filteredUsers(); track user.id) {
+          @if (usersLoading()) {
+            <tr><td colspan="5" class="empty">Cargando usuarios…</td></tr>
+          } @else {
+          @for (user of users(); track user.id) {
             <tr>
-              <td>
+              <td data-label="Usuario">
                 <strong>{{ user.nombre }} {{ user.apellido }}</strong
                 ><small>{{ user.email_verificado ? 'Email verificado' : 'Email pendiente' }}</small>
               </td>
-              <td>
-                {{ user.email }}<small>{{ user.telefono }}</small>
+              <td data-label="Contacto">
+                <!-- RN-37: una cuenta dada de baja conserva su email y CUIT/CUIL como históricos. -->
+                {{ user.email ?? user.email_historico }}<small>{{ user.telefono }}</small>
+                @if (user.cuit_cuil ?? user.cuit_cuil_historico; as cuit) {
+                  <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
+                }
               </td>
-              <td>
+              <td data-label="Rol">
                 <select
                   (change)="changeRole(user, $any($event.target))"
                   [disabled]="busy() === 'user-' + user.id || !roles().length"
-                  [attr.aria-label]="'Rol de ' + user.email"
+                  [attr.aria-label]="'Rol de ' + (user.email ?? user.email_historico)"
                 >
                   @if (!user.rol) {
                     <option value="" selected disabled>Sin rol</option>
@@ -455,20 +473,30 @@
                   }
                 </select>
               </td>
-              <td>
-                <span class="status" [class.status--blocked]="user.bloqueado">{{
-                  user.bloqueado ? 'Bloqueado' : 'Activo'
-                }}</span>
+              <td data-label="Estado">
+                @if (!user.activa) {
+                  <span class="status status--deleted">Dada de baja</span>
+                  @if (user.fecha_baja) {
+                    <small>{{ user.fecha_baja | date: 'dd/MM/yyyy' }}</small>
+                  }
+                } @else if (user.bloqueado) {
+                  <span class="status status--blocked">Bloqueada</span>
+                } @else {
+                  <span class="status">Activa</span>
+                }
               </td>
-              <td class="right">
-                <button
-                  type="button"
-                  class="link-button"
-                  (click)="toggleUser(user)"
-                  [disabled]="busy() === 'user-' + user.id"
-                >
-                  {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
-                </button>
+              <td data-label="Acciones" class="right">
+                <!-- La baja es definitiva: bloquear o habilitar no aplica. -->
+                @if (user.activa) {
+                  <button
+                    type="button"
+                    class="link-button"
+                    (click)="toggleUser(user)"
+                    [disabled]="busy() === 'user-' + user.id"
+                  >
+                    {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
+                  </button>
+                }
               </td>
             </tr>
           } @empty {
@@ -476,9 +504,19 @@
               <td colspan="5" class="empty">No se encontraron usuarios.</td>
             </tr>
           }
+          }
         </tbody>
       </table>
     </div>
+    <nav class="pagination" aria-label="Paginación de usuarios">
+      <span role="status">{{ usersTotal() }} usuarios · Página {{ usersPage() }} de {{ usersPages() }}</span>
+      <div class="pagination__actions">
+        <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() - 1)"
+          [disabled]="usersLoading() || busy() !== null || usersPage() <= 1">Anterior</button>
+        <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() + 1)"
+          [disabled]="usersLoading() || busy() !== null || usersPage() >= usersPages()">Siguiente</button>
+      </div>
+    </nav>
   </section>
   <section class="panel management">
     <div class="panel__title">

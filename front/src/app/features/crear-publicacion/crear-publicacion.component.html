@@ -160,6 +160,7 @@
               type="file"
               accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
               multiple
+              [disabled]="enviando()"
               (change)="agregarDesdeInput($event)"
             />
             <span class="drop__icon"><svg lucideImagePlus [size]="30"></svg></span>
@@ -169,24 +170,8 @@
           </label>
 
           @if (imagenes().length) {
-            <div class="photos">
-              @for (img of imagenes(); track img.preview; let i = $index) {
-                <figure class="photo">
-                  <img [src]="img.preview" [alt]="'Foto ' + (i + 1)" />
-                  @if (i === 0) {
-                    <span class="photo__cover">Portada</span>
-                  }
-                  <button
-                    type="button"
-                    class="photo__remove"
-                    aria-label="Quitar foto"
-                    (click)="quitarImagen(i)"
-                  >
-                    <svg lucideX [size]="16"></svg>
-                  </button>
-                </figure>
-              }
-            </div>
+            <app-galeria-imagenes [fotos]="imagenes()" [disabled]="enviando()"
+              (reordenar)="ordenarImagenes($event)" (quitar)="quitarImagen($event)" />
           }
           @if (faltanFotos()) {
             <p class="acct-hint acct-hint--error" role="alert">
@@ -194,7 +179,7 @@
             </p>
           }
           <p class="acct-hint">
-            Es obligatorio subir al menos una. La primera foto será la portada. Usá imágenes claras
+            Es obligatorio subir al menos una. Podés cambiar la portada y el orden antes de publicar. Usá imágenes claras
             de los ambientes y la fachada (JPG, PNG, WEBP o HEIC, hasta 10 MB).
           </p>
           @if (avisoImagenes()) {

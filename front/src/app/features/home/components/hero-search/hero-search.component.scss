@@ -171,6 +171,8 @@ button:focus-visible {
   outline-offset: 4px;
 }
 @media (max-width: 600px) {
+  .hero__search-row input { font-size: 1rem; }
+  .hero__search-row .btn { width: 44px; height: 44px; }
   .hero {
     padding: 52px 20px 60px;
   }

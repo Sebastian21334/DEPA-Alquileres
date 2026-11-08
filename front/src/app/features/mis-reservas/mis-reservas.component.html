@@ -3,7 +3,11 @@
     <div class="acct-heading">
       <div>
         <h1>Mis reservas</h1>
-        <p>Gestioná las estadías que reservaste y las que recibiste en tus propiedades.</p>
+        @if (esAnunciante()) {
+          <p>Gestioná las estadías que reservaste y las que recibiste en tus propiedades.</p>
+        } @else {
+          <p>Gestioná las estadías que reservaste.</p>
+        }
       </div>
     </div>
 
@@ -12,22 +16,26 @@
     @if (cargando()) {
       <div class="acct-state"><app-spinner /><p>Cargando reservas…</p></div>
     } @else {
-      <div class="reservation-summary" aria-label="Resumen de reservas">
+      <div class="reservation-summary" [class.reservation-summary--single]="!esAnunciante()" aria-label="Resumen de reservas">
         <div class="acct-card">
           <strong>{{ propias().length }}</strong><span>Realizadas</span><small>{{ activas(propias()) }} activas</small>
         </div>
-        <div class="acct-card">
-          <strong>{{ recibidas().length }}</strong><span>Recibidas</span><small>{{ activas(recibidas()) }} activas</small>
-        </div>
+        @if (esAnunciante()) {
+          <div class="acct-card">
+            <strong>{{ recibidas().length }}</strong><span>Recibidas</span><small>{{ activas(recibidas()) }} activas</small>
+          </div>
+        }
       </div>
 
       <div class="reservation-tabs" role="tablist" aria-label="Tipo de reservas">
         <button type="button" role="tab" [attr.aria-selected]="vista() === 'realizadas'" [class.is-active]="vista() === 'realizadas'" (click)="vista.set('realizadas')">
           Reservas realizadas <span>{{ propias().length }}</span>
         </button>
-        <button type="button" role="tab" [attr.aria-selected]="vista() === 'recibidas'" [class.is-active]="vista() === 'recibidas'" (click)="vista.set('recibidas')">
-          Reservas recibidas <span>{{ recibidas().length }}</span>
-        </button>
+        @if (esAnunciante()) {
+          <button type="button" role="tab" [attr.aria-selected]="vista() === 'recibidas'" [class.is-active]="vista() === 'recibidas'" (click)="vista.set('recibidas')">
+            Reservas recibidas <span>{{ recibidas().length }}</span>
+          </button>
+        }
         <button type="button" role="tab" [attr.aria-selected]="vista() === 'reclamos'" [class.is-active]="vista() === 'reclamos'" (click)="vista.set('reclamos')">
           Reclamos <span>{{ reclamos().length }}</span>
         </button>
@@ -94,7 +102,7 @@
               @if (editando()?.id === reserva.id) {
                 <form class="reschedule-form" (ngSubmit)="confirmarReprogramacion()" [attr.aria-busy]="ocupada() === reserva.id">
                   <h4>Cambiar fechas de la reserva #{{ reserva.id }}</h4>
-                  <p>Elegí otro inicio. Se mantienen los <strong>{{ dias(reserva) }} días</strong> y el total pagado de
+                  <p>Elegí otro inicio. El cambio se permite antes del inicio y sin código de ingreso validado. Se mantienen los <strong>{{ dias(reserva) }} días</strong> y el total pagado de
                     <strong>{{ monto(reserva.importe_contratado ?? reserva.monto_pago, reserva.moneda_contratada) }}</strong>, con la tarifa original.</p>
                   <p class="muted">Fechas actuales: {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}. Avisaremos al anunciante por correo cuando confirmes.</p>
                   <div class="reschedule-form__dates">
@@ -175,7 +183,7 @@
             <div class="acct-card empty">Todavía no realizaste reservas.</div>
           }
         </section>
-      } @else if (vista() === 'recibidas') {
+      } @else if (vista() === 'recibidas' && esAnunciante()) {
         <section class="reservation-section" role="tabpanel">
           <div class="section-heading">
             <h2>Reservas recibidas</h2>

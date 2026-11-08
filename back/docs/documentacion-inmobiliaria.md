@@ -33,5 +33,5 @@ El primer comando consulta columnas; el segundo aplica la migración repetible.
 No completa ni altera solicitudes existentes. Si una solicitud antigua de una
 inmobiliaria está pendiente e incompleta, el administrador debe rechazarla con un
 motivo para permitir completar y reenviar. Las aprobaciones históricas se conservan.
-Esta preparación no aplica la política general de eliminación documental, que
-sigue siendo una tarea separada.
+La eliminación al aprobar o rechazar también incluye ambas constancias; aplicar
+además la [migración de eliminación documental](eliminacion-documentos.md).

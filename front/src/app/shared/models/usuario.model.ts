@@ -3,9 +3,13 @@
 
 export interface Usuario {
   id: number;
+  activa?: boolean;
+  bloqueado?: boolean;
   nombre: string;
   apellido: string;
-  email?: string;
+  /** null cuando la cuenta se dio de baja; el original queda en email_historico (RN-37). */
+  email?: string | null;
+  email_historico?: string | null;
   telefono?: string;
   foto_url?: string | null;
 }

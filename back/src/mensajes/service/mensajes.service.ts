@@ -4,6 +4,8 @@ import {
   Injectable,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
+  NotFoundException,
   Logger,
 } from '@nestjs/common';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
@@ -83,6 +85,27 @@ export class MensajesService {
       }
     }
 
+    const [destinatario, remitente] = await Promise.all([
+      this.usuariosService.buscarPorId(dto.id_destino_usuario),
+      this.usuariosService.buscarPorId(idUsuarioOrigen),
+    ]);
+    if (!destinatario) {
+      throw new NotFoundException('El destinatario no existe');
+    }
+    // Se decide por la cuenta del destinatario y no por publicacion.activa:
+    // un Anunciante activo puede pausar una publicación y sus Inquilinos con
+    // reserva tienen que poder seguir escribiéndole.
+    if (!destinatario.activa) {
+      throw new ConflictException(
+        'No podés enviarle mensajes a esta cuenta porque fue dada de baja',
+      );
+    }
+    if (destinatario.bloqueado || !remitente?.activa || remitente.bloqueado) {
+      throw new ConflictException(
+        'El contacto está suspendido porque una cuenta está bloqueada o inactiva. Para reservas anteriores, contactá a soporte.',
+      );
+    }
+
     const mensaje = this.mensajeRepository.crear({
       texto: dto.texto,
       fecha: new Date(),
@@ -96,11 +119,8 @@ export class MensajesService {
     });
 
     const guardado = await this.mensajeRepository.guardar(mensaje);
-    const [destinatario, remitente] = await Promise.all([
-      this.usuariosService.buscarPorId(dto.id_destino_usuario),
-      this.usuariosService.buscarPorId(idUsuarioOrigen),
-    ]);
-    if (destinatario && remitente) {
+    // El destinatario está activo (se validó arriba), así que tiene email vigente.
+    if (remitente && destinatario.email) {
       try {
         await this.mailService.enviarMensajeNuevo(
           destinatario.email,

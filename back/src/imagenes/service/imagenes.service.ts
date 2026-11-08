@@ -92,6 +92,14 @@ export class ImagenesService {
     return this.imagenesRepo.eliminar(imagen);
   }
 
+  async ordenar(idPublicacion: number, ids: number[], anunciante: Anunciante) {
+    await this.publicacionesService.obtenerPropia(
+      idPublicacion, anunciante.idUsuario,
+      'No podés ordenar imágenes de una publicación que no es tuya',
+    );
+    return this.imagenesRepo.ordenar(idPublicacion, ids);
+  }
+
   /** Lista las imagenes asociadas a una publicacion. */
   async listarPorPublicacion(idPublicacion: number) {
     return this.imagenesRepo.buscarPorPublicacion(idPublicacion);

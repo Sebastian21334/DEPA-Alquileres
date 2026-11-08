@@ -90,19 +90,10 @@
           }
 
           @if (expandida() === pub.id) {
+            <app-galeria-imagenes [fotos]="pub.imagenes ?? []" [minimo]="1"
+              [disabled]="ocupada() === pub.id" (reordenar)="ordenarImagenes(pub, $event)"
+              (quitar)="eliminarImagen(pub, pub.imagenes![$event].id)" />
             <div class="gallery">
-              @for (img of pub.imagenes ?? []; track img.id; let i = $index) {
-                <figure>
-                  <img [src]="img.url" [alt]="'Imagen ' + (i + 1)" />
-                  @if (i === 0) { <span class="gallery__cover">Portada</span> }
-                  <button type="button" aria-label="Eliminar imagen"
-                    [disabled]="ocupada() === pub.id || (pub.imagenes?.length ?? 0) <= 1"
-                    [title]="(pub.imagenes?.length ?? 0) <= 1 ? 'La publicación debe tener al menos una imagen' : 'Eliminar imagen'"
-                    (click)="eliminarImagen(pub, img.id)">
-                    <svg lucideTrash2 [size]="14"></svg>
-                  </button>
-                </figure>
-              }
               <label class="gallery__add">
                 <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                   [disabled]="ocupada() === pub.id" (change)="subirImagenes(pub, $event)" />

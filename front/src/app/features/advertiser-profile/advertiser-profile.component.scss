@@ -23,10 +23,16 @@ aside { display: grid; gap: 18px; position: sticky; top: 96px; }
 .public-data a { color: var(--color-secondary); text-decoration: none; }
 .public-data a:hover { text-decoration: underline; }
 
-.heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; scroll-margin-top: 96px; }
 .heading h2 { margin: 0; font-size: 1.7rem; font-weight: 800; letter-spacing: -.02em; }
 .heading span { padding: 5px 12px; border-radius: 999px; color: #fff; background: var(--color-accent); font-size: .78rem; font-weight: 700; box-shadow: 0 4px 10px rgba(255,152,0,.35); }
 .listings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.listings-range { margin: 0 0 1rem; color: var(--color-text-muted); font-size: .88rem; }
+.pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .75rem; margin-top: 1.5rem; color: #506078; font-size: .88rem; font-weight: 700; }
+.pagination button { min-height: 44px; padding: .6rem 1rem; border: 0; border-radius: 7px; background: var(--color-primary); color: #fff; font: inherit; cursor: pointer; }
+.pagination button:hover:not(:disabled) { background: var(--color-primary-dark); }
+.pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.pagination button:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
 
 .state { min-height: 55vh; display: grid; place-content: center; justify-items: center; text-align: center; color: var(--color-text-muted); }
 .state a { color: var(--color-primary); font-weight: 700; }

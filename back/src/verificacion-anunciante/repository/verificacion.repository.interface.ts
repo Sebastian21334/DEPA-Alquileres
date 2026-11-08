@@ -4,6 +4,7 @@ import { SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 
 export interface PersistenciaVerificacion {
+  programarEliminacionDocumentos(urls: string[]): Promise<void>;
   guardarSolicitud(
     solicitud: SolicitudVerificacion,
   ): Promise<SolicitudVerificacion>;
@@ -16,6 +17,10 @@ export interface PersistenciaVerificacion {
 export const VERIFICACION_REPOSITORY = 'VERIFICACION_REPOSITORY';
 
 export interface IVerificacionRepository {
+  procesarEliminacionesPendientes(
+    eliminar: (url: string) => Promise<void>,
+    ahora?: Date,
+  ): Promise<{ eliminados: number; fallidos: number }>;
   conSolicitudBloqueada<T>(
     idAnunciante: number,
     operacion: (
