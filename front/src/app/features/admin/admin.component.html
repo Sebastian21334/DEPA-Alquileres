@@ -157,6 +157,141 @@
   <section class="panel">
     <div class="panel__title">
       <div>
+        <h2>Solicitudes de cancelación</h2>
+        <p>Reservas pagadas antes del inicio que esperan decisión administrativa.</p>
+      </div>
+      <span class="counter">{{ cancellations().length }}</span>
+    </div>
+    @if (!cancellations().length) {
+      <p class="empty">No hay solicitudes pendientes.</p>
+    } @else {
+      <div class="settlement-list">
+        @for (solicitud of cancellations(); track solicitud.id) {
+          <article class="settlement-card">
+            <div>
+              <span class="status status--blocked">Pendiente</span>
+              <h3>Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '—' }}</h3>
+              <p><strong>Inquilino:</strong> {{ solicitud.reserva?.usuario?.nombre }} {{ solicitud.reserva?.usuario?.apellido }}</p>
+              <p><strong>Publicación:</strong> {{ solicitud.reserva?.publicacion?.titulo ?? '—' }}</p>
+              <p><strong>Fechas:</strong> {{ solicitud.reserva?.fecha_inicio }} — {{ solicitud.reserva?.fecha_fin }}</p>
+              <p><strong>Importe:</strong> {{ solicitud.reserva?.monto_pago | currency: (solicitud.reserva?.moneda_contratada ?? 'ARS') }}</p>
+              <p class="settlement-note">{{ solicitud.motivo }}</p>
+            </div>
+            <div class="actions">
+              <button type="button" class="button button--success" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="aprobarCancelacion(solicitud)">Aprobar</button>
+              <button type="button" class="button button--danger-outline" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="rechazarCancelacion(solicitud)">Rechazar</button>
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="panel__title">
+      <div>
+        <h2>Reembolsos pendientes</h2>
+        <p>Devoluciones creadas por cancelaciones, reclamos o contracargos.</p>
+      </div>
+      <span class="counter">{{ refunds().length }}</span>
+    </div>
+    @if (!refunds().length) {
+      <p class="empty">No hay reembolsos registrados.</p>
+    } @else {
+      <div class="settlement-list">
+        @for (reembolso of refunds(); track reembolso.id) {
+          <article class="settlement-card">
+            <div>
+              <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ reembolso.estado }}</span>
+              <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
+              <p><strong>{{ reembolso.tipo }}</strong> · {{ reembolso.importe | currency: reembolso.moneda }}</p>
+              <p class="muted">{{ reembolso.origen }} · {{ reembolso.motivo }}</p>
+            </div>
+            <div class="actions">
+              @if (reembolso.estado !== 'APROBADO' && reembolso.estado !== 'RECHAZADO' && reembolso.estado !== 'CANCELADO') {
+                <button type="button" class="button button--success" [disabled]="busy() === 'refund-' + reembolso.id" (click)="registrarReembolsoPendiente(reembolso)">Registrar devolución</button>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="panel__title">
+      <div>
+        <h2>Reclamos de reservas</h2>
+        <p>Evidencia, mensajes con las partes y resolución administrativa.</p>
+      </div>
+      <span class="counter">{{ claims().length }}</span>
+    </div>
+    @if (!claims().length) {
+      <p class="empty">No hay reclamos registrados.</p>
+    } @else {
+      <div class="settlement-list">
+        @for (claim of claims(); track claim.id) {
+          <article class="settlement-card">
+            <div>
+              <span class="status" [class.status--blocked]="claim.estado === 'EN_REVISION'">{{ claim.estado }}</span>
+              <h3>Reclamo #{{ claim.id }} · Reserva #{{ claim.reserva?.id ?? '—' }}</h3>
+              <p><strong>Categoría:</strong> {{ claim.categoria }}</p>
+              <p>{{ claim.descripcion }}</p>
+              <p class="muted">
+                {{ claim.evidencias?.length ?? 0 }} imagen(es) ·
+                {{ claim.mensajes?.length ?? 0 }} mensaje(s)
+              </p>
+              @if (claim.mensajes?.length) {
+                <details>
+                  <summary>Ver mensajes</summary>
+                  <ul>
+                    @for (mensaje of claim.mensajes; track mensaje.id) {
+                      <li>
+                        <strong>{{ mensaje.autor?.nombre ?? 'Usuario' }}:</strong>
+                        {{ mensaje.texto }}
+                        @if (mensaje.visible_para === 'ADMIN') { <em>(nota interna)</em> }
+                      </li>
+                    }
+                  </ul>
+                </details>
+              }
+              @if (claim.evidencias?.length) {
+                <details>
+                  <summary>Ver evidencias</summary>
+                  <ul>
+                    @for (evidencia of claim.evidencias; track evidencia.id) {
+                      <li>
+                        <button type="button" class="link-button" (click)="verEvidencia(claim, evidencia)">
+                          {{ evidencia.nombre_archivo }}
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                </details>
+              }
+              @if (claim.resolucion) {
+                <p><strong>Resolución:</strong> {{ claim.resolucion }}
+                  @if (claim.importe_reembolso) { · {{ claim.importe_reembolso | currency: 'ARS' }} }
+                </p>
+              }
+            </div>
+            <div class="actions">
+              <button type="button" class="button button--ghost" [disabled]="busy() === 'claim-' + claim.id" (click)="responderReclamo(claim)">Responder</button>
+              @if (claim.estado !== 'RESUELTO_INQUILINO' && claim.estado !== 'RESUELTO_ANUNCIANTE' && claim.estado !== 'CERRADO') {
+                <button type="button" class="button button--danger-outline" [disabled]="busy() === 'claim-' + claim.id" (click)="resolverReclamoReserva(claim, 'DEVOLUCION_PARCIAL')">Devolución parcial</button>
+                <button type="button" class="button button--danger-outline" [disabled]="busy() === 'claim-' + claim.id" (click)="resolverReclamoReserva(claim, 'DEVOLUCION_TOTAL')">Devolución total</button>
+                <button type="button" class="button button--ghost" [disabled]="busy() === 'claim-' + claim.id" (click)="resolverReclamoReserva(claim, 'SIN_DEVOLUCION')">Sin devolución</button>
+              }
+            </div>
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel">
+    <div class="panel__title">
+      <div>
         <h2>Solicitudes de verificación</h2>
         <p>Documentación pendiente de revisión.</p>
       </div>

@@ -293,7 +293,8 @@ export class UsuariosService {
     }
     return consulta
       .andWhere('pago.status NOT IN (:...finales)', {
-        finales: ['approved', 'rejected', 'cancelled', 'refunded', 'charged_back'],
+        // Un charged_back abierto sigue siendo una operación sin conciliar.
+        finales: ['approved', 'rejected', 'cancelled', 'refunded'],
       })
       .andWhere(
         '(pago.payment_id IS NOT NULL OR pago.created_at > :limiteCheckout)',
@@ -350,6 +351,7 @@ export class UsuariosService {
         resueltas: [
           EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
           EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+          EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
         ],
       })
       .getCount();

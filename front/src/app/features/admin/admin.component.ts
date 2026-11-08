@@ -1,4 +1,4 @@
-import { DatePipe, isPlatformBrowser } from '@angular/common';
+import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
 import { Component, computed, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -14,7 +14,9 @@ import {
   LucideX,
 } from '@lucide/angular';
 import {
+  AdminCancellationRequest,
   AdminCatalogItem,
+  AdminReembolso,
   AdminSettlement,
   AdminCity,
   AdminProvince,
@@ -23,6 +25,7 @@ import {
   CatalogKey,
   VerificationRequest,
 } from './admin.service';
+import { Reclamo } from '../../shared/services/reservation.service';
 
 interface CatalogSection {
   key: CatalogKey;
@@ -35,6 +38,7 @@ interface CatalogSection {
   standalone: true,
   imports: [
     CotizacionesAdminComponent,
+    CurrencyPipe,
     DatePipe,
     FormsModule,
     LucideUsers,
@@ -69,6 +73,9 @@ export class AdminComponent {
   protected readonly registeredUsers = signal(0);
   protected readonly requests = signal<VerificationRequest[]>([]);
   protected readonly settlements = signal<AdminSettlement[]>([]);
+  protected readonly claims = signal<Reclamo[]>([]);
+  protected readonly cancellations = signal<AdminCancellationRequest[]>([]);
+  protected readonly refunds = signal<AdminReembolso[]>([]);
   protected readonly otherLoading = signal(true);
   protected readonly loading = computed(() =>
     this.otherLoading() || this.publicationsLoading() || this.usersLoading(),
@@ -110,7 +117,7 @@ export class AdminComponent {
     this.error.set(null);
     this.loadPublications(this.publicationsPage());
     this.loadUsers(this.usersPage());
-    let pending = 2;
+    let pending = 5;
     const done = () => {
       if (--pending === 0) this.otherLoading.set(false);
     };
@@ -127,6 +134,36 @@ export class AdminComponent {
     this.api.listarLiquidaciones().subscribe({
       next: (v) => {
         this.settlements.set(v);
+        done();
+      },
+      error: (e: Error) => {
+        this.error.set(e.message);
+        done();
+      },
+    });
+    this.api.listarReclamos().subscribe({
+      next: (v) => {
+        this.claims.set(v);
+        done();
+      },
+      error: (e: Error) => {
+        this.error.set(e.message);
+        done();
+      },
+    });
+    this.api.listarSolicitudesCancelacion().subscribe({
+      next: (v) => {
+        this.cancellations.set(v);
+        done();
+      },
+      error: (e: Error) => {
+        this.error.set(e.message);
+        done();
+      },
+    });
+    this.api.listarReembolsos().subscribe({
+      next: (v) => {
+        this.refunds.set(v);
         done();
       },
       error: (e: Error) => {
@@ -261,6 +298,133 @@ export class AdminComponent {
       () => this.api.resolverLiquidacion(settlement.id, siguiente, undefined, observacion),
       () => this.settlements.update((items) => items.filter((item) => item.id !== settlement.id)),
       'Reclamo resuelto. La reserva volvió a su circuito normal.',
+    );
+  }
+
+  protected verEvidencia(
+    reclamo: Reclamo,
+    evidencia: { id: number; nombre_archivo: string },
+  ): void {
+    this.api.urlEvidenciaReclamo(reclamo.id, evidencia.id).subscribe({
+      next: ({ url }) => window.open(url, '_blank', 'noopener'),
+      error: (e: Error) => this.error.set(e.message),
+    });
+  }
+
+  protected aprobarCancelacion(solicitud: AdminCancellationRequest): void {
+    const observacion = window.prompt('Observación de la aprobación (opcional):')?.trim();
+    this.run(
+      `cancellation-${solicitud.id}`,
+      () =>
+        this.api.resolverSolicitudCancelacion(
+          solicitud.reserva?.id ?? 0,
+          solicitud.id,
+          'APROBADA',
+          observacion,
+        ),
+      (value) => {
+        this.cancellations.update((items) =>
+          items.filter((item) => item.id !== solicitud.id),
+        );
+        const resultado = value as {
+          reembolso: { id: number; importe: number; moneda: string } | null;
+        };
+        if (!resultado.reembolso) {
+          this.notice.set('Cancelación aprobada sin devolución.');
+          return;
+        }
+        const referencia = window
+          .prompt('Referencia o comprobante de la devolución:')
+          ?.trim();
+        if (!referencia) {
+          this.notice.set(
+            'Cancelación aprobada. La devolución quedó pendiente de registrar.',
+          );
+          return;
+        }
+        this.api.registrarReembolso(resultado.reembolso.id, referencia).subscribe({
+          next: () => this.notice.set('Cancelación y devolución registradas.'),
+          error: (e: Error) => this.error.set(e.message),
+        });
+      },
+      'Solicitud de cancelación aprobada.',
+    );
+  }
+
+  protected registrarReembolsoPendiente(reembolso: AdminReembolso): void {
+    const referencia = window
+      .prompt('Referencia o comprobante de la devolución:')
+      ?.trim();
+    if (!referencia) return;
+    this.run(
+      `refund-${reembolso.id}`,
+      () => this.api.registrarReembolso(reembolso.id, referencia),
+      () =>
+        this.refunds.update((items) =>
+          items.filter((item) => item.id !== reembolso.id),
+        ),
+      'Reembolso registrado y aplicado a la reserva.',
+    );
+  }
+
+  protected rechazarCancelacion(solicitud: AdminCancellationRequest): void {
+    const observacion = window.prompt('Motivo del rechazo:')?.trim();
+    if (!observacion) return;
+    this.run(
+      `cancellation-${solicitud.id}`,
+      () =>
+        this.api.resolverSolicitudCancelacion(
+          solicitud.reserva?.id ?? 0,
+          solicitud.id,
+          'RECHAZADA',
+          observacion,
+        ),
+      () =>
+        this.cancellations.update((items) =>
+          items.filter((item) => item.id !== solicitud.id),
+        ),
+      'Solicitud de cancelación rechazada.',
+    );
+  }
+
+  protected responderReclamo(reclamo: Reclamo): void {
+    const texto = window.prompt('Mensaje para el Inquilino y el Anunciante:')?.trim();
+    if (!texto) return;
+    this.run(
+      `claim-${reclamo.id}`,
+      () => this.api.responderReclamo(reclamo.id, texto),
+      () => undefined,
+      'Mensaje enviado al hilo del reclamo.',
+    );
+  }
+
+  protected resolverReclamoReserva(
+    reclamo: Reclamo,
+    resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL',
+  ): void {
+    let importe: number | undefined;
+    if (resolucion === 'DEVOLUCION_PARCIAL') {
+      const valor = window.prompt('Importe parcial a devolver:')?.trim();
+      importe = Number(valor);
+      if (!Number.isFinite(importe) || importe <= 0) {
+        this.error.set('Indicá un importe parcial válido.');
+        return;
+      }
+    }
+    const referencia = window.prompt('Referencia o comprobante (obligatorio para devoluciones manuales):')?.trim();
+    const observacion = window.prompt('Conclusión de la revisión:')?.trim();
+    this.run(
+      `claim-${reclamo.id}`,
+      () =>
+        this.api.resolverReclamo(
+          reclamo.id,
+          resolucion,
+          importe,
+          referencia,
+          observacion,
+        ),
+      () => this.claims.update((items) => items.filter((item) => item.id !== reclamo.id)),
+      'Reclamo resuelto.',
     );
   }
 

@@ -19,6 +19,8 @@ import type {
 } from '../repository/pasarela-pagos.interface';
 import { EstadoPagoReserva } from '../../reservas/entity/reserva.entity';
 import { ReservasService } from '../../reservas/service/reservas.service';
+import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
+import { DisputasService } from '../../disputas/service/disputas.service';
 import { CrearCheckoutDto } from '../dto/crear-checkout.dto';
 import { Pago } from '../entity/pago.entity';
 
@@ -30,6 +32,8 @@ export class PagosService {
     private readonly presupuestos: PresupuestosService,
     @Inject(PAGOS_REPOSITORY) private readonly pagos: IPagosRepository,
     private readonly reservasService: ReservasService,
+    private readonly reembolsosService: ReembolsosService,
+    private readonly disputasService: DisputasService,
     private readonly config: ConfigService,
     @Inject(PASARELA_PAGOS) private readonly pasarela: IPasarelaPagos,
   ) {}
@@ -185,11 +189,42 @@ export class PagosService {
         pago.reserva.id,
         pago.approved_at ?? new Date(),
       );
-    } else if (
-      ['rejected', 'cancelled', 'refunded', 'charged_back'].includes(
-        payment.status ?? '',
+    } else if (payment.status === 'charged_back') {
+      await this.disputasService.registrarContracargo({
+        idReserva: pago.reserva.id,
+        idPago: pago.id,
+        chargebackId:
+          payment.chargeback_id ??
+          `payment:${payment.id}:charged_back`,
+        importe: Number(payment.transaction_amount ?? pago.amount),
+        motivo: payment.status_detail ?? 'Contracargo informado por Mercado Pago',
+      });
+    } else if (payment.status === 'refunded') {
+      if (
+        await this.reembolsosService.tieneReembolsoTotalAprobado(
+          pago.reserva.id,
+        )
       )
-    ) {
+        return pago;
+      const importe = Number(payment.transaction_amount ?? pago.amount);
+      const reembolso = await this.reembolsosService.registrarDesdeWebhook({
+        pago,
+        importe,
+        referenciaExterna: `mp-refund:${payment.id}`,
+        idExterno: String(payment.id),
+      });
+      if (
+        pago.reserva.estado_pago === EstadoPagoReserva.APROBADO ||
+        pago.reserva.estado_pago === EstadoPagoReserva.CONTRACARGO
+      ) {
+        await this.reservasService.aplicarReembolsoConfirmado(reembolso.id);
+      } else {
+        await this.reservasService.rechazarPago(
+          pago.reserva.id,
+          EstadoPagoReserva.REEMBOLSADO,
+        );
+      }
+    } else if (['rejected', 'cancelled'].includes(payment.status ?? '')) {
       await this.reservasService.rechazarPago(
         pago.reserva.id,
         this.mapearEstado(payment.status),
