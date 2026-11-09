@@ -36,6 +36,7 @@ import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservaReembolsoAplicacionService } from './reserva-reembolso-aplicacion.service';
 import { ReservaEstadoService } from './reserva-estado.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 
 @Injectable()
 export class ReservaSolicitudCancelacionResolucionService {
@@ -117,7 +118,7 @@ export class ReservaSolicitudCancelacionResolucionService {
           )
             throw new ConflictException('La solicitud ya fue resuelta');
           actualSolicitud.estado = EstadoSolicitudCancelacion.RECHAZADA;
-          actualSolicitud.decidida_por = { id: idAdmin } as never;
+          actualSolicitud.decidida_por = referenciaUsuario(idAdmin);
           actualSolicitud.decidida_en = new Date();
           actualSolicitud.observacion = dto.observacion?.trim() || null;
           return {
@@ -281,7 +282,7 @@ export class ReservaSolicitudCancelacionResolucionService {
             actualReserva.fecha_inicio <= hoyActual
           ) {
             actualSolicitud.estado = EstadoSolicitudCancelacion.VENCIDA;
-            actualSolicitud.decidida_por = { id: idAdmin } as never;
+            actualSolicitud.decidida_por = referenciaUsuario(idAdmin);
             actualSolicitud.decidida_en = new Date();
             actualSolicitud.observacion =
               'La reserva ya no admite la cancelación solicitada';
@@ -294,7 +295,7 @@ export class ReservaSolicitudCancelacionResolucionService {
           }
 
           actualSolicitud.estado = EstadoSolicitudCancelacion.APROBADA;
-          actualSolicitud.decidida_por = { id: idAdmin } as never;
+          actualSolicitud.decidida_por = referenciaUsuario(idAdmin);
           actualSolicitud.decidida_en = new Date();
           actualSolicitud.observacion = dto.observacion?.trim() || null;
           return {
@@ -381,7 +382,7 @@ export class ReservaSolicitudCancelacionResolucionService {
           actualReserva.fecha_inicio <= hoyActual
         ) {
           actualSolicitud.estado = EstadoSolicitudCancelacion.VENCIDA;
-          actualSolicitud.decidida_por = { id: idAdmin } as never;
+          actualSolicitud.decidida_por = referenciaUsuario(idAdmin);
           actualSolicitud.decidida_en = new Date();
           actualSolicitud.observacion =
             'La reserva ya no admite la cancelación solicitada';
@@ -394,7 +395,7 @@ export class ReservaSolicitudCancelacionResolucionService {
         }
 
         actualSolicitud.estado = EstadoSolicitudCancelacion.APROBADA;
-        actualSolicitud.decidida_por = { id: idAdmin } as never;
+        actualSolicitud.decidida_por = referenciaUsuario(idAdmin);
         actualSolicitud.decidida_en = new Date();
         actualSolicitud.observacion = dto.observacion?.trim() || null;
         const solicitudGuardada =
@@ -454,7 +455,7 @@ export class ReservaSolicitudCancelacionResolucionService {
       )
         return;
       actual.estado = EstadoSolicitudCancelacion.VENCIDA;
-      actual.decidida_por = { id: idAdmin } as never;
+      actual.decidida_por = referenciaUsuario(idAdmin);
       actual.decidida_en = new Date();
       actual.observacion = observacion;
       await reservas.guardarSolicitudCancelacion(actual);

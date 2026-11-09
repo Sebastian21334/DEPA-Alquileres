@@ -99,3 +99,20 @@ test('el módulo core de pagos no importa módulos de dominio', () => {
     /ReservasModule|ReembolsosModule|DisputasModule|ReclamosModule/,
   );
 });
+
+test('los services de los dominios refactorizados no usan as never', () => {
+  assert.deepEqual(
+    violaciones(
+      [
+        'reservas/service',
+        'pagos/service',
+        'reembolsos/service',
+        'reclamos/service',
+        'disputas/service',
+        'bloqueo-anunciante/service',
+      ],
+      /\bas never\b/,
+    ),
+    [],
+  );
+});

@@ -27,6 +27,7 @@ import {
   type IDisputasRepository,
 } from '../repository/disputas.repository.interface';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 
 @Injectable()
 export class DisputasService {
@@ -161,7 +162,7 @@ export class DisputasService {
       disputa.resolucion = dto.observacion?.trim() || 'Contracargo perdido';
     }
 
-    disputa.resuelto_por = { id: idAdmin } as never;
+    disputa.resuelto_por = referenciaUsuario(idAdmin);
     disputa.resuelto_en = new Date();
     return this.disputas.guardar(disputa);
   }

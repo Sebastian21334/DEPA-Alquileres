@@ -30,6 +30,7 @@ import {
   type IDevolucionesUnitOfWork,
 } from '../persistence/devoluciones.unit-of-work.interface';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 
 const ESTADOS_REEMBOLSO_ACTIVO = [
   EstadoReembolso.PENDIENTE,
@@ -153,7 +154,7 @@ export class ReembolsosService {
           idempotency_key: clave,
           solicitado_por:
             datos.idSolicitadoPor != null
-              ? ({ id: datos.idSolicitadoPor } as never)
+              ? referenciaUsuario(datos.idSolicitadoPor)
               : null,
           resuelto_por: null,
           resuelto_en: null,
@@ -251,7 +252,7 @@ export class ReembolsosService {
           );
 
         actual.estado = EstadoReembolso.EN_PROCESO;
-        actual.resuelto_por = { id: idActor } as never;
+        actual.resuelto_por = referenciaUsuario(idActor);
         return {
           reembolso: await reembolsos.guardar(actual),
           transiciono: true,
@@ -368,7 +369,7 @@ export class ReembolsosService {
       reembolso.id_externo = datos.idExterno;
       reembolso.resuelto_en = new Date();
       reembolso.resuelto_por =
-        datos.idActor != null ? ({ id: datos.idActor } as never) : null;
+        datos.idActor != null ? referenciaUsuario(datos.idActor) : null;
       reembolso.error_detalle = null;
 
       this.aplicarDevolucionAlPago(pago, reembolso);
@@ -472,7 +473,7 @@ export class ReembolsosService {
         reembolso.error_detalle = motivo.trim();
         reembolso.resuelto_en = new Date();
         reembolso.resuelto_por =
-          idActor != null ? ({ id: idActor } as never) : null;
+          idActor != null ? referenciaUsuario(idActor) : null;
       },
     );
     if (!rechazado) throw new NotFoundException('Reembolso no encontrado');

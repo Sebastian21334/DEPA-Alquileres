@@ -23,6 +23,7 @@ import {
   type IReservaRepository,
 } from '../repository/reserva.repository.interface';
 import { ReservaEstadoService } from './reserva-estado.service';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 
 @Injectable()
 export class ReservaSolicitudCancelacionService {
@@ -86,7 +87,7 @@ export class ReservaSolicitudCancelacionService {
 
     const solicitud = this.reservaRepository.crearSolicitudCancelacion({
       reserva,
-      solicitante: Object.assign({}, { id: idUsuario }) as never,
+      solicitante: referenciaUsuario(idUsuario),
       motivo: dto.motivo.trim(),
       estado: EstadoSolicitudCancelacion.PENDIENTE,
       decidida_por: null,

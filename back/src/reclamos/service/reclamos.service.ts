@@ -43,6 +43,7 @@ import {
   type IReclamosRepository,
 } from '../repository/reclamos.repository.interface';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 
 const DIAS_RECLAMO = 7;
 const MAX_EVIDENCIAS = 5;
@@ -177,7 +178,7 @@ export class ReclamosService {
       );
       const evidencia = this.reclamos.crearEvidencia({
         reclamo,
-        usuario: { id: idUsuario } as never,
+        usuario: referenciaUsuario(idUsuario),
         url,
         nombre_archivo: archivo.originalname.slice(0, 255),
         tipo: 'image/jpeg',
@@ -215,7 +216,7 @@ export class ReclamosService {
       throw new ForbiddenException('Solo el Administrador puede dejar notas internas');
     const mensaje = this.reclamos.crearMensaje({
       reclamo,
-      autor: { id: idUsuario } as never,
+      autor: referenciaUsuario(idUsuario),
       texto: dto.texto.trim(),
       visible_para: dto.visible_para ?? VisibilidadMensajeReclamo.TODOS,
     });
@@ -319,7 +320,7 @@ export class ReclamosService {
       reclamo.importe_reembolso = importe;
     }
 
-    reclamo.administrador_resolucion = { id: idAdmin } as never;
+    reclamo.administrador_resolucion = referenciaUsuario(idAdmin);
     reclamo.resuelto_en = new Date();
     return this.reclamos.guardar(reclamo);
   }
