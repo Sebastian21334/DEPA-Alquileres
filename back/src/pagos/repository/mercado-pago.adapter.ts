@@ -114,6 +114,13 @@ export class MercadoPagoAdapter
     });
   }
 
+  listarReembolsos(
+    paymentId: string,
+  ): Promise<ResultadoReembolsoExterno[]> {
+    const client = this.crearCliente();
+    return new PaymentRefund(client).list({ payment_id: paymentId });
+  }
+
   validarWebhook(entrada: WebhookEntrada): void {
     const secret = this.config.get<string>('MP_WEBHOOK_SECRET');
     if (secret) {

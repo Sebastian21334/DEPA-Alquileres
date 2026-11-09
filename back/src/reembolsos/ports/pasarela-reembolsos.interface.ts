@@ -17,4 +17,5 @@ export interface IPasarelaReembolsos {
     paymentId: string,
     refundId: string,
   ): Promise<ResultadoReembolsoExterno>;
+  listarReembolsos(paymentId: string): Promise<ResultadoReembolsoExterno[]>;
 }

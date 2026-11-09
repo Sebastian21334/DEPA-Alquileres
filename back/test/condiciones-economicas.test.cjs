@@ -38,7 +38,15 @@ function escenario(moneda = 'ARS') {
     modalidad: { permite_reservas_por_fecha: true },
     perteneceA: () => false,
   };
-  const estado = { reservas: [], pagos: [], checkouts: [], alBloquear: () => {} };
+  const estado = {
+    reservas: [],
+    pagos: [],
+    checkouts: [],
+    alBloquear: () => {},
+    reembolsosExternos: [],
+    reembolsosRegistrados: [],
+    reembolsosAplicados: [],
+  };
   const cotizacion = {
     id: 10, venta: '1200.000000', tipo: 'blue', proveedor: 'prueba',
     actualizada_fuente_en: new Date(), consultada_en: new Date(),
@@ -127,17 +135,35 @@ function escenario(moneda = 'ARS') {
     consultarPago: async () => estado.pagoExterno,
   };
   const reembolsos = {
-    registrarDesdeWebhook: async () => ({}),
+    registrarDesdeWebhook: async (datos) => {
+      estado.reembolsosRegistrados.push(datos);
+      return { id: estado.reembolsosRegistrados.length, estado: 'APROBADO' };
+    },
     registrarManual: async () => ({}),
     tieneReembolsoTotalAprobado: async () => false,
   };
+  const pasarelaReembolsos = {
+    listarReembolsos: async () => estado.reembolsosExternos,
+  };
   const disputas = { registrarContracargo: async () => ({}) };
-  const cancelaciones = { aplicarReembolsoConfirmado: async () => ({}) };
+  const cancelaciones = {
+    aplicarReembolsoConfirmado: async (id) => {
+      estado.reembolsosAplicados.push(id);
+      return {};
+    },
+  };
   const checkout = new CheckoutService(
     presupuestos, reservas, pagosCore, config, pasarela,
   );
   const webhook = new PagosWebhookService(
-    pagosCore, reservas, cancelaciones, reembolsos, disputas, pasarela, reservaEstado,
+    pagosCore,
+    reservas,
+    cancelaciones,
+    reembolsos,
+    disputas,
+    pasarela,
+    pasarelaReembolsos,
+    reservaEstado,
   );
   webhook.logger = { warn: () => {} };
   const pagos = {
@@ -409,4 +435,52 @@ test('un webhook tardío no reactiva tras desbloquear una reserva cancelada por 
   assert.equal(reserva.estado_pago, 'APROBADO');
   assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
   assert.match(reserva.observacion_liquidacion, /bloqueo/i);
+});
+
+test('un reembolso parcial externo se registra por refund.id y se aplica', async () => {
+  const e = escenario();
+  const reserva = Object.assign(new Reserva(), {
+    id: 77,
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'RETENIDO',
+    cancelada: false,
+    finalizada: false,
+    fecha_inicio: '2030-02-10',
+    fecha_fin: '2030-02-12',
+    monto_pago: 100,
+    publicacion: e.publicacion,
+    usuario: { id: USUARIO },
+  });
+  e.estado.reservas.push(reserva);
+  const pago = Object.assign(new Pago(), {
+    id: 20,
+    external_reference: 'reserva:77',
+    amount: 100,
+    currency: 'ARS',
+    status: 'approved',
+    reserva,
+  });
+  e.estado.pagos.push(pago);
+  e.estado.pagoExterno = {
+    id: 123,
+    external_reference: 'reserva:77',
+    status: 'approved',
+    transaction_amount: 100,
+    transaction_amount_refunded: 50,
+    currency_id: 'ARS',
+    date_approved: new Date('2030-02-11T12:00:00Z').toISOString(),
+  };
+  e.estado.reembolsosExternos = [
+    { id: 'refund-1', amount: 50, status: 'approved' },
+  ];
+
+  await e.pagos.procesarWebhook({ dataId: '123' });
+
+  assert.equal(e.estado.reembolsosRegistrados.length, 1);
+  assert.equal(e.estado.reembolsosRegistrados[0].idExterno, 'refund-1');
+  assert.equal(
+    e.estado.reembolsosRegistrados[0].referenciaExterna,
+    'mp-refund:refund-1',
+  );
+  assert.deepEqual(e.estado.reembolsosAplicados, [1]);
 });

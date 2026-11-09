@@ -47,6 +47,8 @@ export type CrearReembolsoDatos = {
   motivo: string;
   idSolicitadoPor: number | null;
   idempotencyKey?: string;
+  /** Los ajustes externos pueden tener más de un reembolso por reserva. */
+  permitirMultiplesAjustes?: boolean;
 };
 
 @Injectable()
@@ -104,7 +106,10 @@ export class ReembolsosService {
         if (existenteEnTx)
           return { reembolso: existenteEnTx, creado: false };
 
-        if (datos.origen === OrigenReembolso.AJUSTE_ADMIN) {
+        if (
+          datos.origen === OrigenReembolso.AJUSTE_ADMIN &&
+          !datos.permitirMultiplesAjustes
+        ) {
           const deLaReserva = await reembolsos.buscarPorReserva(
             datos.reserva.id,
           );
@@ -507,9 +512,14 @@ export class ReembolsosService {
     referenciaExterna: string;
     idExterno: string | null;
   }): Promise<Reembolso> {
-    const existente = await this.reembolsos.buscarPorReferenciaExterna(
-      datos.referenciaExterna,
-    );
+    const porIdExterno = datos.idExterno
+      ? await this.reembolsos.buscarPorIdExterno(datos.idExterno)
+      : null;
+    const existente =
+      porIdExterno ??
+      (await this.reembolsos.buscarPorReferenciaExterna(
+        datos.referenciaExterna,
+      ));
     if (existente) {
       if (existente.estado !== EstadoReembolso.APROBADO)
         return this.confirmar(existente.id, {
@@ -533,7 +543,10 @@ export class ReembolsosService {
       importe: Number(datos.importe),
       motivo: 'Reembolso informado por Mercado Pago',
       idSolicitadoPor: null,
-      idempotencyKey: randomUUID(),
+      idempotencyKey: datos.idExterno
+        ? `mp-refund:${datos.idExterno}`.slice(0, 36)
+        : randomUUID(),
+      permitirMultiplesAjustes: true,
     });
     return this.confirmar(reembolso.id, {
       referencia: datos.referenciaExterna,

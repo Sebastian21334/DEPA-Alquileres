@@ -61,7 +61,29 @@ export class ReembolsosRepository implements IReembolsosRepository {
   }
 
   buscarPorReferenciaExterna(referencia: string): Promise<Reembolso | null> {
-    return this.repository.findOne({ where: { referencia_externa: referencia } });
+    return this.repository.findOne({
+      where: { referencia_externa: referencia },
+      relations: {
+        reserva: {
+          publicacion: { anunciante: { usuario: true } },
+          usuario: true,
+        },
+        pago: true,
+      },
+    });
+  }
+
+  buscarPorIdExterno(idExterno: string): Promise<Reembolso | null> {
+    return this.repository.findOne({
+      where: { id_externo: idExterno },
+      relations: {
+        reserva: {
+          publicacion: { anunciante: { usuario: true } },
+          usuario: true,
+        },
+        pago: true,
+      },
+    });
   }
 
   buscarPorPago(idPago: number): Promise<Reembolso[]> {

@@ -33,6 +33,7 @@ Cuando Mercado Pago informa un pago aprobado sobre una reserva ya cerrada:
    - con una observación que indica que requiere devolución.
 3. La reserva aparece en `GET /reservas/liquidaciones/administracion` para que un administrador registre la devolución. La lista también incluye las reservas canceladas por bloqueo que quedaron en `NO_APLICA` sin pago acreditado, para que el Administrador vea la incidencia aunque no corresponda devolución. La respuesta indica `tiene_reembolso_activo` y `fue_cancelada_por_bloqueo`.
 4. Un webhook repetido no vuelve a confirmar, no genera otro código y no duplica la revisión.
+5. Para reembolsos externos, el webhook lista los reembolsos del pago y registra cada uno por `refund.id` e importe; los parciales actualizan `Pago.amount_refunded` sin duplicar el reembolso.
 
 ## Notificaciones
 

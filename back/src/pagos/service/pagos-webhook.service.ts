@@ -11,6 +11,12 @@ import { ReservaEstadoService } from '../../reservas/service/reserva-estado.serv
 import { ReservaCancelacionesService } from '../../reservas/service/reserva-cancelaciones.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
+import {
+  PASARELA_REEMBOLSOS,
+  type IPasarelaReembolsos,
+  type ResultadoReembolsoExterno,
+} from '../../reembolsos/ports/pasarela-reembolsos.interface';
+import type { Pago } from '../entity/pago.entity';
 import { DisputasService } from '../../disputas/service/disputas.service';
 import {
   PASARELA_PAGOS,
@@ -35,6 +41,8 @@ export class PagosWebhookService {
     private readonly disputasService: DisputasService,
     @Inject(PASARELA_PAGOS)
     private readonly pasarela: IPasarelaPagos,
+    @Inject(PASARELA_REEMBOLSOS)
+    private readonly pasarelaReembolsos: IPasarelaReembolsos,
     private readonly estado: ReservaEstadoService,
   ) {}
 
@@ -129,6 +137,12 @@ export class PagosWebhookService {
       approved_at: pago.approved_at,
     });
 
+    if (
+      Number(payment.transaction_amount_refunded ?? 0) > 0 ||
+      payment.status === 'refunded'
+    )
+      await this.reconciliarReembolsosExternos(pago, payment);
+
     if (payment.status === 'approved') {
       await this.reservasService.confirmarPago(
         pago.reserva.id,
@@ -144,31 +158,6 @@ export class PagosWebhookService {
         importe: Number(payment.transaction_amount ?? pago.amount),
         motivo: payment.status_detail ?? 'Contracargo informado por Mercado Pago',
       });
-    } else if (payment.status === 'refunded') {
-      if (
-        await this.reembolsosService.tieneReembolsoTotalAprobado(
-          pago.reserva.id,
-        )
-      )
-        return pago;
-      const importe = Number(payment.transaction_amount ?? pago.amount);
-      const reembolso = await this.reembolsosService.registrarDesdeWebhook({
-        pago,
-        importe,
-        referenciaExterna: `mp-refund:${payment.id}`,
-        idExterno: String(payment.id),
-      });
-      if (
-        pago.reserva.estado_pago === EstadoPagoReserva.APROBADO ||
-        pago.reserva.estado_pago === EstadoPagoReserva.CONTRACARGO
-      ) {
-        await this.cancelaciones.aplicarReembolsoConfirmado(reembolso.id);
-      } else {
-        await this.reservasService.rechazarPago(
-          pago.reserva.id,
-          EstadoPagoReserva.REEMBOLSADO,
-        );
-      }
     } else if (['rejected', 'cancelled'].includes(payment.status ?? '')) {
       await this.reservasService.rechazarPago(
         pago.reserva.id,
@@ -177,6 +166,51 @@ export class PagosWebhookService {
     }
 
     return pago;
+  }
+
+  private async reconciliarReembolsosExternos(
+    pago: Pago,
+    payment: PagoExterno,
+  ): Promise<void> {
+    if (payment.id == null) return;
+    let reembolsos: ResultadoReembolsoExterno[];
+    try {
+      reembolsos = await this.pasarelaReembolsos.listarReembolsos(
+        String(payment.id),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron listar los reembolsos externos del pago ${payment.id}`,
+        error as Error,
+      );
+      return;
+    }
+
+    for (const reembolsoExterno of reembolsos) {
+      if (
+        reembolsoExterno.id == null ||
+        reembolsoExterno.amount == null
+      )
+        continue;
+      const estado = (reembolsoExterno.status ?? 'approved').toLowerCase();
+      if (!['approved', 'succeeded'].includes(estado)) continue;
+      const reembolso =
+        await this.reembolsosService.registrarDesdeWebhook({
+          pago,
+          importe: Number(reembolsoExterno.amount),
+          referenciaExterna: `mp-refund:${reembolsoExterno.id}`,
+          idExterno: String(reembolsoExterno.id),
+        });
+      if (reembolso.estado !== 'APROBADO') continue;
+      try {
+        await this.cancelaciones.aplicarReembolsoConfirmado(reembolso.id);
+      } catch (error) {
+        this.logger.warn(
+          `El reembolso externo ${reembolso.id} se registró, pero no se pudo aplicar a la reserva`,
+          error as Error,
+        );
+      }
+    }
   }
 
   private mapearEstado(status?: string): EstadoPagoReserva {

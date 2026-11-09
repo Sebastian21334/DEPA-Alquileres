@@ -9,6 +9,7 @@ export interface IReembolsosRepository {
   buscarPorIdConBloqueo(id: number): Promise<Reembolso | null>;
   buscarPagoId(id: number): Promise<number | null>;
   buscarPorIdempotencyKey(clave: string): Promise<Reembolso | null>;
+  buscarPorIdExterno(idExterno: string): Promise<Reembolso | null>;
   buscarPorReferenciaExterna(referencia: string): Promise<Reembolso | null>;
   buscarPorPago(idPago: number): Promise<Reembolso[]>;
   buscarPorReserva(idReserva: number): Promise<Reembolso[]>;

@@ -481,3 +481,33 @@ test('ejecutar respeta MP_REFUNDS_ENABLED=false', async () => {
     /ejecución automática está deshabilitada/,
   );
 });
+
+test('registrarDesdeWebhook reutiliza un reembolso por id_externo', async () => {
+  const existente = { id: 9, estado: 'APROBADO', id_externo: 'refund-1' };
+  let creados = 0;
+  const repo = {
+    buscarPorIdExterno: async () => existente,
+    buscarPorReferenciaExterna: async () => null,
+    crear: () => {
+      creados += 1;
+      return {};
+    },
+  };
+  const service = new ReembolsosService(
+    repo,
+    {},
+    { get: () => 'false' },
+    {},
+    uow(repo, {}),
+  );
+
+  const resultado = await service.registrarDesdeWebhook({
+    pago: { id: 1, amount: 100, reserva: { id: 2 } },
+    importe: 50,
+    referenciaExterna: 'mp-refund:refund-1',
+    idExterno: 'refund-1',
+  });
+
+  assert.equal(resultado, existente);
+  assert.equal(creados, 0);
+});

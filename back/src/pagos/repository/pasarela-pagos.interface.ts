@@ -7,6 +7,7 @@ export interface PagoExterno {
   id?: number | string;
   external_reference?: string;
   transaction_amount?: number;
+  transaction_amount_refunded?: number;
   currency_id?: string;
   status?: string;
   status_detail?: string;
