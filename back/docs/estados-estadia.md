@@ -1,15 +1,17 @@
 # Estados de la estadía
 
-La API serializa `estado_estadia` en cada Reserva, tanto en listados como en
-detalles, respuestas de acciones y resúmenes de pagos. Se calcula con las fechas
-del período y el ingreso validado. No se almacena otra columna ni se requiere
-una migración para esta funcionalidad. `finalizada` conserva los cierres manuales existentes y registra los automáticos;
-para saber si la estadía sigue vigente se usa `estado_estadia`.
+La API expone `estado_estadia` mediante `ReservaConsultaService`: el read model
+lo agrega en los controllers de reservas y en las reservas anidadas de reclamos,
+disputas, solicitudes de cancelación y reembolsos. Se calcula con las fechas del
+período y el ingreso validado. No se almacena otra columna ni se requiere una
+migración para esta funcionalidad. `finalizada` conserva los cierres manuales
+existentes y registra los automáticos; para saber si la estadía sigue vigente se
+usa `estado_estadia`.
 
-El cálculo pertenece a la entidad `Reserva`, mediante `calcularEstadoEstadia()`.
-Los servicios consultan su propiedad `estado_estadia`; el controlador y el
-repositorio conservan sus responsabilidades de entrada y persistencia. No se
-agrega una capa `domain`. Las utilidades compartidas de fecha están en
+El cálculo pertenece a `ReservaEstadoService.calcular()`. La entidad `Reserva`
+permanece anémica: no tiene `calcularEstadoEstadia()` ni getters de presentación.
+Los controllers usan `ReservaConsultaService` para la respuesta; el repositorio
+solo persiste y consulta. Las utilidades compartidas de fecha están en
 `common/utils/fechas.ts`.
 
 Con pago aprobado y sin cancelación ni cierre manual:

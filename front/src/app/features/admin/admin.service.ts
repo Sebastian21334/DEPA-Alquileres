@@ -67,7 +67,10 @@ export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
-export type AdminSettlement = Reserva;
+export type AdminSettlement = Reserva & {
+  tiene_reembolso_activo?: boolean;
+  fue_cancelada_por_bloqueo?: boolean;
+};
 
 export interface AdminReembolso {
   id: number;
@@ -79,6 +82,20 @@ export interface AdminReembolso {
   motivo: string;
   creado_en: string;
   reserva?: { id: number; publicacion?: { titulo?: string } | null } | null;
+}
+
+export interface AdminBlockResumen {
+  canceladasPendientes: number;
+  canceladasConDevolucion: number;
+  enRevision: number;
+  sinAccion: number;
+  fallidas: number;
+  detalles: string[];
+}
+
+export interface AdminBlockResult extends AdminUser {
+  reservas?: AdminBlockResumen | null;
+  advertencia?: string;
 }
 
 export interface AdminCancellationRequest {
@@ -195,7 +212,10 @@ export class AdminService {
     });
   }
   cambiarBloqueo(id: number, bloquear: boolean, motivo?: string) {
-    return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo });
+    return this.http.patch<AdminBlockResult>(
+      `${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`,
+      { motivo },
+    );
   }
   cambiarRol(id: number, nombreRol: string) {
     return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });

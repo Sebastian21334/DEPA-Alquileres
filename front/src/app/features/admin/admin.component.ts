@@ -14,6 +14,7 @@ import {
   LucideX,
 } from '@lucide/angular';
 import {
+  AdminBlockResult,
   AdminCancellationRequest,
   AdminCatalogItem,
   AdminReembolso,
@@ -82,6 +83,7 @@ export class AdminComponent {
   );
   protected readonly error = signal<string | null>(null);
   protected readonly notice = signal<string | null>(null);
+  protected readonly warning = signal<string | null>(null);
   protected readonly query = signal('');
   protected readonly busy = signal<string | null>(null);
   protected readonly rejectId = signal<number | null>(null);
@@ -446,6 +448,22 @@ export class AdminComponent {
     });
   }
 
+  protected etiquetaLiquidacion(settlement: AdminSettlement): string {
+    if (this.esIncidenciaBloqueo(settlement)) return 'Cancelada por bloqueo';
+    if (settlement.estado_liquidacion === 'EN_REVISION') return 'En revisión';
+    if (settlement.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO')
+      return 'Pendiente de pago al propietario';
+    if (settlement.estado_liquidacion === 'NO_APLICA') return 'Sin liquidación';
+    return 'Código validado';
+  }
+
+  protected esIncidenciaBloqueo(settlement: AdminSettlement): boolean {
+    return (
+      settlement.estado_liquidacion === 'NO_APLICA' &&
+      settlement.fue_cancelada_por_bloqueo === true
+    );
+  }
+
   private resolverSettlement(
     settlement: AdminSettlement,
     estado: 'PAGADO_PROPIETARIO' | 'DEVUELTO_INQUILINO',
@@ -470,11 +488,39 @@ export class AdminComponent {
     this.run(
       `user-${user.id}`,
       () => this.api.cambiarBloqueo(user.id, bloquear, motivo ?? undefined),
-      () =>
+      (value) => {
+        const resultado = value as AdminBlockResult;
         this.users.update((v) =>
-          v.map((u) => (u.id === user.id ? { ...u, bloqueado: bloquear } : u)),
-        ),
-      'Estado del usuario actualizado.',
+          v.map((u) =>
+            u.id === user.id ? { ...u, bloqueado: bloquear } : u,
+          ),
+        );
+        if (resultado.reservas) {
+          const resumen = resultado.reservas;
+          if (resumen.fallidas > 0) {
+            const detalle = resumen.detalles.slice(0, 2).join('; ');
+            this.warning.set(
+              `${resumen.fallidas} reserva(s) no se pudieron resolver automáticamente.${detalle ? ` ${detalle}` : ''}`,
+            );
+          } else if (resumen.enRevision > 0) {
+            this.warning.set(
+              `${resumen.enRevision} reserva(s) quedaron en revisión administrativa. Revisá la lista de liquidaciones.`,
+            );
+          }
+        } else if (resultado.advertencia) {
+          this.warning.set(resultado.advertencia);
+        }
+      },
+      (value) => {
+        const resultado = value as AdminBlockResult;
+        if (!resultado.reservas) {
+          return resultado.advertencia
+            ? 'El estado del usuario quedó actualizado con advertencias.'
+            : 'Estado del usuario actualizado.';
+        }
+        const resumen = resultado.reservas;
+        return `Usuario actualizado. Reservas: ${resumen.canceladasPendientes} pendiente(s), ${resumen.canceladasConDevolucion} con devolución, ${resumen.enRevision} en revisión.`;
+      },
     );
   }
   protected changeRole(user: AdminUser, select: HTMLSelectElement): void {
@@ -528,16 +574,17 @@ export class AdminComponent {
     key: string,
     request: () => any,
     success: (value: unknown) => void,
-    message: string,
+    message: string | ((value: unknown) => string),
     failure?: () => void,
   ): void {
     this.busy.set(key);
     this.error.set(null);
     this.notice.set(null);
+    this.warning.set(null);
     request().subscribe({
       next: (v: unknown) => {
         success(v);
-        this.notice.set(message);
+        this.notice.set(typeof message === 'function' ? message(v) : message);
         this.busy.set(null);
       },
       error: (e: Error) => {

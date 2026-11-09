@@ -6,6 +6,7 @@ import { ReservaEstadoService } from './reserva-estado.service';
 export type ReservaRespuesta = Reserva & { estado_estadia: EstadoEstadia };
 export type ReservaRespuestaAdministracion = ReservaRespuesta & {
   tiene_reembolso_activo: boolean;
+  fue_cancelada_por_bloqueo: boolean;
 };
 
 /**
@@ -45,6 +46,8 @@ export class ReservaConsultaService {
     return reservas.map((reserva) => ({
       ...this.paraRespuesta(reserva),
       tiene_reembolso_activo: activos.has(reserva.id),
+      fue_cancelada_por_bloqueo:
+        this.estado.fueCanceladaPorBloqueo(reserva),
     }));
   }
 }

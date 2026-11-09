@@ -16,6 +16,9 @@
   @if (notice()) {
     <div class="alert alert--success" role="status">{{ notice() }}</div>
   }
+  @if (warning()) {
+    <div class="alert alert--warning" role="status">{{ warning() }}</div>
+  }
 
   <div class="stats">
     <article>
@@ -35,7 +38,7 @@
     <article>
       <svg lucideCheck [size]="25"></svg>
       <div>
-        <strong>{{ settlements().length }}</strong><span>Liquidaciones por resolver</span>
+        <strong>{{ settlements().length }}</strong><span>Liquidaciones e incidencias</span>
       </div>
     </article>
   </div>
@@ -124,13 +127,25 @@
         @for (settlement of settlements(); track settlement.id) {
           <article class="settlement-card">
             <div>
-              <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
-                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : 'Código validado' }}
+              <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'" [class.status--deleted]="esIncidenciaBloqueo(settlement)">
+                {{ etiquetaLiquidacion(settlement) }}
               </span>
+              @if (settlement.tiene_reembolso_activo) {
+                <span class="status status--blocked">Devolución activa</span>
+              }
               <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
               <p><strong>Importe:</strong> {{ montoLiquidacion(settlement) }}</p>
+              @if (esIncidenciaBloqueo(settlement)) {
+                <p class="settlement-note">
+                  @if (settlement.tiene_reembolso_activo) {
+                    La devolución está registrada y se gestiona en “Reembolsos pendientes”.
+                  } @else {
+                    Cancelación por bloqueo sin pago acreditado: no corresponde una devolución.
+                  }
+                </p>
+              }
               @if (settlement.cotizacion_dolar; as dolar) {
                 <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
                 <p>Cotización #{{ dolar.id }} · {{ dolar.proveedor }} · Publicada: {{ dolar.actualizada_fuente_en }} · Aceptada: {{ settlement.cotizacion_aceptada_en }}.</p>
@@ -140,12 +155,16 @@
               }
             </div>
             <div class="actions">
-              @if (settlement.estado_liquidacion === 'EN_REVISION') {
-                <button type="button" class="button button--ghost" [disabled]="busy() === 'settlement-' + settlement.id" (click)="resolverReclamo(settlement)">Resolver reclamo</button>
-              }
-              <button type="button" class="button button--danger-outline" [disabled]="busy() === 'settlement-' + settlement.id" (click)="registrarDevolucion(settlement)">Registrar devolución</button>
-              @if (settlement.codigo_validado_en) {
-                <button type="button" class="button button--success" [disabled]="busy() === 'settlement-' + settlement.id || settlement.estado_liquidacion === 'EN_REVISION'" (click)="registrarPago(settlement)">Registrar pago al propietario</button>
+              @if (!esIncidenciaBloqueo(settlement)) {
+                @if (settlement.estado_liquidacion === 'EN_REVISION') {
+                  <button type="button" class="button button--ghost" [disabled]="busy() === 'settlement-' + settlement.id" (click)="resolverReclamo(settlement)">Resolver reclamo</button>
+                }
+                <button type="button" class="button button--danger-outline" [disabled]="busy() === 'settlement-' + settlement.id" (click)="registrarDevolucion(settlement)">Registrar devolución</button>
+                @if (settlement.codigo_validado_en) {
+                  <button type="button" class="button button--success" [disabled]="busy() === 'settlement-' + settlement.id || settlement.estado_liquidacion === 'EN_REVISION'" (click)="registrarPago(settlement)">Registrar pago al propietario</button>
+                }
+              } @else if (settlement.tiene_reembolso_activo) {
+                <span class="muted">Revisar en “Reembolsos pendientes”.</span>
               }
             </div>
           </article>

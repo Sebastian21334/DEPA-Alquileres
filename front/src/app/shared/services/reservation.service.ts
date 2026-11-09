@@ -46,6 +46,8 @@ export interface Reserva {
   finalizada: boolean;
   cancelada: boolean;
   fecha_cancelacion: string | null;
+  cancelada_por?: 'INQUILINO' | 'ANUNCIANTE' | 'ADMINISTRADOR' | null;
+  motivo_cancelacion?: string | null;
   estado_pago:
     | 'PENDIENTE'
     | 'APROBADO'

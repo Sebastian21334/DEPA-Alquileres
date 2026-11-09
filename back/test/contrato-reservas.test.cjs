@@ -56,6 +56,17 @@ test('el listado administrativo marca las devoluciones activas', async () => {
   ]);
   assert.equal(respuesta.estado_estadia, 'PENDIENTE_PAGO');
   assert.equal(respuesta.tiene_reembolso_activo, true);
+  assert.equal(respuesta.fue_cancelada_por_bloqueo, false);
+
+  const [cancelada] = await servicio.paraRespuestasAdministracion([
+    {
+      ...reserva(),
+      cancelada: true,
+      cancelada_por: 'ADMINISTRADOR',
+      motivo_cancelacion: 'Bloqueo de cuenta del anunciante: Fraude',
+    },
+  ]);
+  assert.equal(cancelada.fue_cancelada_por_bloqueo, true);
 });
 
 test('ReclamosController serializa la reserva anidada', async () => {

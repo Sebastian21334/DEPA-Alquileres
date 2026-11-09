@@ -528,6 +528,10 @@ select {
   color: #106b42;
   background: #e8f8f0;
 }
+.alert--warning {
+  color: #7a4a00;
+  background: #fff4d6;
+}
 @media (max-width: 700px) {
   .admin {
     padding: 20px 14px 40px;

@@ -23,6 +23,8 @@ La contraparte habilitada puede consultar sus reservas y realizar las gestiones 
 - Los mensajes nuevos se rechazan antes de guardarlos o enviar el aviso por correo. El chat existente conserva el historial y deshabilita el envío al detectar la restricción.
 - Al bloquear un Anunciante, las reservas pendientes de pago se cancelan y liberan sus fechas, sin devolución.
 - Las reservas pagadas sin código validado se cancelan, liberan sus fechas y generan una devolución del 100 % del saldo cobrado no devuelto. Si ya existe una devolución parcial, se emite un complemento por el saldo faltante; no se duplica el importe ya devuelto.
+- La decisión de devolver es automática, pero la ejecución del dinero depende de `MP_REFUNDS_ENABLED`: con `false` la devolución queda `PENDIENTE` para que el Administrador la registre; con `true` puede ejecutarse por Mercado Pago.
+- Las reservas canceladas por bloqueo sin pago acreditado aparecen en la lista administrativa de liquidaciones como `NO_APLICA`, aunque no generen devolución, para que el Administrador vea la incidencia.
 - La creación y la confirmación de reembolsos se resuelven en una transacción con bloqueo del pago y del reembolso; un fallo de Mercado Pago no habilita un segundo reembolso por el mismo saldo.
 - Las reservas con código validado, o con reclamo, contracargo o liquidación en revisión, no se cancelan ni devuelven automáticamente: pasan a revisión administrativa.
 - Desbloquear no restaura reservas ni revierte devoluciones. Las cancelaciones y devoluciones son irreversibles.

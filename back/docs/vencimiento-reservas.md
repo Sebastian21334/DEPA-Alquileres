@@ -25,13 +25,13 @@ Este documento describe la política implementada para reservas temporales y el 
 Cuando Mercado Pago informa un pago aprobado sobre una reserva ya cerrada:
 
 1. Si el pago fue aprobado dentro del plazo (`fechaPago <= pago_vencimiento`) y las fechas siguen libres, la reserva se reactiva: se vuelven a bloquear las fechas, se emite el código de alojamiento y se confirma.
-2. Si las fechas ya fueron reasignadas, el pago llegó fuera de plazo o la reserva había sido cancelada manualmente, la reserva queda:
+2. Si las fechas ya fueron reasignadas, el pago llegó fuera de plazo, la reserva había sido cancelada manualmente o fue cancelada por el bloqueo de su Anunciante, la reserva queda:
    - `estado_pago = APROBADO`;
    - `cancelada = true`;
    - `estado_liquidacion = EN_REVISION`;
    - sin código de alojamiento;
    - con una observación que indica que requiere devolución.
-3. La reserva aparece en `GET /reservas/liquidaciones/administracion` para que un administrador registre la devolución. No se habilita el pago al propietario sin código validado.
+3. La reserva aparece en `GET /reservas/liquidaciones/administracion` para que un administrador registre la devolución. La lista también incluye las reservas canceladas por bloqueo que quedaron en `NO_APLICA` sin pago acreditado, para que el Administrador vea la incidencia aunque no corresponda devolución. La respuesta indica `tiene_reembolso_activo` y `fue_cancelada_por_bloqueo`.
 4. Un webhook repetido no vuelve a confirmar, no genera otro código y no duplica la revisión.
 
 ## Notificaciones
@@ -45,8 +45,9 @@ Cuando Mercado Pago informa un pago aprobado sobre una reserva ya cerrada:
 
 - `GET /reservas/mis-reservas` muestra la reserva cancelada y su estado de liquidación.
 - `GET /reservas/recibidas` excluye reservas canceladas.
-- `GET /reservas/liquidaciones/administracion` incluye las reservas en revisión.
-- `PATCH /reservas/:id/liquidacion` permite registrar la devolución al inquilino.
+- `GET /reservas/liquidaciones/administracion` incluye las reservas en revisión y las cancelaciones por bloqueo en `NO_APLICA` sin devolución.
+- `PATCH /reservas/:id/liquidacion` permite registrar la devolución al inquilino cuando la reserva admite resolución.
+- Una reserva cancelada por bloqueo no se reactiva por un pago tardío, aunque el Anunciante ya haya sido desbloqueado. El pago queda en revisión para devolución.
 
 ## Compatibilidad
 

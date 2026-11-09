@@ -187,12 +187,13 @@ El bloqueo de un Anunciante ya no se limita a ocultar publicaciones y rechazar n
 
 - **Pendientes de pago:** se cancelan y liberan sus fechas, sin devolución.
 - **Pagadas sin código de alojamiento validado:** se cancelan, liberan sus fechas y generan una devolución del 100 % del saldo cobrado no devuelto. Se considera que el Inquilino no ingresó. Si ya existe una devolución parcial, se completa el saldo faltante con un complemento.
+- **Pendientes de pago canceladas por bloqueo:** aparecen en la lista administrativa de liquidaciones como `NO_APLICA`, sin devolución, para que el Administrador vea la incidencia.
 - **Con código validado (en curso o finalizadas):** no se cancelan ni devuelven automáticamente. La liquidación queda en revisión para que el Administrador resuelva el pago, la retención o el recupero.
 - **Con reclamo, contracargo o liquidación en revisión:** pasan al circuito administrativo, sin cancelación ni devolución automática.
 
 La baja de cuenta mantiene su regla: no produce cancelaciones ni devoluciones automáticas. La diferencia es deliberada: la baja exige que no haya operaciones pendientes; el bloqueo es una medida administrativa que puede ocurrir con reservas ya contratadas.
 
-La devolución usa `OrigenReembolso.CANCELACION` y el motivo del bloqueo. Si `MP_REFUNDS_ENABLED=true` puede ejecutarse por Mercado Pago; si está en `false`, el Administrador la registra manualmente. El desbloqueo no restaura reservas ni revierte devoluciones.
+La devolución usa `OrigenReembolso.CANCELACION` y el motivo del bloqueo. La decisión es automática; la ejecución del dinero depende de `MP_REFUNDS_ENABLED`: con `true` puede ejecutarse por Mercado Pago y con `false` el Administrador la registra manualmente. El desbloqueo no restaura reservas ni revierte devoluciones.
 
 Código: `back/src/bloqueo-anunciante/` (módulo de composición), `ReservaBloqueoAnuncianteService.cancelarReservasPorBloqueoAnunciante`, `ReservaReembolsoAplicacionService` y la guarda de `ReservasService.confirmarPago` para pagos tardíos. La creación y confirmación de reembolsos usa `DevolucionesUnitOfWork` con lock de `Pago` y `Reembolso`.
 
