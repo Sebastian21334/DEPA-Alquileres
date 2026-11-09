@@ -69,10 +69,15 @@ test('las entidades de reservas, pagos y reembolsos son anémicas', () => {
     const contenido = leer(archivo);
     assert.doesNotMatch(
       contenido,
-      /^  (?!static\s)[a-zA-Z_]\w*\(/m,
+      /^\s{2}(?:(?:public|private|protected|static|async|readonly|get|set)\s+)*[a-zA-Z_]\w*\s*\(/m,
       `${archivo} declara métodos de negocio`,
     );
     assert.doesNotMatch(contenido, /toJSON\s*\(/, `${archivo} declara toJSON`);
+    assert.doesNotMatch(
+      contenido,
+      /@(?:AfterLoad|AfterInsert|AfterUpdate|AfterRemove)\s*\(/,
+      `${archivo} declara hooks de negocio`,
+    );
   }
 });
 

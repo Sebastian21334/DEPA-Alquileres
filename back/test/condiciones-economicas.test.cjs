@@ -366,3 +366,47 @@ test('un pago aprobado con la cuenta del anunciante inactiva pasa a revisión', 
   assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
   assert.match(reserva.observacion_liquidacion, /inactivo/i);
 });
+
+test('un webhook tardío no reactiva tras desbloquear una reserva cancelada por bloqueo', async () => {
+  const e = escenario();
+  const reserva = Object.assign(new Reserva(), {
+    id: 99,
+    estado_pago: 'CANCELADO',
+    estado_liquidacion: 'NO_APLICA',
+    cancelada: true,
+    cancelada_por: 'ADMINISTRADOR',
+    motivo_cancelacion:
+      'Bloqueo de cuenta del anunciante: Fraude',
+    fecha_inicio: '2030-02-10',
+    fecha_fin: '2030-02-12',
+    monto_pago: 100,
+    publicacion: e.publicacion,
+    usuario: { id: USUARIO },
+  });
+  e.estado.reservas.push(reserva);
+  const pago = Object.assign(new Pago(), {
+    id: 10,
+    external_reference: 'reserva:99',
+    amount: 100,
+    currency: 'ARS',
+    status: 'pending',
+    reserva,
+  });
+  e.estado.pagos.push(pago);
+  e.publicacion.anunciante.usuario.bloqueado = false;
+  e.estado.pagoExterno = {
+    id: 123,
+    external_reference: 'reserva:99',
+    status: 'approved',
+    transaction_amount: 100,
+    currency_id: 'ARS',
+    date_approved: new Date('2030-02-11T12:00:00Z').toISOString(),
+  };
+
+  await e.pagos.procesarWebhook({ dataId: '123' });
+
+  assert.equal(reserva.cancelada, true);
+  assert.equal(reserva.estado_pago, 'APROBADO');
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.match(reserva.observacion_liquidacion, /bloqueo/i);
+});

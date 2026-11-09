@@ -26,7 +26,7 @@ function servicio(reclamo) {
     buscarPorUsuario: async () => [copia()],
     buscarPorId: async () => copia(),
   };
-  return new ReclamosService(repo, {}, {}, {}, {});
+  return new ReclamosService(repo, {}, {}, {}, {}, {});
 }
 
 test('listarMios oculta las notas internas del Administrador', async () => {

@@ -336,7 +336,10 @@ export class ReservaBloqueoAnuncianteService {
         );
       }
       devolucion.pendientes = cobertura.pendientes;
-      devolucion.reembolso = cobertura.aprobado ?? devolucion.reembolso;
+      devolucion.reembolso =
+        cobertura.pendientes[0] ??
+        cobertura.aprobado ??
+        devolucion.reembolso;
     }
 
     if (devolucion.reembolso?.estado === EstadoReembolso.APROBADO) {

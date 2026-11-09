@@ -689,3 +689,79 @@ test('H1: si el reembolso compartido se rechaza antes de cancelar, se restablece
   assert.match(e.creados[1].idempotencyKey, /^blq:7:1:r1:[a-z0-9]+$/);
   assert.deepEqual(e.rechazados, []);
 });
+
+test('H2a: un parcial aprobado se completa por el saldo faltante', async () => {
+  const reserva = crearReserva({
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'RETENIDO',
+  });
+  const e = escenario([reserva]);
+  e.setExistentes([
+    {
+      id: 5,
+      estado: 'APROBADO',
+      importe: 50,
+      origen: 'CANCELACION',
+      idempotency_key: 'blq:7:1',
+    },
+  ]);
+  e.setAmountRefunded(50);
+
+  const resumen = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+
+  assert.equal(resumen.canceladasConDevolucion, 1);
+  assert.equal(reserva.cancelada, true);
+  assert.equal(e.creados.length, 1);
+  assert.equal(e.creados[0].importe, 50);
+  assert.equal(e.creados[0].idempotencyKey, 'blq:7:1:c1');
+});
+
+test('H7: un bloqueo repetido no vuelve a cancelar ni a devolver', async () => {
+  const reserva = crearReserva({ estado_pago: 'PENDIENTE' });
+  const e = escenario([reserva]);
+
+  const primero = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+  const segundo = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+
+  assert.equal(primero.canceladasPendientes, 1);
+  assert.equal(segundo.sinAccion, 1);
+  assert.equal(segundo.canceladasPendientes, 0);
+  assert.equal(e.creados.length, 0);
+  assert.equal(e.pendientes.length, 1);
+});
+
+test('H7b: un bloqueo repetido sobre una reserva pagada reutiliza la devolución', async () => {
+  const reserva = crearReserva({
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'RETENIDO',
+  });
+  const e = escenario([reserva]);
+
+  const primero = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+  const segundo = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+
+  assert.equal(primero.canceladasConDevolucion, 1);
+  assert.equal(segundo.enRevision, 1);
+  assert.equal(e.creados.length, 1);
+  assert.equal(e.liberadas.length, 1);
+});

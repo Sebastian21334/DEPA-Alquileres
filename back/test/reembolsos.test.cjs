@@ -332,3 +332,152 @@ test('ejecutar reintenta un FALLIDO excluyendo su propio importe del saldo', asy
   assert.deepEqual(argumentosReserva, [10, 5]);
   assert.equal(reembolso.estado, 'FALLIDO');
 });
+
+test('ejecutar aprueba una devolución con Mercado Pago y actualiza el pago', async () => {
+  const reembolso = {
+    id: 5,
+    estado: 'PENDIENTE',
+    importe: 30,
+    origen: 'CANCELACION',
+    idempotency_key: 'clave',
+    moneda: 'ARS',
+    pago: { id: 10, payment_id: 'mp-1' },
+  };
+  const pago = {
+    id: 10,
+    amount: 100,
+    amount_refunded: 0,
+    status: 'approved',
+    currency: 'ARS',
+  };
+  let llamadasMp = 0;
+  const repo = {
+    buscarPorId: async () => reembolso,
+    buscarPagoId: async () => 10,
+    buscarPorIdConBloqueo: async () => reembolso,
+    sumarImportesReservados: async () => 0,
+    guardar: async (actual) => actual,
+    actualizarEnTransaccion: async (_id, operacion) => {
+      operacion(reembolso);
+      return reembolso;
+    },
+  };
+  const pasarela = {
+    reembolsar: async () => {
+      llamadasMp += 1;
+      return { id: 'r-1', status: 'approved', amount: 30, currency_id: 'ARS' };
+    },
+    consultarReembolso: async () => ({}),
+  };
+  const service = new ReembolsosService(
+    repo,
+    pasarela,
+    { get: () => 'true' },
+    { saldoReembolsable: () => 100 },
+    uow(repo, { buscarPorIdConBloqueo: async () => pago, guardar: async (p) => p }),
+  );
+
+  const resultado = await service.ejecutar(5, 1);
+
+  assert.equal(llamadasMp, 1);
+  assert.equal(resultado.estado, 'APROBADO');
+  assert.equal(resultado.id_externo, 'r-1');
+  assert.equal(pago.amount_refunded, 30);
+  assert.equal(pago.status, 'approved');
+});
+
+test('confirmar una devolución total deja el pago como reembolsado', async () => {
+  const reembolso = {
+    id: 6,
+    importe: 100,
+    estado: 'PENDIENTE',
+    origen: 'CANCELACION',
+  };
+  const pago = {
+    id: 10,
+    amount: 100,
+    amount_refunded: 0,
+    status: 'approved',
+    currency: 'ARS',
+  };
+  const repo = {
+    buscarPagoId: async () => 10,
+    buscarPorIdConBloqueo: async () => reembolso,
+    guardar: async (actual) => actual,
+  };
+  const service = new ReembolsosService(
+    repo,
+    {},
+    { get: () => 'false' },
+    { saldoReembolsable: () => 100 },
+    uow(repo, { buscarPorIdConBloqueo: async () => pago, guardar: async (p) => p }),
+  );
+
+  await service.registrarManual(6, 'transferencia-total', 1);
+
+  assert.equal(reembolso.estado, 'APROBADO');
+  assert.equal(pago.amount_refunded, 100);
+  assert.equal(pago.status, 'refunded');
+  assert.ok(pago.refunded_at);
+});
+
+test('rechazar y ejecutar respetan los estados terminales', async () => {
+  const aprobado = { id: 1, estado: 'APROBADO' };
+  const repoAprobado = {
+    actualizarEnTransaccion: async (_id, operacion) => {
+      operacion(aprobado);
+      return aprobado;
+    },
+  };
+  const serviceAprobado = new ReembolsosService(
+    repoAprobado,
+    {},
+    { get: () => 'false' },
+    {},
+    uow(repoAprobado, {}),
+  );
+  await assert.rejects(
+    () => serviceAprobado.rechazar(1, 'No corresponde', 1),
+    /aprobado/,
+  );
+
+  const rechazado = {
+    id: 2,
+    estado: 'RECHAZADO',
+    importe: 10,
+    pago: { payment_id: 'mp-2' },
+  };
+  const repoRechazado = { buscarPorId: async () => rechazado };
+  const serviceRechazado = new ReembolsosService(
+    repoRechazado,
+    {},
+    { get: () => 'true' },
+    {},
+    uow(repoRechazado, {}),
+  );
+  await assert.rejects(
+    () => serviceRechazado.ejecutar(2, 1),
+    /estado ejecutable/,
+  );
+});
+
+test('ejecutar respeta MP_REFUNDS_ENABLED=false', async () => {
+  const reembolso = {
+    id: 7,
+    estado: 'PENDIENTE',
+    importe: 30,
+    pago: { payment_id: 'mp-7' },
+  };
+  const service = new ReembolsosService(
+    { buscarPorId: async () => reembolso },
+    {},
+    { get: () => 'false' },
+    {},
+    uow({}, {}),
+  );
+
+  await assert.rejects(
+    () => service.ejecutar(7, 1),
+    /ejecución automática está deshabilitada/,
+  );
+});
