@@ -95,7 +95,7 @@
                 @if (puedeConsultarCodigo(reserva)) {
                   <button type="button" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
                 }
-                @if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION') {
+                @if (puedeReclamar(reserva)) {
                   <button type="button" class="acct-btn acct-btn--danger acct-btn--sm" [disabled]="ocupada() === reserva.id" (click)="abrirReclamo(reserva)">Reportar un problema</button>
                 }
               </div>

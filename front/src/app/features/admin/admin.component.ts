@@ -464,7 +464,7 @@ export class AdminComponent {
     // El motivo viaja al backend y se incluye en el correo de bloqueo. Cancelar
     // el cuadro evita cambiar el estado por accidente.
     const motivo = bloquear
-      ? window.prompt(`Motivo del bloqueo para ${user.nombre} ${user.apellido}. Sus publicaciones dejarán de estar disponibles y no admitirán contacto ni nuevas reservas. Las reservas anteriores, reclamos y liquidaciones se conservan y se gestionan por separado:`)
+      ? window.prompt(`Motivo del bloqueo para ${user.nombre} ${user.apellido}. Sus publicaciones dejarán de estar disponibles y no admitirán contacto ni nuevas reservas. Las reservas pendientes de pago se cancelarán; las pagadas sin código de ingreso validado se cancelarán y devolverán; las que tienen código validado y los reclamos o liquidaciones pasan a revisión administrativa:`)
       : undefined;
     if (bloquear && motivo === null) return;
     this.run(

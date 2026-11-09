@@ -33,7 +33,14 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "oxlint src/"
+    "lint": "oxlint src/",
+    "test:reserva-estado": "npm run build && node --test test/reserva-estado.test.cjs",
+    "test:reembolsos": "npm run build && node --test test/reembolsos.test.cjs",
+    "test:reclamos": "npm run build && node --test test/reclamos.test.cjs",
+    "test:arquitectura": "npm run build && node --test test/arquitectura.test.cjs",
+    "test:bloqueo-anunciante": "npm run build && node --test test/bloqueo-anunciante.test.cjs",
+    "test:liquidaciones": "npm run build && node --test test/liquidaciones.test.cjs",
+    "test:contrato-reservas": "npm run build && node --test test/contrato-reservas.test.cjs"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",

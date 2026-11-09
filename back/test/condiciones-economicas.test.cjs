@@ -6,7 +6,12 @@ const { JwtService } = require('@nestjs/jwt');
 const { CrearCheckoutDto } = require('../dist/pagos/dto/crear-checkout.dto');
 const { PresupuestosService } = require('../dist/pagos/service/presupuestos.service');
 const { PagosService } = require('../dist/pagos/service/pagos.service');
+const { CheckoutService } = require('../dist/pagos/service/checkout.service');
+const { PagosWebhookService } = require('../dist/pagos/service/pagos-webhook.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
+const { ReservaEstadoService } = require('../dist/reservas/service/reserva-estado.service');
+const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
+const { ReservaCreacionService } = require('../dist/reservas/service/reserva-creacion.service');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 
@@ -62,46 +67,83 @@ function escenario(moneda = 'ARS') {
   const disponibilidad = {
     verificarDisponibilidad: async () => true,
     marcarComoReservadas: async () => {},
+    liberarReserva: async () => {},
   };
-  const reservas = new ReservasService(
+  const reservaEstado = new ReservaEstadoService();
+  const reservaCiclo = new ReservaCicloVidaService(reservaEstado);
+  const usuarios = {
+    buscarPorId: async () => ({ nombre: 'Prueba', apellido: 'Reserva' }),
+  };
+  const vencimiento = {
+    expirarPendientes: async () => 0,
+    rechazarPago: async (id) => repositorio.buscarPorId(id),
+  };
+  const creacion = new ReservaCreacionService(
     config,
     { ejecutar: (operacion) => operacion({ reservas: repositorio, fechas }) },
     repositorio,
     disponibilidad,
-    { buscarPorId: async () => ({ nombre: 'Prueba', apellido: 'Reserva' }) },
+    usuarios,
+    publicaciones,
+    vencimiento,
+  );
+  const reservas = new ReservasService(
+    { ejecutar: (operacion) => operacion({ reservas: repositorio, fechas }) },
+    repositorio,
+    disponibilidad,
     publicaciones,
     { enviarConfirmacion: async () => {} },
-    { crearSolicitud: async () => ({}) },
+    reservaEstado,
+    reservaCiclo,
+    vencimiento,
+    creacion,
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },
     publicaciones, disponibilidad, new JwtService(), config,
   );
-  const pagos = new PagosService(
-    presupuestos,
-    {
-      crear: (datos) => Object.assign(new Pago(), datos),
-      guardar: async (pago) => {
-        if (!estado.pagos.includes(pago)) estado.pagos.push(pago);
-        return pago;
-      },
-      buscarPorReferencia: async (referencia) => estado.pagos.find(p => p.external_reference === referencia),
+  const repositorioPagos = {
+    crear: (datos) => Object.assign(new Pago(), datos),
+    guardar: async (pago) => {
+      if (!estado.pagos.includes(pago)) estado.pagos.push(pago);
+      return pago;
     },
-    reservas,
-    { registrarDesdeWebhook: async () => ({}), registrarManual: async () => ({}) },
-    { registrarContracargo: async () => ({}) },
-    config,
-    {
-      validarConfiguracionCheckout: () => {},
-      crearCheckout: async (reserva, referencia, clave, currency) => {
-        estado.checkouts.push({ amount: reserva.monto_pago, currency });
-        return { id: 'preferencia-prueba', url: 'https://example.invalid/pago' };
-      },
-      validarWebhook: () => {},
-      consultarPago: async () => estado.pagoExterno,
+    buscarPorId: async (id) => estado.pagos.find(p => p.id === id),
+    buscarPorReferencia: async (referencia) => estado.pagos.find(p => p.external_reference === referencia),
+    buscarPorReserva: async (idReserva) => estado.pagos.find(p => p.reserva?.id === idReserva),
+    actualizarEstado: async (id, cambios) => {
+      const pago = estado.pagos.find(p => p.id === id) ?? estado.pagos[0];
+      if (pago) Object.assign(pago, cambios);
     },
+  };
+  const pagosCore = new PagosService(repositorioPagos);
+  const pasarela = {
+    validarConfiguracionCheckout: () => {},
+    crearCheckout: async (reserva, referencia, clave, currency) => {
+      estado.checkouts.push({ amount: reserva.monto_pago, currency });
+      return { id: 'preferencia-prueba', url: 'https://example.invalid/pago' };
+    },
+    validarWebhook: () => {},
+    consultarPago: async () => estado.pagoExterno,
+  };
+  const reembolsos = {
+    registrarDesdeWebhook: async () => ({}),
+    registrarManual: async () => ({}),
+    tieneReembolsoTotalAprobado: async () => false,
+  };
+  const disputas = { registrarContracargo: async () => ({}) };
+  const cancelaciones = { aplicarReembolsoConfirmado: async () => ({}) };
+  const checkout = new CheckoutService(
+    presupuestos, reservas, pagosCore, config, pasarela,
   );
-  pagos.logger = { warn: () => {} };
+  const webhook = new PagosWebhookService(
+    pagosCore, reservas, cancelaciones, reembolsos, disputas, pasarela, reservaEstado,
+  );
+  webhook.logger = { warn: () => {} };
+  const pagos = {
+    crearCheckout: (...args) => checkout.crearCheckout(...args),
+    procesarWebhook: (...args) => webhook.procesarWebhook(...args),
+  };
   return { publicacion, cotizacion, estado, presupuestos, reservas, pagos };
 }
 
@@ -190,8 +232,6 @@ for (const moneda of ['ARS', 'USD']) {
       reserva.importe_contratado, reserva.moneda_contratada, reserva.cotizacion_dolar,
     ]);
     e.publicacion.precio *= 3;
-    // El bloqueo posterior no impide conciliar una operación ya iniciada.
-    e.publicacion.anunciante.usuario.bloqueado = true;
     e.publicacion.tipoMoneda.nombre = moneda === 'ARS' ? 'USD' : 'ARS';
     e.cotizacion.venta = '2000.000000';
     e.cotizacion.id = 11;
@@ -250,3 +290,79 @@ for (const diferencia of [{ transaction_amount: 301 }, { currency_id: 'USD' }]) 
     assert.equal(e.estado.reservas[0].estado_pago, 'PENDIENTE');
   });
 }
+
+
+test('un pago aprobado después de bloquear al anunciante no confirma la reserva', async () => {
+  const e = escenario();
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  await e.pagos.crearCheckout(
+    { ...solicitud, presupuesto_token: presupuesto.token },
+    USUARIO,
+  );
+  const reserva = e.estado.reservas[0];
+  e.publicacion.anunciante.usuario.bloqueado = true;
+  e.estado.pagoExterno = {
+    id: 123,
+    external_reference: `reserva:${reserva.id}`,
+    status: 'approved',
+    transaction_amount: 300,
+    currency_id: 'ARS',
+    date_approved: new Date().toISOString(),
+  };
+  await e.pagos.procesarWebhook({ dataId: '123' });
+  assert.equal(reserva.cancelada, true);
+  assert.equal(reserva.estado_pago, 'APROBADO');
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+});
+
+test('un pago tardío no reactiva una reserva cancelada por bloqueo', async () => {
+  const e = escenario();
+  const reserva = Object.assign(new Reserva(), {
+    id: 99,
+    estado_pago: 'CANCELADO',
+    estado_liquidacion: 'NO_APLICA',
+    cancelada: true,
+    cancelada_por: 'ADMINISTRADOR',
+    motivo_cancelacion:
+      'Bloqueo de cuenta del anunciante: Fraude',
+    fecha_inicio: '2030-02-10',
+    fecha_fin: '2030-02-12',
+    monto_pago: 100,
+    publicacion: e.publicacion,
+    usuario: { id: USUARIO },
+  });
+  e.estado.reservas.push(reserva);
+
+  await e.reservas.confirmarPago(99, new Date('2030-02-11T12:00:00Z'));
+
+  assert.equal(reserva.cancelada, true);
+  assert.equal(reserva.cancelada_por, 'ADMINISTRADOR');
+  assert.equal(reserva.estado_pago, 'APROBADO');
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.match(reserva.observacion_liquidacion, /bloqueo/i);
+});
+
+test('un pago aprobado con la cuenta del anunciante inactiva pasa a revisión', async () => {
+  const e = escenario();
+  e.publicacion.anunciante.usuario.activa = false;
+  const reserva = Object.assign(new Reserva(), {
+    id: 98,
+    estado_pago: 'PENDIENTE',
+    estado_liquidacion: 'NO_APLICA',
+    cancelada: false,
+    finalizada: false,
+    fecha_inicio: '2030-02-10',
+    fecha_fin: '2030-02-12',
+    monto_pago: 100,
+    publicacion: e.publicacion,
+    usuario: { id: USUARIO },
+  });
+  e.estado.reservas.push(reserva);
+
+  await e.reservas.confirmarPago(98, new Date('2030-02-01T12:00:00Z'));
+
+  assert.equal(reserva.cancelada, true);
+  assert.equal(reserva.estado_pago, 'APROBADO');
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.match(reserva.observacion_liquidacion, /inactivo/i);
+});

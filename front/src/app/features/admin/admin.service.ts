@@ -86,6 +86,7 @@ export interface AdminCancellationRequest {
   motivo: string;
   estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'VENCIDA';
   creada_en: string;
+  solicitante?: { id: number; nombre?: string; apellido?: string } | null;
   reserva?: {
     id: number;
     monto_pago: number;

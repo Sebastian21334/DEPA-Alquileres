@@ -17,6 +17,8 @@ import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ReclamosService } from '../service/reclamos.service';
+import { ReservaConsultaService } from '../../reservas/service/reserva-consulta.service';
+import type { Reclamo } from '../entity/reclamo.entity';
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
@@ -28,31 +30,51 @@ const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', 5, {
 @Controller('reclamos')
 @UseGuards(JwtAuthGuard)
 export class ReclamosController {
-  constructor(private readonly reclamosService: ReclamosService) {}
+  constructor(
+    private readonly reclamosService: ReclamosService,
+    private readonly consulta: ReservaConsultaService,
+  ) {}
+
+  private conReserva(reclamo: Reclamo) {
+    return {
+      ...reclamo,
+      reserva: this.consulta.paraRespuesta(reclamo.reserva),
+    };
+  }
 
   @Post()
-  crear(@Body() dto: CrearReclamoDto, @Req() req: AuthenticatedRequest) {
-    return this.reclamosService.crear(dto, req.user.id);
+  async crear(
+    @Body() dto: CrearReclamoDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.conReserva(await this.reclamosService.crear(dto, req.user.id));
   }
 
   @Get('mios')
-  listarMios(@Req() req: AuthenticatedRequest) {
-    return this.reclamosService.listarMios(req.user.id);
+  async listarMios(@Req() req: AuthenticatedRequest) {
+    const reclamos = await this.reclamosService.listarMios(req.user.id);
+    return reclamos.map((reclamo) => this.conReserva(reclamo));
   }
 
   @UseGuards(RolesGuard)
   @Roles('Administrador')
   @Get('administracion')
-  listarAdministracion() {
-    return this.reclamosService.listarAdministracion();
+  async listarAdministracion() {
+    const reclamos = await this.reclamosService.listarAdministracion();
+    return reclamos.map((reclamo) => this.conReserva(reclamo));
   }
 
   @Get(':id')
-  obtener(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
-    return this.reclamosService.obtener(
-      id,
-      req.user.id,
-      req.user.rol === 'Administrador',
+  async obtener(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.conReserva(
+      await this.reclamosService.obtener(
+        id,
+        req.user.id,
+        req.user.rol === 'Administrador',
+      ),
     );
   }
 
@@ -114,11 +136,13 @@ export class ReclamosController {
   @UseGuards(RolesGuard)
   @Roles('Administrador')
   @Patch(':id/resolver')
-  resolver(
+  async resolver(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ResolverReclamoDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.reclamosService.resolver(id, dto, req.user.id);
+    return this.conReserva(
+      await this.reclamosService.resolver(id, dto, req.user.id),
+    );
   }
 }

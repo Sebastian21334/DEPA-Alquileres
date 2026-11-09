@@ -181,6 +181,21 @@ Siguiendo la convención del checklist, agregar al final de cada ítem:
 - «Revisar los estados de acceso de las cuentas, manteniendo diferenciados el correo sin verificar, el bloqueo administrativo y la baja.» → «El panel ya distingue Activa, Bloqueada y Dada de baja, con el correo sin verificar aparte. Pendiente en el código: el historial de bloqueos, desbloqueos y bajas.»
 - «Conservar las relaciones y operaciones ante la baja de una cuenta» (punto 3 de «Cosas que acomodar») → «Ya no existe la eliminación definitiva de cuentas en el código: solo baja lógica y bloqueo.»
 
+## Actualización 09/11/2026 — bloqueo de Anunciante con reservas
+
+El bloqueo de un Anunciante ya no se limita a ocultar publicaciones y rechazar nuevas reservas. Al bloquear, el sistema resuelve las reservas de sus publicaciones:
+
+- **Pendientes de pago:** se cancelan y liberan sus fechas, sin devolución.
+- **Pagadas sin código de alojamiento validado:** se cancelan, liberan sus fechas y generan una devolución del 100 % del saldo cobrado no devuelto. Se considera que el Inquilino no ingresó. Si ya existe una devolución parcial, se completa el saldo faltante con un complemento.
+- **Con código validado (en curso o finalizadas):** no se cancelan ni devuelven automáticamente. La liquidación queda en revisión para que el Administrador resuelva el pago, la retención o el recupero.
+- **Con reclamo, contracargo o liquidación en revisión:** pasan al circuito administrativo, sin cancelación ni devolución automática.
+
+La baja de cuenta mantiene su regla: no produce cancelaciones ni devoluciones automáticas. La diferencia es deliberada: la baja exige que no haya operaciones pendientes; el bloqueo es una medida administrativa que puede ocurrir con reservas ya contratadas.
+
+La devolución usa `OrigenReembolso.CANCELACION` y el motivo del bloqueo. Si `MP_REFUNDS_ENABLED=true` puede ejecutarse por Mercado Pago; si está en `false`, el Administrador la registra manualmente. El desbloqueo no restaura reservas ni revierte devoluciones.
+
+Código: `back/src/bloqueo-anunciante/` (módulo de composición), `ReservaBloqueoAnuncianteService.cancelarReservasPorBloqueoAnunciante`, `ReservaReembolsoAplicacionService` y la guarda de `ReservasService.confirmarPago` para pagos tardíos. La creación y confirmación de reembolsos usa `DevolucionesUnitOfWork` con lock de `Pago` y `Reembolso`.
+
 ## Compatibilidad y alcance
 
 - No se requieren migraciones: `activa` y `fecha_baja` ya existían en `usuario`.
@@ -188,7 +203,6 @@ Siguiendo la convención del checklist, agregar al final de cada ítem:
 - **Reservas vencidas:** en `main`, una reserva pendiente con el plazo vencido se cierra recién cuando alguien crea otra reserva. Mientras tanto sigue impidiendo la baja. La rama `fix/checklist-11-reservas` (sin mergear) agrega el cierre automático cada minuto, que resuelve esto.
 - **Concurrencia:** la baja bloquea la fila del usuario, pero la creación de reservas no la consulta. Queda una carrera muy improbable: que el mismo usuario reserve y se dé de baja en el mismo instante. No se cerró para no tocar `reservas.service.ts`, que también modifica la rama `fix/checklist-11-reservas`.
 - **Fuera de alcance:**
-  - que el bloqueo de un Anunciante aplique la misma lógica que su baja sobre las reservas (ítem del documento «Cuando un admin bloquea un anunciante…»);
   - el historial de bloqueos y bajas;
   - la recuperación de una cuenta dada de baja al registrarse otra vez.
 - En el panel, el selector de rol sigue habilitado para las cuentas dadas de baja.

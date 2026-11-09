@@ -124,7 +124,7 @@ function servicioUsuarios(db) {
   }, {}, {}, dataSource, {}, {});
 }
 
-test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de publicaciones', async () => {
+test('UsuariosService.cambiarBloqueo conserva reservas, reclamos, liquidaciones y pausa de publicaciones; la resolución por bloqueo vive en BloqueoAnuncianteService', async () => {
   const db = base();
   reserva(db, { estado_pago: 'PENDIENTE', estado_liquidacion: 'NO_APLICA' });
   reserva(db, { estado_liquidacion: 'RETENIDO', fecha_fin: FUTURO });

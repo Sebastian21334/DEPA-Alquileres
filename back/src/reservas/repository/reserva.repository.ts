@@ -1,13 +1,16 @@
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThan, Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
 import {
   EstadoLiquidacionReserva,
   EstadoPagoReserva,
   Reserva,
 } from '../entity/reserva.entity';
-import { IReservaRepository } from './reserva.repository.interface';
+import {
+  IReservaRepository,
+  type FiltrosLiquidacionesAdministracion,
+} from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
 import {
   EstadoSolicitudCancelacion,
@@ -153,6 +156,23 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
+  buscarPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
+    return this.repository.find({
+      where: {
+        publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
+      },
+      relations: {
+        usuario: true,
+        publicacion: {
+          anunciante: { usuario: true },
+          ciudad: true,
+          provincia: true,
+        },
+      },
+      order: { fecha_inicio: 'ASC' },
+    });
+  }
+
   buscarRecibidasPorAnunciante(
     idUsuarioAnunciante: number,
   ): Promise<Reserva[]> {
@@ -186,6 +206,23 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
+  async marcarFinalizadas(fechaCorte: string): Promise<void> {
+    await this.repository
+      .createQueryBuilder()
+      .update(Reserva)
+      .set({ finalizada: true })
+      .where('finalizada = false')
+      .andWhere('cancelada = false')
+      .andWhere('estado_pago = :aprobado', {
+        aprobado: EstadoPagoReserva.APROBADO,
+      })
+      .andWhere('codigo_validado_en IS NOT NULL')
+      .andWhere('fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL')
+      .andWhere('fecha_inicio <= fecha_fin')
+      .andWhere('fecha_fin < :hoy', { hoy: fechaCorte })
+      .execute();
+  }
+
   existeAprobada(
     idPublicacion: number,
     idUsuarioInquilino: number,
@@ -200,24 +237,36 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarLiquidacionesAdministracion(): Promise<Reserva[]> {
-    return this.repository.find({
-      where: {
-        estado_liquidacion: In([
-          EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
-          EstadoLiquidacionReserva.EN_REVISION,
-        ]),
-      },
-      relations: {
-        usuario: true,
-        publicacion: {
-          anunciante: { usuario: true },
-          ciudad: true,
-          provincia: true,
+  buscarLiquidacionesAdministracion(
+    filtros: FiltrosLiquidacionesAdministracion,
+  ): Promise<Reserva[]> {
+    const consulta = this.repository
+      .createQueryBuilder('reserva')
+      .leftJoinAndSelect('reserva.usuario', 'usuario')
+      .leftJoinAndSelect('reserva.publicacion', 'publicacion')
+      .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
+      .leftJoinAndSelect('anunciante.usuario', 'anuncianteUsuario')
+      .leftJoinAndSelect('publicacion.ciudad', 'ciudad')
+      .leftJoinAndSelect('publicacion.provincia', 'provincia')
+      .where('reserva.estado_liquidacion IN (:...estados)', {
+        estados: filtros.estados,
+      });
+
+    if (filtros.incluirCanceladasPorBloqueo) {
+      consulta.orWhere(
+        '(reserva.estado_liquidacion = :noAplica AND reserva.cancelada = true AND reserva.cancelada_por = :actor AND reserva.motivo_cancelacion LIKE :motivoBloqueo)',
+        {
+          noAplica: EstadoLiquidacionReserva.NO_APLICA,
+          actor: filtros.actorCancelacion,
+          motivoBloqueo: `%${filtros.motivoBloqueo}%`,
         },
-      },
-      order: { codigo_validado_en: 'ASC', id: 'DESC' },
-    });
+      );
+    }
+
+    return consulta
+      .orderBy('reserva.codigo_validado_en', 'ASC')
+      .addOrderBy('reserva.id', 'DESC')
+      .getMany();
   }
 
   private solicitudes() {
@@ -253,6 +302,16 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
+  buscarSolicitudCancelacionConBloqueo(
+    id: number,
+    idReserva: number,
+  ): Promise<SolicitudCancelacion | null> {
+    return this.solicitudes().findOne({
+      where: { id, reserva: { id: idReserva } },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
+
   buscarSolicitudCancelacionActiva(
     idReserva: number,
   ): Promise<SolicitudCancelacion | null> {
@@ -261,7 +320,14 @@ export class ReservaRepository implements IReservaRepository {
         reserva: { id: idReserva },
         estado: EstadoSolicitudCancelacion.PENDIENTE,
       },
-      relations: { solicitante: true, decidida_por: true },
+      relations: {
+        solicitante: true,
+        decidida_por: true,
+        reserva: {
+          usuario: true,
+          publicacion: { anunciante: { usuario: true } },
+        },
+      },
       order: { id: 'DESC' },
     });
   }

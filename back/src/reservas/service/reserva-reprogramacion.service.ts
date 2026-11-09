@@ -20,6 +20,9 @@ import {
 } from '../repository/reserva.repository.interface';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { ReservasService } from './reservas.service';
+import { ReservaEstadoService } from './reserva-estado.service';
+import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 @Injectable()
 export class ReservaReprogramacionService {
@@ -31,6 +34,8 @@ export class ReservaReprogramacionService {
     private readonly disponibilidadService: DisponibilidadService,
     private readonly notificacionesService: ReservaNotificacionesService,
     private readonly reservasService: ReservasService,
+    private readonly estado: ReservaEstadoService,
+    private readonly ciclo: ReservaCicloVidaService,
   ) {}
 
   /** El inquilino puede cambiar sus fechas si el nuevo rango sigue libre. */
@@ -44,36 +49,36 @@ export class ReservaReprogramacionService {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
-        if (!reserva.esDelInquilino(idUsuarioQueOpera)) {
+        if (!this.estado.esDelInquilino(reserva, idUsuarioQueOpera)) {
           throw new ForbiddenException(
             'Solo el inquilino que realizó la reserva puede cambiar sus fechas',
           );
         }
         // Una estadía terminada por fecha también cuenta como cerrada.
-        if (reserva.cancelada || reserva.estado_estadia === 'FINALIZADA') {
+        if (reserva.cancelada || this.estado.calcular(reserva) === 'FINALIZADA') {
           throw new BadRequestException(
             'No se pueden modificar las fechas de una reserva cerrada',
           );
         }
-        if (!reserva.pagoAprobado()) {
+        if (!this.estado.pagoAprobado(reserva)) {
           throw new BadRequestException(
             'No se pueden modificar las fechas hasta que el pago esté aprobado',
           );
         }
         if (
-          reserva.estado_estadia !== 'CONFIRMADA' ||
-          reserva.codigoValidado()
+          this.estado.calcular(reserva) !== 'CONFIRMADA' ||
+          this.estado.codigoValidado(reserva)
         ) {
           throw new BadRequestException(
             'Solo se pueden reprogramar reservas antes del inicio de la estadía y sin ingreso validado',
           );
         }
-        if (reserva.liquidacionEnRevision()) {
+        if (this.estado.liquidacionEnRevision(reserva)) {
           throw new BadRequestException(
             'No se puede reprogramar una reserva con un reclamo o liquidación en revisión',
           );
         }
-        if (reserva.liquidacionResuelta()) {
+        if (this.estado.liquidacionResuelta(reserva)) {
           throw new BadRequestException(
             'No se puede reprogramar una reserva con una liquidación resuelta',
           );
@@ -111,7 +116,7 @@ export class ReservaReprogramacionService {
             'La reserva requiere revisar sus condiciones originales antes de reprogramar. Contactá a soporte.',
           );
         }
-        if (Math.abs(montoPago - importeContratado) > 0.009) {
+        if (Math.abs(montoPago - importeContratado) > TOLERANCIA_MONETARIA) {
           throw new ConflictException(
             'El importe registrado no coincide con el contratado. Contactá a soporte antes de reprogramar.',
           );
@@ -178,7 +183,7 @@ export class ReservaReprogramacionService {
           );
         const anteriorInicio = reserva.fecha_inicio;
         const anteriorFin = reserva.fecha_fin;
-        reserva.reprogramar(dto.fecha_inicio, dto.fecha_fin);
+        this.ciclo.reprogramar(reserva, dto.fecha_inicio, dto.fecha_fin);
         await reservaRepository.guardar(reserva);
         const cambio = await reservaRepository.guardarReprogramacion({
           reserva,
@@ -186,7 +191,7 @@ export class ReservaReprogramacionService {
           fecha_fin_anterior: anteriorFin,
           fecha_inicio_nueva: dto.fecha_inicio,
           fecha_fin_nueva: dto.fecha_fin,
-          destinatario: reserva.emailDelAnunciante() ?? null,
+          destinatario: this.estado.emailDelAnunciante(reserva) ?? null,
           notificada_en: null,
           detalle: {
             conversion:
@@ -205,8 +210,8 @@ export class ReservaReprogramacionService {
                 : undefined,
             idReserva: reserva.id,
             titulo: reserva.publicacion.titulo,
-            nombreAnunciante: reserva.nombreDelAnunciante() || 'Anfitrión',
-            nombreInquilino: reserva.nombreInquilino() || 'Inquilino',
+            nombreAnunciante: this.estado.nombreDelAnunciante(reserva) || 'Anfitrión',
+            nombreInquilino: this.estado.nombreInquilino(reserva) || 'Inquilino',
             inicioAnterior: anteriorInicio,
             finAnterior: anteriorFin,
             inicioNuevo: dto.fecha_inicio,

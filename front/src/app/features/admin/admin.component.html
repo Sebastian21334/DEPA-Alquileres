@@ -171,6 +171,7 @@
             <div>
               <span class="status status--blocked">Pendiente</span>
               <h3>Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '—' }}</h3>
+              <p><strong>Solicitante:</strong> {{ solicitud.solicitante?.nombre }} {{ solicitud.solicitante?.apellido }}</p>
               <p><strong>Inquilino:</strong> {{ solicitud.reserva?.usuario?.nombre }} {{ solicitud.reserva?.usuario?.apellido }}</p>
               <p><strong>Publicación:</strong> {{ solicitud.reserva?.publicacion?.titulo ?? '—' }}</p>
               <p><strong>Fechas:</strong> {{ solicitud.reserva?.fecha_inicio }} — {{ solicitud.reserva?.fecha_fin }}</p>

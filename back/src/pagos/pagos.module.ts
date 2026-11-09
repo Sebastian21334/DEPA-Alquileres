@@ -1,39 +1,27 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Pago } from './entity/pago.entity';
-import { PagosController } from './controller/pagos.controller';
-import { PagosService } from './service/pagos.service';
-import { ReservasModule } from '../reservas/reservas.module';
-import { SeguridadModule } from '../seguridad/seguridad.module';
-import { CotizacionesModule } from '../cotizaciones/cotizaciones.module';
-import { PublicacionesModule } from '../publicaciones/publicaciones.module';
-import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
-import { PresupuestosService } from './service/presupuestos.service';
-
-import { PagosRepository } from './repository/pagos.repository';
-import { PAGOS_REPOSITORY } from './repository/pagos.repository.interface';
 import { PasarelaModule } from './pasarela.module';
-import { ReembolsosModule } from '../reembolsos/reembolsos.module';
-import { DisputasModule } from '../disputas/disputas.module';
+import { PagosRepository } from './repository/pagos.repository';
+import { PagosTransaccionales } from './repository/pagos-transaccionales';
+import { PAGOS_TRANSACCIONALES } from './ports/pagos-transaccionales.interface';
+import { PAGOS_REPOSITORY } from './repository/pagos.repository.interface';
+import { PagosService } from './service/pagos.service';
 
+/**
+ * Núcleo de pagos: estado y persistencia del pago.
+ * No importa módulos de dominio para que pueda ser consumido por reservas,
+ * reembolsos y disputas sin crear ciclos.
+ */
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Pago]),
-    ReservasModule,
-    SeguridadModule,
-    CotizacionesModule,
-    PublicacionesModule,
-    DisponibilidadModule,
-    PasarelaModule,
-    ReembolsosModule,
-    DisputasModule,
-  ],
-  controllers: [PagosController],
+  imports: [TypeOrmModule.forFeature([Pago]), PasarelaModule],
   providers: [
     PagosService,
-    PresupuestosService,
     PagosRepository,
     { provide: PAGOS_REPOSITORY, useExisting: PagosRepository },
+    PagosTransaccionales,
+    { provide: PAGOS_TRANSACCIONALES, useExisting: PagosTransaccionales },
   ],
+  exports: [PagosService, PAGOS_TRANSACCIONALES],
 })
 export class PagosModule {}

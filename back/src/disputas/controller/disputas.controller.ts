@@ -13,25 +13,40 @@ import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { DisputasService } from '../service/disputas.service';
+import { ReservaConsultaService } from '../../reservas/service/reserva-consulta.service';
+import type { Disputa } from '../entity/disputa.entity';
 import { ResolverDisputaDto } from '../dto/resolver-disputa.dto';
 
 @Controller('disputas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('Administrador')
 export class DisputasController {
-  constructor(private readonly disputasService: DisputasService) {}
+  constructor(
+    private readonly disputasService: DisputasService,
+    private readonly consulta: ReservaConsultaService,
+  ) {}
+
+  private conReserva(disputa: Disputa) {
+    return {
+      ...disputa,
+      reserva: this.consulta.paraRespuesta(disputa.reserva),
+    };
+  }
 
   @Get('administracion')
-  listar() {
-    return this.disputasService.listarAdministracion();
+  async listar() {
+    const disputas = await this.disputasService.listarAdministracion();
+    return disputas.map((disputa) => this.conReserva(disputa));
   }
 
   @Patch(':id/resolver')
-  resolver(
+  async resolver(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ResolverDisputaDto,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.disputasService.resolver(id, dto, req.user.id);
+    return this.conReserva(
+      await this.disputasService.resolver(id, dto, req.user.id),
+    );
   }
 }

@@ -13,6 +13,8 @@ import type { IMailService } from '../../mail/mail.interface';
 import { normalizarFechaReserva } from './reservas.utils';
 import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transaccion-calendario.interface';
 import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
+import { ReservaEstadoService } from './reserva-estado.service';
+import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 
 @Injectable()
 export class ReservaNotificacionesService {
@@ -23,6 +25,8 @@ export class ReservaNotificacionesService {
     @Inject(RESERVA_REPOSITORY)
     private readonly reservaRepository: IReservaRepository,
     @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
+    private readonly estado: ReservaEstadoService,
+    private readonly ciclo: ReservaCicloVidaService,
   ) {}
 
   async enviarReprogramacion(
@@ -66,9 +70,9 @@ export class ReservaNotificacionesService {
     const cantidadDias =
       Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) +
       1;
-    const nombreInquilino = reserva.nombreInquilino();
-    const emailAnunciante = reserva.emailDelAnunciante();
-    const nombreAnunciante = reserva.nombreDelAnunciante() || 'Anfitrión';
+    const nombreInquilino = this.estado.nombreInquilino(reserva);
+    const emailAnunciante = this.estado.emailDelAnunciante(reserva);
+    const nombreAnunciante = this.estado.nombreDelAnunciante(reserva) || 'Anfitrión';
     const direccion = reserva.publicacion?.direccionCompleta() ?? '';
     const datosComunes = {
       conversion:
@@ -148,7 +152,7 @@ export class ReservaNotificacionesService {
         return;
       }
       huboCambios = true;
-      reserva.marcarAvisoEnviado(notificaciones[indice].tipo);
+      this.ciclo.marcarAvisoEnviado(reserva, notificaciones[indice].tipo);
     });
     if (huboCambios)
       await this.reservaRepository.registrarNotificaciones(reserva.id, {

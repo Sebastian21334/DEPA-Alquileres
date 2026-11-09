@@ -296,6 +296,23 @@ export class MisReservasComponent {
     );
   }
 
+  protected puedeReclamar(reserva: Reserva): boolean {
+    if (reserva.cancelada || reserva.estado_pago !== 'APROBADO') return false;
+    if (
+      reserva.estado_liquidacion === 'PAGADO_PROPIETARIO' ||
+      reserva.estado_liquidacion === 'DEVUELTO_INQUILINO' ||
+      reserva.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO' ||
+      reserva.estado_liquidacion === 'EN_REVISION'
+    )
+      return false;
+    if (!reserva.fecha_inicio || !reserva.fecha_fin) return false;
+    const hoy = this.hoy();
+    if (hoy < reserva.fecha_inicio) return false;
+    const fin = new Date(`${reserva.fecha_fin}T12:00:00-03:00`).getTime();
+    const actual = new Date(`${hoy}T12:00:00-03:00`).getTime();
+    return actual <= fin + 7 * 86_400_000;
+  }
+
   protected solicitarCancelacion(reserva: Reserva): void {
     const motivo = window
       .prompt(

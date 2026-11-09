@@ -31,7 +31,6 @@ import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { CambiarRolDto } from '../dto/cambiar-rol.dto';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
-import { CambiarBloqueoDto } from '../dto/cambiar-bloqueo.dto';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 
 @Controller('usuarios')
@@ -122,38 +121,6 @@ export class UsuariosController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.usuariosService.eliminar(id, req.user.id);
-  }
-
-  @Patch(':id/bloquear')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  bloquear(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CambiarBloqueoDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    return this.usuariosService.cambiarBloqueo(
-      id,
-      true,
-      req.user.id,
-      dto.motivo,
-    );
-  }
-
-  @Patch(':id/habilitar')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  habilitar(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CambiarBloqueoDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    return this.usuariosService.cambiarBloqueo(
-      id,
-      false,
-      req.user.id,
-      dto.motivo,
-    );
   }
 
   @Patch(':id/rol')

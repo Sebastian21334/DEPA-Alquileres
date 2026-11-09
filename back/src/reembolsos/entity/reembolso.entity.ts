@@ -104,8 +104,4 @@ export class Reembolso {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   error_detalle: string | null;
-
-  get esTotal(): boolean {
-    return this.tipo === TipoReembolso.TOTAL || this.tipo === TipoReembolso.CONTRACARGO;
-  }
 }

@@ -1,4 +1,15 @@
 import { ReservaFinalizacionService } from './service/reserva-finalizacion.service';
+import { ReservaCreacionService } from './service/reserva-creacion.service';
+import { ReservaConsultaService } from './service/reserva-consulta.service';
+import { ReservaVencimientoService } from './service/reserva-vencimiento.service';
+import { ReservaBloqueoAnuncianteService } from './service/reserva-bloqueo-anunciante.service';
+import { ReservaBloqueoDevolucionService } from './service/reserva-bloqueo-devolucion.service';
+import { ReservaCancelacionesService } from './service/reserva-cancelaciones.service';
+import { ReservaSolicitudCancelacionService } from './service/reserva-solicitud-cancelacion.service';
+import { ReservaSolicitudCancelacionResolucionService } from './service/reserva-solicitud-cancelacion-resolucion.service';
+import { ReservaReembolsoAplicacionService } from './service/reserva-reembolso-aplicacion.service';
+import { ReservaCicloVidaService } from './service/reserva-ciclo-vida.service';
+import { ReservaEstadoService } from './service/reserva-estado.service';
 import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
 import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
 import { ReservaReprogramacionService } from './service/reserva-reprogramacion.service';
@@ -18,6 +29,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { MailModule } from '../mail/mail.module';
 import { ReembolsosModule } from '../reembolsos/reembolsos.module';
+import { PagosModule } from '../pagos/pagos.module';
 
 @Module({
   imports: [
@@ -33,10 +45,22 @@ import { ReembolsosModule } from '../reembolsos/reembolsos.module';
     PublicacionesModule,
     MailModule,
     ReembolsosModule,
+    PagosModule,
   ],
   controllers: [ReservasController],
   providers: [
     ReservaFinalizacionService,
+    ReservaCreacionService,
+    ReservaEstadoService,
+    ReservaCicloVidaService,
+    ReservaCancelacionesService,
+    ReservaSolicitudCancelacionService,
+    ReservaSolicitudCancelacionResolucionService,
+    ReservaBloqueoAnuncianteService,
+    ReservaBloqueoDevolucionService,
+    ReservaReembolsoAplicacionService,
+    ReservaConsultaService,
+    ReservaVencimientoService,
     ReservaLiquidacionesService,
     ReservaNotificacionesService,
     ReservaReprogramacionService,
@@ -48,6 +72,13 @@ import { ReembolsosModule } from '../reembolsos/reembolsos.module';
       useExisting: ReservaRepository, // el token apunta a la misma instancia de ReservaRepository
     },
   ],
-  exports: [ReservasService],
+  exports: [
+    ReservasService,
+    ReservaEstadoService,
+    ReservaCancelacionesService,
+    ReservaBloqueoAnuncianteService,
+    ReservaReembolsoAplicacionService,
+    ReservaConsultaService,
+  ],
 })
 export class ReservasModule {}
