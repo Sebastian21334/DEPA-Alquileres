@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
@@ -13,15 +14,14 @@ import {
   ARCHIVO_REPOSITORY,
   type IArchivoRepository,
 } from '../../common/almacenamiento/archivo.repository.interface';
-import {
-  EstadoLiquidacionReserva,
-  EstadoPagoReserva,
-} from '../../reservas/entity/reserva.entity';
+import { EstadoPagoReserva } from '../../reservas/entity/reserva.entity';
 import { ReservaCancelacionesService } from '../../reservas/service/reserva-cancelaciones.service';
-import { ReservasService } from '../../reservas/service/reservas.service';
+import { ReservaCicloVidaService } from '../../reservas/service/reserva-ciclo-vida.service';
+import { ReservaEstadoService } from '../../reservas/service/reserva-estado.service';
 import { PagosService } from '../../pagos/service/pagos.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import {
+  EstadoReembolso,
   OrigenReembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
@@ -44,6 +44,11 @@ import {
 } from '../repository/reclamos.repository.interface';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
+import {
+  RECLAMOS_UOW,
+  type IReclamosUnitOfWork,
+} from '../persistence/reclamos.unit-of-work.interface';
+import { NotificacionesService } from '../../notificaciones/service/notificaciones.service';
 
 const DIAS_RECLAMO = 7;
 const MAX_EVIDENCIAS = 5;
@@ -54,65 +59,85 @@ export class ReclamosService {
   constructor(
     @Inject(RECLAMOS_REPOSITORY)
     private readonly reclamos: IReclamosRepository,
-    private readonly reservasService: ReservasService,
     private readonly cancelaciones: ReservaCancelacionesService,
     private readonly pagosService: PagosService,
     private readonly reembolsos: ReembolsosService,
+    private readonly ciclo: ReservaCicloVidaService,
+    private readonly estado: ReservaEstadoService,
     @Inject(ARCHIVO_REPOSITORY)
     private readonly archivos: IArchivoRepository,
+    @Inject(RECLAMOS_UOW)
+    private readonly uow: IReclamosUnitOfWork,
+    @Optional()
+    private readonly notificaciones?: NotificacionesService,
   ) {}
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
-    const reserva = await this.reservasService.obtenerPorId(dto.id_reserva);
-    if (reserva.usuario?.id !== idUsuario)
-      throw new ForbiddenException(
-        'Solo el Inquilino de la reserva puede iniciar un reclamo',
-      );
-    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO)
-      throw new ConflictException('La reserva no tiene un pago aprobado');
-    if (reserva.cancelada)
-      throw new ConflictException('La reserva está cancelada');
-    if (
-      !reserva.fecha_inicio ||
-      !reserva.fecha_fin ||
-      reserva.fecha_inicio > reserva.fecha_fin
-    )
-      throw new ConflictException('Las fechas de la reserva no son válidas');
+    const creado = await this.uow.ejecutar(async ({ reclamos, reservas }) => {
+      const reserva = await reservas.buscarPorId(dto.id_reserva);
+      if (!reserva)
+        throw new NotFoundException('No se encontró la reserva del reclamo');
+      if (reserva.usuario?.id !== idUsuario)
+        throw new ForbiddenException(
+          'Solo el Inquilino de la reserva puede iniciar un reclamo',
+        );
+      if (reserva.estado_pago !== EstadoPagoReserva.APROBADO)
+        throw new ConflictException('La reserva no tiene un pago aprobado');
+      if (reserva.cancelada)
+        throw new ConflictException('La reserva está cancelada');
+      if (
+        !reserva.fecha_inicio ||
+        !reserva.fecha_fin ||
+        reserva.fecha_inicio > reserva.fecha_fin
+      )
+        throw new ConflictException('Las fechas de la reserva no son válidas');
 
-    if (!reserva.usuario)
-      throw new ConflictException('La reserva no tiene un Inquilino asociado');
+      if (!reserva.usuario)
+        throw new ConflictException('La reserva no tiene un Inquilino asociado');
 
-    const hoy = fechaArgentina();
-    if (hoy < reserva.fecha_inicio)
-      throw new BadRequestException(
-        'Antes del inicio usá la solicitud de cancelación; el reclamo es para una estadía iniciada o finalizada',
-      );
-    if (this.fueraDePlazo(reserva.fecha_fin, hoy))
-      throw new BadRequestException(
-        `El plazo para reclamar vence a los ${DIAS_RECLAMO} días corridos del fin de la estadía`,
-      );
+      const hoy = fechaArgentina();
+      if (hoy < reserva.fecha_inicio)
+        throw new BadRequestException(
+          'Antes del inicio usá la solicitud de cancelación; el reclamo es para una estadía iniciada o finalizada',
+        );
+      if (this.fueraDePlazo(reserva.fecha_fin, hoy))
+        throw new BadRequestException(
+          `El plazo para reclamar vence a los ${DIAS_RECLAMO} días corridos del fin de la estadía`,
+        );
 
-    const abierto = await this.reclamos.buscarAbiertoPorReserva(reserva.id);
-    if (abierto)
-      throw new ConflictException('La reserva ya tiene un reclamo abierto');
+      const abierto = await reclamos.buscarAbiertoPorReserva(reserva.id);
+      if (abierto)
+        throw new ConflictException('La reserva ya tiene un reclamo abierto');
 
-    const reclamo = this.reclamos.crear({
-      reserva,
-      inquilino: reserva.usuario,
-      anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
-      categoria: dto.categoria,
-      descripcion: dto.descripcion.trim(),
-      estado: EstadoReclamo.ABIERTO,
-      resolucion: null,
-      importe_reembolso: null,
-      administrador_resolucion: null,
-      resuelto_en: null,
+      const reclamo = reclamos.crear({
+        reserva,
+        inquilino: reserva.usuario,
+        anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
+        categoria: dto.categoria,
+        descripcion: dto.descripcion.trim(),
+        estado: EstadoReclamo.ABIERTO,
+        resolucion: null,
+        importe_reembolso: null,
+        administrador_resolucion: null,
+        resuelto_en: null,
+      });
+
+      // Si el dinero todavía no se pagó al propietario, el reclamo congela la
+      // liquidación. Si ya se pagó, el reclamo se crea igual y el Administrador
+      // decide si corresponde un ajuste posterior.
+      if (!this.estado.liquidacionResuelta(reserva)) {
+        this.ciclo.marcarEnRevisionPorReclamo(
+          reserva,
+          'Reclamo del inquilino en revisión',
+        );
+        await reservas.guardar(reserva);
+      }
+      return reclamos.guardar(reclamo);
     });
-    await this.reservasService.marcarEnRevisionPorReclamo(
-      reserva.id,
-      'Reclamo del inquilino en revisión',
-    );
-    return this.reclamos.guardar(reclamo);
+    const completo = await this.reclamos.buscarPorId(creado.id);
+    if (!completo) throw new NotFoundException('Reclamo no encontrado');
+    await this.notificaciones?.reclamoCreado(completo);
+    return completo;
   }
 
   async listarMios(idUsuario: number): Promise<Reclamo[]> {
@@ -224,7 +249,13 @@ export class ReclamosService {
       reclamo.estado = EstadoReclamo.EN_REVISION;
       await this.reclamos.guardar(reclamo);
     }
-    return this.reclamos.guardarMensaje(mensaje);
+    const guardado = await this.reclamos.guardarMensaje(mensaje);
+    await this.notificaciones?.reclamoMensaje(
+      reclamo,
+      idUsuario,
+      dto.texto.trim(),
+    );
+    return guardado;
   }
 
   async listarMensajes(
@@ -248,81 +279,211 @@ export class ReclamosService {
   ): Promise<Reclamo> {
     const reclamo = await this.obtener(id, idAdmin, true);
     if (
-      [EstadoReclamo.RESUELTO_INQUILINO, EstadoReclamo.RESUELTO_ANUNCIANTE, EstadoReclamo.CERRADO].includes(
-        reclamo.estado,
-      )
+      [
+        EstadoReclamo.RESUELTO_INQUILINO,
+        EstadoReclamo.RESUELTO_ANUNCIANTE,
+        EstadoReclamo.CERRADO,
+      ].includes(reclamo.estado)
     )
       throw new ConflictException('El reclamo ya fue resuelto');
-    const reserva = reclamo.reserva;
 
     if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
-      await this.reservasService.resolverReclamoSinDevolucion(
-        reserva.id,
-        dto.observacion?.trim() || 'Reclamo resuelto a favor del Anunciante',
+      const reembolsos = await this.reembolsos.listarPorReserva(
+        reclamo.reserva.id,
       );
-      reclamo.estado = EstadoReclamo.RESUELTO_ANUNCIANTE;
-      reclamo.resolucion = ResolucionReclamo.SIN_DEVOLUCION;
-    } else {
-      const reservaActual = await this.reservasService.obtenerPorId(reserva.id);
       if (
-        [
-          EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
-          EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
-          EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
-        ].includes(reservaActual.estado_liquidacion)
+        reembolsos.some((reembolso) =>
+          [
+            EstadoReembolso.PENDIENTE,
+            EstadoReembolso.EN_PROCESO,
+            EstadoReembolso.FALLIDO,
+            EstadoReembolso.APROBADO,
+          ].includes(reembolso.estado),
+        )
       )
         throw new ConflictException(
-          'La liquidación ya fue resuelta; no se puede devolver sin revertirla',
+          'El reclamo tiene una devolución asociada; resolvela antes de cerrarlo sin devolución',
         );
-      // Bloquea la reserva y la deja en revisión antes de mover dinero:
-      // impide que un pago al propietario gane la carrera contra la devolución.
-      await this.reservasService.marcarEnRevisionPorReclamo(
-        reserva.id,
-        'Devolución de reclamo en ejecución',
+      const resuelto = await this.uow.ejecutar(
+        async ({ reclamos, reservas }) => {
+          const actualReclamo = await reclamos.buscarPorIdConBloqueo(id);
+          if (!actualReclamo)
+            throw new NotFoundException('Reclamo no encontrado');
+          if (
+            [
+              EstadoReclamo.RESUELTO_INQUILINO,
+              EstadoReclamo.RESUELTO_ANUNCIANTE,
+              EstadoReclamo.CERRADO,
+            ].includes(actualReclamo.estado)
+          )
+            throw new ConflictException('El reclamo ya fue resuelto');
+
+          const reserva = await reservas.buscarPorId(
+            actualReclamo.reserva.id,
+          );
+          if (!reserva)
+            throw new NotFoundException('Reserva del reclamo no encontrada');
+          if (!this.estado.liquidacionResuelta(reserva)) {
+            this.ciclo.resolverReclamoSinDevolucion(
+              reserva,
+              dto.observacion?.trim() ||
+                'Reclamo resuelto a favor del Anunciante',
+            );
+            await reservas.guardar(reserva);
+          }
+
+          actualReclamo.estado = EstadoReclamo.RESUELTO_ANUNCIANTE;
+          actualReclamo.resolucion = ResolucionReclamo.SIN_DEVOLUCION;
+          actualReclamo.administrador_resolucion = referenciaUsuario(idAdmin);
+          actualReclamo.resuelto_en = new Date();
+          return reclamos.guardar(actualReclamo);
+        },
       );
-      const pago = await this.pagosService.buscarPorReserva(reserva.id);
-      if (!pago)
-        throw new ConflictException('La reserva no tiene un pago registrado');
-      const saldo = this.pagosService.saldoReembolsable(pago);
-      const importe =
-        dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
-          ? saldo
-          : Number(dto.importe ?? 0);
-      if (!Number.isFinite(importe) || importe <= 0)
-        throw new BadRequestException('Indicá el importe de la devolución parcial');
-      if (importe > saldo + TOLERANCIA_MONETARIA)
-        throw new ConflictException('La devolución supera el saldo del pago');
-      const reembolso = await this.reembolsos.crearSolicitud({
-        reserva,
-        pago,
-        tipo:
-          dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
-            ? TipoReembolso.TOTAL
-            : TipoReembolso.PARCIAL,
-        origen: OrigenReembolso.RECLAMO,
-        importe,
-        motivo: `Reclamo #${reclamo.id}: ${dto.observacion ?? 'resolución favorable al inquilino'}`,
-        idSolicitadoPor: idAdmin,
-        idempotencyKey: `reclamo:${reclamo.id}`,
-      });
-      await this.reembolsos.registrarOejecutar(
-        reembolso.id,
-        dto.referencia?.trim() || `reclamo-${reclamo.id}`,
-        idAdmin,
-      );
-      await this.cancelaciones.aplicarReembolsoConfirmado(reembolso.id);
-      await this.reservasService.observarLiquidacion(
-        reserva.id,
-        dto.observacion?.trim() || 'Reclamo resuelto a favor del Inquilino',
-      );
-      reclamo.estado = EstadoReclamo.RESUELTO_INQUILINO;
-      reclamo.resolucion = dto.resolucion;
-      reclamo.importe_reembolso = importe;
+      const completo = await this.reclamos.buscarPorId(resuelto.id);
+      if (!completo) throw new NotFoundException('Reclamo no encontrado');
+      await this.notificaciones?.reclamoResuelto(completo);
+      return completo;
     }
 
-    reclamo.administrador_resolucion = referenciaUsuario(idAdmin);
-    reclamo.resuelto_en = new Date();
-    return this.reclamos.guardar(reclamo);
+    const preparado = await this.uow.ejecutar(
+      async ({ reclamos, reservas }) => {
+        const actualReclamo = await reclamos.buscarPorIdConBloqueo(id);
+        if (!actualReclamo)
+          throw new NotFoundException('Reclamo no encontrado');
+        if (
+          [
+            EstadoReclamo.RESUELTO_INQUILINO,
+            EstadoReclamo.RESUELTO_ANUNCIANTE,
+            EstadoReclamo.CERRADO,
+          ].includes(actualReclamo.estado)
+        )
+          throw new ConflictException('El reclamo ya fue resuelto');
+
+        const reserva = await reservas.buscarPorId(actualReclamo.reserva.id);
+        if (!reserva)
+          throw new NotFoundException('Reserva del reclamo no encontrada');
+        if (!this.estado.liquidacionResuelta(reserva)) {
+          // Bloquea la reserva y la deja en revisión antes de mover dinero:
+          // impide que un pago al propietario gane la carrera contra la devolución.
+          this.ciclo.marcarEnRevisionPorReclamo(
+            reserva,
+            'Devolución de reclamo en ejecución',
+          );
+          await reservas.guardar(reserva);
+        }
+        actualReclamo.estado = EstadoReclamo.EN_REVISION;
+        return {
+          reclamo: await reclamos.guardar(actualReclamo),
+          reserva,
+        };
+      },
+    );
+
+    const pago = await this.pagosService.buscarPorReserva(
+      preparado.reserva.id,
+    );
+    if (!pago)
+      throw new ConflictException('La reserva no tiene un pago registrado');
+    const saldo = this.pagosService.saldoReembolsable(pago);
+    const importe =
+      dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
+        ? saldo
+        : Number(dto.importe ?? 0);
+    if (!Number.isFinite(importe) || importe <= 0)
+      throw new BadRequestException(
+        'Indicá el importe de la devolución parcial',
+      );
+    if (importe > saldo + TOLERANCIA_MONETARIA)
+      throw new ConflictException('La devolución supera el saldo del pago');
+
+    const reembolso = await this.reembolsos.crearSolicitud({
+      reserva: preparado.reserva,
+      pago,
+      tipo:
+        dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
+          ? TipoReembolso.TOTAL
+          : TipoReembolso.PARCIAL,
+      origen: OrigenReembolso.RECLAMO,
+      importe,
+      motivo: `Reclamo #${reclamo.id}: ${
+        dto.observacion ?? 'resolución favorable al inquilino'
+      }`,
+      idSolicitadoPor: idAdmin,
+      idempotencyKey: `reclamo:${reclamo.id}`,
+    });
+    const ejecutado = await this.reembolsos.registrarOejecutar(
+      reembolso.id,
+      dto.referencia,
+      idAdmin,
+    );
+    if (ejecutado.estado !== EstadoReembolso.APROBADO)
+      throw new ConflictException(
+        'La devolución no quedó aprobada; el reclamo permanece en revisión',
+      );
+    await this.cancelaciones.aplicarReembolsoConfirmado(reembolso.id);
+
+    const resuelto = await this.uow.ejecutar(
+      async ({ reclamos, reservas }) => {
+        const actualReclamo = await reclamos.buscarPorIdConBloqueo(id);
+        if (!actualReclamo)
+          throw new NotFoundException('Reclamo no encontrado');
+        if (
+          [
+            EstadoReclamo.RESUELTO_INQUILINO,
+            EstadoReclamo.RESUELTO_ANUNCIANTE,
+            EstadoReclamo.CERRADO,
+          ].includes(actualReclamo.estado)
+        )
+          throw new ConflictException('El reclamo ya fue resuelto');
+
+        const reserva = await reservas.buscarPorId(
+          actualReclamo.reserva.id,
+        );
+        if (!reserva)
+          throw new NotFoundException('Reserva del reclamo no encontrada');
+        reserva.observacion_liquidacion =
+          dto.observacion?.trim() ||
+          'Reclamo resuelto a favor del Inquilino';
+        await reservas.guardar(reserva);
+
+        actualReclamo.estado = EstadoReclamo.RESUELTO_INQUILINO;
+        actualReclamo.resolucion = dto.resolucion;
+        actualReclamo.importe_reembolso = importe;
+        actualReclamo.administrador_resolucion = referenciaUsuario(idAdmin);
+        actualReclamo.resuelto_en = new Date();
+        return reclamos.guardar(actualReclamo);
+      },
+    );
+    const completo = await this.reclamos.buscarPorId(resuelto.id);
+    if (!completo) throw new NotFoundException('Reclamo no encontrado');
+    await this.notificaciones?.reclamoResuelto(completo);
+    return completo;
+  }
+
+  async cerrar(id: number, idAdmin: number): Promise<Reclamo> {
+    const cerrado = await this.uow.ejecutar(async ({ reclamos }) => {
+      const reclamo = await reclamos.buscarPorIdConBloqueo(id);
+      if (!reclamo) throw new NotFoundException('Reclamo no encontrado');
+      if (reclamo.estado === EstadoReclamo.CERRADO)
+        return reclamo;
+      if (
+        ![
+          EstadoReclamo.RESUELTO_INQUILINO,
+          EstadoReclamo.RESUELTO_ANUNCIANTE,
+        ].includes(reclamo.estado)
+      )
+        throw new ConflictException(
+          'Solo puede cerrarse un reclamo que ya fue resuelto',
+        );
+      reclamo.estado = EstadoReclamo.CERRADO;
+      reclamo.administrador_resolucion =
+        reclamo.administrador_resolucion ?? referenciaUsuario(idAdmin);
+      return reclamos.guardar(reclamo);
+    });
+    const completo = await this.reclamos.buscarPorId(cerrado.id);
+    if (!completo) throw new NotFoundException('Reclamo no encontrado');
+    await this.notificaciones?.reclamoCerrado(completo);
+    return completo;
   }
 
   private filtrarMensajes(reclamo: Reclamo, esAdmin: boolean): Reclamo {

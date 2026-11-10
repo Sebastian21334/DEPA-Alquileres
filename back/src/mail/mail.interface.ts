@@ -81,6 +81,11 @@ export interface IMailService {
     bloqueado: boolean,
     motivo?: string,
   ): Promise<void>;
+  enviarAviso(
+    destinatario: string,
+    asunto: string,
+    mensaje: string,
+  ): Promise<void>;
 }
 
 export const MAIL_SERVICE = 'MAIL_SERVICE';

@@ -122,12 +122,6 @@ export class ReservaCicloVidaService {
     return true;
   }
 
-  reportarProblema(reserva: Reserva, motivo: string): void {
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    reserva.observacion_liquidacion = `Reclamo del inquilino: ${motivo.trim()}`;
-    reserva.fecha_resolucion_liquidacion = null;
-  }
-
   resolverLiquidacion(
     reserva: Reserva,
     estado: EstadoLiquidacionReserva,
@@ -153,13 +147,45 @@ export class ReservaCicloVidaService {
       reserva.fecha_resolucion_liquidacion = new Date();
   }
 
-  marcarContracargo(reserva: Reserva): void {
-    reserva.estado_pago = EstadoPagoReserva.CONTRACARGO;
-  }
-
   restaurarPagoAprobado(reserva: Reserva): void {
     if (reserva.estado_pago === EstadoPagoReserva.CONTRACARGO)
       reserva.estado_pago = EstadoPagoReserva.APROBADO;
+  }
+
+  /** Congela la liquidación cuando se abre un reclamo antes del pago al propietario. */
+  marcarEnRevisionPorReclamo(reserva: Reserva, motivo: string): void {
+    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+    reserva.observacion_liquidacion = motivo.trim();
+    reserva.fecha_resolucion_liquidacion = null;
+  }
+
+  /** Libera la retención cuando el reclamo se resuelve sin devolución. */
+  resolverReclamoSinDevolucion(reserva: Reserva, observacion: string): void {
+    reserva.estado_liquidacion = this.estado.codigoValidado(reserva)
+      ? EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO
+      : EstadoLiquidacionReserva.RETENIDO;
+    reserva.observacion_liquidacion = observacion.trim();
+    reserva.fecha_resolucion_liquidacion = null;
+  }
+
+  /** Congela la reserva mientras Mercado Pago tramita un contracargo. */
+  marcarContracargoPorDisputa(reserva: Reserva, motivo: string): void {
+    reserva.estado_pago = EstadoPagoReserva.CONTRACARGO;
+    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+    reserva.observacion_liquidacion = motivo.trim();
+    reserva.fecha_resolucion_liquidacion = null;
+  }
+
+  /** Restaura el estado previo cuando el contracargo se resuelve a favor. */
+  restaurarContracargo(
+    reserva: Reserva,
+    estadoPago: EstadoPagoReserva,
+    estadoLiquidacion: EstadoLiquidacionReserva,
+    observacion: string,
+  ): void {
+    reserva.estado_pago = estadoPago;
+    reserva.estado_liquidacion = estadoLiquidacion;
+    reserva.observacion_liquidacion = observacion.trim();
   }
 
   aplicarReembolsoTotal(reserva: Reserva): void {

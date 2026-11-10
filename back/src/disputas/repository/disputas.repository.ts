@@ -37,6 +37,13 @@ export class DisputasRepository implements IDisputasRepository {
     });
   }
 
+  buscarPorIdConBloqueo(id: number): Promise<Disputa | null> {
+    return this.disputas.findOne({
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
+
   listarAdministracion(): Promise<Disputa[]> {
     return this.disputas.find({
       relations: {

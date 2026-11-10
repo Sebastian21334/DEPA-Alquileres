@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
@@ -31,6 +32,7 @@ import {
 } from '../persistence/devoluciones.unit-of-work.interface';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
+import { NotificacionesService } from '../../notificaciones/service/notificaciones.service';
 
 const ESTADOS_REEMBOLSO_ACTIVO = [
   EstadoReembolso.PENDIENTE,
@@ -65,9 +67,11 @@ export class ReembolsosService {
     private readonly pagosService: PagosService,
     @Inject(DEVOLUCIONES_UOW)
     private readonly uow: IDevolucionesUnitOfWork,
+    @Optional()
+    private readonly notificaciones?: NotificacionesService,
   ) {}
 
-  get ejecucionAutomaticaHabilitada(): boolean {
+  private get ejecucionAutomaticaHabilitada(): boolean {
     return this.config.get<string>('MP_REFUNDS_ENABLED') === 'true';
   }
 
@@ -186,14 +190,30 @@ export class ReembolsosService {
     });
   }
 
-  /** Ejecuta por Mercado Pago si está habilitado; si no, exige registro manual. */
+  /**
+   * Punto único de ejecución de devoluciones. El modo automático o manual se
+   * decide acá y no en cada caso de uso. En modo manual, sin referencia real,
+   * el reembolso queda pendiente para que un Administrador lo registre.
+   */
   async registrarOejecutar(
     id: number,
     referencia: string | null | undefined,
     idActor: number,
   ): Promise<Reembolso> {
     if (this.ejecucionAutomaticaHabilitada) return this.ejecutar(id, idActor);
-    return this.registrarManual(id, referencia ?? '', idActor);
+    const referenciaLimpia = referencia?.trim();
+    if (referenciaLimpia)
+      return this.registrarManual(id, referenciaLimpia, idActor);
+    const reembolso = await this.buscar(id);
+    if (
+      reembolso.estado !== EstadoReembolso.PENDIENTE &&
+      reembolso.estado !== EstadoReembolso.EN_PROCESO &&
+      reembolso.estado !== EstadoReembolso.FALLIDO
+    )
+      throw new ConflictException(
+        'El reembolso no puede quedar pendiente en su estado actual',
+      );
+    return reembolso;
   }
 
   async ejecutar(id: number, idActor: number): Promise<Reembolso> {
@@ -332,7 +352,7 @@ export class ReembolsosService {
     datos: { referencia: string; idActor: number | null; idExterno: string | null },
     opciones?: { permitirEnProceso?: boolean },
   ): Promise<Reembolso> {
-    return this.uow.ejecutar(async ({ reembolsos, pagos }) => {
+    const guardado = await this.uow.ejecutar(async ({ reembolsos, pagos }) => {
       // Se bloquea primero el Pago para respetar el mismo orden que crearSolicitud
       // y evitar deadlocks entre creación y confirmación.
       const idPago = await reembolsos.buscarPagoId(id);
@@ -376,6 +396,18 @@ export class ReembolsosService {
       await pagos.guardar(pago);
       return reembolsos.guardar(reembolso);
     });
+    if (!this.notificaciones) return guardado;
+    try {
+      const completo = await this.buscar(guardado.id);
+      await this.notificaciones.reembolso(completo);
+      return completo;
+    } catch (error) {
+      this.logger.error(
+        `El reembolso ${guardado.id} se aprobó, pero falló su notificación`,
+        error as Error,
+      );
+      return guardado;
+    }
   }
 
   private aplicarDevolucionAlPago(
@@ -478,6 +510,39 @@ export class ReembolsosService {
     );
     if (!rechazado) throw new NotFoundException('Reembolso no encontrado');
     return rechazado;
+  }
+
+  /**
+   * Anula una solicitud de devolución que todavía no movió dinero. No se usa
+   * para aprobados ni para reembolsos en proceso de Mercado Pago.
+   */
+  async cancelar(
+    id: number,
+    motivo: string,
+    idActor: number | null,
+  ): Promise<Reembolso> {
+    const cancelado = await this.reembolsos.actualizarEnTransaccion(
+      id,
+      (reembolso) => {
+        if (reembolso.estado === EstadoReembolso.CANCELADO) return;
+        if (
+          reembolso.estado !== EstadoReembolso.PENDIENTE &&
+          reembolso.estado !== EstadoReembolso.FALLIDO
+        )
+          throw new ConflictException(
+            'Solo puede cancelarse un reembolso pendiente o fallido',
+          );
+        reembolso.estado = EstadoReembolso.CANCELADO;
+        reembolso.error_detalle = motivo.trim().slice(0, 500);
+        reembolso.resuelto_en = new Date();
+        reembolso.resuelto_por =
+          idActor != null ? referenciaUsuario(idActor) : null;
+      },
+    );
+    if (!cancelado) throw new NotFoundException('Reembolso no encontrado');
+    const completo = await this.buscar(cancelado.id);
+    await this.notificaciones?.reembolso(completo);
+    return completo;
   }
 
   async fallar(

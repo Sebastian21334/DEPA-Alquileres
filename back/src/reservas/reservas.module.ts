@@ -23,6 +23,8 @@ import { ReservasService } from './service/reservas.service';
 import { ReservasController } from './controller/reservas.controller';
 import { ReservaRepository } from './repository/reserva.repository';
 import { RESERVA_REPOSITORY } from './repository/reserva.repository.interface';
+import { ReservasTransaccionales } from './repository/reservas-transaccionales';
+import { RESERVAS_TRANSACCIONALES } from './ports/reservas-transaccionales.interface';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
@@ -30,6 +32,7 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { MailModule } from '../mail/mail.module';
 import { ReembolsosModule } from '../reembolsos/reembolsos.module';
 import { PagosModule } from '../pagos/pagos.module';
+import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 
 @Module({
   imports: [
@@ -46,6 +49,7 @@ import { PagosModule } from '../pagos/pagos.module';
     MailModule,
     ReembolsosModule,
     PagosModule,
+    NotificacionesModule,
   ],
   controllers: [ReservasController],
   providers: [
@@ -71,14 +75,21 @@ import { PagosModule } from '../pagos/pagos.module';
       provide: RESERVA_REPOSITORY,
       useExisting: ReservaRepository, // el token apunta a la misma instancia de ReservaRepository
     },
+    ReservasTransaccionales,
+    {
+      provide: RESERVAS_TRANSACCIONALES,
+      useExisting: ReservasTransaccionales,
+    },
   ],
   exports: [
     ReservasService,
     ReservaEstadoService,
+    ReservaCicloVidaService,
     ReservaCancelacionesService,
     ReservaBloqueoAnuncianteService,
     ReservaReembolsoAplicacionService,
     ReservaConsultaService,
+    RESERVAS_TRANSACCIONALES,
   ],
 })
 export class ReservasModule {}

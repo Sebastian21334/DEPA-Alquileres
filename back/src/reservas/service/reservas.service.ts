@@ -30,7 +30,6 @@ import {
   ActorCancelacion,
   EstadoPagoReserva,
   Reserva,
-  EstadoLiquidacionReserva,
 } from '../entity/reserva.entity';
 import { CrearReservaDto } from '../dto/crear-reserva.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
@@ -278,94 +277,6 @@ export class ReservasService {
     if (!reserva)
       throw new NotFoundException(`No se encontró la reserva ${id}`);
     return reserva;
-  }
-
-  /** El reclamo congela la liquidación mientras el Administrador resuelve. */
-  async marcarEnRevisionPorReclamo(
-    id: number,
-    motivo: string,
-  ): Promise<Reserva> {
-    return this.transaccion.ejecutar(async ({ reservas }) => {
-      const reserva = await reservas.buscarPorId(id);
-      if (!reserva)
-        throw new NotFoundException(`No se encontró la reserva ${id}`);
-      if (this.estado.liquidacionResuelta(reserva)) {
-        throw new ConflictException(
-          'La liquidación ya fue resuelta; no se puede abrir un reclamo que la reabra',
-        );
-      }
-      reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-      reserva.observacion_liquidacion = motivo;
-      reserva.fecha_resolucion_liquidacion = null;
-      return reservas.guardar(reserva);
-    });
-  }
-
-  /** Resolución sin devolución: se libera la retención o se paga al propietario. */
-  async resolverReclamoSinDevolucion(
-    id: number,
-    observacion: string,
-  ): Promise<Reserva> {
-    return this.transaccion.ejecutar(async ({ reservas }) => {
-      const reserva = await reservas.buscarPorId(id);
-      if (!reserva)
-        throw new NotFoundException(`No se encontró la reserva ${id}`);
-      if (this.estado.liquidacionResuelta(reserva)) {
-        throw new ConflictException(
-          'La liquidación ya fue resuelta; no se puede reabrir desde el reclamo',
-        );
-      }
-      if (
-        (reserva.observacion_liquidacion ?? '').includes(
-          'Devolución de',
-        ) &&
-        (reserva.observacion_liquidacion ?? '').includes(
-          'en ejecución',
-        )
-      ) {
-        throw new ConflictException(
-          'Hay una devolución en ejecución; esperá su resultado antes de reabrir la liquidación',
-        );
-      }
-      reserva.estado_liquidacion = this.estado.codigoValidado(reserva)
-        ? EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO
-        : EstadoLiquidacionReserva.RETENIDO;
-      reserva.observacion_liquidacion = observacion;
-      reserva.fecha_resolucion_liquidacion =
-        this.estado.liquidacionResuelta(reserva) ? new Date() : null;
-      return reservas.guardar(reserva);
-    });
-  }
-
-  /** Agrega la observación administrativa sin alterar el estado de liquidación. */
-  async observarLiquidacion(id: number, observacion: string): Promise<Reserva> {
-    const reserva = await this.obtenerPorId(id);
-    reserva.observacion_liquidacion = observacion;
-    return this.reservaRepository.guardar(reserva);
-  }
-
-  /** Congela la reserva mientras Mercado Pago tramita un contracargo. */
-  async marcarContracargo(id: number, motivo: string): Promise<Reserva> {
-    const reserva = await this.obtenerPorId(id);
-    reserva.estado_pago = EstadoPagoReserva.CONTRACARGO;
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    reserva.observacion_liquidacion = motivo;
-    reserva.fecha_resolucion_liquidacion = null;
-    return this.reservaRepository.guardar(reserva);
-  }
-
-  /** Restaura el estado previo cuando el contracargo se resuelve a favor. */
-  async restaurarContracargo(
-    id: number,
-    estadoPago: EstadoPagoReserva,
-    estadoLiquidacion: EstadoLiquidacionReserva,
-    observacion: string,
-  ): Promise<Reserva> {
-    const reserva = await this.obtenerPorId(id);
-    reserva.estado_pago = estadoPago;
-    reserva.estado_liquidacion = estadoLiquidacion;
-    reserva.observacion_liquidacion = observacion;
-    return this.reservaRepository.guardar(reserva);
   }
 
   /** El inquilino participante o el anunciante dueño pueden cancelar. */

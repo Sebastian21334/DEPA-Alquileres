@@ -8,6 +8,7 @@ export interface IReclamosRepository {
   crear(datos: Partial<Reclamo>): Reclamo;
   guardar(reclamo: Reclamo): Promise<Reclamo>;
   buscarPorId(id: number): Promise<Reclamo | null>;
+  buscarPorIdConBloqueo(id: number): Promise<Reclamo | null>;
   buscarAbiertoPorReserva(idReserva: number): Promise<Reclamo | null>;
   buscarPorUsuario(idUsuario: number): Promise<Reclamo[]>;
   listarAdministracion(): Promise<Reclamo[]>;

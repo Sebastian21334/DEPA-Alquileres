@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { PagosModule } from '../pagos/pagos.module';
 import { PasarelaModule } from '../pagos/pasarela.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
+import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 import { Reembolso } from './entity/reembolso.entity';
 import { ReembolsosRepository } from './repository/reembolsos.repository';
 import { REEMBOLSOS_REPOSITORY } from './repository/reembolsos.repository.interface';
@@ -16,6 +17,7 @@ import { DEVOLUCIONES_UOW } from './persistence/devoluciones.unit-of-work.interf
     PagosModule,
     PasarelaModule,
     SeguridadModule,
+    NotificacionesModule,
   ],
   providers: [
     ReembolsosService,

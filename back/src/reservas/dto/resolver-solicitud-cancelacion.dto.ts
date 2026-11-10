@@ -8,4 +8,9 @@ export class ResolverSolicitudCancelacionDto {
   @IsString()
   @MaxLength(500)
   observacion?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  referencia?: string;
 }

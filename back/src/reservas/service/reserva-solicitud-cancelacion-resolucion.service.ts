@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
@@ -37,6 +38,7 @@ import { ReservaReembolsoAplicacionService } from './reserva-reembolso-aplicacio
 import { ReservaEstadoService } from './reserva-estado.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
+import { NotificacionesService } from '../../notificaciones/service/notificaciones.service';
 
 @Injectable()
 export class ReservaSolicitudCancelacionResolucionService {
@@ -54,6 +56,8 @@ export class ReservaSolicitudCancelacionResolucionService {
     private readonly estado: ReservaEstadoService,
     private readonly ciclo: ReservaCicloVidaService,
     private readonly aplicacion: ReservaReembolsoAplicacionService,
+    @Optional()
+    private readonly notificaciones?: NotificacionesService,
   ) {}
 
   async resolverSolicitudCancelacion(
@@ -153,6 +157,11 @@ export class ReservaSolicitudCancelacionResolucionService {
             'La solicitud se rechazó, pero el reembolso pendiente no pudo compensarse',
           );
       }
+      await this.notificaciones?.cancelacionResuelta(
+        reserva,
+        false,
+        dto.observacion,
+      );
       return {
         solicitud: await this.recargarSolicitud(idSolicitud, idReserva),
         reembolso: null,
@@ -321,31 +330,30 @@ export class ReservaSolicitudCancelacionResolucionService {
       }
 
       let reembolsoFinal = reembolso;
-      if (this.reembolsosService.ejecucionAutomaticaHabilitada) {
-        try {
-          reembolsoFinal = await this.reembolsosService.registrarOejecutar(
-            reembolso.id,
-            null,
-            idAdmin,
+      try {
+        reembolsoFinal = await this.reembolsosService.registrarOejecutar(
+          reembolso.id,
+          dto.referencia,
+          idAdmin,
+        );
+        if (reembolsoFinal.estado === EstadoReembolso.APROBADO)
+          await this.aplicacion.aplicarReembolsoConfirmado(
+            reembolsoFinal.id,
           );
-          if (reembolsoFinal.estado === EstadoReembolso.APROBADO)
-            await this.aplicacion.aplicarReembolsoConfirmado(
-              reembolsoFinal.id,
-            );
-          else
-            throw new ConflictException(
-              'La solicitud se aprobó, pero la devolución no quedó confirmada; revisar',
-            );
-        } catch (error) {
-          this.logger.error(
-            `La solicitud ${idSolicitud} se aprobó, pero la devolución ${reembolso.id} no se ejecutó`,
-            error as Error,
-          );
-          throw new ConflictException(
-            'La solicitud se aprobó, pero la devolución no se pudo ejecutar; revisar',
-          );
-        }
+      } catch (error) {
+        this.logger.error(
+          `La solicitud ${idSolicitud} se aprobó, pero la devolución ${reembolso.id} no se ejecutó`,
+          error as Error,
+        );
+        throw new ConflictException(
+          'La solicitud se aprobó, pero la devolución no se pudo ejecutar; revisar',
+        );
       }
+      await this.notificaciones?.cancelacionResuelta(
+        reserva,
+        true,
+        dto.observacion,
+      );
       return {
         solicitud: await this.recargarSolicitud(idSolicitud, idReserva),
         reembolso: reembolsoFinal,
@@ -418,6 +426,11 @@ export class ReservaSolicitudCancelacionResolucionService {
       throw new ConflictException(
         'La reserva ya no admite la cancelación solicitada',
       );
+    await this.notificaciones?.cancelacionResuelta(
+      reserva,
+      true,
+      dto.observacion,
+    );
     return {
       solicitud: await this.recargarSolicitud(idSolicitud, idReserva),
       reembolso: null,

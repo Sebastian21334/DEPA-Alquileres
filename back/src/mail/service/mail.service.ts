@@ -224,6 +224,17 @@ export class MailService implements IMailService {
     );
   }
 
+  async enviarAviso(
+    destinatario: string,
+    asunto: string,
+    mensaje: string,
+  ): Promise<void> {
+    const contenido = `<p>${this.plantillas
+      .escapar(mensaje)
+      .replace(/\n/g, '<br>')}</p>`;
+    await this.enviar(destinatario, asunto, contenido, mensaje.slice(0, 160));
+  }
+
   async enviarBajaPublicacion(
     destinatario: string,
     titulo: string,

@@ -1,6 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
-import { Reembolso } from '../../reembolsos/entity/reembolso.entity';
+import {
+  EstadoReembolso,
+  Reembolso,
+} from '../../reembolsos/entity/reembolso.entity';
+import { NotificacionesService } from '../../notificaciones/service/notificaciones.service';
 import { Reserva } from '../entity/reserva.entity';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
@@ -17,6 +21,8 @@ export class ReservaCancelacionesService {
     private readonly resolucion: ReservaSolicitudCancelacionResolucionService,
     private readonly reembolsosService: ReembolsosService,
     private readonly aplicacion: ReservaReembolsoAplicacionService,
+    @Optional()
+    private readonly notificaciones?: NotificacionesService,
   ) {}
 
   solicitarCancelacion(
@@ -61,15 +67,23 @@ export class ReservaCancelacionesService {
 
   async registrarReembolsoManual(
     idReembolso: number,
-    referencia: string | undefined,
+    referencia: string,
     idAdmin: number,
   ): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
-    await this.reembolsosService.registrarOejecutar(
+    const ejecutado = await this.reembolsosService.registrarManual(
       idReembolso,
       referencia,
       idAdmin,
     );
-    return this.aplicacion.aplicarReembolsoConfirmado(idReembolso);
+    if (ejecutado.estado !== EstadoReembolso.APROBADO)
+      throw new Error(
+        'La devolución manual no quedó aprobada; revisá la referencia',
+      );
+    const aplicado = await this.aplicacion.aplicarReembolsoConfirmado(
+      idReembolso,
+    );
+    await this.notificaciones?.reembolso(aplicado.reembolso);
+    return aplicado;
   }
 
   aplicarReembolsoConfirmado(

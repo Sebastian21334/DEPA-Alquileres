@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import {
   TRANSACCION_CALENDARIO,
   type ITransaccionCalendario,
@@ -28,6 +28,7 @@ import { ReservaEstadoService } from './reserva-estado.service';
 import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservaVencimientoService } from './reserva-vencimiento.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { NotificacionesService } from '../../notificaciones/service/notificaciones.service';
 
 export type ResultadoBloqueoAnunciante =
   | 'canceladasPendientes'
@@ -65,6 +66,8 @@ export class ReservaBloqueoAnuncianteService {
     private readonly vencimiento: ReservaVencimientoService,
     private readonly aplicacion: ReservaReembolsoAplicacionService,
     private readonly devolucion: ReservaBloqueoDevolucionService,
+    @Optional()
+    private readonly notificaciones?: NotificacionesService,
   ) {}
 
   async cancelarReservasPorBloqueoAnunciante(
@@ -92,6 +95,11 @@ export class ReservaBloqueoAnuncianteService {
           motivoTexto,
         );
         resumen[resultado] += 1;
+        if (resultado !== 'sinAccion')
+          await this.notificaciones?.reservaAfectadaPorBloqueo(
+            reserva,
+            resultado,
+          );
       } catch (error) {
         const mensaje =
           error instanceof Error ? error.message : String(error);
@@ -123,20 +131,33 @@ export class ReservaBloqueoAnuncianteService {
       this.estado.liquidacionEnRevision(reserva) ||
       reserva.estado_pago === EstadoPagoReserva.CONTRACARGO;
 
+    // En curso o finalizada: se preserva la estadía y no se devuelve
+    // automáticamente. Si la liquidación sigue pendiente, se congela para que
+    // un Administrador la revise.
+    if (
+      this.estado.esEstadiaEnCurso(reserva) ||
+      this.estado.esEstadiaFinalizada(reserva)
+    ) {
+      if (liquidacionResuelta) return 'sinAccion';
+      await this.congelarLiquidacion(reserva, motivo);
+      return 'enRevision';
+    }
+
     // Reclamo, contracargo o liquidación ya en revisión: decide el Administrador.
     if (enRevision) {
       await this.congelarLiquidacion(reserva, motivo);
       return 'enRevision';
     }
 
-    // Código validado: el Inquilino ingresó. No corresponde devolución automática.
+    // Código validado fuera del período de estadía: no se cancela ni se
+    // devuelve automáticamente porque hace falta revisar el ingreso.
     if (codigoValidado) {
       if (liquidacionResuelta) return 'sinAccion';
       await this.congelarLiquidacion(reserva, motivo);
       return 'enRevision';
     }
 
-    // Sin código: no hubo ingreso.
+    // Sin código y fuera del período: no hubo ingreso acreditado.
     if (
       reserva.estado_pago === EstadoPagoReserva.PENDIENTE ||
       reserva.estado_pago === EstadoPagoReserva.RECHAZADO ||
@@ -194,6 +215,14 @@ export class ReservaBloqueoAnuncianteService {
     const fresca = await this.reservaRepository.buscarPorId(reserva.id);
     if (!fresca) return 'sinAccion';
     if (this.estado.liquidacionResuelta(fresca)) return 'sinAccion';
+
+    if (
+      this.estado.esEstadiaEnCurso(fresca) ||
+      this.estado.esEstadiaFinalizada(fresca)
+    ) {
+      await this.congelarLiquidacion(fresca, motivo);
+      return 'enRevision';
+    }
 
     const bloqueoPrevio = this.esCancelacionPorBloqueo(fresca);
     if (fresca.cancelada && !bloqueoPrevio) {
@@ -346,29 +375,27 @@ export class ReservaBloqueoAnuncianteService {
       await this.aplicacion.aplicarReembolsoConfirmado(devolucion.reembolso.id);
     }
 
-    if (this.reembolsosService.ejecucionAutomaticaHabilitada) {
-      const errores: string[] = [];
-      for (const pendiente of devolucion.pendientes) {
-        if (pendiente.estado !== EstadoReembolso.PENDIENTE) continue;
-        try {
-          const ejecutado = await this.reembolsosService.registrarOejecutar(
-            pendiente.id,
-            null,
-            idAdmin,
-          );
-          if (ejecutado.estado === EstadoReembolso.APROBADO)
-            await this.aplicacion.aplicarReembolsoConfirmado(ejecutado.id);
-        } catch (error) {
-          const mensaje =
-            error instanceof Error ? error.message : String(error);
-          errores.push(`Reembolso ${pendiente.id}: ${mensaje}`);
-        }
-      }
-      if (errores.length > 0)
-        throw new Error(
-          `La reserva ${reserva.id} se canceló, pero quedaron devoluciones sin ejecutar: ${errores.join('; ')}`,
+    const errores: string[] = [];
+    for (const pendiente of devolucion.pendientes) {
+      if (pendiente.estado !== EstadoReembolso.PENDIENTE) continue;
+      try {
+        const ejecutado = await this.reembolsosService.registrarOejecutar(
+          pendiente.id,
+          null,
+          idAdmin,
         );
+        if (ejecutado.estado === EstadoReembolso.APROBADO)
+          await this.aplicacion.aplicarReembolsoConfirmado(ejecutado.id);
+      } catch (error) {
+        const mensaje =
+          error instanceof Error ? error.message : String(error);
+        errores.push(`Reembolso ${pendiente.id}: ${mensaje}`);
+      }
     }
+    if (errores.length > 0)
+      throw new Error(
+        `La reserva ${reserva.id} se canceló, pero quedaron devoluciones sin ejecutar: ${errores.join('; ')}`,
+      );
     return 'canceladasConDevolucion';
   }
 
@@ -402,6 +429,19 @@ export class ReservaBloqueoAnuncianteService {
         const actual = await reservaRepository.buscarPorId(idReserva);
         if (!actual) return 'sinAccion';
         if (this.estado.liquidacionResuelta(actual)) return 'sinAccion';
+        if (
+          this.estado.esEstadiaEnCurso(actual) ||
+          this.estado.esEstadiaFinalizada(actual)
+        ) {
+          actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+          actual.observacion_liquidacion = this.observacionConMotivo(
+            actual.observacion_liquidacion,
+            motivo,
+          );
+          actual.fecha_resolucion_liquidacion = null;
+          await reservaRepository.guardar(actual);
+          return 'enRevision';
+        }
         if (actual.cancelada && !this.esCancelacionPorBloqueo(actual))
           return 'enRevision';
         if (

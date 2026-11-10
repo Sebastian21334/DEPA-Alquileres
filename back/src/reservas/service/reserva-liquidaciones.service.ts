@@ -147,38 +147,6 @@ export class ReservaLiquidacionesService {
     return resultado;
   }
 
-  /** El reclamo del inquilino congela cualquier liquidación manual pendiente. */
-  async reportarProblema(
-    id: number,
-    motivo: string,
-    idUsuario: number,
-  ): Promise<Reserva> {
-    return this.transaccion.ejecutar(
-      async ({ reservas: reservaRepository }) => {
-        const reserva = await reservaRepository.buscarPorId(id);
-        if (!reserva)
-          throw new NotFoundException(`No se encontró la reserva ${id}`);
-        if (!this.estado.esDelInquilino(reserva, idUsuario)) {
-          throw new ForbiddenException(
-            'Solo el inquilino de la reserva puede reportar un problema',
-          );
-        }
-        if (!this.estado.estaConfirmada(reserva)) {
-          throw new ConflictException(
-            'Solo se pueden reportar problemas sobre reservas confirmadas',
-          );
-        }
-        if (this.estado.liquidacionResuelta(reserva)) {
-          throw new ConflictException(
-            'La liquidación de esta reserva ya fue resuelta',
-          );
-        }
-        this.ciclo.reportarProblema(reserva, motivo);
-        return reservaRepository.guardar(reserva);
-      },
-    );
-  }
-
   listarLiquidacionesAdministracion(): Promise<Reserva[]> {
     return this.reservaRepository.buscarLiquidacionesAdministracion({
       estados: [
@@ -310,7 +278,7 @@ export class ReservaLiquidacionesService {
       // la reserva queda intacta y el reembolso puede reintentarse.
       const ejecutado = await this.reembolsosService.registrarOejecutar(
         reembolso.id,
-        dto.referencia?.trim() || `liquidacion-${id}-${reembolso.id}`,
+        dto.referencia,
         idAdmin,
       );
       if (ejecutado.estado !== EstadoReembolso.APROBADO)

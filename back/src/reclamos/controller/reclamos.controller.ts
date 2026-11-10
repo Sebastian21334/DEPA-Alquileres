@@ -145,4 +145,16 @@ export class ReclamosController {
       await this.reclamosService.resolver(id, dto, req.user.id),
     );
   }
+
+  @UseGuards(RolesGuard)
+  @Roles('Administrador')
+  @Patch(':id/cerrar')
+  async cerrar(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.conReserva(
+      await this.reclamosService.cerrar(id, req.user.id),
+    );
+  }
 }

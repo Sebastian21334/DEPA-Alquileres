@@ -49,4 +49,14 @@ export class DisputasController {
       await this.disputasService.resolver(id, dto, req.user.id),
     );
   }
+
+  @Patch(':id/cerrar')
+  async cerrar(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.conReserva(
+      await this.disputasService.cerrar(id, req.user.id),
+    );
+  }
 }

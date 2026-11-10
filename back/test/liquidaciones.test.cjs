@@ -79,7 +79,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
   assert.equal(solicitudCreada.importe, 100);
   assert.equal(solicitudCreada.tipo, 'TOTAL');
   assert.equal(solicitudCreada.idempotencyKey, 'liq:1:t:10000');
-  assert.equal(referenciaEjecutada, 'liquidacion-1-1');
+  assert.equal(referenciaEjecutada, undefined);
 });
 
 test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
@@ -242,7 +242,10 @@ test('una cancelación con parcial aprobado crea un complemento por el saldo', a
       };
     },
     compensar: async () => true,
-    ejecucionAutomaticaHabilitada: false,
+    registrarOejecutar: async (id) => ({
+      id,
+      estado: 'PENDIENTE',
+    }),
   };
   const actualSolicitud = { ...solicitud };
   const transaccion = {

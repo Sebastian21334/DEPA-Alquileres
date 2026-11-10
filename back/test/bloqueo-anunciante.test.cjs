@@ -41,6 +41,15 @@ function crearReserva(extra = {}) {
   });
 }
 
+function fechaRelativa(dias) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(Date.now() + dias * 86_400_000));
+}
+
 function escenario(reservas) {
   const pendientes = [];
   const creados = [];
@@ -105,7 +114,12 @@ function escenario(reservas) {
       return auto;
     },
     registrarOejecutar: async (id) => {
+      if (!auto) return { id, estado: 'PENDIENTE' };
       if (falloEjecucion) throw new Error('fallo simulado de Mercado Pago');
+      const reembolso =
+        creados.find((r) => r.id === id) ??
+        existentes.find((r) => r.id === id);
+      if (reembolso) reembolso.estado = 'APROBADO';
       return { id, estado: 'APROBADO' };
     },
     rechazar: async (id, motivo, idActor) => {
@@ -184,6 +198,7 @@ function escenario(reservas) {
   );
   return {
     service,
+    aplicacion,
     pendientes,
     creados,
     liberadas,
@@ -269,6 +284,74 @@ test('reserva con código validado: no cancela ni devuelve; congela liquidación
     estado_pago: 'APROBADO',
     estado_liquidacion: 'RETENIDO',
     codigo_validado_en: new Date('2030-01-01T15:00:00Z'),
+  });
+  const e = escenario([reserva]);
+
+  const resumen = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+
+  assert.equal(resumen.enRevision, 1);
+  assert.equal(reserva.cancelada, false);
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.deepEqual(e.creados, []);
+  assert.deepEqual(e.liberadas, []);
+});
+
+test('reserva en curso con pago, fechas y código: no cancela ni devuelve', async () => {
+  const reserva = crearReserva({
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'RETENIDO',
+    fecha_inicio: fechaRelativa(0),
+    fecha_fin: fechaRelativa(2),
+    codigo_validado_en: new Date(),
+  });
+  const e = escenario([reserva]);
+
+  const resumen = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+
+  assert.equal(resumen.enRevision, 1);
+  assert.equal(reserva.cancelada, false);
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.deepEqual(e.creados, []);
+  assert.deepEqual(e.liberadas, []);
+});
+
+test('reserva iniciada sin código: no cumple las tres condiciones y se cancela con devolución', async () => {
+  const reserva = crearReserva({
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'RETENIDO',
+    fecha_inicio: fechaRelativa(0),
+    fecha_fin: fechaRelativa(2),
+    codigo_validado_en: null,
+  });
+  const e = escenario([reserva]);
+
+  const resumen = await e.service.cancelarReservasPorBloqueoAnunciante(
+    7,
+    99,
+    'Fraude',
+  );
+
+  assert.equal(resumen.canceladasConDevolucion, 1);
+  assert.equal(reserva.cancelada, true);
+  assert.equal(e.creados.length, 1);
+  assert.deepEqual(e.liberadas, [1]);
+});
+
+test('reserva con fecha de fin pasada: se considera finalizada y no se cancela', async () => {
+  const reserva = crearReserva({
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'RETENIDO',
+    fecha_inicio: fechaRelativa(-3),
+    fecha_fin: fechaRelativa(-1),
+    codigo_validado_en: null,
   });
   const e = escenario([reserva]);
 
@@ -499,8 +582,36 @@ test('A2: si el pago se aprueba durante el cierre, se deriva a devolución y no 
   assert.equal(e.creados.length, 1);
 });
 
-test('M3: aplicar un reembolso aprobado relee y actualiza la reserva con lock', async () => {
+test('un reembolso de reclamo se aplica aunque el propietario ya haya cobrado', async () => {
   const reserva = crearReserva({
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'PAGADO_PROPIETARIO',
+  });
+  const e = escenario([reserva]);
+  e.setExistentes([
+    {
+      id: 5,
+      estado: 'APROBADO',
+      importe: 100,
+      origen: 'RECLAMO',
+      tipo: 'TOTAL',
+      motivo: 'Reclamo resuelto',
+      reserva: { id: 1 },
+      pago: { id: 30, amount: 100, amount_refunded: 100 },
+    },
+  ]);
+  e.setAmountRefunded(100);
+
+  const resultado = await e.aplicacion.aplicarReembolsoConfirmado(5);
+
+  assert.equal(resultado.reembolso.id, 5);
+  assert.equal(reserva.estado_pago, 'REEMBOLSADO');
+  assert.equal(reserva.estado_liquidacion, 'DEVUELTO_INQUILINO');
+  assert.equal(reserva.cancelada, false);
+  assert.deepEqual(e.liberadas, []);
+});
+
+test('M3: aplicar un reembolso aprobado relee y actualiza la reserva con lock', async () => {  const reserva = crearReserva({
     estado_pago: 'APROBADO',
     estado_liquidacion: 'RETENIDO',
   });

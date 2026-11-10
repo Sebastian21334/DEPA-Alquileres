@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
@@ -24,6 +25,7 @@ import {
 } from '../repository/reserva.repository.interface';
 import { ReservaEstadoService } from './reserva-estado.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
+import { NotificacionesService } from '../../notificaciones/service/notificaciones.service';
 
 @Injectable()
 export class ReservaSolicitudCancelacionService {
@@ -32,6 +34,8 @@ export class ReservaSolicitudCancelacionService {
     private readonly reservaRepository: IReservaRepository,
     private readonly reembolsosService: ReembolsosService,
     private readonly estado: ReservaEstadoService,
+    @Optional()
+    private readonly notificaciones?: NotificacionesService,
   ) {}
 
   async solicitarCancelacion(
@@ -94,7 +98,13 @@ export class ReservaSolicitudCancelacionService {
       decidida_en: null,
       observacion: null,
     });
-    return this.reservaRepository.guardarSolicitudCancelacion(solicitud);
+    const guardada =
+      await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
+    await this.notificaciones?.cancelacionSolicitada(
+      reserva,
+      dto.motivo.trim(),
+    );
+    return guardada;
   }
 
   async consultarSolicitudCancelacion(

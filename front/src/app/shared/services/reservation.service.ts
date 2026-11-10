@@ -235,10 +235,6 @@ export class ReservationService {
     return this.http.patch<Reserva>(`${this.baseUrl}/${id}/validar-codigo`, { codigo });
   }
 
-  reportProblem(id: number, motivo: string): Observable<Reserva> {
-    return this.http.patch<Reserva>(`${this.baseUrl}/${id}/reportar-problema`, { motivo });
-  }
-
   requestCancellation(id: number, motivo: string): Observable<SolicitudCancelacion> {
     return this.http.post<SolicitudCancelacion>(`${this.baseUrl}/${id}/cancelacion`, { motivo });
   }

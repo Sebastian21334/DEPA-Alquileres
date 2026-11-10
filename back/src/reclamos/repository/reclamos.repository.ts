@@ -38,6 +38,13 @@ export class ReclamosRepository implements IReclamosRepository {
     });
   }
 
+  buscarPorIdConBloqueo(id: number): Promise<Reclamo | null> {
+    return this.reclamos.findOne({
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+  }
+
   buscarAbiertoPorReserva(idReserva: number): Promise<Reclamo | null> {
     return this.reclamos.findOne({
       where: {

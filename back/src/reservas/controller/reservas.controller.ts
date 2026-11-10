@@ -23,7 +23,6 @@ import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ValidarCodigoAlojamientoDto } from '../dto/validar-codigo-alojamiento.dto';
-import { ReportarProblemaReservaDto } from '../dto/reportar-problema-reserva.dto';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
@@ -132,22 +131,6 @@ export class ReservasController {
       await this.liquidacionesService.validarCodigoAlojamiento(
         id,
         dto.codigo,
-        req.user.id,
-      ),
-    );
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Patch(':id/reportar-problema')
-  async reportarProblema(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ReportarProblemaReservaDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    return this.consulta.paraRespuesta(
-      await this.liquidacionesService.reportarProblema(
-        id,
-        dto.motivo,
         req.user.id,
       ),
     );

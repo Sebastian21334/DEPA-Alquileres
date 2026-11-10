@@ -482,8 +482,52 @@ test('ejecutar respeta MP_REFUNDS_ENABLED=false', async () => {
   );
 });
 
-test('registrarDesdeWebhook reutiliza un reembolso por id_externo', async () => {
-  const existente = { id: 9, estado: 'APROBADO', id_externo: 'refund-1' };
+test('registrarOejecutar en modo manual sin referencia deja el reembolso pendiente', async () => {
+  const reembolso = { id: 8, estado: 'PENDIENTE', pago: { id: 10 } };
+  const repo = { buscarPorId: async () => reembolso };
+  const service = new ReembolsosService(
+    repo,
+    {},
+    { get: () => 'false' },
+    {},
+    uow(repo, {}),
+  );
+
+  const resultado = await service.registrarOejecutar(8, null, 7);
+
+  assert.equal(resultado.estado, 'PENDIENTE');
+});
+
+test('cancelar solo anula reembolsos pendientes o fallidos', async () => {
+  const reembolso = {
+    id: 8,
+    estado: 'PENDIENTE',
+    importe: 40,
+    moneda: 'ARS',
+    motivo: 'Prueba',
+    reserva: { id: 3 },
+  };
+  const repo = {
+    buscarPorId: async () => reembolso,
+    actualizarEnTransaccion: async (_id, operacion) => {
+      operacion(reembolso);
+      return reembolso;
+    },
+  };
+  const service = new ReembolsosService(
+    repo,
+    {},
+    { get: () => 'false' },
+    {},
+    uow(repo, {}),
+  );
+
+  const cancelado = await service.cancelar(8, 'Ya no corresponde', 7);
+  assert.equal(cancelado.estado, 'CANCELADO');
+  assert.equal(cancelado.error_detalle, 'Ya no corresponde');
+});
+
+test('registrarDesdeWebhook reutiliza un reembolso por id_externo', async () => {  const existente = { id: 9, estado: 'APROBADO', id_externo: 'refund-1' };
   let creados = 0;
   const repo = {
     buscarPorIdExterno: async () => existente,

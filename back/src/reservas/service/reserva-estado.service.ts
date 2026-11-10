@@ -50,6 +50,36 @@ export class ReservaEstadoService {
     return reserva.estado_pago === EstadoPagoReserva.APROBADO;
   }
 
+  /**
+   * Una estadía está en curso solo cuando el pago fue aprobado, la fecha
+   * actual está dentro del rango reservado y el Anunciante validó el código.
+   * Las tres condiciones son necesarias para preservarla ante un bloqueo.
+   */
+  esEstadiaEnCurso(reserva: Reserva, ahora = new Date()): boolean {
+    if (reserva.cancelada || reserva.finalizada) return false;
+    if (!this.pagoAprobado(reserva) || !this.codigoValidado(reserva))
+      return false;
+    if (
+      !esFechaCalendarioValida(reserva.fecha_inicio) ||
+      !esFechaCalendarioValida(reserva.fecha_fin) ||
+      reserva.fecha_inicio > reserva.fecha_fin
+    )
+      return false;
+    const hoy = fechaArgentina(ahora);
+    return hoy >= reserva.fecha_inicio && hoy <= reserva.fecha_fin;
+  }
+
+  /**
+   * Una estadía se considera finalizada por su bandera explícita o porque
+   * ya pasó la fecha de fin. En ambos casos no se cancela ni devuelve
+   * automáticamente por un bloqueo.
+   */
+  esEstadiaFinalizada(reserva: Reserva, ahora = new Date()): boolean {
+    if (reserva.finalizada) return true;
+    if (!esFechaCalendarioValida(reserva.fecha_fin)) return false;
+    return fechaArgentina(ahora) > reserva.fecha_fin;
+  }
+
   estaConfirmada(reserva: Reserva): boolean {
     return this.pagoAprobado(reserva) && !reserva.cancelada;
   }

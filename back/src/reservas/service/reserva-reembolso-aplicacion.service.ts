@@ -77,7 +77,9 @@ export class ReservaReembolsoAplicacionService {
           this.pagosService.saldoReembolsable(reembolso.pago) <= TOLERANCIA_MONETARIA;
         if (
           reserva.estado_liquidacion ===
-          EstadoLiquidacionReserva.PAGADO_PROPIETARIO
+            EstadoLiquidacionReserva.PAGADO_PROPIETARIO &&
+          reembolso.origen !== OrigenReembolso.RECLAMO &&
+          reembolso.origen !== OrigenReembolso.CONTRACARGO
         )
           throw new ConflictException(
             'La reserva ya fue pagada al propietario; no admite otra devolución',

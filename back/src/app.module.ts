@@ -21,6 +21,7 @@ import { PagosAplicacionModule } from './pagos/pagos-aplicacion.module';
 import { ReclamosModule } from './reclamos/reclamos.module';
 import { ReembolsosAplicacionModule } from './reembolsos/reembolsos-aplicacion.module';
 import { BloqueoAnuncianteModule } from './bloqueo-anunciante/bloqueo-anunciante.module';
+import { NotificacionesModule } from './notificaciones/notificaciones.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -65,6 +66,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ReclamosModule,
     ReembolsosAplicacionModule,
     BloqueoAnuncianteModule,
+    NotificacionesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
