@@ -35,6 +35,13 @@ interface MensajeResponse {
   mensaje: string;
 }
 
+export interface VistaBloqueo {
+  motivo: string | null;
+  fecha: string | null;
+  apelacion: { texto: string; fecha: string } | null;
+  respuesta: { texto: string; fecha: string } | null;
+}
+
 const TOKEN_KEY = 'auth_token';
 
 // Implementa RF2 (autenticación) y el alta de usuarios de RF1: registro, login,
@@ -50,6 +57,7 @@ export class AuthService {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
   private readonly baseUrl = `${environment.apiUrl}/auth`;
+  tokenBloqueo: string | null = null;
 
   // Signal de solo-lectura que expone el usuario autenticado (o null).
   readonly currentUser = signal<JwtPayload | null>(this.leerPayloadInicial());
@@ -106,9 +114,18 @@ export class AuthService {
 
   /** POST /auth/login — valida credenciales y guarda el JWT devuelto. */
   login(dto: LoginDto): Observable<LoginResponse> {
+    this.tokenBloqueo = null;
     return this.http
       .post<LoginResponse>(`${this.baseUrl}/login`, dto)
       .pipe(tap((res) => this.guardarSesion(res.access_token)));
+  }
+
+  consultarBloqueo(token: string): Observable<VistaBloqueo> {
+    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/consultar`, { token });
+  }
+
+  apelarBloqueo(token: string, texto: string): Observable<VistaBloqueo> {
+    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/apelar`, { token, texto });
   }
 
   /** POST /auth/reenviar-verificacion — solicita un nuevo mail para una cuenta pendiente. */
@@ -118,6 +135,7 @@ export class AuthService {
 
   /** Cierra la sesión activa (borra el token y limpia el estado en memoria). */
   logout(): void {
+    this.tokenBloqueo = null;
     if (this.isBrowser) localStorage.removeItem(TOKEN_KEY);
     this.currentUser.set(null);
   }

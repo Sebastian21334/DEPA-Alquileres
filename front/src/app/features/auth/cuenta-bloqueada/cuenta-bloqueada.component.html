@@ -1,0 +1,48 @@
+<main class="blocked-page">
+  <section class="blocked-card" aria-labelledby="blocked-title">
+    <h1 id="blocked-title">Tu cuenta está bloqueada</h1>
+    @if (error()) {
+      <p class="blocked-error" role="alert">{{ error() }}</p>
+    }
+    @if (bloqueo(); as detalle) {
+      <div class="blocked-reason">
+        <h2>Motivo del bloqueo</h2>
+        <p>{{ detalle.motivo || 'El motivo de este bloqueo no está registrado.' }}</p>
+        @if (detalle.fecha) {
+          <small>Registrado el {{ detalle.fecha | date: 'dd/MM/yyyy' }}</small>
+        }
+      </div>
+      @if (detalle.apelacion; as apelacion) {
+        <h2>Tu apelación</h2>
+        <p>{{ apelacion.texto }}</p>
+        @if (detalle.respuesta; as respuesta) {
+          <h2>Respuesta de administración</h2>
+          <p>{{ respuesta.texto }}</p>
+          <small>{{ respuesta.fecha | date: 'dd/MM/yyyy' }}</small>
+        } @else {
+          <p role="status">Tu apelación está pendiente de respuesta.</p>
+          <button type="button" class="acct-btn acct-btn--ghost" (click)="consultar()" [disabled]="ocupado()">Actualizar estado</button>
+        }
+      } @else {
+        <form (ngSubmit)="apelar()">
+          <h2>Apelar el bloqueo</h2>
+          <label for="appeal-text">Contanos por qué querés que revisemos el bloqueo</label>
+          <textarea id="appeal-text" name="texto" [(ngModel)]="texto" rows="5" maxlength="2000" required></textarea>
+          <button type="submit" class="acct-btn acct-btn--primary" [disabled]="ocupado() || !texto.trim()">
+            {{ ocupado() ? 'Enviando…' : 'Enviar apelación' }}
+          </button>
+        </form>
+        @if (error()) {
+          <button type="button" class="acct-btn acct-btn--ghost" (click)="consultar()" [disabled]="ocupado()">Actualizar estado</button>
+        }
+      }
+    } @else if (ocupado()) {
+      <p role="status">Cargando el detalle del bloqueo…</p>
+    } @else if (accesoVigente()) {
+      <button type="button" class="acct-btn acct-btn--ghost" (click)="consultar()">Reintentar</button>
+    } @else if (!error()) {
+      <p>Ingresá con tu correo y contraseña para consultar el motivo o apelar.</p>
+    }
+    <a class="back-link" routerLink="/login">Volver al inicio de sesión</a>
+  </section>
+</main>

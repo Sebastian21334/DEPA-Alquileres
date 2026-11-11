@@ -33,7 +33,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       }
 
       const codigo = error.error?.codigo;
-      return throwError(() => new ApiError(error.status, mensaje, typeof codigo === 'string' ? codigo : undefined));
+      const tokenBloqueo = req.url.endsWith('/auth/login') && codigo === 'USUARIO_BLOQUEADO' &&
+        typeof error.error?.tokenBloqueo === 'string' ? error.error.tokenBloqueo : undefined;
+      return throwError(() => new ApiError(error.status, mensaje, typeof codigo === 'string' ? codigo : undefined, tokenBloqueo));
     }),
   );
 };

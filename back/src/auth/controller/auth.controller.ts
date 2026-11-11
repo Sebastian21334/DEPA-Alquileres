@@ -1,7 +1,8 @@
-import { Body, Controller, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Header, HttpCode, Patch, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
 import { AuthService } from '../service/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
+import { ApelacionBloqueoDto, ConsultarBloqueoDto } from '../dto/apelacion-bloqueo.dto';
 
 import { VerificarCuentaDto } from '../dto/verificar-cuenta.dto';
 import { RecuperarContraseniaDto } from '../dto/recuperar-contrasenia.dto';
@@ -20,8 +21,22 @@ export class AuthController {
   }
 
   @Post('login')
+  @Header('Cache-Control', 'no-store')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
+  }
+
+  @Post('bloqueo/consultar')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  consultarBloqueo(@Body() dto: ConsultarBloqueoDto) {
+    return this.authService.consultarBloqueo(dto.token);
+  }
+
+  @Post('bloqueo/apelar')
+  @Header('Cache-Control', 'no-store')
+  apelarBloqueo(@Body(new ValidationPipe({ transform: true })) dto: ApelacionBloqueoDto) {
+    return this.authService.apelarBloqueo(dto.token, dto.texto);
   }
 
   @Post('reenviar-verificacion')

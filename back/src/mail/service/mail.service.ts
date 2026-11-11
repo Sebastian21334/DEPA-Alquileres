@@ -178,7 +178,7 @@ export class MailService implements IMailService {
       ? `<p>Motivo: ${this.plantillas.escapar(motivo)}</p>`
       : '';
     const contenido = bloqueado
-      ? `<p>Tu cuenta fue bloqueada y no podrás iniciar sesión.</p>${motivoSeguro}<p>Si creés que se trata de un error, comunicate con soporte.</p>`
+      ? `<p>Tu cuenta fue bloqueada.</p>${motivoSeguro}<p>Ingresá con tus credenciales para consultar el bloqueo o presentar una apelación.</p>`
       : '<p>Tu cuenta fue habilitada nuevamente. Ya podés iniciar sesión.</p>';
     await this.enviar(
       destinatario,

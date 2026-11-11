@@ -27,14 +27,14 @@ export class UsuariosCredencialesService {
     return bcrypt.hash(contrasenia, rounds);
   }
 
-  async validarCredenciales(email: string, contrasenia: string) {
+  async validarCredenciales(email: string, contrasenia: string, permitirBloqueado = false) {
     const user = await this.usuariosRepo.buscarParaLogin(email);
     if (!user || !(await bcrypt.compare(contrasenia, user.contrasenia))) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
     if (!user.activa)
       throw new ForbiddenException('Tu cuenta está inactiva');
-    if (user.bloqueado)
+    if (user.bloqueado && !permitirBloqueado)
       throw new ForbiddenException('Tu usuario está bloqueado');
     return user;
   }
