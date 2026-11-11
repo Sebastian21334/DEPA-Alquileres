@@ -16,7 +16,7 @@ import { UbicacionConfirmada } from '../components/location-picker/location-pick
 type CampoPublicacion = keyof PublicacionFormulario['form']['controls'];
 
 const PATRON_TITULO_PUBLICACION =
-  /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} .,'’()/-]+(?<! )$/u;
+  /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} ,:.]+(?<! )$/u;
 
 // Formulario de una publicación, único para el alta (CrearPublicacionComponent) y la
 // edición (PublicationFormComponent). Cada pantalla lo declara en sus `providers`, así
@@ -44,7 +44,7 @@ export class PublicacionFormulario {
   );
 
   readonly form = inject(FormBuilder).nonNullable.group({
-    titulo: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(255), Validators.pattern(PATRON_TITULO_PUBLICACION)]],
+    titulo: ['', [Validators.required, Validators.minLength(15), Validators.maxLength(255), Validators.pattern(PATRON_TITULO_PUBLICACION)]],
     descripcion: ['', [Validators.required, Validators.maxLength(255)]],
     idTipoPropiedad: [null as number | null, Validators.required],
     idModalidad: [null as number | null, Validators.required],
