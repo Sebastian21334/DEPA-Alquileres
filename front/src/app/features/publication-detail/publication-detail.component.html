@@ -8,6 +8,12 @@
       <a routerLink="/">Volver a las publicaciones</a>
     </div>
   } @else if (publication(); as item) {
+    @if (item.eliminada) {
+      <div class="deleted-notice" role="status">
+        <strong>Esta publicación ha sido eliminada.</strong>
+        <p>Se mantendrá visible hasta que se cumpla tu reserva. No admite nuevas reservas ni contactos.</p>
+      </div>
+    }
     <div class="gallery">
       <div class="gallery__main">
         @for (image of currentImage() ? [currentImage()!] : []; track image.id) {
@@ -43,7 +49,7 @@
           @if (item.anunciante?.verificado) {
             <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> Dueño Verificado</span>
           }
-          @if (esMiPublicacion()) {
+          @if (esMiPublicacion() && !item.eliminada) {
             <a class="edit-link" [routerLink]="['/publicaciones', item.id, 'editar']">✎ Modificar publicación</a>
           }
         </div>
@@ -53,7 +59,7 @@
             <p class="location"><svg lucideMapPin [size]="16"></svg> {{ location(item) }}</p>
             <p class="published-date">{{ item.fecha_publicacion | relativeTime }}</p>
           </div>
-          @if (!esMiPublicacion()) {
+          @if (!esMiPublicacion() && !item.eliminada) {
             <button
               type="button"
               class="favorite-button"
@@ -115,7 +121,7 @@
         </section>
       }
 
-      @if (esTemporaria()) {
+      @if (esTemporaria() && !item.eliminada) {
         <section class="booking-layout" appReveal>
           <div class="booking-calendar">
             <div class="section-heading"><div><span>Disponibilidad</span><h2>Elegí las fechas de tu alquiler</h2></div></div>
@@ -147,7 +153,7 @@
             <small class="external-warning">Si continuás por WhatsApp, la conversación ocurre fuera de DEPA y no podremos intervenir ante inconvenientes.</small>
           </aside>
         </section>
-      } @else {
+      } @else if (!item.eliminada) {
         <section class="price-panel" appReveal="zoom">
           <div class="price-panel__amount">
             <strong>{{ price(item) }}<span class="price-panel__unit"> / mes</span></strong>
@@ -187,7 +193,7 @@
       }
     </div>
 
-    @if (paymentOpen()) {
+    @if (paymentOpen() && !item.eliminada) {
       <div class="modal-backdrop" (click)="closePayment()">
         <section class="payment-modal" role="dialog" aria-modal="true" aria-labelledby="payment-title" (click)="$event.stopPropagation()">
           <button class="payment-modal__close" type="button" (click)="closePayment()" aria-label="Cerrar">×</button>

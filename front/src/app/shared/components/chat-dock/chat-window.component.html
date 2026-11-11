@@ -35,7 +35,9 @@
       <p class="chat__error" role="alert">{{ error() }}</p>
     }
 
-    @if (contactoSuspendido()) {
+    @if (publicacionEliminada()) {
+      <p class="chat__error" role="status">Esta publicación ha sido eliminada y no admite contactos. El historial se conserva.</p>
+    } @else if (contactoSuspendido()) {
       <p class="chat__error" role="status">Contacto suspendido: la cuenta no está disponible. El historial se conserva. Para reservas anteriores, contactá a soporte.</p>
     }
     <form class="chat__form" (ngSubmit)="enviar()">

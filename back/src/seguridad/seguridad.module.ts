@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { UsuariosConsultaModule } from '../usuarios/usuarios-consulta.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { SeguridadService } from './service/seguridad.service';
 import { JwtStrategy } from './strategy/jwt.strategy';
@@ -30,7 +31,7 @@ import { JwtStrategy } from './strategy/jwt.strategy';
       },
     }),
   ],
-  providers: [JwtAuthGuard, RolesGuard, JwtStrategy, SeguridadService],
-  exports: [JwtModule, PassportModule, JwtAuthGuard, RolesGuard],
+  providers: [JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard, JwtStrategy, SeguridadService],
+  exports: [JwtModule, PassportModule, JwtAuthGuard, OptionalJwtAuthGuard, RolesGuard],
 })
 export class SeguridadModule {}

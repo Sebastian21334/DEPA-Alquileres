@@ -147,6 +147,13 @@ export class PublicacionesEnMemoria {
     this.filas.set(publicacion.id, copiar(publicacion));
     return publicacion;
   }
+
+  async actualizarSiNoEliminada(id: number, cambios: Partial<Publicacion>): Promise<boolean> {
+    const actual = this.filas.get(id);
+    if (!actual || actual.eliminada) return false;
+    Object.assign(actual, cambios);
+    return true;
+  }
 }
 
 /** Reemplaza Azure Communication Services: guarda los correos "enviados". */

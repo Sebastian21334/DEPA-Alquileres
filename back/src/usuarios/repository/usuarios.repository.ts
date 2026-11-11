@@ -147,8 +147,9 @@ export class UsuariosRepository implements IUsuariosRepository {
     return paginar(query, consulta);
   }
 
-  async buscarPorId(id: number): Promise<Usuario | null> {
-    return this.repo.findOne({
+  async buscarPorId(id: number, transaccion?: EntityManager): Promise<Usuario | null> {
+    const repositorio = transaccion ? transaccion.getRepository(Usuario) : this.repo;
+    return repositorio.findOne({
       where: { id: id },
       relations: { rol: true },
     });

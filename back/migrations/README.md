@@ -6,6 +6,38 @@ La migración se puede repetir y conserva los bloqueos existentes. Cuando el
 motivo o el administrador original no están registrados, se muestran como
 datos no disponibles.
 
+# Publicaciones eliminadas y reservas vigentes (2026-11-11)
+
+Con el backend detenido, ejecutar desde `back`:
+
+```sh
+npm run db:publicaciones-eliminadas
+```
+
+Agrega `publicacion.eliminada` sin borrar datos y se puede ejecutar nuevamente.
+Aplicarla también después de inicializar una base nueva, antes de iniciar esta
+versión (`synchronize: false`). La eliminación conserva las fotos, el calendario,
+los mensajes y la relación con las reservas. Las publicaciones eliminadas no
+aparecen en el catálogo, favoritos ni listados por anunciante y no admiten
+reactivación, nuevas reservas, presupuestos ni mensajes.
+
+El detalle requiere una sesión válida y una reserva propia no cancelada ni
+finalizada cuyo último día no haya pasado en Argentina. Admite pagos aprobados
+y pagos pendientes que aún no vencieron. Al finalizar, cancelar o vencer la
+última reserva vigente de ese inquilino, el enlace deja de estar disponible para
+él; el historial de la reserva se conserva. Las eliminaciones físicas anteriores
+a esta versión no pueden recuperar automáticamente la publicación perdida.
+
+La galería y el calendario aplican la misma autorización que el detalle. Las
+ediciones, el orden y el borrado de fotos y los envíos de mensajes vuelven a
+comprobar la baja al escribir, para no modificar una publicación eliminada
+mientras la solicitud estaba en curso. Las operaciones internas de reservas
+anteriores conservan su acceso al calendario.
+
+El comando exige un certificado TLS válido para conexiones remotas y no
+imprime la cadena de conexión ante errores. Las bases locales conservan su
+configuración de conexión.
+
 # Cancelaciones, devoluciones, reclamos y contracargos
 
 Para habilitar el circuito del ítem 14, con el backend detenido y sobre una

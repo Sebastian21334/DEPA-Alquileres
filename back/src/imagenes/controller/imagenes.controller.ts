@@ -17,6 +17,8 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImagenesService } from '../service/imagenes.service';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../seguridad/guards/optional-jwt-auth.guard';
 import { AnuncianteGuard } from '../../anunciantes/guards/anunciante.guard';
 import { OrdenarImagenesDto } from '../dto/ordenar-imagenes.dto';
 
@@ -65,8 +67,9 @@ export class ImagenesController {
   }
 
   @Get('publicacion/:idPublicacion')
-  async listarPorPublicacion(@Param('idPublicacion', ParseIntPipe) idPublicacion: number) {
-    return this.imagenesService.listarPorPublicacion(idPublicacion);
+  @UseGuards(OptionalJwtAuthGuard)
+  async listarPorPublicacion(@Param('idPublicacion', ParseIntPipe) idPublicacion: number, @Req() req: Partial<AuthenticatedRequest>) {
+    return this.imagenesService.listarPorPublicacion(idPublicacion, req.user?.id);
   }
 
   @Delete(':id')

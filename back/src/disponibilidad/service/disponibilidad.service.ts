@@ -68,7 +68,7 @@ export class DisponibilidadService {
     }
 
     return this.fechaRepository.conTransaccion(async (fechaRepository, transaccion) => {
-      await this.publicacionesService.bloquearParaModificacion(dto.id_publicacion, transaccion);
+      await this.publicacionesService.bloquearParaModificacion(dto.id_publicacion, transaccion, false);
       const existentes = await fechaRepository.buscarPorRango(
         dto.id_publicacion,
         inicio,
@@ -109,7 +109,8 @@ export class DisponibilidadService {
    * para que el front pinte qué días se pueden reservar.
    * Lectura pública, no requiere estar logueado.
    */
-  async listarPorPublicacion(idPublicacion: number): Promise<FechaDisponibilidadPublicaDto[]> {
+  async listarPorPublicacion(idPublicacion: number, idUsuario?: number): Promise<FechaDisponibilidadPublicaDto[]> {
+    await this.publicacionesService.buscarPublicaPorId(idPublicacion, idUsuario);
     const fechas =
       await this.fechaRepository.buscarPorPublicacion(idPublicacion);
     return fechas.map(({ fecha, disponible }) => ({ fecha, disponible }));
@@ -176,7 +177,7 @@ export class DisponibilidadService {
   private async buscarFechaBloqueada(id: number, repositorio: IFechaRepository, transaccion: EntityManager): Promise<Fecha> {
     const idPublicacion = await repositorio.buscarPublicacionPorFecha(id);
     if (idPublicacion === null) throw new NotFoundException(`No se encontró la fecha ${id}`);
-    await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion);
+    await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion, false);
     const fecha = await repositorio.buscarPorId(id);
     if (!fecha) throw new NotFoundException(`No se encontró la fecha ${id}`);
     return fecha;

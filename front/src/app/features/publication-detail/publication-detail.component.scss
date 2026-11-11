@@ -3,6 +3,8 @@
 .state { min-height: 55vh; display: grid; place-content: center; justify-items: center; color: var(--color-text-muted); }
 .state--error { text-align: center; }
 .state--error a { color: var(--color-primary); font-weight: 700; }
+.deleted-notice { max-width: 1132px; margin: 0 auto; padding: 20px 24px; border-left: 4px solid #b45309; background: #fff7e6; color: #713f12; line-height: 1.5; }
+.deleted-notice p { margin: 4px 0 0; }
 
 .gallery { max-width: 1180px; margin: 0 auto; padding: 18px 24px 0; animation: depa-fade-in .6s ease both; }
 .gallery__main { position: relative; height: clamp(250px, 34vw, 460px); overflow: hidden; border-radius: 14px; background: #e7e8eb; }

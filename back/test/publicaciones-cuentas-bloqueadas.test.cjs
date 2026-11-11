@@ -108,6 +108,7 @@ test('el catálogo aplica la restricción en SQL antes de contar y paginar', asy
   assert.deepEqual(pagina.datos, []);
   assert.equal(consultas.length, 2);
   for (const sql of consultas) {
+    assert.match(sql, /"publicacion"\."eliminada" = false/);
     assert.match(sql, /"usuario"\."activa" = true AND "usuario"\."bloqueado" = false/);
   }
 });

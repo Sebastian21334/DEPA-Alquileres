@@ -3,11 +3,12 @@ import type { EntityManager } from 'typeorm';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
+import { IsNull, MoreThan, MoreThanOrEqual, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
 import {
   CategoriaInicio,
   ConsultaPublicaciones,
+  ConsultaReservasAcceso,
   IPublicacionesRepository,
   PaginaPublicaciones,
 } from './publicaciones.repository.interface';
@@ -19,7 +20,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
   private sqlAdmiteReservaPorFecha(alias: string): string {
     return `COALESCE(${alias}.permite_reservas_por_fecha, ${alias}.nombre ~* '${PATRON_RESERVA_POR_FECHA}', false)`;
   }
-  async bloquearPorId(id: number, transaccion: EntityManager): Promise<boolean> {
+  async bloquearPorId(id: number, transaccion: EntityManager): Promise<Publicacion | null> {
     if (!transaccion.queryRunner?.isTransactionActive) {
       throw new Error('La publicación debe bloquearse dentro de una transacción');
     }
@@ -28,7 +29,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .where('publicacion.id = :id', { id })
       .setLock('pessimistic_write')
       .getOne();
-    return publicacion !== null;
+    return publicacion;
   }
 
   buscarCondicionesDeReserva(id: number, transaccion: EntityManager): Promise<Publicacion | null> {
@@ -65,9 +66,14 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     return this.repo.save(publicacion);
   }
 
+  async actualizarSiNoEliminada(id: number, cambios: Partial<Publicacion>): Promise<boolean> {
+    const resultado = await this.repo.update({ id, eliminada: false }, cambios);
+    return (resultado.affected ?? 0) > 0;
+  }
+
   async marcarActiva(id: number): Promise<void> {
     // UPDATE directo: no toca relaciones (a diferencia de save con la entidad cargada).
-    await this.repo.update({ id, motivo_baja_admin: IsNull() }, { activa: true });
+    await this.repo.update({ id, eliminada: false, motivo_baja_admin: IsNull() }, { activa: true });
   }
 
   async darDeBaja(id: number, motivo: string): Promise<void> {
@@ -103,6 +109,23 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
+  existeReserva(consulta: ConsultaReservasAcceso): Promise<boolean> {
+    const vigente = {
+      publicacion: { id: consulta.idPublicacion },
+      usuario: { id: consulta.idUsuario },
+      cancelada: consulta.cancelada,
+      finalizada: consulta.finalizada,
+      fecha_fin: MoreThanOrEqual(consulta.fechaFinDesde),
+    };
+    return this.reservasRepo.exists({
+      where: consulta.pagos.map(({ estado, venceDespues }) => ({
+        ...vigente,
+        estado_pago: estado,
+        ...(venceDespues ? { pago_vencimiento: MoreThan(venceDespues) } : {}),
+      })),
+    });
+  }
+
   buscarAdministracion(consulta: ListarAdministracionDto) {
     const query = this.repo.createQueryBuilder('publicacion')
       .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
@@ -124,7 +147,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     // Se agregan imagenes y anunciante porque el listado público (home) necesita
     // mostrar la imagen principal y el estado "verificado" del anunciante por cada tarjeta.
     return this.repo.find({
-      where: { activa: true, anunciante: { usuario: { activa: true, bloqueado: false } } },
+      where: { activa: true, eliminada: false, anunciante: { usuario: { activa: true, bloqueado: false } } },
       relations: {
         tipoPropiedad: true,
         ciudad: true,
@@ -171,6 +194,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .leftJoin('anunciante.usuario', 'usuario')
       .leftJoin('anunciante.tipoAnunciante', 'tipoAnunciante')
       .where('publicacion.activa = :activa', { activa: true })
+      .andWhere('publicacion.eliminada = false')
       .andWhere('usuario.activa = true AND usuario.bloqueado = false')
       .distinct(true);
 
@@ -259,7 +283,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const ids = filas.map((fila) => Number(fila.id));
     const publicaciones = ids.length
       ? await this.repo.find({
-          where: ids.map((id) => ({ id, activa: true,
+          where: ids.map((id) => ({ id, activa: true, eliminada: false,
             anunciante: { usuario: { activa: true, bloqueado: false } } })),
           relations: {
             tipoPropiedad: true,
@@ -366,6 +390,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     return this.repo.find({
       where: {
         anunciante: { idUsuario: idAnunciante },
+        eliminada: false,
         ...(soloActivas ? { activa: true } : {}),
       },
       relations: {
@@ -381,7 +406,12 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
-  eliminar(publicacion: Publicacion): Promise<Publicacion> {
-    return this.repo.remove(publicacion);
+  async eliminar(publicacion: Publicacion): Promise<Publicacion> {
+    // UPDATE toma el mismo bloqueo de fila que usa la creación de reservas.
+    // No borra fotos, fechas, mensajes ni la FK que conserva la reserva.
+    await this.repo.update({ id: publicacion.id }, {
+      activa: publicacion.activa, eliminada: publicacion.eliminada,
+    });
+    return publicacion;
   }
 }

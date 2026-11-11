@@ -30,7 +30,7 @@ export interface IUsuariosRepository {
   contarUsuarios(): Promise<number>;
   listarTodos(): Promise<Usuario[]>;
   listarAdministracion(consulta: ListarAdministracionDto): Promise<Pagina<Usuario>>;
-  buscarPorId(id: number): Promise<Usuario | null>;
+  buscarPorId(id: number, transaccion?: EntityManager): Promise<Usuario | null>;
   buscarParaLogin(email: string): Promise<Usuario | null>;
   buscarConBloqueo(id: number, transaccion?: EntityManager): Promise<Usuario | null>;
   listarBloqueados(): Promise<BloqueoAdministrativo[]>;

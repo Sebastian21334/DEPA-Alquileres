@@ -7,6 +7,7 @@ back/.env
 front/node_modules/
 front/dist/
 front/.angular/
+/.angular/
 
 # General
 .DS_Store

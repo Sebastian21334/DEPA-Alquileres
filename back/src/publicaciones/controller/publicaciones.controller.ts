@@ -19,6 +19,8 @@ import { PublicacionesService } from '../service/publicaciones.service';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../seguridad/guards/optional-jwt-auth.guard';
 import { AnuncianteGuard } from '../../anunciantes/guards/anunciante.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
@@ -68,8 +70,9 @@ export class PublicacionesController {
   }
 
   @Get(':id')
-  async buscarPorId(@Param('id', ParseIntPipe) id: number) {
-    return this.publicacionesService.buscarPublicaPorId(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  async buscarPorId(@Param('id', ParseIntPipe) id: number, @Req() req: Partial<AuthenticatedRequest>) {
+    return this.publicacionesService.buscarPublicaPorId(id, req.user?.id);
   }
 
   @Post()

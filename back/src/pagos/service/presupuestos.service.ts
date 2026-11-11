@@ -59,7 +59,7 @@ export class PresupuestosService {
     const publicacion = await this.publicaciones.buscarPorId(
       dto.id_publicacion,
     );
-    if (!publicacion.activa || !this.publicaciones.cuentaAnuncianteHabilitada(publicacion) ||
+    if (publicacion.eliminada || !publicacion.activa || !this.publicaciones.cuentaAnuncianteHabilitada(publicacion) ||
         !this.publicaciones.admiteReservaPorFecha(publicacion))
       throw new BadRequestException('Esta publicación no admite reservas');
     if (this.publicaciones.perteneceA(publicacion, idUsuario))

@@ -8,12 +8,15 @@ import {
   Param,
   ParseIntPipe,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { DisponibilidadService } from '../service/disponibilidad.service';
 import { CrearDisponibilidadDto } from '../dto/crear-disponibilidad.dto';
 import { ActualizarDisponibilidadDto } from '../dto/actualizar-disponibilidad.dto';
 import { PropietarioPublicacionGuard } from '../guards/propietario-publicacion.guard';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../seguridad/guards/optional-jwt-auth.guard';
 
 @Controller('disponibilidad')
 export class DisponibilidadController {
@@ -35,9 +38,10 @@ export class DisponibilidadController {
   }
 
   @Get('publicacion/:id')
+  @UseGuards(OptionalJwtAuthGuard)
   // El calendario es público para que un visitante pueda elegir fechas.
-  listarPorPublicacion(@Param('id', ParseIntPipe) id: number) {
-    return this.disponibilidadService.listarPorPublicacion(id);
+  listarPorPublicacion(@Param('id', ParseIntPipe) id: number, @Req() req: Partial<AuthenticatedRequest>) {
+    return this.disponibilidadService.listarPorPublicacion(id, req.user?.id);
   }
 
   @UseGuards(JwtAuthGuard, PropietarioPublicacionGuard)
