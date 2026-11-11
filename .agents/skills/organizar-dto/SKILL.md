@@ -1,8 +1,10 @@
 ---
 name: organizar-dto
-description: Ubica los DTO nuevos del backend en la carpeta dto del módulo al que pertenecen.
+description: Organiza los DTO del backend en el módulo dueño del contrato y ubica la validación de entrada del flujo que se modifica.
 ---
 
 # Organizar los DTO
 
-Cuando el cambio requiera un DTO nuevo, guardá su archivo en la carpeta `dto/` del módulo que lo define. Creá la carpeta si el módulo todavía no la tiene. Reutilizá un DTO existente si ya representa el mismo contrato.
+Ubicá cada DTO en `dto/` del módulo dueño del contrato. Si el flujo que modificás tiene un DTO declarado dentro del controlador, movelo a `dto/`. Creá la carpeta si hace falta y reutilizá un DTO existente cuando represente el mismo contrato.
+
+Validá el formato de entrada con los mecanismos declarativos del proyecto, como los decoradores de `class-validator` cuando se use esa biblioteca. Las reglas de negocio y las validaciones que necesitan consultar datos quedan en el servicio.

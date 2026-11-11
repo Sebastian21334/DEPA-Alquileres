@@ -1,11 +1,11 @@
 ---
 name: decidir-enum-o-entidad
-description: Consulta al usuario antes de crear un enum para un concepto del negocio que pueda modelarse como entidad, como un estado, tipo o categoría, en módulos nuevos o existentes del backend.
+description: Define cómo modelar estados, tipos y categorías del negocio en el backend. Reutiliza catálogos existentes y consulta antes de crear un enum si el modelado sigue pendiente.
 ---
 
 # Decidir entre enum y entidad
 
-1. Cuando consideres crear un enum para un concepto del negocio, revisá si ya existe una entidad que lo represente y qué módulo es responsable de ese concepto.
-2. Antes de editar, presentá al usuario las opciones de enum y entidad. Recomendá modelarlo como entidad y explicá brevemente qué aporta en ese caso. Si ya existe una entidad adecuada, proponé reutilizarla.
-3. Indicá en qué módulo quedaría la entidad. Priorizá el módulo existente responsable del concepto. Proponé un módulo nuevo si el concepto tiene una responsabilidad propia y ninguno de los módulos actuales encaja.
-4. Esperá la decisión del usuario y aplicá la opción elegida.
+1. Antes de modelar un estado, tipo o categoría del negocio, identificá el módulo responsable y reutilizá un catálogo existente si representa el concepto. Aplicá las decisiones de modelado ya acordadas.
+2. Para estados persistidos, reutilizá el catálogo de estados y su ámbito cuando el proyecto use ese modelo. Si agregás valores obligatorios, incorporalos a la carga inicial.
+3. Si el estado se deriva de otros datos, calculalo en el servicio y tipalo en el DTO de respuesta cuando se exponga por la API.
+4. Si el modelado de un concepto sigue pendiente y considerás crear un enum, presentá las opciones de enum y entidad antes de editar esa parte. Explicá qué aporta cada opción e indicá qué módulo sería responsable. Priorizá un módulo existente si le corresponde el concepto. Esperá la decisión para esa parte y avanzá con las tareas independientes.
