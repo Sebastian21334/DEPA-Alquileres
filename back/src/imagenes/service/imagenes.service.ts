@@ -51,7 +51,7 @@ export class ImagenesService {
     });
 
     const guardada = await this.imagenesRepo.conTransaccion(async (imagenes, transaccion) => {
-      await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion);
+      await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion, false);
       nuevaImagen.orden = (await imagenes.buscarUltimoOrden(idPublicacion)) + 1;
       return imagenes.guardar(nuevaImagen);
     });
@@ -70,20 +70,24 @@ export class ImagenesService {
         'No podés eliminar una imagen que no es tuya',
       );
     }
-
-    // Regla de negocio: la publicación debe conservar al menos una imagen.
-    const imagenesDePublicacion = await this.imagenesRepo.buscarPorPublicacion(
-      imagen.publicacion.id,
-    );
-    if (imagenesDePublicacion.length <= 1) {
-      throw new BadRequestException(
-        'Una publicación debe tener al menos una imagen. Subí otra antes de borrar esta.',
-      );
+    if (imagen.publicacion.eliminada) {
+      throw new BadRequestException('No podés modificar las imágenes de una publicación eliminada');
     }
 
-    await this.almacenamientoService.eliminarImagenPropia(imagen.url);
-
-    return this.imagenesRepo.eliminar(imagen);
+    return this.imagenesRepo.conTransaccion(async (imagenes, transaccion) => {
+      await this.publicacionesService.bloquearParaModificacion(imagen.publicacion.id, transaccion, false);
+      // Serializa dos borrados y la baja de la publicación antes de tocar Azure.
+      const actual = await imagenes.buscarPorId(idImagen);
+      if (!actual) throw new NotFoundException('Imagen no encontrada');
+      const imagenesDePublicacion = await imagenes.buscarPorPublicacion(imagen.publicacion.id);
+      if (imagenesDePublicacion.length <= 1) {
+        throw new BadRequestException(
+          'Una publicación debe tener al menos una imagen. Subí otra antes de borrar esta.',
+        );
+      }
+      await this.almacenamientoService.eliminarImagenPropia(actual.url);
+      return imagenes.eliminar(actual);
+    });
   }
 
   async ordenar(idPublicacion: number, ids: number[], anunciante: Anunciante) {
@@ -92,7 +96,7 @@ export class ImagenesService {
       'No podés ordenar imágenes de una publicación que no es tuya',
     );
     return this.imagenesRepo.conTransaccion(async (imagenes, transaccion) => {
-      await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion);
+      await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion, false);
       const actuales = await imagenes.buscarPorPublicacion(idPublicacion);
       const porId = new Map(actuales.map((imagen) => [imagen.id, imagen]));
       if (
@@ -108,7 +112,8 @@ export class ImagenesService {
   }
 
   /** Lista las imagenes asociadas a una publicacion. */
-  async listarPorPublicacion(idPublicacion: number) {
+  async listarPorPublicacion(idPublicacion: number, idUsuario?: number) {
+    await this.publicacionesService.buscarPublicaPorId(idPublicacion, idUsuario);
     const imagenes = await this.imagenesRepo.buscarPorPublicacion(idPublicacion);
     for (const imagen of imagenes) {
       if (imagen.publicacion) {

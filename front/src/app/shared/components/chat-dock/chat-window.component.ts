@@ -46,7 +46,11 @@ export class ChatWindowComponent implements OnInit {
   protected readonly error = signal('');
   protected texto = '';
   protected readonly miId = computed(() => Number(this.auth.currentUser()?.sub));
+  protected readonly publicacionEliminada = computed(
+    () => this.mensajes()[0]?.publicacion.eliminada === true,
+  );
   protected readonly contactoSuspendido = computed(() => {
+    if (this.publicacionEliminada()) return true;
     const mensaje = this.mensajes()[0];
     if (!mensaje) return false;
     const otro = mensaje.origenUsuario.id === this.miId()

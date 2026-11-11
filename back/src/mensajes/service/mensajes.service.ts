@@ -49,6 +49,11 @@ export class MensajesService {
     const publicacion = await this.publicacionesService.buscarPorId(
       dto.id_publicacion,
     );
+    if (publicacion.eliminada) {
+      throw new ConflictException(
+        'No se pueden enviar mensajes: esta publicación ha sido eliminada',
+      );
+    }
 
     if (!this.publicacionesService.perteneceA(publicacion, dto.id_destino_usuario)) {
       const esAnunciante = this.publicacionesService.perteneceA(publicacion, idUsuarioOrigen);
@@ -75,40 +80,44 @@ export class MensajesService {
       }
     }
 
-    const [destinatario, remitente] = await Promise.all([
-      this.usuariosService.buscarPorId(dto.id_destino_usuario),
-      this.usuariosService.buscarPorId(idUsuarioOrigen),
-    ]);
-    if (!destinatario) {
-      throw new NotFoundException('El destinatario no existe');
-    }
-    // Se decide por la cuenta del destinatario y no por publicacion.activa:
-    // un Anunciante activo puede pausar una publicación y sus Inquilinos con
-    // reserva tienen que poder seguir escribiéndole.
-    if (!destinatario.activa) {
-      throw new ConflictException(
-        'No podés enviarle mensajes a esta cuenta porque fue dada de baja',
-      );
-    }
-    if (destinatario.bloqueado || !remitente?.activa || remitente.bloqueado) {
-      throw new ConflictException(
-        'El contacto está suspendido porque una cuenta está bloqueada o inactiva. Para reservas anteriores, contactá a soporte.',
-      );
-    }
+    const { guardado, destinatario, remitente } = await this.mensajeRepository.conTransaccion(async (mensajes, transaccion) => {
+      await this.publicacionesService.bloquearParaModificacion(dto.id_publicacion, transaccion, false);
+      const [destinatario, remitente] = await Promise.all([
+        this.usuariosService.buscarPorId(dto.id_destino_usuario, transaccion),
+        this.usuariosService.buscarPorId(idUsuarioOrigen, transaccion),
+      ]);
+      if (!destinatario) {
+        throw new NotFoundException('El destinatario no existe');
+      }
+      // Se decide por la cuenta del destinatario y no por publicacion.activa:
+      // un Anunciante activo puede pausar una publicación y sus Inquilinos con
+      // reserva tienen que poder seguir escribiéndole.
+      if (!destinatario.activa) {
+        throw new ConflictException(
+          'No podés enviarle mensajes a esta cuenta porque fue dada de baja',
+        );
+      }
+      if (destinatario.bloqueado || !remitente?.activa || remitente.bloqueado) {
+        throw new ConflictException(
+          'El contacto está suspendido porque una cuenta está bloqueada o inactiva. Para reservas anteriores, contactá a soporte.',
+        );
+      }
 
-    const mensaje = this.mensajeRepository.crear({
-      texto: dto.texto,
-      fecha: new Date(),
-      leido: false,
-      fecha_lectura: null,
-      origenUsuario: Object.assign(new Usuario(), { id: idUsuarioOrigen }),
-      destinoUsuario: Object.assign(new Usuario(), {
-        id: dto.id_destino_usuario,
-      }),
-      publicacion: publicacion,
+      const mensaje = mensajes.crear({
+        texto: dto.texto,
+        fecha: new Date(),
+        leido: false,
+        fecha_lectura: null,
+        origenUsuario: Object.assign(new Usuario(), { id: idUsuarioOrigen }),
+        destinoUsuario: Object.assign(new Usuario(), {
+          id: dto.id_destino_usuario,
+        }),
+        publicacion: publicacion,
+      });
+
+      const guardado = await mensajes.guardar(mensaje);
+      return { guardado, destinatario, remitente };
     });
-
-    const guardado = await this.mensajeRepository.guardar(mensaje);
     // El destinatario está activo (se validó arriba), así que tiene email vigente.
     if (remitente && destinatario.email) {
       try {

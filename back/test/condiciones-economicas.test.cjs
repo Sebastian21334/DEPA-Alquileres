@@ -126,6 +126,29 @@ test('bloquear impide nuevos presupuestos y checkout con presupuesto anterior', 
   sinOperaciones(e.estado);
 });
 
+test('eliminar impide nuevos presupuestos y checkout incluso con presupuesto anterior', async () => {
+  const e = escenario();
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  e.publicacion.eliminada = true;
+  await assert.rejects(e.presupuestos.cotizar(solicitud, USUARIO), /no admite reservas/);
+  await assert.rejects(
+    e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO),
+    /no está disponible/,
+  );
+  sinOperaciones(e.estado);
+});
+
+test('eliminar entre cotización y bloqueo transaccional impide crear la reserva', async () => {
+  const e = escenario();
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  e.estado.alBloquear = () => { e.publicacion.eliminada = true; };
+  await assert.rejects(
+    e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO),
+    /publicación cambió/,
+  );
+  sinOperaciones(e.estado);
+});
+
 for (const token of [undefined, null, '', 123]) {
   test(`checkout rechaza presupuesto ausente o invalido: ${token}`, async () => {
     const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });

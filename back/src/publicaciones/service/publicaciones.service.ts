@@ -24,6 +24,8 @@ import { Publicacion } from '../entity/publicacion.entity';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import type { IMailService } from '../../mail/mail.interface';
 import type { EntityManager } from 'typeorm';
+import { EstadoPagoReserva } from '../../catalogos/estados';
+import { fechaArgentina } from '../../common/utils/fechas';
 
 @Injectable()
 export class PublicacionesService {
@@ -81,15 +83,32 @@ export class PublicacionesService {
   }
 
   /** El acceso interno conserva el historial; el enlace público respeta el bloqueo. */
-  async buscarPublicaPorId(id: number) {
+  async buscarPublicaPorId(id: number, idUsuario?: number) {
     const publicacion = await this.buscarPorId(id);
+    if (publicacion.eliminada) {
+      if (!idUsuario || !await this.tieneReservaVigente(id, idUsuario))
+        throw new NotFoundException('Publicación no disponible');
+      return publicacion;
+    }
     if (!this.cuentaAnuncianteHabilitada(publicacion))
       throw new NotFoundException('Publicación no disponible');
     return publicacion;
   }
 
+  private tieneReservaVigente(idPublicacion: number, idUsuario: number): Promise<boolean> {
+    const ahora = new Date();
+    return this.publicacionesRepo.existeReserva({
+      idPublicacion, idUsuario, fechaFinDesde: fechaArgentina(ahora),
+      cancelada: false, finalizada: false,
+      pagos: [
+        { estado: EstadoPagoReserva.APROBADO },
+        { estado: EstadoPagoReserva.PENDIENTE, venceDespues: ahora },
+      ],
+    });
+  }
+
   esVisible(publicacion: Publicacion): boolean {
-    return publicacion.activa && this.cuentaAnuncianteHabilitada(publicacion) &&
+    return !publicacion.eliminada && publicacion.activa && this.cuentaAnuncianteHabilitada(publicacion) &&
       !publicacion.motivo_baja_admin && (publicacion.imagenes?.length ?? 0) > 0;
   }
 
@@ -123,8 +142,9 @@ export class PublicacionesService {
     return this.publicacionesRepo.bloquearPorAnunciante(idUsuario, transaccion);
   }
 
-  async bloquearParaModificacion(id: number, transaccion: EntityManager): Promise<void> {
-    if (!(await this.publicacionesRepo.bloquearPorId(id, transaccion))) {
+  async bloquearParaModificacion(id: number, transaccion: EntityManager, permitirEliminada = true): Promise<void> {
+    const actual = await this.publicacionesRepo.bloquearPorId(id, transaccion);
+    if (!actual || (!permitirEliminada && actual.eliminada)) {
       throw new NotFoundException('Publicación no encontrada');
     }
   }
@@ -145,6 +165,8 @@ export class PublicacionesService {
     const publicacion = await this.buscarPorId(id);
     if (!this.perteneceA(publicacion, idUsuario))
       throw new ForbiddenException(mensaje);
+    if (publicacion.eliminada)
+      throw new NotFoundException('La publicación ha sido eliminada');
     return publicacion;
   }
 
@@ -159,7 +181,7 @@ export class PublicacionesService {
 
   /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
   async activar(publicacion: Publicacion) {
-    if (publicacion.activa || publicacion.motivo_baja_admin)
+    if (publicacion.eliminada || publicacion.activa || publicacion.motivo_baja_admin)
       return;
     // Se actualiza solo la columna: guardar la entidad completa haría que TypeORM
     // sincronice publicacion.imagenes (leída antes de subir la foto, vacía) y
@@ -210,7 +232,7 @@ export class PublicacionesService {
       soloActivas,
     );
     // El dueño ve todas (para poder completarlas); la vista pública solo las que cumplen la regla.
-    return publicaciones.filter((p) => this.cuentaAnuncianteHabilitada(p) &&
+    return publicaciones.filter((p) => !p.eliminada && this.cuentaAnuncianteHabilitada(p) &&
       (!soloActivas || this.esVisible(p)))
       .map((publicacion) => this.prepararRespuesta(publicacion));
   }
@@ -261,9 +283,12 @@ export class PublicacionesService {
           : await this.ubicacionService.getCiudadPorId(dto.idCiudad),
     };
     const informados = Object.entries(cambios).filter(([, valor]) => valor !== undefined);
-    Object.assign(publicacion, Object.fromEntries(informados));
-
-    return this.prepararRespuesta(await this.publicacionesRepo.guardar(publicacion));
+    const datos = Object.fromEntries(informados);
+    // Un UPDATE parcial no puede restaurar eliminada=false desde una lectura anterior.
+    if (informados.length && !await this.publicacionesRepo.actualizarSiNoEliminada(id, datos)) {
+      throw new NotFoundException('La publicación ha sido eliminada');
+    }
+    return this.prepararRespuesta(Object.assign(publicacion, datos));
   }
 
   /** Incluye publicaciones activas e inactivas de todos los anunciantes. */
@@ -306,6 +331,8 @@ export class PublicacionesService {
       anuncianteQueOpera.idUsuario,
       'No podés eliminar una publicación que no es tuya',
     );
+    publicacion.activa = false;
+    publicacion.eliminada = true;
     return this.prepararRespuesta(await this.publicacionesRepo.eliminar(publicacion));
   }
 }

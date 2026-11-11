@@ -1,12 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, type EntityManager } from 'typeorm';
 import { Mensaje } from '../entity/mensaje.entity';
 import { IMensajeRepository } from './mensaje.repository.interface';
 
 @Injectable()
 export class MensajeRepository implements IMensajeRepository {
   constructor(@InjectRepository(Mensaje) private readonly repository: Repository<Mensaje>) {}
+
+  conTransaccion<T>(operacion: (mensajes: IMensajeRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.repository.manager.transaction((transaccion) =>
+      operacion(new MensajeRepository(transaccion.getRepository(Mensaje)), transaccion),
+    );
+  }
 
   crear(datos: Partial<Mensaje>): Mensaje {
     return this.repository.create(datos);

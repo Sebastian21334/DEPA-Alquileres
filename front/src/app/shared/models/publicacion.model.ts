@@ -14,6 +14,7 @@ export interface Publicacion {
   fecha_publicacion: string;
   precio: number;
   activa: boolean;
+  eliminada?: boolean;
   motivo_baja_admin?: string | null;
   visualizaciones?: number;
   /** Cantidad de reservas no canceladas; llega desde GET /publicaciones/destacadas. */

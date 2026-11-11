@@ -1,6 +1,8 @@
 import { Mensaje } from '../entity/mensaje.entity';
+import type { EntityManager } from 'typeorm';
 
 export interface IMensajeRepository {
+  conTransaccion<T>(operacion: (mensajes: IMensajeRepository, transaccion: EntityManager) => Promise<T>): Promise<T>;
   crear(datos: Partial<Mensaje>): Mensaje;
   guardar(mensaje: Mensaje): Promise<Mensaje>;
   existeConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<boolean>;

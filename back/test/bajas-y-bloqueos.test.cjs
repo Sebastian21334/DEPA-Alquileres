@@ -260,11 +260,13 @@ function servicioMensajes(usuarios) {
   const publicacion = { id: 10, titulo: 'Casa', activa: false, anunciante: { idUsuario: 2 } };
   const servicio = new MensajesService(
     {
+      conTransaccion: async (accion) => accion({ crear: (datos) => datos,
+        guardar: async (mensaje) => { guardados.push(mensaje); return mensaje; } }, {}),
       crear: (datos) => datos,
       guardar: async (mensaje) => { guardados.push(mensaje); return mensaje; },
       existeConversacion: async () => true,
     },
-    new PublicacionesService({ buscarPorId: async () => publicacion }),
+    new PublicacionesService({ buscarPorId: async () => publicacion, bloquearPorId: async () => publicacion }),
     new UsuariosService({ buscarPorId: async (id) => usuarios[id] ?? null }),
     { existeReservaAprobada: async () => true },
     { enviarMensajeNuevo: async (email) => { correos.push(email); } },

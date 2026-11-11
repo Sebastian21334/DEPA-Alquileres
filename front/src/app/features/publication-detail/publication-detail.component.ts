@@ -152,7 +152,7 @@ export class PublicationDetailComponent {
               next: (items) => this.activeCount.set(items.length),
             });
           }
-          if (this.esTemporaria()) {
+          if (this.esTemporaria() && !publication.eliminada) {
             this.loadAvailability(publication.id);
           }
         },
@@ -161,6 +161,7 @@ export class PublicationDetailComponent {
   }
 
   private registerView(publication: Publicacion): void {
+    if (publication.eliminada) return;
     const ownerId = publication.anunciante?.usuario?.id ?? publication.anunciante?.idUsuario;
     if (ownerId === Number(this.auth.currentUser()?.sub)) return;
     const key = `depa:viewed:${publication.id}`;
@@ -204,6 +205,7 @@ export class PublicationDetailComponent {
   }
 
   protected chatear(item: Publicacion): void {
+    if (item.eliminada) return;
     const usuario = item.anunciante?.usuario;
     if (!usuario) return;
     if (!this.auth.isAuthenticated) {
@@ -220,7 +222,7 @@ export class PublicationDetailComponent {
   }
 
   protected toggleFavorite(item: Publicacion): void {
-    if (this.savingFavorite()) return;
+    if (item.eliminada || this.savingFavorite()) return;
     if (!this.auth.isAuthenticated) {
       this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });
       return;
@@ -257,6 +259,7 @@ export class PublicationDetailComponent {
   }
 
   protected whatsappUrl(item: Publicacion): string | null {
+    if (item.eliminada) return null;
     const phone = item.anunciante?.numero_contacto || item.anunciante?.usuario?.telefono;
     const digits = phone?.replace(/\D/g, '');
     return digits
@@ -272,6 +275,7 @@ export class PublicationDetailComponent {
   }
 
   protected openPayment(): void {
+    if (this.publication()?.eliminada) return;
     this.bookingError.set('');
     if (!this.auth.isAuthenticated) {
       this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });
@@ -304,7 +308,7 @@ export class PublicationDetailComponent {
     const item = this.publication(),
       inicio = this.selectedStart(),
       fin = this.selectedEnd();
-    if (!item || !inicio || !fin || this.processingPayment()) return;
+    if (!item || item.eliminada || !inicio || !fin || this.processingPayment()) return;
     this.consultaPresupuesto?.unsubscribe();
     this.presupuesto.set(null);
     this.aceptaConversion.set(false);
@@ -343,7 +347,7 @@ export class PublicationDetailComponent {
     const item = this.publication();
     const start = this.selectedStart();
     const end = this.selectedEnd();
-    if (!item || !start || !end || this.processingPayment()) return;
+    if (!item || item.eliminada || !start || !end || this.processingPayment()) return;
 
     const presupuesto = this.presupuesto();
     if (!presupuesto || this.cotizando()) return;

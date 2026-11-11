@@ -9,7 +9,7 @@ export interface Mensaje {
   fecha_lectura: string | null;
   origenUsuario: Usuario;
   destinoUsuario: Usuario;
-  publicacion: { id: number; titulo: string };
+  publicacion: { id: number; titulo: string; eliminada?: boolean };
 }
 
 // Una fila de la bandeja: GET /mensajes agrupa por publicación + interlocutor.

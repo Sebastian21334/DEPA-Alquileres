@@ -55,8 +55,8 @@ export class UsuariosService {
   }
 
   /** Busca un usuario por su clave primaria. */
-  async buscarPorId(id: number): Promise<Usuario | null> {
-    return this.usuariosRepo.buscarPorId(id);
+  async buscarPorId(id: number, transaccion?: EntityManager): Promise<Usuario | null> {
+    return this.usuariosRepo.buscarPorId(id, transaccion);
   }
 
   async bloquearParaAltaAnunciante(idUsuario: number, transaccion: EntityManager): Promise<Usuario> {

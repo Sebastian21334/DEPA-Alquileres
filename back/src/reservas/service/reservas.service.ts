@@ -165,7 +165,7 @@ export class ReservasService
     const publicacion = await this.publicacionesService.buscarPorId(
       dto.id_publicacion,
     );
-    if (!publicacion.activa || !this.publicacionesService.cuentaAnuncianteHabilitada(publicacion)) {
+    if (publicacion.eliminada || !publicacion.activa || !this.publicacionesService.cuentaAnuncianteHabilitada(publicacion)) {
       throw new BadRequestException(
         'No se puede reservar: la publicación no está disponible',
       );
@@ -243,6 +243,7 @@ export class ReservasService
         }
         if (
           !actual?.activa ||
+          actual.eliminada ||
           !this.publicacionesService.cuentaAnuncianteHabilitada(actual) ||
           Number(actual.precio) !== precioDiario ||
           monedaActual !== moneda

@@ -36,6 +36,10 @@ export class Publicacion {
   @Column({ name: 'activa', type: 'boolean', default: false })
   activa: boolean;
 
+  // Conserva las relaciones de las reservas existentes.
+  @Column({ name: 'eliminada', type: 'boolean', default: false })
+  eliminada: boolean;
+
   @Column({
     name: 'motivo_baja_admin',
     type: 'varchar',
