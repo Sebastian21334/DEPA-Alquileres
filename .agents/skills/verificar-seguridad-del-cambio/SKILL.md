@@ -17,4 +17,8 @@ Seguí el flujo afectado desde la entrada hasta la operación y su resultado. Id
 
 Durante una implementación, corregí los problemas de seguridad del flujo afectado dentro del alcance acordado. En una revisión, informá cada hallazgo con su ubicación, impacto y escenario.
 
-Mantené activas las validaciones y los permisos durante la implementación y las pruebas. Ejecutá las comprobaciones pertinentes. Si cambia una validación o un permiso, verificá un caso permitido y uno rechazado. Si queda un riesgo que impide entregar el cambio de forma segura, indicá qué falta resolver.
+Mantené activas las validaciones y los permisos durante la implementación y las pruebas. Si cambia una validación o un permiso, probá el flujo con un caso permitido y uno rechazado. Si hay un endpoint para ese flujo, ejecutá los casos a través de ese endpoint.
+
+Si cambia el contrato HTTP, verificá el código de estado y el cuerpo de la respuesta. Cuando el frontend consuma ese contrato, comprobá también que el usuario pueda completar la acción esperada.
+
+Si queda un riesgo que impide entregar el cambio de forma segura, indicá qué falta resolver.
