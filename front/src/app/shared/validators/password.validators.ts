@@ -3,7 +3,7 @@ import { AbstractControl, ValidationErrors, ValidatorFn } from '@angular/forms';
 export const MENSAJE_CONTRASENIA_SEGURA =
   'Usá al menos 12 caracteres, con una letra, un número y un símbolo, sin espacios ni caracteres invisibles. Máximo 72 bytes en UTF-8.';
 
-// Misma política que ContraseniaSegura en los DTO de registro y restablecimiento.
+// Misma política de contraseñas que los DTO de autenticación del backend.
 export function passwordSeguraValidator(): ValidatorFn {
   const encoder = new TextEncoder();
 

@@ -32,7 +32,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         }
       }
 
-      return throwError(() => new ApiError(error.status, mensaje));
+      const codigo = error.error?.codigo;
+      return throwError(() => new ApiError(error.status, mensaje, typeof codigo === 'string' ? codigo : undefined));
     }),
   );
 };

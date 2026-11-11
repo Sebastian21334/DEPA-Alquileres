@@ -1,74 +1,46 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Pago } from '../../pagos/entity/pago.entity';
-import {
-  EstadoLiquidacionReserva,
-  Reserva,
-} from '../../reservas/entity/reserva.entity';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
+import { AmbitoEstado, EstadoDisputa } from '../../catalogos/estados';
+import { PagosRegistroService } from '../../pagos/service/pagos-registro.service';
 import {
   OrigenReembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
-import {
-  Disputa,
-  EstadoDisputa,
-  OrigenDisputa,
-} from '../entity/disputa.entity';
+import { type Disputa, OrigenDisputa } from '../entity/disputa.entity';
 import { ResolverDisputaDto } from '../dto/resolver-disputa.dto';
+import {
+  DISPUTAS_REPOSITORY,
+  type IDisputasRepository,
+} from '../repository/disputas.repository.interface';
 
 @Injectable()
 export class DisputasService {
-  constructor(
-    @InjectRepository(Disputa)
-    private readonly disputas: Repository<Disputa>,
-    @InjectRepository(Reserva)
-    private readonly reservas: Repository<Reserva>,
-    @InjectRepository(Pago)
-    private readonly pagos: Repository<Pago>,
-    private readonly reembolsos: ReembolsosService,
-    private readonly reservasService: ReservasService,
-  ) {}
+  constructor(@Inject(DISPUTAS_REPOSITORY) private readonly disputas: IDisputasRepository, private readonly pagos: PagosRegistroService, private readonly reembolsos: ReembolsosService, private readonly reservasService: ReservasService, private readonly catalogos: CatalogosService) {}
 
   /**
    * Registra el contracargo y congela la liquidación. No cancela la reserva
    * ni libera fechas: primero hay que preservar la evidencia y resolver.
    */
-  async registrarContracargo(datos: {
-    idReserva: number;
-    idPago: number;
-    chargebackId: string;
-    importe: number;
-    motivo?: string;
-  }): Promise<Disputa> {
-    const existente = await this.disputas.findOne({
-      where: { chargeback_id: datos.chargebackId },
-    });
+  async registrarContracargo(datos: { idReserva: number; idPago: number; chargebackId: string; importe: number; motivo?: string; }): Promise<Disputa> {
+    const existente = await this.disputas.buscarPorContracargo(datos.chargebackId);
     if (existente) return existente;
 
-    const reserva = await this.reservas.findOne({
-      where: { id: datos.idReserva },
-      relations: {
-        usuario: true,
-        publicacion: { anunciante: { usuario: true } },
-      },
-    });
-    if (!reserva)
-      throw new NotFoundException('No se encontró la reserva del contracargo');
-    const pago = await this.pagos.findOne({ where: { id: datos.idPago } });
-    if (!pago) throw new NotFoundException('No se encontró el pago');
+    const reserva = await this.reservasService.buscarParaContracargo(datos.idReserva);
+    const pago = await this.pagos.buscarPorId(datos.idPago);
+    const estado = await this.catalogos.obtenerEstado(AmbitoEstado.DISPUTA, EstadoDisputa.ABIERTA);
 
-    const disputa = this.disputas.create({
+    const disputa = this.disputas.crear({
       reserva,
       pago,
       origen: OrigenDisputa.CONTRACARGO,
-      estado: EstadoDisputa.ABIERTA,
+      estado,
       importe: datos.importe,
       moneda: pago.currency,
       motivo:
@@ -85,64 +57,30 @@ export class DisputasService {
       resuelto_en: null,
     });
 
-    pago.status = 'charged_back';
-    pago.chargeback_id = datos.chargebackId;
-    await this.pagos.save(pago);
-
-    reserva.marcarContracargo();
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    reserva.observacion_liquidacion =
-      'Contracargo abierto: liquidación congelada hasta su resolución';
-    await this.reservas.save(reserva);
-    return this.disputas.save(disputa);
+    await this.pagos.marcarContracargo(pago, datos.chargebackId);
+    await this.reservasService.congelarPorContracargo(reserva);
+    return this.disputas.guardar(disputa);
   }
 
-  async listarAdministracion(): Promise<Disputa[]> {
-    return this.disputas.find({
-      relations: {
-        reserva: {
-          usuario: true,
-          publicacion: { anunciante: { usuario: true } },
-        },
-        pago: true,
-        resuelto_por: true,
-      },
-      order: { id: 'DESC' },
-      take: 200,
-    });
+  async listarAdministracion() {
+    const disputas = await this.disputas.listarAdministracion();
+    return disputas.map((disputa) => this.respuestaAdministracion(disputa));
   }
 
-  async resolver(
-    id: number,
-    dto: ResolverDisputaDto,
-    idAdmin: number,
-  ): Promise<Disputa> {
-    const disputa = await this.disputas.findOne({
-      where: { id },
-      relations: {
-        reserva: {
-          usuario: true,
-          publicacion: { anunciante: { usuario: true } },
-        },
-        pago: true,
-      },
-    });
+  async resolver(id: number, dto: ResolverDisputaDto, idAdmin: number) {
+    const disputa = await this.disputas.buscarPorId(id);
     if (!disputa) throw new NotFoundException('Disputa no encontrada');
-    if ([EstadoDisputa.GANADA, EstadoDisputa.PERDIDA].includes(disputa.estado))
+    if (disputa.estado.codigo === EstadoDisputa.GANADA || disputa.estado.codigo === EstadoDisputa.PERDIDA)
       throw new ConflictException('La disputa ya fue resuelta');
 
+    const estado = await this.catalogos.obtenerEstado(AmbitoEstado.DISPUTA, dto.resultado);
     const { reserva, pago } = disputa;
-    if (dto.resultado === 'GANADA') {
-      pago.status = 'approved';
-      pago.chargeback_id = null;
-      await this.pagos.save(pago);
-      reserva.restaurarPagoAprobado();
-      reserva.estado_liquidacion =
-        (disputa.estado_liquidacion_previo as EstadoLiquidacionReserva) ??
-        EstadoLiquidacionReserva.RETENIDO;
-      reserva.observacion_liquidacion = 'Contracargo resuelto a favor del Anunciante';
-      await this.reservas.save(reserva);
-      disputa.estado = EstadoDisputa.GANADA;
+    if (dto.resultado === EstadoDisputa.GANADA) {
+      await this.pagos.restaurarPagoAprobado(pago);
+      await this.reservasService.restaurarPorContracargoGanado(
+        reserva,
+        disputa.estado_liquidacion_previo,
+      );
       disputa.resolucion = dto.observacion?.trim() || 'Contracargo ganado';
     } else {
       const importe = Number(disputa.importe);
@@ -166,12 +104,20 @@ export class DisputasService {
       // El orquestador aplica el estado de la reserva y libera fechas solo
       // cuando el contracargo perdido ocurre antes del inicio.
       await this.reservasService.aplicarReembolsoConfirmado(reembolso.id);
-      disputa.estado = EstadoDisputa.PERDIDA;
       disputa.resolucion = dto.observacion?.trim() || 'Contracargo perdido';
     }
 
+    disputa.estado = estado;
     disputa.resuelto_por = { id: idAdmin } as never;
     disputa.resuelto_en = new Date();
-    return this.disputas.save(disputa);
+    return this.respuestaAdministracion(await this.disputas.guardar(disputa));
+  }
+
+  private respuestaAdministracion({ estado, ...disputa }: Disputa) {
+    return {
+      ...disputa,
+      estado: estado.codigo,
+      reserva: this.reservasService.prepararRespuesta(disputa.reserva),
+    };
   }
 }

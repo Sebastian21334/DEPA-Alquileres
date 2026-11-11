@@ -5,10 +5,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
-import {
-  ARCHIVO_REPOSITORY,
-  type IArchivoRepository,
-} from '../../common/almacenamiento/archivo.repository.interface';
+import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import {
   VERIFICACION_REPOSITORY,
   type IVerificacionRepository,
@@ -22,11 +19,7 @@ export class EliminacionDocumentosService
   private temporizador?: ReturnType<typeof setInterval>;
   private ejecutando = false;
 
-  constructor(
-    @Inject(VERIFICACION_REPOSITORY)
-    private readonly repo: IVerificacionRepository,
-    @Inject(ARCHIVO_REPOSITORY) private readonly archivos: IArchivoRepository,
-  ) {}
+  constructor(@Inject(VERIFICACION_REPOSITORY) private readonly repo: IVerificacionRepository, private readonly almacenamientoService: AlmacenamientoService) {}
 
   onModuleInit(): void {
     void this.ejecutar();
@@ -38,12 +31,35 @@ export class EliminacionDocumentosService
     if (this.temporizador) clearInterval(this.temporizador);
   }
 
-  async ejecutar(): Promise<void> {
+  async ejecutar(ahora = new Date()): Promise<void> {
     if (this.ejecutando) return;
     this.ejecutando = true;
     try {
-      const resultado = await this.repo.procesarEliminacionesPendientes((url) =>
-        this.archivos.eliminarDocumentoPropio(url),
+      const resultado = await this.repo.conEliminacionesPendientes(
+        async (documentos, persistencia) => {
+          let eliminados = 0;
+          let fallidos = 0;
+          for (const documento of documentos) {
+            try {
+              await this.almacenamientoService.eliminarDocumentoPropio(documento.url);
+            } catch {
+              documento.intentos += 1;
+              const espera = Math.min(
+                3_600_000,
+                30_000 * 2 ** Math.min(documento.intentos - 1, 7),
+              );
+              documento.proximo_intento = new Date(ahora.getTime() + espera);
+              await persistencia.guardar(documento);
+              fallidos += 1;
+              continue;
+            }
+            // Repetir un borrado tras un COMMIT incierto es seguro.
+            await persistencia.eliminar(documento.id);
+            eliminados += 1;
+          }
+          return { eliminados, fallidos };
+        },
+        ahora,
       );
       if (resultado.fallidos) {
         this.logger.warn(

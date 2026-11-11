@@ -188,9 +188,7 @@ export class ReservationService {
     return this.http.post<PresupuestoReserva>(`${this.paymentUrl}/presupuesto`, payload);
   }
 
-  createCheckout(
-    payload: CrearReservaPayload & { presupuesto_token: string },
-  ): Observable<CheckoutCreado> {
+  createCheckout(payload: CrearReservaPayload & { presupuesto_token: string }): Observable<CheckoutCreado> {
     return this.http.post<CheckoutCreado>(`${this.paymentUrl}/checkout`, payload);
   }
 
@@ -249,11 +247,7 @@ export class ReservationService {
     return this.http.get<Reembolso[]>(`${this.baseUrl}/${id}/reembolsos`);
   }
 
-  createClaim(payload: {
-    id_reserva: number;
-    categoria: Reclamo['categoria'];
-    descripcion: string;
-  }): Observable<Reclamo> {
+  createClaim(payload: { id_reserva: number; categoria: Reclamo['categoria']; descripcion: string; }): Observable<Reclamo> {
     return this.http.post<Reclamo>(`${environment.apiUrl}/reclamos`, payload);
   }
 

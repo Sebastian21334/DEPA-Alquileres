@@ -8,12 +8,7 @@ import { IUbicacionRepository } from './ubicacion.repository.interface';
 
 @Injectable()
 export class UbicacionRepository implements IUbicacionRepository {
-  constructor(
-    @InjectRepository(Provincia)
-    private readonly provinciaRepo: Repository<Provincia>,
-    @InjectRepository(Ciudad)
-    private readonly ciudadRepo: Repository<Ciudad>,
-  ) {}
+  constructor(@InjectRepository(Provincia) private readonly provinciaRepo: Repository<Provincia>, @InjectRepository(Ciudad) private readonly ciudadRepo: Repository<Ciudad>) {}
 
   buscarTodasProvincias(): Promise<Provincia[]> {
     return this.provinciaRepo.find();
@@ -28,10 +23,7 @@ export class UbicacionRepository implements IUbicacionRepository {
     return this.provinciaRepo.save(provincia);
   }
 
-  async actualizarProvincia(
-    id: number,
-    datos: Partial<Provincia>,
-  ): Promise<Provincia | null> {
+  async actualizarProvincia(id: number, datos: Partial<Provincia>): Promise<Provincia | null> {
     await this.provinciaRepo.update(id, datos);
     return this.buscarProvinciaPorId(id);
   }
@@ -59,10 +51,7 @@ export class UbicacionRepository implements IUbicacionRepository {
     return this.ciudadRepo.save(ciudad);
   }
 
-  async actualizarCiudad(
-    id: number,
-    datos: Partial<Ciudad>,
-  ): Promise<Ciudad | null> {
+  async actualizarCiudad(id: number, datos: Partial<Ciudad>): Promise<Ciudad | null> {
     await this.ciudadRepo.update(id, datos);
     return this.buscarCiudadPorId(id);
   }

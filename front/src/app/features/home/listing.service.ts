@@ -22,23 +22,7 @@ export class ListingService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/publicaciones`;
 
-  getActivas(
-    opciones: {
-      pagina?: number;
-      limite?: number;
-      categoria?: string;
-      orden?: OrdenPublicaciones;
-      busqueda?: string;
-      idProvincia?: number;
-      idsCiudad?: number[];
-      idsTipoPropiedad?: number[];
-      idsTipoMoneda?: number[];
-      precioMin?: number | null;
-      precioMax?: number | null;
-      superficieMin?: number | null;
-      ambientes?: string[];
-    } = {},
-  ): Observable<PaginaPublicaciones> {
+  getActivas(opciones: { pagina?: number; limite?: number; categoria?: string; orden?: OrdenPublicaciones; busqueda?: string; idProvincia?: number; idsCiudad?: number[]; idsTipoPropiedad?: number[]; idsTipoMoneda?: number[]; precioMin?: number | null; precioMax?: number | null; superficieMin?: number | null; ambientes?: string[]; } = {}): Observable<PaginaPublicaciones> {
     let params = new HttpParams();
     if (opciones.pagina) params = params.set('pagina', opciones.pagina);
     if (opciones.limite) params = params.set('limite', opciones.limite);

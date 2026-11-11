@@ -1,12 +1,13 @@
+import { EstadoVerificacion } from '../../catalogos/estados';
 import {
   type IVerificacionRepository,
   VERIFICACION_REPOSITORY,
 } from '../repository/verificacion.repository.interface';
 import {
+  ANALISIS_FACIAL,
   type AnalisisRostro,
-  type IAnalisisFacialRepository,
-  ANALISIS_FACIAL_REPOSITORY,
-} from '../repository/analisis-facial.repository.interface';
+  type IAnalisisFacial,
+} from '../proveedor/analisis-facial.interface';
 import {
   Inject,
   BadRequestException,
@@ -18,7 +19,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomUUID } from 'node:crypto';
 
-import type { SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
+import { type SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
 
 export type AccionVitalidad =
   'TURN_LEFT' | 'TURN_RIGHT' | 'TILT_HEAD' | 'OPEN_MOUTH';
@@ -57,18 +58,9 @@ export class PruebaVidaService {
   private readonly logger = new Logger(PruebaVidaService.name);
   private readonly umbralCoincidencia = 0.6;
 
-  constructor(
-    private readonly jwtService: JwtService,
-    @Inject(ANALISIS_FACIAL_REPOSITORY)
-    private readonly analisis: IAnalisisFacialRepository,
-    @Inject(VERIFICACION_REPOSITORY)
-    private readonly verificaciones: IVerificacionRepository,
-  ) {}
+  constructor(private readonly jwtService: JwtService, @Inject(ANALISIS_FACIAL) private readonly analisis: IAnalisisFacial, @Inject(VERIFICACION_REPOSITORY) private readonly verificaciones: IVerificacionRepository) {}
 
-  async crearDesafio(
-    idUsuario: number,
-    accionesAnteriores: AccionVitalidad[] = [],
-  ) {
+  async crearDesafio(idUsuario: number, accionesAnteriores: AccionVitalidad[] = []) {
     let instructions: Array<{ type: AccionVitalidad; label: string }> = [];
     // Si el usuario pidió otros gestos, se entrega una secuencia distinta. El
     // backend sigue eligiéndola y firmándola: el cliente no puede inventarla.
@@ -93,7 +85,7 @@ export class PruebaVidaService {
       async (solicitud, persistencia) => {
         if (
           !solicitud ||
-          !solicitud.puedeRecibirDocumentos(solicitud.estaRechazada())
+          !this.puedeRecibirDocumentos(solicitud, solicitud.estado === EstadoVerificacion.RECHAZADA)
         ) {
           throw new ConflictException(
             'La solicitud no admite una nueva prueba de vida',
@@ -107,11 +99,11 @@ export class PruebaVidaService {
             actions: instructions.map(({ type }) => type),
             jti,
             solicitudId: solicitud.id,
-            revision: solicitud.revisionParaPresentacion(),
+            revision: this.revisionParaPresentacion(solicitud),
           } satisfies DesafioPayload,
           { expiresIn: '10m' },
         );
-        solicitud.iniciarPruebaVida(jti);
+        this.iniciarPruebaVida(solicitud, jti);
         await persistencia.guardarSolicitud(solicitud);
         return token;
       },
@@ -138,10 +130,7 @@ export class PruebaVidaService {
    * usuario. Un token vencido no es un error para "cambiar gestos": se emite
    * uno nuevo. Un token válido de otro usuario sí se rechaza.
    */
-  private async leerDesafioParaCambio(
-    challengeToken: string,
-    idUsuario: number,
-  ): Promise<DesafioPayload | null> {
+  private async leerDesafioParaCambio(challengeToken: string, idUsuario: number): Promise<DesafioPayload | null> {
     if (!challengeToken) return null;
     try {
       const payload =
@@ -171,11 +160,7 @@ export class PruebaVidaService {
     }
   }
 
-  async validarVitalidad(
-    idUsuario: number,
-    challengeToken: string,
-    archivos: Record<string, Express.Multer.File[] | undefined> = {},
-  ) {
+  async validarVitalidad(idUsuario: number, challengeToken: string, archivos: Record<string, Express.Multer.File[] | undefined> = {}) {
     const payload = await this.verificarToken<DesafioPayload>(
       challengeToken,
       'face-liveness-challenge',
@@ -287,18 +272,14 @@ export class PruebaVidaService {
       async (solicitud, persistencia) => {
         // Otra validación o un cambio de gestos no puede reutilizar el desafío.
         this.verificarDesafioActual(solicitud, payload);
-        solicitud.validarPruebaVida(livePhotoHash);
+        this.validarPruebaVida(solicitud, livePhotoHash);
         await persistencia.guardarSolicitud(solicitud);
       },
     );
     return { valid: true, verificationToken };
   }
 
-  async verificarCapturaAutorizada(
-    idUsuario: number,
-    verificationToken: string,
-    livePhoto: Buffer,
-  ): Promise<VerificacionPayload> {
+  async verificarCapturaAutorizada(idUsuario: number, verificationToken: string, livePhoto: Buffer): Promise<VerificacionPayload> {
     const payload = await this.verificarToken<VerificacionPayload>(
       verificationToken,
       'face-liveness-verified',
@@ -312,14 +293,68 @@ export class PruebaVidaService {
     return payload;
   }
 
-  private verificarDesafioActual(
-    solicitud: SolicitudVerificacion | null,
-    payload: DesafioPayload,
-  ): asserts solicitud is SolicitudVerificacion {
+  puedeRecibirDocumentos(solicitud: SolicitudVerificacion, reenvio: boolean): boolean {
+    return reenvio
+      ? (solicitud.estado === EstadoVerificacion.RECHAZADA)
+      : solicitud.estado === EstadoVerificacion.BORRADOR;
+  }
+
+  private revisionParaPresentacion(solicitud: SolicitudVerificacion): number {
+    return solicitud.numero_revision + ((solicitud.estado === EstadoVerificacion.RECHAZADA) ? 1 : 0);
+  }
+
+  private iniciarPruebaVida(solicitud: SolicitudVerificacion, desafio: string): void {
+    solicitud.prueba_vida_desafio = desafio;
+    solicitud.prueba_vida_revision = this.revisionParaPresentacion(solicitud);
+    solicitud.prueba_vida_rostro_hash = null;
+    solicitud.prueba_vida_validada_en = null;
+    solicitud.prueba_vida_vence_en = null;
+    solicitud.prueba_vida_consumida_en = null;
+  }
+
+  private desafioPruebaVidaVigente(solicitud: SolicitudVerificacion, desafio: string, revision: number): boolean {
+    return (
+      (solicitud.estado === EstadoVerificacion.BORRADOR || (solicitud.estado === EstadoVerificacion.RECHAZADA)) &&
+      solicitud.prueba_vida_desafio === desafio &&
+      solicitud.prueba_vida_revision === revision &&
+      this.revisionParaPresentacion(solicitud) === revision &&
+      !solicitud.prueba_vida_validada_en &&
+      !solicitud.prueba_vida_consumida_en
+    );
+  }
+
+  private validarPruebaVida(solicitud: SolicitudVerificacion, hash: string, ahora = new Date()): void {
+    solicitud.prueba_vida_rostro_hash = hash;
+    solicitud.prueba_vida_validada_en = ahora;
+    solicitud.prueba_vida_vence_en = new Date(ahora.getTime() + 5 * 60 * 1000);
+  }
+
+  autorizacionPruebaVidaVigente(solicitud: SolicitudVerificacion, desafio: string, revision: number, hash: string, ahora = new Date()): boolean {
+    return (
+      solicitud.prueba_vida_desafio === desafio &&
+      solicitud.prueba_vida_revision === revision &&
+      this.revisionParaPresentacion(solicitud) === revision &&
+      solicitud.prueba_vida_rostro_hash === hash &&
+      !!solicitud.prueba_vida_validada_en &&
+      !!solicitud.prueba_vida_vence_en &&
+      solicitud.prueba_vida_vence_en > ahora &&
+      !solicitud.prueba_vida_consumida_en
+    );
+  }
+
+  tienePruebaVidaPresentada(solicitud: SolicitudVerificacion): boolean {
+    return (
+      !!solicitud.prueba_vida_validada_en &&
+      !!solicitud.prueba_vida_consumida_en &&
+      solicitud.prueba_vida_revision === solicitud.numero_revision
+    );
+  }
+
+  private verificarDesafioActual(solicitud: SolicitudVerificacion | null, payload: DesafioPayload): asserts solicitud is SolicitudVerificacion {
     if (
       !solicitud ||
       solicitud.id !== payload.solicitudId ||
-      !solicitud.desafioPruebaVidaVigente(payload.jti, payload.revision)
+      !this.desafioPruebaVidaVigente(solicitud, payload.jti, payload.revision)
     ) {
       throw new BadRequestException(
         'El desafío de prueba de vida ya fue utilizado o reemplazado',
@@ -327,10 +362,7 @@ export class PruebaVidaService {
     }
   }
 
-  private validarMismaPersona(
-    referencia: AnalisisRostro,
-    candidata: AnalisisRostro,
-  ): void {
+  private validarMismaPersona(referencia: AnalisisRostro, candidata: AnalisisRostro): void {
     const distance = this.analisis.distancia(
       referencia.descriptor,
       candidata.descriptor,
@@ -342,11 +374,7 @@ export class PruebaVidaService {
     }
   }
 
-  private validarAccion(
-    accion: AccionVitalidad,
-    neutral: AnalisisRostro,
-    evidencia: AnalisisRostro,
-  ): void {
+  private validarAccion(accion: AccionVitalidad, neutral: AnalisisRostro, evidencia: AnalisisRostro): void {
     // Los umbrales son algo más tolerantes que los del front (0.07 / 0.18 /
     // 0.45) porque face-api mide con otros landmarks y el frame capturado
     // puede tener menos recorrido que el que vio MediaPipe.
@@ -372,15 +400,7 @@ export class PruebaVidaService {
     }
   }
 
-  private async verificarToken<
-    T extends {
-      sub: number;
-      scope: string;
-      jti: string;
-      solicitudId: number;
-      revision: number;
-    },
-  >(token: string, scope: string, idUsuario: number): Promise<T> {
+  private async verificarToken<T extends { sub: number; scope: string; jti: string; solicitudId: number; revision: number; },>(token: string, scope: string, idUsuario: number): Promise<T> {
     if (!token)
       throw new BadRequestException(
         'Falta la autorización de la prueba de vida',

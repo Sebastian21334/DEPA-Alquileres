@@ -15,12 +15,7 @@ import { MailPlantilla } from '../presentation/mail-plantilla';
 export class MailService implements IMailService {
   private readonly frontendUrl: string;
 
-  constructor(
-    @Inject(CORREO_REPOSITORY)
-    private readonly correos: ICorreoRepository,
-    private readonly plantillas: MailPlantilla,
-    config: ConfigService,
-  ) {
+  constructor(@Inject(CORREO_REPOSITORY) private readonly correos: ICorreoRepository, private readonly plantillas: MailPlantilla, config: ConfigService) {
     this.frontendUrl = config
       .getOrThrow<string>('FRONTEND_URLS')
       .split(',')[0]
@@ -40,10 +35,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarReprogramacionReserva(
-    destinatario: string,
-    detalle: ReprogramacionEmailDetalle,
-  ): Promise<void> {
+  async enviarReprogramacionReserva(destinatario: string, detalle: ReprogramacionEmailDetalle): Promise<void> {
     const dia = (valor: string) =>
       this.plantillas.fecha(new Date(`${valor}T12:00:00Z`));
     await this.enviar(
@@ -89,11 +81,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarResultadoVerificacion(
-    destinatario: string,
-    aprobada: boolean,
-    motivo?: string,
-  ): Promise<void> {
+  async enviarResultadoVerificacion(destinatario: string, aprobada: boolean, motivo?: string): Promise<void> {
     // El mismo método cubre los dos resultados administrativos.
     const asunto = aprobada
       ? 'Verificación de identidad aprobada'
@@ -116,10 +104,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarReservaConfirmada(
-    destinatario: string,
-    detalle: ReservaEmailDetalle,
-  ): Promise<void> {
+  async enviarReservaConfirmada(destinatario: string, detalle: ReservaEmailDetalle): Promise<void> {
     const enlace = `${this.frontendUrl}/reserva/resultado?reserva_id=${detalle.idReserva}`;
     await this.enviar(
       destinatario,
@@ -137,10 +122,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarNuevaReserva(
-    destinatario: string,
-    detalle: ReservaEmailDetalle,
-  ): Promise<void> {
+  async enviarNuevaReserva(destinatario: string, detalle: ReservaEmailDetalle): Promise<void> {
     const enlace = `${this.frontendUrl}/reserva/resultado?reserva_id=${detalle.idReserva}`;
     await this.enviar(
       destinatario,
@@ -158,13 +140,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarMensajeNuevo(
-    destinatario: string,
-    nombreDestinatario: string,
-    nombreRemitente: string,
-    titulo: string,
-    idPublicacion: number,
-  ): Promise<void> {
+  async enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number): Promise<void> {
     await this.enviar(
       destinatario,
       `${nombreRemitente} te envió un mensaje en DEPA`,
@@ -184,11 +160,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarSolicitudParaRevision(
-    destinatarios: string[],
-    nombreSolicitante: string,
-    emailSolicitante: string,
-  ): Promise<void> {
+  async enviarSolicitudParaRevision(destinatarios: string[], nombreSolicitante: string, emailSolicitante: string): Promise<void> {
     await Promise.all(
       destinatarios.map((email) =>
         this.enviar(
@@ -201,11 +173,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarCambioBloqueo(
-    destinatario: string,
-    bloqueado: boolean,
-    motivo?: string,
-  ): Promise<void> {
+  async enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string): Promise<void> {
     const motivoSeguro = motivo
       ? `<p>Motivo: ${this.plantillas.escapar(motivo)}</p>`
       : '';
@@ -224,11 +192,7 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarBajaPublicacion(
-    destinatario: string,
-    titulo: string,
-    motivo: string,
-  ): Promise<void> {
+  async enviarBajaPublicacion(destinatario: string, titulo: string, motivo: string): Promise<void> {
     await this.enviar(
       destinatario,
       'Tu publicación fue desactivada por un administrador',
@@ -240,12 +204,7 @@ export class MailService implements IMailService {
     );
   }
 
-  private enviar(
-    destinatario: string,
-    asunto: string,
-    html: string,
-    preheader = 'Tenés una novedad en tu cuenta de DEPA.',
-  ): Promise<void> {
+  private enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.'): Promise<void> {
     return this.correos.enviar({
       destinatario,
       asunto,

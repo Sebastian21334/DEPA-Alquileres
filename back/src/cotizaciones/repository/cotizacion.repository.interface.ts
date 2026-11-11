@@ -7,13 +7,7 @@ export interface ICotizacionRepository {
   ultimaConsulta(): Promise<ConsultaCotizacion | null>;
   guardar(datos: Partial<CotizacionDolar>): Promise<CotizacionDolar>;
   registrarConsulta(exitosa: boolean, error: string | null): Promise<void>;
-  historial(
-    desde: Date | undefined,
-    hasta: Date | undefined,
-    pagina: number,
-  ): Promise<{ items: CotizacionDolar[]; total: number }>;
+  historial(desde: Date | undefined, hasta: Date | undefined, pagina: number): Promise<{ items: CotizacionDolar[]; total: number }>;
   consultas(): Promise<ConsultaCotizacion[]>;
-  conBloqueo<T>(
-    operacion: (repo: ICotizacionRepository) => Promise<T>,
-  ): Promise<T>;
+  conBloqueo<T>(operacion: (repo: ICotizacionRepository) => Promise<T>): Promise<T>;
 }

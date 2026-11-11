@@ -1,18 +1,19 @@
+import { EstadoReembolso } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import { Reembolso, EstadoReembolso } from '../entity/reembolso.entity';
-import { Pago } from '../../pagos/entity/pago.entity';
+import { In, Repository, type EntityManager } from 'typeorm';
+import { Reembolso } from '../entity/reembolso.entity';
 import type { IReembolsosRepository } from './reembolsos.repository.interface';
 
 @Injectable()
 export class ReembolsosRepository implements IReembolsosRepository {
-  constructor(
-    @InjectRepository(Reembolso)
-    private readonly repository: Repository<Reembolso>,
-    @InjectRepository(Pago)
-    private readonly pagos: Repository<Pago>,
-  ) {}
+  constructor(@InjectRepository(Reembolso) private readonly repository: Repository<Reembolso>) {}
+
+  conTransaccion<T>(operacion: (repositorio: IReembolsosRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.repository.manager.transaction((transaccion) =>
+      operacion(new ReembolsosRepository(transaccion.getRepository(Reembolso)), transaccion),
+    );
+  }
 
   crear(datos: Partial<Reembolso>): Reembolso {
     return this.repository.create(datos);
@@ -49,10 +50,13 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  buscarPagoPorReserva(idReserva: number): Promise<Pago | null> {
-    return this.pagos.findOne({
-      where: { reserva: { id: idReserva } },
-      relations: { reserva: true },
+  buscarRegistro(id: number, { bloquear, idPago }: { bloquear?: boolean; idPago?: boolean } = {}): Promise<Reembolso | null> {
+    return this.repository.findOne({
+      where: { id },
+      lock: bloquear ? { mode: 'pessimistic_write' } : undefined,
+      loadRelationIds: idPago
+        ? { relations: ['pago'], disableMixedMap: true }
+        : undefined,
     });
   }
 
@@ -63,14 +67,13 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  async sumarImportesReservados(idPago: number): Promise<number> {
-    const filas = await this.repository.find({
+  buscarPendientesPorPago(idPago: number): Promise<Reembolso[]> {
+    return this.repository.find({
       where: {
         pago: { id: idPago },
         estado: In([EstadoReembolso.PENDIENTE, EstadoReembolso.EN_PROCESO]),
       },
     });
-    return filas.reduce((total, fila) => total + Number(fila.importe), 0);
   }
 
   buscarPendientesConciliacion(): Promise<Reembolso[]> {

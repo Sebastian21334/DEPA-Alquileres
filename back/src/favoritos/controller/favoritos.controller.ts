@@ -23,18 +23,12 @@ export class FavoritosController {
   }
 
   @Post(':idPublicacion')
-  agregar(
-    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  agregar(@Param('idPublicacion', ParseIntPipe) idPublicacion: number, @Req() req: AuthenticatedRequest) {
     return this.favoritos.agregar(req.user.id, idPublicacion);
   }
 
   @Delete(':idPublicacion')
-  quitar(
-    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  quitar(@Param('idPublicacion', ParseIntPipe) idPublicacion: number, @Req() req: AuthenticatedRequest) {
     return this.favoritos.quitar(req.user.id, idPublicacion);
   }
 }

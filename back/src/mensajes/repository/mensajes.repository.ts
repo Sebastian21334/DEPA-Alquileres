@@ -6,10 +6,7 @@ import { IMensajeRepository } from './mensaje.repository.interface';
 
 @Injectable()
 export class MensajeRepository implements IMensajeRepository {
-  constructor(
-    @InjectRepository(Mensaje)
-    private readonly repository: Repository<Mensaje>,
-  ) {}
+  constructor(@InjectRepository(Mensaje) private readonly repository: Repository<Mensaje>) {}
 
   crear(datos: Partial<Mensaje>): Mensaje {
     return this.repository.create(datos);
@@ -19,11 +16,7 @@ export class MensajeRepository implements IMensajeRepository {
     return this.repository.save(mensaje);
   }
 
-  existeConversacion(
-    idPublicacion: number,
-    idUsuarioA: number,
-    idUsuarioB: number,
-  ): Promise<boolean> {
+  existeConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<boolean> {
     return this.repository.exists({
       where: [
         {
@@ -40,11 +33,7 @@ export class MensajeRepository implements IMensajeRepository {
     });
   }
 
-  buscarConversacion(
-    idPublicacion: number,
-    idUsuarioA: number,
-    idUsuarioB: number,
-  ): Promise<Mensaje[]> {
+  buscarConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<Mensaje[]> {
     // El par puede estar en cualquier sentido (A->B o B->A), por eso el OR.
     return this.repository
       .createQueryBuilder('mensaje')
@@ -76,11 +65,7 @@ export class MensajeRepository implements IMensajeRepository {
       .getMany();
   }
 
-  async marcarConversacionComoLeida(
-    idPublicacion: number,
-    idRemitente: number,
-    idDestinatario: number,
-  ): Promise<void> {
+  async marcarConversacionComoLeida(idPublicacion: number, idRemitente: number, idDestinatario: number): Promise<void> {
     await this.repository
       .createQueryBuilder()
       .update(Mensaje)

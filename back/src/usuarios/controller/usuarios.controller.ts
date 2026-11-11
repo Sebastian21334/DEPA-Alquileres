@@ -79,10 +79,7 @@ export class UsuariosController {
     }),
   )
   // Cada usuario solo puede cambiar su propia foto: el id sale del JWT.
-  subirFoto(
-    @UploadedFile() archivo: Express.Multer.File,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  subirFoto(@UploadedFile() archivo: Express.Multer.File, @Req() req: AuthenticatedRequest) {
     if (!archivo) throw new BadRequestException('No se envió ninguna imagen');
     return this.usuariosService.actualizarFoto(req.user.id, archivo);
   }
@@ -101,11 +98,7 @@ export class UsuariosController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  actualizarDatosPersonales(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ActualizarUsuarioDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  actualizarDatosPersonales(@Param('id', ParseIntPipe) id: number, @Body() dto: ActualizarUsuarioDto, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.actualizarDatosPersonales(
       id,
       dto,
@@ -117,21 +110,14 @@ export class UsuariosController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  eliminar(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  eliminar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.eliminar(id, req.user.id);
   }
 
   @Patch(':id/bloquear')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  bloquear(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CambiarBloqueoDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  bloquear(@Param('id', ParseIntPipe) id: number, @Body() dto: CambiarBloqueoDto, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.cambiarBloqueo(
       id,
       true,
@@ -143,11 +129,7 @@ export class UsuariosController {
   @Patch(':id/habilitar')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  habilitar(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CambiarBloqueoDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  habilitar(@Param('id', ParseIntPipe) id: number, @Body() dto: CambiarBloqueoDto, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.cambiarBloqueo(
       id,
       false,
@@ -160,10 +142,7 @@ export class UsuariosController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   // Solo administradores pueden cambiar el rol persistido de otro usuario.
-  async cambiarRol(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CambiarRolDto,
-  ) {
+  async cambiarRol(@Param('id', ParseIntPipe) id: number, @Body() dto: CambiarRolDto) {
     return this.usuariosService.cambiarRol(id, dto.nombreRol);
   }
 }

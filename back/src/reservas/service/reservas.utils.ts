@@ -1,3 +1,4 @@
+import type { Reserva } from '../entity/reserva.entity';
 import { randomBytes } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 
@@ -16,4 +17,9 @@ export function generarCodigoAlojamiento(): string {
     randomBytes(8),
     (byte) => alfabeto[byte % alfabeto.length],
   ).join('');
+}
+
+/** Nombre histórico guardado al momento de reservar. */
+export function nombreInquilinoReserva(reserva: Reserva): string {
+  return [reserva.usuario_nombre, reserva.usuario_apellido].filter(Boolean).join(' ');
 }

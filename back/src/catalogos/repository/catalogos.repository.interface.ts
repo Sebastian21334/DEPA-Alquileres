@@ -3,10 +3,14 @@ import { Rol } from '../entity/rol.entity';
 import { TipoAnunciante } from '../entity/tipo-anunciante.entity';
 import { TipoMoneda } from '../entity/tipo-moneda.entity';
 import { TipoPropiedad } from '../entity/tipo-propiedad.entity';
+import type { Estado } from '../entity/estado.entity';
 
 export const CATALOGOS_REPOSITORY = 'CATALOGOS_REPOSITORY';
 
 export interface ICatalogosRepository {
+  listarClavesEstado(): Promise<Pick<Estado, 'codigoAmbito' | 'codigo'>[]>;
+  buscarEstadoPorCodigo(codigoAmbito: string, codigo: string): Promise<Estado | null>;
+
   buscarTodosRoles(): Promise<Rol[]>;
   buscarRolPorNombre(nombre: string): Promise<Rol | null>;
   buscarRolPorId(id: number): Promise<Rol | null>;
@@ -18,39 +22,27 @@ export interface ICatalogosRepository {
   buscarTipoAnunciantePorId(id: number): Promise<TipoAnunciante | null>;
   buscarTipoAnunciantePorNombre(nombre: string): Promise<TipoAnunciante | null>;
   crearTipoAnunciante(datos: Partial<TipoAnunciante>): Promise<TipoAnunciante>;
-  actualizarTipoAnunciante(
-    id: number,
-    datos: Partial<TipoAnunciante>,
-  ): Promise<TipoAnunciante | null>;
+  actualizarTipoAnunciante(id: number, datos: Partial<TipoAnunciante>): Promise<TipoAnunciante | null>;
   eliminarTipoAnunciante(id: number): Promise<void>;
 
   buscarTodosTiposPropiedad(): Promise<TipoPropiedad[]>;
   buscarTipoPropiedadPorId(id: number): Promise<TipoPropiedad | null>;
   buscarTipoPropiedadPorNombre(nombre: string): Promise<TipoPropiedad | null>;
   crearTipoPropiedad(datos: Partial<TipoPropiedad>): Promise<TipoPropiedad>;
-  actualizarTipoPropiedad(
-    id: number,
-    datos: Partial<TipoPropiedad>,
-  ): Promise<TipoPropiedad | null>;
+  actualizarTipoPropiedad(id: number, datos: Partial<TipoPropiedad>): Promise<TipoPropiedad | null>;
   eliminarTipoPropiedad(id: number): Promise<void>;
 
   buscarTodasModalidades(): Promise<Modalidad[]>;
   buscarModalidadPorId(id: number): Promise<Modalidad | null>;
   buscarModalidadPorNombre(nombre: string): Promise<Modalidad | null>;
   crearModalidad(datos: Partial<Modalidad>): Promise<Modalidad>;
-  actualizarModalidad(
-    id: number,
-    datos: Partial<Modalidad>,
-  ): Promise<Modalidad | null>;
+  actualizarModalidad(id: number, datos: Partial<Modalidad>): Promise<Modalidad | null>;
   eliminarModalidad(id: number): Promise<void>;
 
   buscarTodosTiposMoneda(): Promise<TipoMoneda[]>;
   buscarTipoMonedaPorId(id: number): Promise<TipoMoneda | null>;
   buscarTipoMonedaPorNombre(nombre: string): Promise<TipoMoneda | null>;
   crearTipoMoneda(datos: Partial<TipoMoneda>): Promise<TipoMoneda>;
-  actualizarTipoMoneda(
-    id: number,
-    datos: Partial<TipoMoneda>,
-  ): Promise<TipoMoneda | null>;
+  actualizarTipoMoneda(id: number, datos: Partial<TipoMoneda>): Promise<TipoMoneda | null>;
   eliminarTipoMoneda(id: number): Promise<void>;
 }

@@ -10,6 +10,9 @@ const { OrdenarImagenesDto } = require('../dist/imagenes/dto/ordenar-imagenes.dt
 const { ImagenesRepository } = require('../dist/imagenes/repository/imagenes.repository');
 const { ImagenesService } = require('../dist/imagenes/service/imagenes.service');
 const { Imagen } = require('../dist/imagenes/entity/imagen.entity');
+const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
+const { PublicacionesRepository } = require('../dist/publicaciones/repository/publicaciones.repository');
+const sharp = require('sharp');
 
 test('el endpoint acepta solo un orden de IDs enteros positivos sin repetidos', async () => {
   const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
@@ -41,51 +44,57 @@ function escenario() {
     save: async (foto) => { fotos.push(foto); return foto; },
   };
   const manager = {
+    queryRunner: { isTransactionActive: true },
     getRepository: (entidad) => entidad === Imagen ? repoImagen : {
       createQueryBuilder: () => ({
         where(sql, { id }) { assert.equal(id, 7); return this; },
         setLock(modo) { assert.equal(modo, 'pessimistic_write'); estado.bloqueos++; return this; },
-        getOneOrFail: async () => ({ id: 7 }),
+        getOne: async () => ({ id: 7 }),
       }),
     },
   };
-  const repository = new ImagenesRepository({ manager: {
+  const repository = new ImagenesRepository({ create: (datos) => datos, manager: {
     transaction: async (accion) => {
       const copia = fotos.map(f => ({ ...f }));
       try { return await accion(manager); }
       catch (error) { fotos = copia; throw error; }
     },
   } });
-  return { repository, estado, fotos: () => fotos };
+  const publicaciones = new PublicacionesService(new PublicacionesRepository({
+    findOne: async () => ({ id: 7, activa: true, anunciante: { idUsuario: 88 } }),
+  }));
+  const servicio = new ImagenesService(repository, publicaciones, { subir: async () => 'd.jpg' });
+  return { servicio, estado, fotos: () => fotos };
 }
 
 test('elegir portada persiste todo el orden y las nuevas subidas quedan al final', async () => {
-  const { repository, estado } = escenario();
-  const resultado = await repository.ordenar(7, [30, 10, 20]);
+  const { servicio, estado } = escenario();
+  const resultado = await servicio.ordenar(7, [30, 10, 20], { idUsuario: 88 });
   assert.deepEqual(resultado.map(f => [f.id, f.orden]), [[30, 0], [10, 1], [20, 2]]);
-  const subida = await repository.guardar({ id: 40, url: 'd.jpg', publicacion: { id: 7 } });
+  const buffer = await sharp({ create: { width: 1, height: 1, channels: 3, background: 'white' } }).png().toBuffer();
+  const subida = await servicio.subir(7, { idUsuario: 88 }, { buffer });
   assert.equal(subida.orden, 3);
   assert.equal(estado.bloqueos, 2);
 });
 
 test('rechaza fotos ajenas, repetidas o galerías desactualizadas sin escrituras parciales', async () => {
   for (const ids of [[30, 10], [30, 10, 99], [30, 10, 20, 40], [30, 10, 10], []]) {
-    const { repository, estado } = escenario();
-    await assert.rejects(repository.ordenar(7, ids), { status: 409 });
+    const { servicio, estado } = escenario();
+    await assert.rejects(servicio.ordenar(7, ids, { idUsuario: 88 }), { status: 409 });
     assert.equal(estado.actualizaciones, 0);
   }
 });
 
 test('un fallo al reordenar revierte la operación completa', async () => {
-  const { repository, estado, fotos } = escenario();
+  const { servicio, estado, fotos } = escenario();
   estado.fallarEn = 10;
-  await assert.rejects(repository.ordenar(7, [30, 10, 20]), /Fallo de escritura/);
+  await assert.rejects(servicio.ordenar(7, [30, 10, 20], { idUsuario: 88 }), /Fallo de escritura/);
   assert.deepEqual(fotos().map(f => f.orden), [0, 1, 2]);
 });
 
 test('el servicio exige propiedad antes de permitir ordenar', async () => {
   let escrituras = 0;
-  const servicio = new ImagenesService({ ordenar: async () => { escrituras++; } }, {
+  const servicio = new ImagenesService({ conTransaccion: async () => { escrituras++; } }, {
     obtenerPropia: async () => { throw new ForbiddenException(); },
   }, {});
   await assert.rejects(servicio.ordenar(7, [30, 10, 20], { idUsuario: 88 }), { status: 403 });
@@ -95,14 +104,16 @@ test('el servicio exige propiedad antes de permitir ordenar', async () => {
 test('el dueño puede ordenar y recibe la galería actualizada', async () => {
   const esperado = [{ id: 30, orden: 0 }, { id: 10, orden: 1 }];
   const servicio = new ImagenesService({
-    ordenar: async (id, ids) => {
-      assert.equal(id, 7);
-      assert.deepEqual(ids, [30, 10]);
-      return esperado;
-    },
+    conTransaccion: (accion) => accion({
+      buscarPorPublicacion: async () => [{ id: 10, orden: 1 }, { id: 30, orden: 0 }],
+      actualizarOrden: async (id, ids) => {
+        assert.equal(id, 7);
+        assert.deepEqual(ids, [30, 10]);
+      },
+    }, {}),
   }, { obtenerPropia: async (id, usuario) => {
     assert.equal(id, 7); assert.equal(usuario, 88);
-  } }, {});
+  }, bloquearParaModificacion: async () => {} }, {});
   assert.deepEqual(await servicio.ordenar(7, [30, 10], { idUsuario: 88 }), esperado);
 });
 

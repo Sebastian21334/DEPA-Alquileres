@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Pago } from './entity/pago.entity';
 import { PagosController } from './controller/pagos.controller';
 import { PagosService } from './service/pagos.service';
 import { ReservasModule } from '../reservas/reservas.module';
@@ -10,15 +8,14 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
 import { PresupuestosService } from './service/presupuestos.service';
 
-import { PagosRepository } from './repository/pagos.repository';
-import { PAGOS_REPOSITORY } from './repository/pagos.repository.interface';
+import { PagosPersistenciaModule } from './pagos-persistencia.module';
 import { PasarelaModule } from './pasarela.module';
 import { ReembolsosModule } from '../reembolsos/reembolsos.module';
 import { DisputasModule } from '../disputas/disputas.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Pago]),
+    PagosPersistenciaModule,
     ReservasModule,
     SeguridadModule,
     CotizacionesModule,
@@ -29,11 +26,6 @@ import { DisputasModule } from '../disputas/disputas.module';
     DisputasModule,
   ],
   controllers: [PagosController],
-  providers: [
-    PagosService,
-    PresupuestosService,
-    PagosRepository,
-    { provide: PAGOS_REPOSITORY, useExisting: PagosRepository },
-  ],
+  providers: [PagosService, PresupuestosService],
 })
 export class PagosModule {}

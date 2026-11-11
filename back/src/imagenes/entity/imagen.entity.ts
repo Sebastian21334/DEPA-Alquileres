@@ -14,11 +14,11 @@ export class Imagen {
   @PrimaryGeneratedColumn({ name: 'id_imagen' })
   id: number;
 
-  @Column({ type: 'varchar', length: 250 })
+  @Column({ name: 'url', type: 'varchar', length: 250 })
   url: string;
 
   // La primera imagen por orden es la portada de la publicación.
-  @Column({ type: 'integer', default: 0 })
+  @Column({ name: 'orden', type: 'integer', default: 0 })
   orden: number;
 
   // La relación inversa permite cargar todas las imágenes de una publicación.
@@ -28,7 +28,4 @@ export class Imagen {
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Relation<Publicacion>;
 
-  perteneceA(idUsuario: number): boolean {
-    return this.publicacion?.perteneceA(idUsuario) ?? false;
-  }
 }

@@ -126,12 +126,7 @@ export class AdminService {
   listarLiquidaciones() {
     return this.http.get<AdminSettlement[]>(`${this.api}/reservas/liquidaciones/administracion`);
   }
-  resolverLiquidacion(
-    id: number,
-    estado: Reserva['estado_liquidacion'],
-    referencia?: string,
-    observacion?: string,
-  ) {
+  resolverLiquidacion(id: number, estado: Reserva['estado_liquidacion'], referencia?: string, observacion?: string) {
     return this.http.patch<AdminSettlement>(`${this.api}/reservas/${id}/liquidacion`, {
       estado,
       referencia,
@@ -146,12 +141,7 @@ export class AdminService {
       `${this.api}/reservas/cancelaciones/administracion`,
     );
   }
-  resolverSolicitudCancelacion(
-    idReserva: number,
-    idSolicitud: number,
-    decision: 'APROBADA' | 'RECHAZADA',
-    observacion?: string,
-  ) {
+  resolverSolicitudCancelacion(idReserva: number, idSolicitud: number, decision: 'APROBADA' | 'RECHAZADA', observacion?: string) {
     return this.http.patch<{
       solicitud: AdminCancellationRequest;
       reembolso: { id: number; importe: number; moneda: string } | null;
@@ -179,13 +169,7 @@ export class AdminService {
       visible_para: 'TODOS',
     });
   }
-  resolverReclamo(
-    id: number,
-    resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL',
-    importe?: number,
-    referencia?: string,
-    observacion?: string,
-  ) {
+  resolverReclamo(id: number, resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL', importe?: number, referencia?: string, observacion?: string) {
     return this.http.patch<Reclamo>(`${this.api}/reclamos/${id}/resolver`, {
       resolucion,
       importe,

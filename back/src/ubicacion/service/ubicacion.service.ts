@@ -1,5 +1,3 @@
-import { GEOCODIFICACION_REPOSITORY } from '../repository/geocodificacion.repository.interface';
-import type { IGeocodificacionRepository } from '../repository/geocodificacion.repository.interface';
 import { RegistroEnUsoError } from '../../common/persistence/registro-en-uso.error';
 import {
   BadRequestException,
@@ -14,22 +12,17 @@ import type { IUbicacionRepository } from '../repository/ubicacion.repository.in
 import { Provincia } from '../entity/provincia.entity';
 import { CrearCiudadDto } from '../dto/crear-ciudad.dto';
 import { Ciudad } from '../entity/ciudad.entity';
+import {
+  GEOCODIFICACION,
+  type IGeocodificacion,
+} from '../proveedor/geocodificacion.interface';
 
 @Injectable()
 export class UbicacionService {
-  constructor(
-    @Inject(UBICACION_REPOSITORY)
-    private readonly ubicacionRepo: IUbicacionRepository,
-    @Inject(GEOCODIFICACION_REPOSITORY)
-    private readonly geocodificacionRepo: IGeocodificacionRepository,
-  ) {}
+  constructor(@Inject(UBICACION_REPOSITORY) private readonly ubicacionRepo: IUbicacionRepository, @Inject(GEOCODIFICACION) private readonly geocodificacion: IGeocodificacion) {}
 
   /** Búsqueda puntual con cache y un máximo de una consulta externa por segundo. */
-  async buscarDireccion(
-    direccion?: string,
-    ciudad?: string,
-    provincia?: string,
-  ) {
+  async buscarDireccion(direccion?: string, ciudad?: string, provincia?: string) {
     const partes = [direccion, ciudad, provincia, 'Argentina']
       .map((valor) => valor?.trim())
       .filter((valor): valor is string => Boolean(valor));
@@ -40,7 +33,7 @@ export class UbicacionService {
     }
 
     try {
-      return await this.geocodificacionRepo.buscar(partes.join(', '));
+      return await this.geocodificacion.buscar(partes.join(', '));
     } catch {
       throw new ServiceUnavailableException(
         'No pudimos consultar el mapa en este momento. Intentá nuevamente.',
@@ -125,10 +118,7 @@ export class UbicacionService {
     return { mensaje: 'Ciudad eliminada correctamente' };
   }
 
-  private async eliminarSeguro(
-    accion: () => Promise<void>,
-    nombre: string,
-  ): Promise<void> {
+  private async eliminarSeguro(accion: () => Promise<void>, nombre: string): Promise<void> {
     try {
       await accion();
     } catch (error: unknown) {

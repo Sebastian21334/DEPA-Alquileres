@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import type { EntityManager } from 'typeorm';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
-import { paginar } from '../../common/paginacion';
+import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
@@ -11,16 +12,50 @@ import {
   PaginaPublicaciones,
 } from './publicaciones.repository.interface';
 import { Reserva } from '../../reservas/entity/reserva.entity';
-import { sqlAdmiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
+import { PATRON_RESERVA_POR_FECHA } from '../../catalogos/entity/modalidad.entity';
 
 @Injectable()
 export class PublicacionesRepository implements IPublicacionesRepository {
-  constructor(
-    @InjectRepository(Publicacion)
-    private readonly repo: Repository<Publicacion>,
-    @InjectRepository(Reserva)
-    private readonly reservasRepo: Repository<Reserva>,
-  ) {}
+  private sqlAdmiteReservaPorFecha(alias: string): string {
+    return `COALESCE(${alias}.permite_reservas_por_fecha, ${alias}.nombre ~* '${PATRON_RESERVA_POR_FECHA}', false)`;
+  }
+  async bloquearPorId(id: number, transaccion: EntityManager): Promise<boolean> {
+    if (!transaccion.queryRunner?.isTransactionActive) {
+      throw new Error('La publicación debe bloquearse dentro de una transacción');
+    }
+    const publicacion = await transaccion.getRepository(Publicacion)
+      .createQueryBuilder('publicacion')
+      .where('publicacion.id = :id', { id })
+      .setLock('pessimistic_write')
+      .getOne();
+    return publicacion !== null;
+  }
+
+  buscarCondicionesDeReserva(id: number, transaccion: EntityManager): Promise<Publicacion | null> {
+    return transaccion.getRepository(Publicacion).findOne({
+      where: { id },
+      relations: { tipoMoneda: true, anunciante: { usuario: true } },
+    });
+  }
+  async bloquearPorAnunciante(idUsuario: number, transaccion: EntityManager): Promise<boolean> {
+    const publicaciones = await transaccion.getRepository(Publicacion)
+      .createQueryBuilder('publicacion')
+      .select('publicacion.id')
+      .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
+      .orderBy('publicacion.id', 'ASC')
+      .setLock('pessimistic_write')
+      .getMany();
+    return publicaciones.length > 0;
+  }
+
+  async desactivarPorAnunciante(idUsuario: number, transaccion: EntityManager): Promise<void> {
+    await transaccion.createQueryBuilder()
+      .update(Publicacion)
+      .set({ activa: false })
+      .where('id_anunciante = :idUsuario', { idUsuario })
+      .execute();
+  }
+  constructor(@InjectRepository(Publicacion) private readonly repo: Repository<Publicacion>, @InjectRepository(Reserva) private readonly reservasRepo: Repository<Reserva>) {}
 
   crear(datos: Partial<Publicacion>): Publicacion {
     return this.repo.create(datos);
@@ -108,9 +143,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * agregado de reservas en SQL; después se cargan las relaciones de esos IDs.
    * Así una petición nunca materializa el catálogo completo en memoria.
    */
-  async buscarPaginadas(
-    consulta: ConsultaPublicaciones,
-  ): Promise<PaginaPublicaciones> {
+  async buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones> {
     const {
       pagina,
       limite,
@@ -264,15 +297,12 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     };
   }
 
-  private aplicarCategoria(
-    query: SelectQueryBuilder<Publicacion>,
-    categoria?: CategoriaInicio,
-  ): void {
+  private aplicarCategoria(query: SelectQueryBuilder<Publicacion>, categoria?: CategoriaInicio): void {
     // Misma regla que calendario y reservas: "temporales" son las modalidades por fecha.
     if (categoria === 'temporales')
-      query.andWhere(sqlAdmiteReservaPorFecha('modalidad'));
+      query.andWhere(this.sqlAdmiteReservaPorFecha('modalidad'));
     if (categoria === 'largo-plazo')
-      query.andWhere(`NOT ${sqlAdmiteReservaPorFecha('modalidad')}`);
+      query.andWhere(`NOT ${this.sqlAdmiteReservaPorFecha('modalidad')}`);
     if (categoria === 'villa-maria')
       query.andWhere('LOWER(ciudad.nombre) IN (:...ciudades)', {
         ciudades: ['villa maria', 'villa maría'],
@@ -289,10 +319,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * catálogo o el detalle. Cada palabra puede aparecer en un campo distinto;
    * por ejemplo, "casa villa maria" combina tipo de propiedad y ciudad.
    */
-  private aplicarBusqueda(
-    query: SelectQueryBuilder<Publicacion>,
-    busqueda?: string,
-  ): void {
+  private aplicarBusqueda(query: SelectQueryBuilder<Publicacion>, busqueda?: string): void {
     const terminos = (busqueda ?? '')
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
@@ -334,10 +361,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
-  buscarPorAnunciante(
-    idAnunciante: number,
-    soloActivas: boolean,
-  ): Promise<Publicacion[]> {
+  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]> {
     // El spread agrega el filtro activa únicamente cuando el caller lo solicita.
     return this.repo.find({
       where: {

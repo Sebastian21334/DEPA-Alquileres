@@ -1,16 +1,21 @@
 require('reflect-metadata');
+const { PruebaVidaService } = require('../dist/verificacion-anunciante/service/prueba-vida.service');
+const { CAMPOS_PRUEBA_PRIVADOS } = require('../dist/verificacion-anunciante/dto/solicitud-verificacion-respuesta.dto');
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
 const { DataSource } = require('typeorm');
 const { BlobServiceClient } = require('@azure/storage-blob');
-const { SolicitudVerificacion: Solicitud, EstadoVerificacion: Estado } = require('../dist/verificacion-anunciante/entity/solicitud-verificacion.entity');
+const { SolicitudVerificacion: Solicitud } = require('../dist/verificacion-anunciante/entity/solicitud-verificacion.entity');
+const { EstadoVerificacion: Estado } = require('../dist/catalogos/estados');
 const { EliminacionDocumento: Trabajo } = require('../dist/verificacion-anunciante/entity/eliminacion-documento.entity');
 const { RevisionVerificacion: Revision } = require('../dist/verificacion-anunciante/entity/revision-verificacion.entity');
 const { Anunciante } = require('../dist/anunciantes/entity/anunciante.entity');
+const { AnunciantesRepository } = require('../dist/anunciantes/repository/anunciantes.repository');
+const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
 const { VerificacionRepository } = require('../dist/verificacion-anunciante/repository/verificacion.repository');
 const { VerificacionAnuncianteService } = require('../dist/verificacion-anunciante/service/verificacion-anunciante.service');
 const { EliminacionDocumentosService } = require('../dist/verificacion-anunciante/service/eliminacion-documentos.service');
-const { AzureArchivoRepository } = require('../dist/common/almacenamiento/azure-archivo.repository');
+const { AzureArchivoRepository } = require('../dist/almacenamiento/repository/azure-archivo.repository');
 
 const campos = ['dni_frente_url', 'dni_dorso_url', 'rostro_url', 'matricula_url', 'constancia_cuit_url'];
 const source = new DataSource({ type: 'postgres', entities: [__dirname + '/../dist/**/*.entity.js'] });
@@ -27,7 +32,7 @@ function solicitud(estado = Estado.PENDIENTE, empresa = false) {
     anunciante: Object.assign(new Anunciante(), {
       idUsuario: 7, verificado: false,
       usuario: { email: 'prueba@example.test', nombre: 'Ana', apellido: 'Prueba' },
-      tipoAnunciante: { esInmobiliaria: () => empresa },
+      tipoAnunciante: { nombre: empresa ? 'Inmobiliaria' : 'Particular' },
     }),
   });
   campos.forEach((campo, i) => { s[campo] = empresa || i < 3 ? `https://almacen.test/privado/${campo}-revision-1` : null; });
@@ -39,7 +44,7 @@ function solicitud(estado = Estado.PENDIENTE, empresa = false) {
 function escenario(s = solicitud()) {
   let estado = { solicitud: s, revisiones: [], trabajos: [] };
   let falloRevision = false, falloCommit = false, falloAzure = false;
-  const borrados = [], avisos = [], consultas = [];
+  const borrados = [], avisos = [], consultas = [], correos = [];
   const clonar = valor => {
     if (valor instanceof Date) return new Date(valor);
     if (Array.isArray(valor)) return valor.map(clonar);
@@ -59,7 +64,11 @@ function escenario(s = solicitud()) {
         },
         async save(actual) { copia.solicitud = actual; return actual; },
       };
-      if (entidad === Anunciante) return { async save(a) { copia.solicitud.anunciante = a; return a; } };
+      if (entidad === Anunciante) return { async update(criterio, cambios) {
+        assert.deepEqual(criterio, { idUsuario: copia.solicitud.anunciante.idUsuario });
+        assert.deepEqual(cambios, { verificado: true });
+        Object.assign(copia.solicitud.anunciante, cambios);
+      } };
       if (entidad === Revision) return { async save(r) {
         if (falloRevision) throw new Error('fallo de historial');
         copia.revisiones.push(r); return r;
@@ -100,9 +109,11 @@ function escenario(s = solicitud()) {
   } };
   const limpieza = new EliminacionDocumentosService(repo, archivos);
   limpieza.logger = { error: msg => avisos.push(msg), warn: msg => avisos.push(msg) };
-  const mail = { async enviarResultadoVerificacion() {} };
-  const servicio = new VerificacionAnuncianteService({}, {}, {}, repo, mail, archivos, {}, limpieza);
-  return { repo, limpieza, servicio, borrados, avisos, consultas,
+  const mail = { async enviarResultadoVerificacion(...args) { correos.push(args); } };
+  const anunciantes = new AnunciantesService(new AnunciantesRepository({}));
+  const catalogos = { esInmobiliaria: (tipo) => tipo?.nombre === 'Inmobiliaria' };
+  const servicio = new VerificacionAnuncianteService(anunciantes, {}, catalogos, repo, mail, archivos, new PruebaVidaService(), limpieza);
+  return { repo, limpieza, servicio, borrados, avisos, consultas, correos,
     get estado() { return estado; },
     fallarRevision: v => { falloRevision = v; }, fallarCommit: v => { falloCommit = v; },
     fallarAzure: v => { falloAzure = v; },
@@ -120,13 +131,14 @@ for (const empresa of [false, true]) {
       assert.equal(s.estado, aprobada ? Estado.APROBADA : Estado.RECHAZADA);
       assert.equal(s.anunciante.verificado, aprobada);
       campos.forEach(campo => assert.equal(s[campo], null));
-      Solicitud.CAMPOS_PRUEBA_PRIVADOS.forEach(campo => assert.equal(s[campo], null));
+      CAMPOS_PRUEBA_PRIVADOS.forEach(campo => assert.equal(s[campo], null));
       assert.equal(s.prueba_vida_validada_en.getTime(), fechaPrueba);
       assert.ok(s.actualizada_en instanceof Date);
       assert.equal(e.estado.revisiones.length, 1);
       assert.equal(e.estado.revisiones[0].id_administrador, 12);
       assert.equal(e.estado.revisiones[0].numero_revision, 1);
       assert.equal(e.estado.revisiones[0].motivo, aprobada ? null : 'Documento ilegible');
+      assert.deepEqual(e.correos, [['prueba@example.test', aprobada, aprobada ? undefined : 'Documento ilegible']]);
       assert.equal(e.borrados.length, empresa ? 5 : 3);
       assert.equal(e.estado.trabajos.length, 0);
       assert.match(e.consultas[0], /FOR UPDATE SKIP LOCKED/);
@@ -141,10 +153,12 @@ test('una decisión fallida revierte cola, historial y referencias sin borrar Az
   e.fallarRevision(true);
   await assert.rejects(e.servicio.aprobar(7, 12, { numero_revision: 1 }), /historial/);
   assert.equal(e.estado.solicitud.estado, Estado.PENDIENTE);
+  assert.equal(e.estado.solicitud.anunciante.verificado, false);
   assert.deepEqual(campos.map(c => e.estado.solicitud[c]), originales);
   assert.equal(e.estado.trabajos.length, 0);
   assert.equal(e.estado.revisiones.length, 0);
   assert.equal(e.borrados.length, 0);
+  assert.equal(e.correos.length, 0);
 });
 
 test('un fallo de Azure persiste el trabajo y permite continuar con una nueva revisión', async () => {
@@ -156,7 +170,11 @@ test('un fallo de Azure persiste el trabajo y permite continuar con una nueva re
   assert.ok(e.estado.trabajos.every(t => t.intentos === 1 && t.proximo_intento > new Date()));
   assert.ok(e.avisos.every(msg => !msg.includes('https://') && !msg.includes('URL privada')));
   const s = e.estado.solicitud;
-  s.presentarDocumentos({ dniFrente: 'frente-nuevo', dniDorso: 'dorso-nuevo', rostro: 'rostro-nuevo' }, true);
+  // Simula que el usuario presentó otra revisión antes de que se reintente la limpieza.
+  Object.assign(s, {
+    dni_frente_url: 'frente-nuevo', dni_dorso_url: 'dorso-nuevo', rostro_url: 'rostro-nuevo',
+    estado: Estado.REENVIADA, numero_revision: 2,
+  });
   assert.equal(s.estado, Estado.REENVIADA);
   assert.equal(s.numero_revision, 2);
   const nuevaLimpieza = new EliminacionDocumentosService(e.repo, { async eliminarDocumentoPropio(url) { e.borrados.push(url); } });
@@ -222,7 +240,7 @@ test('el correo fallido no revierte la decisión ni evita la eliminación', asyn
 
 test('no solapa dos ejecuciones locales y libera el indicador tras fallar la base', async () => {
   let resolver, llamadas = 0;
-  const limpieza = new EliminacionDocumentosService({ procesarEliminacionesPendientes: async () => {
+  const limpieza = new EliminacionDocumentosService({ conEliminacionesPendientes: async () => {
     llamadas += 1;
     await new Promise(r => { resolver = r; });
     throw new Error('fallo base');
@@ -301,7 +319,7 @@ test('la migración PostgreSQL es repetible, preserva solicitudes abiertas e his
       const anterior = originales.find(s => s.id === actual.id);
       if ([Estado.APROBADA, Estado.RECHAZADA].includes(actual.estado)) {
         campos.forEach(c => assert.equal(actual[c], null));
-        Solicitud.CAMPOS_PRUEBA_PRIVADOS.forEach(c => assert.equal(actual[c], null));
+        CAMPOS_PRUEBA_PRIVADOS.forEach(c => assert.equal(actual[c], null));
         for (const c of ['estado', 'numero_revision', 'motivo_rechazo', 'actualizada_en', 'prueba_vida_validada_en']) {
           assert.deepEqual(actual[c], anterior[c]);
         }
@@ -332,15 +350,27 @@ test('la migración PostgreSQL es repetible, preserva solicitudes abiertas e his
     }) })) };
     const repo = new VerificacionRepository({}, {}, ds);
     const ahora = new Date('2100-01-01T00:00:00Z');
-    const intento = await repo.procesarEliminacionesPendientes(async url => {
+    const procesar = async (eliminar, fecha) => {
+      let resultado;
+      const limpieza = new EliminacionDocumentosService({
+        conEliminacionesPendientes: async (...args) => {
+          resultado = await repo.conEliminacionesPendientes(...args);
+          return resultado;
+        },
+      }, { eliminarDocumentoPropio: eliminar });
+      limpieza.logger = { error() {}, warn() {} };
+      await limpieza.ejecutar(fecha);
+      return resultado;
+    };
+    const intento = await procesar(async url => {
       if (url.startsWith('rechazada/')) throw new Error('proveedor no disponible');
     }, ahora);
     assert.deepEqual(intento, { eliminados: 5, fallidos: 5 });
     const pendientes = (await db.query('SELECT * FROM eliminacion_documento')).rows;
     assert.equal(pendientes.length, 5);
     assert.ok(pendientes.every(t => t.intentos === 1 && t.proximo_intento > ahora));
-    assert.deepEqual(await repo.procesarEliminacionesPendientes(async () => {}, ahora), { eliminados: 0, fallidos: 0 });
-    assert.deepEqual(await repo.procesarEliminacionesPendientes(async () => {}, new Date(ahora.getTime() + 60_000)),
+    assert.deepEqual(await procesar(async () => {}, ahora), { eliminados: 0, fallidos: 0 });
+    assert.deepEqual(await procesar(async () => {}, new Date(ahora.getTime() + 60_000)),
       { eliminados: 5, fallidos: 0 });
     assert.equal((await db.query('SELECT * FROM eliminacion_documento')).rows.length, 0);
     assert.deepEqual((await db.query('SELECT * FROM revision_verificacion')).rows, revisiones);

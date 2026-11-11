@@ -29,11 +29,7 @@ export class UbicacionController {
 
   @Get('buscar-direccion')
   @UseGuards(JwtAuthGuard)
-  async buscarDireccion(
-    @Query('direccion') direccion: string,
-    @Query('ciudad') ciudad: string,
-    @Query('provincia') provincia: string,
-  ) {
+  async buscarDireccion(@Query('direccion') direccion: string, @Query('ciudad') ciudad: string, @Query('provincia') provincia: string) {
     return this.ubicacionService.buscarDireccion(direccion, ciudad, provincia);
   }
 
@@ -52,10 +48,7 @@ export class UbicacionController {
   @Put('provincias/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  actualizarProvincia(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CrearProvinciaDto,
-  ) {
+  actualizarProvincia(@Param('id', ParseIntPipe) id: number, @Body() dto: CrearProvinciaDto) {
     return this.ubicacionService.actualizarProvincia(id, dto);
   }
 
@@ -76,10 +69,7 @@ export class UbicacionController {
   @Put('ciudades/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  actualizarCiudad(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CrearCiudadDto,
-  ) {
+  actualizarCiudad(@Param('id', ParseIntPipe) id: number, @Body() dto: CrearCiudadDto) {
     return this.ubicacionService.actualizarCiudad(
       id,
       dto.nombre,

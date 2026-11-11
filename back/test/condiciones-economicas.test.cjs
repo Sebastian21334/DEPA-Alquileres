@@ -9,6 +9,9 @@ const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
+const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
+const { CatalogosService } = require('../dist/catalogos/service/catalogos.service');
+const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 
 const AHORA = Date.parse('2030-01-01T12:00:00Z');
 const USUARIO = 7;
@@ -31,7 +34,6 @@ function escenario(moneda = 'ARS') {
     precio: moneda === 'USD' ? 50 : 100,
     tipoMoneda: { nombre: moneda },
     modalidad: { permite_reservas_por_fecha: true },
-    perteneceA: () => false,
   };
   const estado = { reservas: [], pagos: [], checkouts: [], alBloquear: () => {} };
   const cotizacion = {
@@ -42,12 +44,14 @@ function escenario(moneda = 'ARS') {
     get: (clave) => clave === 'MP_CURRENCY_ID' ? 'ARS' : undefined,
     getOrThrow: () => 'clave-exclusiva-de-pruebas',
   };
-  const publicaciones = {
+  const publicaciones = new PublicacionesService({
     buscarPorId: async () => ({ ...publicacion, tipoMoneda: { ...publicacion.tipoMoneda } }),
-  };
+    buscarCondicionesDeReserva: async () => ({ ...publicacion, tipoMoneda: { ...publicacion.tipoMoneda } }),
+    bloquearPorId: async () => { estado.alBloquear(); return true; },
+  }, new CatalogosService());
   const repositorio = {
+    conTransaccion: (operacion) => operacion(repositorio, {}),
     buscarPendientesVencidas: async () => [],
-    buscarCondicionesPublicacion: publicaciones.buscarPorId,
     crear: (datos) => Object.assign(new Reserva(), datos),
     guardar: async (reserva) => {
       if (!reserva.id) {
@@ -58,20 +62,19 @@ function escenario(moneda = 'ARS') {
     },
     buscarPorId: async (id) => estado.reservas.find(r => r.id === id),
   };
-  const fechas = { bloquearPublicacion: async () => estado.alBloquear() };
   const disponibilidad = {
     verificarDisponibilidad: async () => true,
     marcarComoReservadas: async () => {},
   };
   const reservas = new ReservasService(
     config,
-    { ejecutar: (operacion) => operacion({ reservas: repositorio, fechas }) },
     repositorio,
     disponibilidad,
     { buscarPorId: async () => ({ nombre: 'Prueba', apellido: 'Reserva' }) },
     publicaciones,
     { enviarConfirmacion: async () => {} },
     { crearSolicitud: async () => ({}) },
+    new ReservaEstadoService(publicaciones),
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },

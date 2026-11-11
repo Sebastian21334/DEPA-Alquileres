@@ -1,25 +1,101 @@
+import { EstadoLiquidacionReserva, EstadoPagoReserva } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
-import { paginar } from '../../common/paginacion';
+import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, Repository, type EntityManager } from 'typeorm';
 import { Usuario } from '../entity/usuario.entity';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
-import { IUsuariosRepository } from './usuarios.repository.interface';
+import type {
+  IUsuariosRepository,
+  OperacionesPendientesCuenta,
+  ParticipacionEnReserva,
+} from './usuarios.repository.interface';
+import { digitosCuit } from '../../common/utils/cuit';
+import { Reserva } from '../../reservas/entity/reserva.entity';
+import { Pago } from '../../pagos/entity/pago.entity';
 
 @Injectable()
 export class UsuariosRepository implements IUsuariosRepository {
-  constructor(
-    @InjectRepository(Usuario)
-    private readonly repo: Repository<Usuario>,
-  ) {}
+  constructor(@InjectRepository(Usuario) private readonly repo: Repository<Usuario>) {}
 
   crear(datos: Partial<Usuario>): Usuario {
     return this.repo.create(datos);
   }
 
-  guardar(usuario: Usuario): Promise<Usuario> {
-    return this.repo.save(usuario);
+  guardar(usuario: Usuario, transaccion?: EntityManager): Promise<Usuario> {
+    return (transaccion?.getRepository(Usuario) ?? this.repo).save(usuario);
+  }
+
+  conTransaccion<T>(operacion: (transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.repo.manager.transaction(operacion);
+  }
+
+  buscarBloqueado(idUsuario: number, transaccion: EntityManager, incluirRol = false): Promise<Usuario | null> {
+    const consulta = transaccion.getRepository(Usuario).createQueryBuilder('usuario')
+      .where('usuario.id = :idUsuario', { idUsuario })
+      .setLock('pessimistic_write', undefined, ['usuario']);
+    if (incluirRol) consulta.leftJoinAndSelect('usuario.rol', 'rol');
+    return consulta.getOne();
+  }
+
+  async contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager): Promise<OperacionesPendientesCuenta> {
+    const esAnunciante = participacion === 'Anunciante';
+    const reservas = () => {
+      const consulta = transaccion.getRepository(Reserva).createQueryBuilder('reserva');
+      return esAnunciante
+        ? consulta.innerJoin('reserva.publicacion', 'publicacion')
+            .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
+        : consulta.where('reserva.id_usuario = :idUsuario', { idUsuario });
+    };
+
+    const reservasPendientes = await reservas()
+      .andWhere('reserva.estado_pago = :pendiente', { pendiente: EstadoPagoReserva.PENDIENTE })
+      .getCount();
+    const estadiasVigentes = await reservas()
+      .andWhere('reserva.estado_pago = :aprobado', { aprobado: EstadoPagoReserva.APROBADO })
+      .andWhere('reserva.cancelada = false')
+      .andWhere('reserva.finalizada = false')
+      .andWhere(`(
+        reserva.fecha_inicio IS NULL OR reserva.fecha_fin IS NULL
+        OR reserva.fecha_inicio > reserva.fecha_fin
+        OR reserva.fecha_fin >= :hoy
+      )`, { hoy })
+      .getCount();
+
+    const liquidaciones = reservas();
+    if (esAnunciante) {
+      liquidaciones
+        .andWhere('reserva.estado_pago = :aprobado', { aprobado: EstadoPagoReserva.APROBADO })
+        .andWhere('reserva.estado_liquidacion NOT IN (:...resueltas)', {
+          resueltas: [
+            EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+            EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+            EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
+          ],
+        });
+    } else {
+      liquidaciones.andWhere('reserva.estado_liquidacion = :enRevision', {
+        enRevision: EstadoLiquidacionReserva.EN_REVISION,
+      });
+    }
+    const liquidacionesPendientes = await liquidaciones.getCount();
+
+    const pagos = transaccion.getRepository(Pago).createQueryBuilder('pago')
+      .innerJoin('pago.reserva', 'reserva');
+    if (esAnunciante) {
+      pagos.innerJoin('reserva.publicacion', 'publicacion')
+        .where('publicacion.id_anunciante = :idUsuario', { idUsuario });
+    } else {
+      pagos.where('reserva.id_usuario = :idUsuario', { idUsuario });
+    }
+    const pagosSinConciliar = await pagos
+      .andWhere('pago.status NOT IN (:...finales)', {
+        finales: ['approved', 'rejected', 'cancelled', 'refunded'],
+      })
+      .andWhere('(pago.payment_id IS NOT NULL OR pago.created_at > :limiteCheckout)', { limiteCheckout })
+      .getCount();
+    return { reservasPendientes, estadiasVigentes, liquidacionesPendientes, pagosSinConciliar };
   }
 
   buscarPorEmail(email: string): Promise<Usuario | null> {
@@ -50,7 +126,7 @@ export class UsuariosRepository implements IUsuariosRepository {
       .orderBy('usuario.id', 'ASC');
     const q = consulta.q?.trim();
     if (q) {
-      const digitos = Anunciante.digitosCuit(q);
+      const digitos = digitosCuit(q);
       query.andWhere(
         new Brackets((busqueda) => {
           busqueda.where(

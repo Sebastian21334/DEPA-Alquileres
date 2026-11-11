@@ -5,13 +5,10 @@ export class TipoAnunciante {
   @PrimaryGeneratedColumn({ name: 'id_tipo_anunciante' })
   id: number;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ name: 'nombre', type: 'varchar', length: 100 })
   nombre: string;
 
-  @Column({ type: 'varchar', length: 250, nullable: true })
+  @Column({ name: 'descripcion', type: 'varchar', length: 250, nullable: true })
   descripcion: string;
 
-  esInmobiliaria(): boolean {
-    return /inmobiliaria|institucional/i.test(this.nombre);
-  }
 }

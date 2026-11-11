@@ -115,10 +115,7 @@ export class PerfilService {
     return this.http.post(`${this.api}/anunciantes/solicitar`, dto);
   }
 
-  actualizarDatosInmobiliaria(datos: {
-    razon_social: string; matricula_profesional: string; colegio_profesional: string;
-    domicilio_comercial: string; dni_corredor: string;
-  }) {
+  actualizarDatosInmobiliaria(datos: { razon_social: string; matricula_profesional: string; colegio_profesional: string; domicilio_comercial: string; dni_corredor: string; }) {
     return this.http.patch(`${this.api}/anunciantes/mi-solicitud/datos-inmobiliaria`, datos);
   }
 

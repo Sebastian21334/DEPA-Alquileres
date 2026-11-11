@@ -4,13 +4,16 @@ const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
 const { ConflictException, NotFoundException } = require('@nestjs/common');
 const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
+const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
+const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
+const { PublicacionesRepository } = require('../dist/publicaciones/repository/publicaciones.repository');
 const { MensajesService } = require('../dist/mensajes/service/mensajes.service');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
 
 const FUTURO = '2099-01-10';
 const PASADO = '2000-01-10';
 
-// Base aislada donde se ejecutan los predicados que arma el servicio.
+// Base aislada donde se ejecutan los predicados de los repositorios.
 function base() {
   const db = new DatabaseSync(':memory:');
   db.exec(`
@@ -115,13 +118,16 @@ function servicioUsuarios(db) {
       return b;
     },
   };
-  const dataSource = { transaction: (fn) => fn(manager) };
-  return new UsuariosService({
-    buscarPorId: async (id) => {
+  const repo = new UsuariosRepository({
+    manager: { transaction: (fn) => fn(manager) },
+    findOne: async ({ where: { id } }) => {
       const fila = db.prepare('SELECT * FROM usuario WHERE id = ?').get(id);
       return fila && Object.assign(new Usuario(), { ...fila, activa: !!fila.activa, bloqueado: !!fila.bloqueado });
     },
-  }, {}, {}, dataSource, {}, {});
+  });
+  return new UsuariosService(repo, {}, {}, {}, {},
+    new PublicacionesService(new PublicacionesRepository()),
+    { archivarCuitPorBajaDeCuenta: async () => {} });
 }
 
 test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de publicaciones', async () => {
@@ -243,7 +249,7 @@ test('no se puede bloquear ni habilitar una cuenta dada de baja', async () => {
   let guardado = false, avisado = false;
   const repo = { buscarPorId: async () => usuario, guardar: async () => { guardado = true; } };
   const mail = { enviarCambioBloqueo: async () => { avisado = true; } };
-  const servicio = new UsuariosService(repo, {}, {}, {}, mail, {});
+  const servicio = new UsuariosService(repo, {}, {}, mail, {}, {}, {});
   await assert.rejects(servicio.cambiarBloqueo(5, true, 1, 'motivo'), ConflictException);
   assert.equal(guardado, false);
   assert.equal(avisado, false);
@@ -251,15 +257,15 @@ test('no se puede bloquear ni habilitar una cuenta dada de baja', async () => {
 
 function servicioMensajes(usuarios) {
   const guardados = [], correos = [];
-  const publicacion = { id: 10, titulo: 'Casa', activa: false, perteneceA: (id) => id === 2 };
+  const publicacion = { id: 10, titulo: 'Casa', activa: false, anunciante: { idUsuario: 2 } };
   const servicio = new MensajesService(
     {
       crear: (datos) => datos,
       guardar: async (mensaje) => { guardados.push(mensaje); return mensaje; },
       existeConversacion: async () => true,
     },
-    { buscarPorId: async () => publicacion },
-    { buscarPorId: async (id) => usuarios[id] ?? null },
+    new PublicacionesService({ buscarPorId: async () => publicacion }),
+    new UsuariosService({ buscarPorId: async (id) => usuarios[id] ?? null }),
     { existeReservaAprobada: async () => true },
     { enviarMensajeNuevo: async (email) => { correos.push(email); } },
   );

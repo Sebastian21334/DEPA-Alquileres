@@ -26,27 +26,33 @@ export class ReprogramacionReserva {
   })
   reserva: Relation<Reserva>;
 
-  @Column({ type: 'date' })
+  @Column({ name: 'fecha_inicio_anterior', type: 'date' })
   fecha_inicio_anterior: string;
 
-  @Column({ type: 'date' })
+  @Column({ name: 'fecha_fin_anterior', type: 'date' })
   fecha_fin_anterior: string;
 
-  @Column({ type: 'date' })
+  @Column({ name: 'fecha_inicio_nueva', type: 'date' })
   fecha_inicio_nueva: string;
 
-  @Column({ type: 'date' })
+  @Column({ name: 'fecha_fin_nueva', type: 'date' })
   fecha_fin_nueva: string;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'creada_en', type: 'timestamp' })
   creada_en: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'notificada_en', type: 'timestamp', nullable: true })
   notificada_en: Date | null;
 
-  @Column({ type: 'varchar', length: 150, nullable: true, select: false })
+  @Column({
+    name: 'destinatario',
+    type: 'varchar',
+    length: 150,
+    nullable: true,
+    select: false,
+  })
   destinatario: string | null;
 
-  @Column({ type: 'jsonb', select: false })
+  @Column({ name: 'detalle', type: 'jsonb', select: false })
   detalle: ReprogramacionEmailDetalle;
 }

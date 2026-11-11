@@ -1,66 +1,38 @@
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test, before, beforeEach, after } = require('node:test');
-const { EventEmitter } = require('node:events');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
-const { PGlite } = require('@electric-sql/pglite');
 const { DataSource } = require('typeorm');
-const { Reserva, EstadoPagoReserva } = require('../dist/reservas/entity/reserva.entity');
+const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
+const { Reserva } = require('../dist/reservas/entity/reserva.entity');
+const { EstadoPagoReserva, EstadoReembolso } = require('../dist/catalogos/estados');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
-const { Reembolso, EstadoReembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolsos/entity/reembolso.entity');
+const { PagosRegistroService } = require('../dist/pagos/service/pagos-registro.service');
+const { PagosRepository } = require('../dist/pagos/repository/pagos.repository');
+const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolsos/entity/reembolso.entity');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
+const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
+const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
+const { CatalogosService } = require('../dist/catalogos/service/catalogos.service');
 const { ReclamosService } = require('../dist/reclamos/service/reclamos.service');
+const { ReclamosRepository } = require('../dist/reclamos/repository/reclamos.repository');
 const { Reclamo, ResolucionReclamo } = require('../dist/reclamos/entity/reclamo.entity');
 const { ReclamoMensaje } = require('../dist/reclamos/entity/reclamo-mensaje.entity');
 const { ReclamoEvidencia } = require('../dist/reclamos/entity/reclamo-evidencia.entity');
 
-// Adaptador del protocolo de pg: las consultas, relaciones y transacciones de
-// TypeORM se ejecutan en PostgreSQL real embebido, sin leer back/.env.
-// pg interpreta DATE y TIMESTAMP en la zona local; mantener ese contrato evita
-// desplazar los días al hidratar entidades con TypeORM en Argentina.
-const tiposPg = require('pg').types;
-const db = new PGlite({ parsers: {
-  1082: tiposPg.getTypeParser(1082),
-  1114: tiposPg.getTypeParser(1114),
-} });
-class Pool extends EventEmitter {
-  connect(callback) {
-    const cliente = new EventEmitter();
-    cliente.query = (sql, parametros = [], cb) => {
-      if (typeof parametros === 'function') { cb = parametros; parametros = []; }
-      const resultado = db.query(sql, parametros).then(r => ({ ...r, rowCount: r.affectedRows ?? r.rows.length }));
-      if (cb) resultado.then(r => cb(null, r), cb);
-      return resultado;
-    };
-    callback(null, cliente, () => {});
-  }
-  end(callback) { callback(); }
-}
-const source = new DataSource({
-  type: 'postgres', driver: { Pool }, database: 'pruebas',
-  entities: [path.join(__dirname, '../dist/**/*.entity.js').replaceAll('\\', '/')],
-  synchronize: false, installExtensions: false,
-});
+let base, db, source;
 const migracion = nombre => readFileSync(path.join(__dirname, '../migrations', nombre), 'utf8');
-const sqlCancelaciones = migracion('20261104-cancelaciones-devoluciones.sql');
+const sqlEstadosDisputa = migracion('20261110-estados-disputa.sql');
+const sqlEstadosPorAmbito = migracion('20261110-estados-por-ambito.sql');
 let reembolsos, reservas, reclamos, pasarela, automatico;
 
 before(async () => {
-  for (const nombre of [
-    '20261102-esquema-inicial.sql', '20261101-baja-logica-usuario.sql',
-    '20261104-cuit-email-historicos.sql', '20261104-orden-imagenes.sql',
-    '20261105-eliminacion-documentos.sql',
-  ]) {
-    await db.exec('SET search_path TO public');
-    await db.exec(migracion(nombre));
-  }
-  await db.exec(sqlCancelaciones);
-  await db.exec('SET search_path TO public');
-  await source.initialize();
+  base = await crearPostgresPruebas();
+  ({ db, source } = base);
   await db.exec(`
     INSERT INTO rol (id_rol,nombre) VALUES (1,'Inquilino'),(2,'Anunciante'),(3,'Administrador');
     INSERT INTO usuario (id_usuario,nombre,apellido,email,telefono,contrasenia,email_verificado,id_rol)
@@ -76,20 +48,25 @@ beforeEach(async () => {
   await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
   automatico = false;
   pasarela = { reembolsar: async () => ({ id: 'mp-refund-1', status: 'approved' }) };
+  const estadoReserva = new ReservaEstadoService(new PublicacionesService({}, new CatalogosService()));
   reembolsos = new ReembolsosService(
-    new ReembolsosRepository(source.getRepository(Reembolso), source.getRepository(Pago)),
-    pasarela, { get: () => String(automatico) }, source,
+    new ReembolsosRepository(source.getRepository(Reembolso)),
+    pasarela, { get: () => String(automatico) },
+    new PagosRegistroService(new PagosRepository(source.getRepository(Pago))),
+    estadoReserva,
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
-  reservas = new ReservasService({}, { ejecutar: fn => fn({ reservas: repositorio, fechas: {} }) }, repositorio,
-    { liberarReserva: async () => {} }, {}, {}, {}, reembolsos);
-  reclamos = new ReclamosService(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia),
-    source.getRepository(ReclamoMensaje), source.getRepository(Reserva), reembolsos, {});
+  reservas = new ReservasService({}, repositorio,
+    { liberarReserva: async () => {} }, {}, {}, {}, reembolsos, estadoReserva);
+  reclamos = new ReclamosService(
+    new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia),
+      source.getRepository(ReclamoMensaje)),
+    reservas, reembolsos, {},
+  );
 });
 
 after(async () => {
-  if (source.isInitialized) await source.destroy();
-  await db.close();
+  if (base) await base.cerrar();
 });
 
 async function escenario(fechaInicio = '2099-01-10') {
@@ -108,11 +85,42 @@ async function escenario(fechaInicio = '2099-01-10') {
   return { reserva, pago, crearReembolso };
 }
 
-test('la migración de cancelaciones es repetible y conserva reservas y pagos', async () => {
+test('la migración de estados por ámbito es repetible y conserva reservas y pagos', async () => {
   const { reserva, pago } = await escenario();
-  await db.exec(sqlCancelaciones);
+  await db.exec(sqlEstadosPorAmbito);
   assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).estado_pago, 'APROBADO');
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount), 100);
+});
+
+test('la migración conserva los estados de las disputas existentes y su valor por defecto', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const anterior = new PGlite();
+  try {
+    await anterior.exec(`
+      CREATE TYPE public.disputa_estado_enum AS ENUM ('ABIERTA', 'EN_REVISION', 'GANADA', 'PERDIDA', 'CERRADA');
+      CREATE TABLE public.disputa (
+        id_disputa integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+        estado public.disputa_estado_enum NOT NULL DEFAULT 'ABIERTA'
+      );
+      INSERT INTO public.disputa (estado) VALUES ('ABIERTA'), ('EN_REVISION'), ('GANADA'), ('PERDIDA'), ('CERRADA');
+    `);
+    const consultar = () => anterior.query(`
+      SELECT disputa.id_disputa, estado.codigo
+      FROM disputa JOIN estado_disputa estado USING (id_estado_disputa)
+      ORDER BY disputa.id_disputa
+    `);
+    await anterior.exec(sqlEstadosDisputa);
+    const { rows: migradas } = await consultar();
+    assert.deepEqual(migradas, ['ABIERTA', 'EN_REVISION', 'GANADA', 'PERDIDA', 'CERRADA']
+      .map((codigo, indice) => ({ id_disputa: indice + 1, codigo })));
+    await anterior.exec(sqlEstadosDisputa);
+    assert.deepEqual((await consultar()).rows, migradas);
+    await anterior.exec('INSERT INTO disputa DEFAULT VALUES');
+    assert.equal((await consultar()).rows.at(-1).codigo, 'ABIERTA');
+    await assert.rejects(anterior.exec('UPDATE disputa SET id_estado_disputa = -1'), { code: '23503' });
+  } finally {
+    await anterior.close();
+  }
 });
 
 test('el reembolso manual se confirma una sola vez usando el pago persistido', async () => {
@@ -205,7 +213,7 @@ test('resolver una liquidación manual exige comprobante antes de crear el reemb
   const { reserva } = await escenario();
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   const liquidaciones = new ReservaLiquidacionesService(
-    { ejecutar: fn => fn({ reservas: repositorio }) }, repositorio, {}, reembolsos,
+    repositorio, {}, reembolsos, reservas,
   );
   await assert.rejects(liquidaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /referencia|comprobante/i);
   assert.equal(await source.getRepository(Reembolso).count(), 0);
@@ -243,15 +251,27 @@ for (const resultado of ['GANADA', 'PERDIDA']) {
   test(`el contracargo ${resultado} integra la disputa, el pago y la reserva sin duplicaciones`, async () => {
     const { Disputa } = require('../dist/disputas/entity/disputa.entity');
     const { DisputasService } = require('../dist/disputas/service/disputas.service');
+    const { DisputasRepository } = require('../dist/disputas/repository/disputas.repository');
+    const { PagosRepository } = require('../dist/pagos/repository/pagos.repository');
+    const { CatalogosService } = require('../dist/catalogos/service/catalogos.service');
+    const { Estado } = require('../dist/catalogos/entity/estado.entity');
     const { reserva, pago } = await escenario();
-    const disputas = new DisputasService(source.getRepository(Disputa), source.getRepository(Reserva),
-      source.getRepository(Pago), reembolsos, reservas);
+    const estados = source.getRepository(Estado);
+    const catalogos = new CatalogosService({
+      buscarEstadoPorCodigo: (codigoAmbito, codigo) => estados.findOneBy({ codigoAmbito, codigo }),
+    });
+    const disputasRepo = new DisputasRepository(source.getRepository(Disputa));
+    const pagos = new PagosRegistroService(new PagosRepository(source.getRepository(Pago)));
+    const disputas = new DisputasService(disputasRepo, pagos, reembolsos, reservas, catalogos);
     const datos = { idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-prueba', importe: 100 };
     const disputa = await disputas.registrarContracargo(datos);
+    assert.equal(disputa.estado.codigo, 'ABIERTA');
     await disputas.registrarContracargo(datos);
     assert.equal(await source.getRepository(Disputa).count(), 1);
     assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).estado_pago, 'CONTRACARGO');
-    await disputas.resolver(disputa.id, { resultado }, 3);
+    assert.equal((await disputas.listarAdministracion())[0].estado, 'ABIERTA');
+    assert.equal((await disputas.resolver(disputa.id, { resultado }, 3)).estado, resultado);
+    assert.equal((await disputasRepo.buscarPorId(disputa.id)).estado.codigo, resultado);
     const actual = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
     assert.equal(actual.estado_pago, resultado === 'GANADA' ? 'APROBADO' : 'REEMBOLSADO');
     assert.equal(actual.cancelada, resultado === 'PERDIDA');
@@ -269,8 +289,10 @@ test('la API integra módulos, permisos, cancelación y devolución manual', asy
   const { AuthModule } = require('../dist/auth/auth.module');
   const { PagosModule } = require('../dist/pagos/pagos.module');
   const { ReclamosModule } = require('../dist/reclamos/reclamos.module');
+  const { DisputasService } = require('../dist/disputas/service/disputas.service');
+  const { Estado } = require('../dist/catalogos/entity/estado.entity');
   const { CLIENTE_CORREO } = require('../dist/mail/repository/cliente-correo.interface');
-  const { PROVEEDOR_DOLAR } = require('../dist/cotizaciones/repository/proveedor-dolar.interface');
+  const { PROVEEDOR_DOLAR } = require('../dist/cotizaciones/proveedor/proveedor-dolar.interface');
   const ajustes = { JWT_SECRET: 'secreto-exclusivo-pruebas-integracion', FRONTEND_URLS: 'http://localhost:4200', ACS_SENDER_ADDRESS: 'pruebas@example.invalid' };
   const config = { get: clave => ajustes[clave], getOrThrow: clave => {
     if (!ajustes[clave]) throw new Error(`Configuración de prueba ausente: ${clave}`);
@@ -288,17 +310,41 @@ test('la API integra módulos, permisos, cancelación y devolución manual', asy
   const app = modulo.createNestApplication({ logger: false });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
   try {
+    const estados = source.getRepository(Estado);
+    const codigoAmbito = 'DISPUTA';
+    await estados.delete({ codigoAmbito, codigo: 'GANADA' });
+    await estados.update({ codigoAmbito, codigo: 'ABIERTA' }, { nombre: 'Abierta en el panel' });
+    await base.cargarSeed();
     await app.init();
+    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'GANADA' })).nombre, 'Ganada');
+    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'ABIERTA' })).nombre, 'Abierta en el panel');
+    assert.equal(await estados.countBy({ codigoAmbito }), 5);
     const http = app.getHttpServer();
     const token = id => app.get(JwtService).sign({ sub: id });
     const tenant = `Bearer ${token(1)}`, admin = `Bearer ${token(3)}`;
-    const { reserva } = await escenario();
+    const { reserva, pago } = await escenario();
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);
+    const disputa = await app.get(DisputasService).registrarContracargo({
+      idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-api', importe: 100,
+    });
+    await request(http).get('/disputas/administracion').expect(401);
+    await request(http).get('/disputas/administracion').set('Authorization', tenant).expect(403);
+    const expedientes = await request(http).get('/disputas/administracion')
+      .set('Authorization', admin).expect(200);
+    assert.equal(expedientes.body[0].estado, 'ABIERTA');
+    assert.equal(Object.hasOwn(expedientes.body[0], 'ambitoEstado'), false);
+    const resolucion = await request(http).patch(`/disputas/${disputa.id}/resolver`)
+      .set('Authorization', admin).send({ resultado: 'GANADA' }).expect(200);
+    assert.equal(resolucion.body.estado, 'GANADA');
+    await request(http).patch(`/reservas/${reserva.id}/liquidacion`)
+      .set('Authorization', admin).send({ estado: 'GANADA' }).expect(400);
     await request(http).get('/reservas/cancelaciones/administracion').expect(401);
     await request(http).get('/reservas/cancelaciones/administracion').set('Authorization', tenant).expect(403);
     const solicitud = await request(http).post(`/reservas/${reserva.id}/cancelacion`)
       .set('Authorization', tenant).send({ motivo: 'Cambio de planes' }).expect(201);
+    assert.equal(solicitud.body.estado, 'PENDIENTE');
+    assert.equal(Object.hasOwn(solicitud.body, 'ambitoEstado'), false);
     const resultado = await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
       .set('Authorization', admin).send({ decision: 'APROBADA' }).expect(200);
     assert.equal((await source.query('SELECT disponible FROM fecha WHERE id_reserva=$1', [reserva.id]))[0].disponible, false);

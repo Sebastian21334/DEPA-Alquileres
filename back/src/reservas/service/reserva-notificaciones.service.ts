@@ -10,27 +10,18 @@ import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
 import type { IReservaRepository } from '../repository/reserva.repository.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import type { IMailService } from '../../mail/mail.interface';
-import { normalizarFechaReserva } from './reservas.utils';
-import { TRANSACCION_CALENDARIO } from '../../disponibilidad/repository/transaccion-calendario.interface';
-import type { ITransaccionCalendario } from '../../disponibilidad/repository/transaccion-calendario.interface';
+import { nombreInquilinoReserva, normalizarFechaReserva } from './reservas.utils';
+import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
+import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 
 @Injectable()
 export class ReservaNotificacionesService {
   private readonly logger = new Logger(ReservaNotificacionesService.name);
-  constructor(
-    @Inject(TRANSACCION_CALENDARIO)
-    private readonly transaccion: ITransaccionCalendario,
-    @Inject(RESERVA_REPOSITORY)
-    private readonly reservaRepository: IReservaRepository,
-    @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
-  ) {}
+  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService) {}
 
-  async enviarReprogramacion(
-    idCambio: number,
-    idReserva: number,
-  ): Promise<boolean> {
+  async enviarReprogramacion(idCambio: number, idReserva: number): Promise<boolean> {
     try {
-      return await this.transaccion.ejecutar(async ({ reservas }) => {
+      return await this.reservaRepository.conTransaccion(async (reservas) => {
         // Serializa reintentos del mismo aviso sin bloquear reserva ni calendario.
         const cambio = await reservas.buscarReprogramacion(idCambio, idReserva);
         if (!cambio)
@@ -66,10 +57,13 @@ export class ReservaNotificacionesService {
     const cantidadDias =
       Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) +
       1;
-    const nombreInquilino = reserva.nombreInquilino();
-    const emailAnunciante = reserva.emailDelAnunciante();
-    const nombreAnunciante = reserva.nombreDelAnunciante() || 'Anfitrión';
-    const direccion = reserva.publicacion?.direccionCompleta() ?? '';
+    const nombreInquilino = nombreInquilinoReserva(reserva);
+    const contactoAnunciante = this.anunciantesService.datosContacto(
+      reserva.publicacion?.anunciante,
+    );
+    const emailAnunciante = contactoAnunciante.email;
+    const nombreAnunciante = contactoAnunciante.nombre || 'Anfitrión';
+    const direccion = this.publicacionesService.direccionCompleta(reserva.publicacion);
     const datosComunes = {
       conversion:
         reserva.cotizacion_dolar &&
@@ -94,7 +88,7 @@ export class ReservaNotificacionesService {
       monto: Number(reserva.monto_pago),
       moneda:
         reserva.moneda_contratada ??
-        reserva.publicacion?.nombreMoneda() ??
+        reserva.publicacion?.tipoMoneda?.nombre ??
         'ARS',
     };
     const notificaciones = [
@@ -110,8 +104,7 @@ export class ReservaNotificacionesService {
                     nombreDestinatario: nombreInquilino || 'Huésped',
                     nombreContraparte: nombreAnunciante,
                     emailContraparte: emailAnunciante,
-                    telefonoContraparte:
-                      reserva.publicacion?.telefonoDelAnunciante(),
+                    telefonoContraparte: contactoAnunciante.telefono,
                   },
                 ),
             },
@@ -148,7 +141,10 @@ export class ReservaNotificacionesService {
         return;
       }
       huboCambios = true;
-      reserva.marcarAvisoEnviado(notificaciones[indice].tipo);
+      if (notificaciones[indice].tipo === 'inquilino')
+        reserva.email_confirmacion_inquilino_enviado = true;
+      else
+        reserva.email_nueva_reserva_anunciante_enviado = true;
     });
     if (huboCambios)
       await this.reservaRepository.registrarNotificaciones(reserva.id, {

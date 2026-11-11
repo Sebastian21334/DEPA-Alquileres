@@ -6,10 +6,7 @@ import { IFavoritosRepository } from './favoritos.repository.interface';
 
 @Injectable()
 export class FavoritosRepository implements IFavoritosRepository {
-  constructor(
-    @InjectRepository(Favorito)
-    private readonly favoritos: Repository<Favorito>,
-  ) {}
+  constructor(@InjectRepository(Favorito) private readonly favoritos: Repository<Favorito>) {}
 
   buscarPorUsuario(idUsuario: number): Promise<Favorito[]> {
     return this.favoritos.find({

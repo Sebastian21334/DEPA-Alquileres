@@ -1,3 +1,4 @@
+import { EstadoPagoReserva, EstadoReclamo } from '../../catalogos/estados';
 import {
   BadRequestException,
   ConflictException,
@@ -6,27 +7,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { fechaArgentina } from '../../common/utils/fechas';
-import {
-  ARCHIVO_REPOSITORY,
-  type IArchivoRepository,
-} from '../../common/almacenamiento/archivo.repository.interface';
-import {
-  EstadoLiquidacionReserva,
-  EstadoPagoReserva,
-  Reserva,
-} from '../../reservas/entity/reserva.entity';
+import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
+import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import {
   OrigenReembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import {
-  EstadoReclamo,
   Reclamo,
   ResolucionReclamo,
 } from '../entity/reclamo.entity';
@@ -38,6 +29,8 @@ import {
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
+import { RECLAMOS_REPOSITORY } from '../repository/reclamos.repository.interface';
+import type { IReclamosRepository } from '../repository/reclamos.repository.interface';
 
 const DIAS_RECLAMO = 7;
 const MAX_EVIDENCIAS = 5;
@@ -45,30 +38,11 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 @Injectable()
 export class ReclamosService {
-  constructor(
-    @InjectRepository(Reclamo)
-    private readonly reclamos: Repository<Reclamo>,
-    @InjectRepository(ReclamoEvidencia)
-    private readonly evidencias: Repository<ReclamoEvidencia>,
-    @InjectRepository(ReclamoMensaje)
-    private readonly mensajes: Repository<ReclamoMensaje>,
-    @InjectRepository(Reserva)
-    private readonly reservas: Repository<Reserva>,
-    private readonly reembolsos: ReembolsosService,
-    @Inject(ARCHIVO_REPOSITORY)
-    private readonly archivos: IArchivoRepository,
-  ) {}
+  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService) {}
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
-    const reserva = await this.reservas.findOne({
-      where: { id: dto.id_reserva },
-      relations: {
-        usuario: true,
-        publicacion: { anunciante: { usuario: true } },
-      },
-    });
-    if (!reserva) throw new NotFoundException('No se encontró la reserva');
-    if (!reserva.esDelInquilino(idUsuario))
+    const reserva = await this.reservas.buscarParaReclamo(dto.id_reserva);
+    if (!this.reservas.esDelInquilino(reserva, idUsuario))
       throw new ForbiddenException(
         'Solo el Inquilino de la reserva puede iniciar un reclamo',
       );
@@ -96,16 +70,11 @@ export class ReclamosService {
         `El plazo para reclamar vence a los ${DIAS_RECLAMO} días corridos del fin de la estadía`,
       );
 
-    const abierto = await this.reclamos.findOne({
-      where: {
-        reserva: { id: reserva.id },
-        estado: In([EstadoReclamo.ABIERTO, EstadoReclamo.EN_REVISION]),
-      },
-    });
-    if (abierto)
+    if (await this.reclamos.existeAbierto(reserva.id))
       throw new ConflictException('La reserva ya tiene un reclamo abierto');
 
-    const reclamo = this.reclamos.create({
+    await this.reservas.congelarPorReclamo(reserva);
+    const reclamo = await this.reclamos.guardar({
       reserva,
       inquilino: reserva.usuario,
       anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
@@ -117,73 +86,34 @@ export class ReclamosService {
       administrador_resolucion: null,
       resuelto_en: null,
     });
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    reserva.observacion_liquidacion = 'Reclamo del inquilino en revisión';
-    reserva.fecha_resolucion_liquidacion = null;
-    await this.reservas.save(reserva);
-    return this.reclamos.save(reclamo);
+    return this.prepararRespuesta(reclamo);
   }
 
   async listarMios(idUsuario: number): Promise<Reclamo[]> {
-    const reclamos = await this.reclamos.find({
-      where: [{ inquilino: { id: idUsuario } }, { anunciante: { id: idUsuario } }],
-      relations: {
-        reserva: { publicacion: { anunciante: { usuario: true } }, usuario: true },
-        inquilino: true,
-        anunciante: true,
-        evidencias: true,
-        mensajes: { autor: true },
-      },
-      order: { id: 'DESC' },
-    });
+    const reclamos = await this.reclamos.listarPorParticipante(idUsuario);
     return reclamos.map((reclamo) => this.sinNotasInternas(reclamo));
   }
 
   async listarAdministracion(): Promise<Reclamo[]> {
-    return this.reclamos.find({
-      relations: {
-        reserva: { publicacion: { anunciante: { usuario: true } }, usuario: true },
-        inquilino: true,
-        anunciante: true,
-        evidencias: true,
-        mensajes: { autor: true },
-      },
-      order: { id: 'DESC' },
-      take: 200,
-    });
+    const reclamos = await this.reclamos.listarAdministracion();
+    return reclamos.map((reclamo) => this.prepararRespuesta(reclamo));
   }
 
   async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<Reclamo> {
-    const reclamo = await this.reclamos.findOne({
-      where: { id },
-      relations: {
-        reserva: { publicacion: { anunciante: { usuario: true } }, usuario: true },
-        inquilino: true,
-        anunciante: true,
-        evidencias: { usuario: true },
-        mensajes: { autor: true },
-      },
-    });
+    const reclamo = await this.reclamos.buscarPorId(id);
     if (!reclamo) throw new NotFoundException('Reclamo no encontrado');
-    if (esAdmin) return reclamo;
+    if (esAdmin) return this.prepararRespuesta(reclamo);
     this.verificarParticipante(reclamo, idUsuario);
     return this.sinNotasInternas(reclamo);
   }
 
-  async subirEvidencias(
-    id: number,
-    idUsuario: number,
-    esAdmin: boolean,
-    archivos: Express.Multer.File[],
-  ): Promise<ReclamoEvidencia[]> {
+  async subirEvidencias(id: number, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[]): Promise<ReclamoEvidencia[]> {
     const reclamo = await this.obtener(id, idUsuario, esAdmin);
     if (!archivos?.length)
       throw new BadRequestException('No se recibieron imágenes');
     if (reclamo.estado === EstadoReclamo.CERRADO)
       throw new ConflictException('El reclamo está cerrado');
-    const existentes = await this.evidencias.count({
-      where: { reclamo: { id } },
-    });
+    const existentes = await this.reclamos.contarEvidencias(id);
     if (existentes + archivos.length > MAX_EVIDENCIAS)
       throw new BadRequestException(
         `Un reclamo admite hasta ${MAX_EVIDENCIAS} imágenes`,
@@ -204,67 +134,55 @@ export class ReclamosService {
       } catch {
         throw new BadRequestException('El archivo no es una imagen válida');
       }
-      const url = await this.archivos.subir(
+      const url = await this.almacenamientoService.subir(
         'reclamos',
         `reservas/${reclamo.reserva.id}/reclamos/${id}-${randomUUID()}.jpg`,
         contenido,
         'image/jpeg',
       );
-      const evidencia = this.evidencias.create({
+      const evidencia = await this.reclamos.guardarEvidencia({
         reclamo,
         usuario: { id: idUsuario } as never,
         url,
         nombre_archivo: archivo.originalname.slice(0, 255),
         tipo: 'image/jpeg',
       });
-      guardadas.push(await this.evidencias.save(evidencia));
+      evidencia.reclamo = this.prepararRespuesta(evidencia.reclamo);
+      guardadas.push(evidencia);
     }
     return guardadas;
   }
 
-  async urlEvidencia(
-    idReclamo: number,
-    idEvidencia: number,
-    idUsuario: number,
-    esAdmin: boolean,
-  ): Promise<{ url: string }> {
+  async urlEvidencia(idReclamo: number, idEvidencia: number, idUsuario: number, esAdmin: boolean): Promise<{ url: string }> {
     await this.obtener(idReclamo, idUsuario, esAdmin);
-    const evidencia = await this.evidencias.findOne({
-      where: { id: idEvidencia, reclamo: { id: idReclamo } },
-    });
+    const evidencia = await this.reclamos.buscarEvidencia(idReclamo, idEvidencia);
     if (!evidencia) throw new NotFoundException('Evidencia no encontrada');
-    return { url: await this.archivos.firmarArchivo('reclamos', evidencia.url) };
+    return {
+      url: await this.almacenamientoService.firmarArchivo('reclamos', evidencia.url),
+    };
   }
 
-  async enviarMensaje(
-    id: number,
-    dto: EnviarMensajeReclamoDto,
-    idUsuario: number,
-    esAdmin: boolean,
-  ): Promise<ReclamoMensaje> {
+  async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean): Promise<ReclamoMensaje> {
     const reclamo = await this.obtener(id, idUsuario, esAdmin);
     if (reclamo.estado === EstadoReclamo.CERRADO)
       throw new ConflictException('El reclamo está cerrado');
     if (dto.visible_para === VisibilidadMensajeReclamo.ADMIN && !esAdmin)
       throw new ForbiddenException('Solo el Administrador puede dejar notas internas');
-    const mensaje = this.mensajes.create({
+    if (esAdmin && reclamo.estado === EstadoReclamo.ABIERTO) {
+      reclamo.estado = EstadoReclamo.EN_REVISION;
+      await this.reclamos.guardar(reclamo);
+    }
+    const mensaje = await this.reclamos.guardarMensaje({
       reclamo,
       autor: { id: idUsuario } as never,
       texto: dto.texto.trim(),
       visible_para: dto.visible_para ?? VisibilidadMensajeReclamo.TODOS,
     });
-    if (esAdmin && reclamo.estado === EstadoReclamo.ABIERTO) {
-      reclamo.estado = EstadoReclamo.EN_REVISION;
-      await this.reclamos.save(reclamo);
-    }
-    return this.mensajes.save(mensaje);
+    mensaje.reclamo = this.prepararRespuesta(mensaje.reclamo);
+    return mensaje;
   }
 
-  async listarMensajes(
-    id: number,
-    idUsuario: number,
-    esAdmin: boolean,
-  ): Promise<ReclamoMensaje[]> {
+  async listarMensajes(id: number, idUsuario: number, esAdmin: boolean): Promise<ReclamoMensaje[]> {
     const reclamo = await this.obtener(id, idUsuario, esAdmin);
     return reclamo.mensajes
       .filter(
@@ -274,27 +192,19 @@ export class ReclamosService {
       .sort((a, b) => a.id - b.id);
   }
 
-  async resolver(
-    id: number,
-    dto: ResolverReclamoDto,
-    idAdmin: number,
-  ): Promise<Reclamo> {
+  async resolver(id: number, dto: ResolverReclamoDto, idAdmin: number): Promise<Reclamo> {
     const reclamo = await this.obtener(id, idAdmin, true);
-    if (
-      [EstadoReclamo.RESUELTO_INQUILINO, EstadoReclamo.RESUELTO_ANUNCIANTE, EstadoReclamo.CERRADO].includes(
-        reclamo.estado,
-      )
-    )
+    const estadosCerrados: EstadoReclamo[] = [
+      EstadoReclamo.RESUELTO_INQUILINO,
+      EstadoReclamo.RESUELTO_ANUNCIANTE,
+      EstadoReclamo.CERRADO,
+    ];
+    if (estadosCerrados.includes(reclamo.estado))
       throw new ConflictException('El reclamo ya fue resuelto');
     const reserva = reclamo.reserva;
 
     if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
-      reserva.estado_liquidacion = reserva.codigoValidado()
-        ? EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO
-        : EstadoLiquidacionReserva.RETENIDO;
-      reserva.observacion_liquidacion =
-        dto.observacion?.trim() || 'Reclamo resuelto a favor del Anunciante';
-      await this.reservas.save(reserva);
+      await this.reservas.resolverReclamoSinDevolucion(reserva, dto.observacion);
       reclamo.estado = EstadoReclamo.RESUELTO_ANUNCIANTE;
       reclamo.resolucion = ResolucionReclamo.SIN_DEVOLUCION;
     } else {
@@ -303,7 +213,7 @@ export class ReclamosService {
       const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id);
       if (!pago)
         throw new ConflictException('La reserva no tiene un pago registrado');
-      const saldo = pago.saldoReembolsable();
+      const saldo = this.reembolsos.saldoReembolsable(pago);
       const importe =
         dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
           ? saldo
@@ -329,12 +239,11 @@ export class ReclamosService {
         dto.referencia?.trim(),
         idAdmin,
       );
-      if (dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL)
-        reserva.aplicarReembolsoTotal();
-      else reserva.aplicarReembolsoParcial();
-      reserva.observacion_liquidacion =
-        dto.observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
-      await this.reservas.save(reserva);
+      await this.reservas.resolverReclamoConDevolucion(
+        reserva,
+        dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL,
+        dto.observacion,
+      );
       reclamo.estado = EstadoReclamo.RESUELTO_INQUILINO;
       reclamo.resolucion = dto.resolucion;
       reclamo.importe_reembolso = importe;
@@ -342,7 +251,7 @@ export class ReclamosService {
 
     reclamo.administrador_resolucion = { id: idAdmin } as never;
     reclamo.resuelto_en = new Date();
-    return this.reclamos.save(reclamo);
+    return this.prepararRespuesta(await this.reclamos.guardar(reclamo));
   }
 
   private verificarParticipante(reclamo: Reclamo, idUsuario: number): void {
@@ -357,7 +266,13 @@ export class ReclamosService {
     reclamo.mensajes = (reclamo.mensajes ?? []).filter(
       (mensaje) => mensaje.visible_para === VisibilidadMensajeReclamo.TODOS,
     );
-    return reclamo;
+    return this.prepararRespuesta(reclamo);
+  }
+
+  private prepararRespuesta(reclamo: Reclamo): Reclamo {
+    return Object.assign(reclamo, {
+      reserva: this.reservas.prepararRespuesta(reclamo.reserva),
+    });
   }
 
   private fueraDePlazo(fechaFin: string, hoy: string): boolean {

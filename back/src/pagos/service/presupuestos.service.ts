@@ -10,8 +10,6 @@ import { createHmac } from 'node:crypto';
 import { CotizacionesService } from '../../cotizaciones/service/cotizaciones.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
-import { cuentaAnuncianteHabilitada } from '../../publicaciones/politica-publicacion';
-import { admiteReservaPorFecha } from '../../catalogos/entity/modalidad.entity';
 import {
   decimalEntero,
   importeTexto,
@@ -32,13 +30,7 @@ interface PresupuestoFirmado extends CondicionesCobro {
 @Injectable()
 export class PresupuestosService {
   private readonly secreto: string;
-  constructor(
-    private readonly cotizaciones: CotizacionesService,
-    private readonly publicaciones: PublicacionesService,
-    private readonly disponibilidad: DisponibilidadService,
-    private readonly jwt: JwtService,
-    private readonly config: ConfigService,
-  ) {
+  constructor(private readonly cotizaciones: CotizacionesService, private readonly publicaciones: PublicacionesService, private readonly disponibilidad: DisponibilidadService, private readonly jwt: JwtService, private readonly config: ConfigService) {
     // Clave separada: un presupuesto jamás puede utilizarse como token de inicio de sesión.
     this.secreto = createHmac('sha256', config.getOrThrow<string>('JWT_SECRET'))
       .update('depa:presupuesto:v1')
@@ -67,9 +59,10 @@ export class PresupuestosService {
     const publicacion = await this.publicaciones.buscarPorId(
       dto.id_publicacion,
     );
-    if (!publicacion.activa || !cuentaAnuncianteHabilitada(publicacion) || !admiteReservaPorFecha(publicacion.modalidad))
+    if (!publicacion.activa || !this.publicaciones.cuentaAnuncianteHabilitada(publicacion) ||
+        !this.publicaciones.admiteReservaPorFecha(publicacion))
       throw new BadRequestException('Esta publicación no admite reservas');
-    if (publicacion.perteneceA(idUsuario))
+    if (this.publicaciones.perteneceA(publicacion, idUsuario))
       throw new BadRequestException('No podés reservar tu propia publicación');
     const dias = Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
     let moneda: 'ARS' | 'USD', unitario: bigint, origen: string;
@@ -139,11 +132,7 @@ export class PresupuestosService {
       cotizacion,
     };
   }
-  async validar(
-    token: string,
-    dto: CrearReservaDto,
-    usuario: number,
-  ): Promise<CondicionesCobro> {
+  async validar(token: string, dto: CrearReservaDto, usuario: number): Promise<CondicionesCobro> {
     let condiciones: PresupuestoFirmado;
     try {
       condiciones = await this.jwt.verifyAsync<PresupuestoFirmado>(token, {

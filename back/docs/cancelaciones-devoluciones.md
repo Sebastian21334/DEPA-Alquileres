@@ -105,4 +105,6 @@ Variables:
 - `MP_REFUNDS_ENABLED` (`false` por defecto).
 - `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
 
-La migración es `20261104-cancelaciones-devoluciones.sql` y es repetible.
+El comando aplica la migración de cancelaciones si todavía corresponde y luego
+`20261110-estados-por-ambito.sql`. Esta conserva los códigos de estado y pasa
+las disputas del enum original o del catálogo histórico al catálogo compartido.

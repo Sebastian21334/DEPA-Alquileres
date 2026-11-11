@@ -6,16 +6,20 @@ import {
   IsOptional,
   IsPositive,
   IsString,
+  Length,
+  Matches,
   Max,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
+import { MENSAJE_FORMATO_TITULO, PATRON_TITULO_PUBLICACION } from './crear-publicacion.dto';
 
 export class ActualizarPublicacionDto {
-  @IsOptional()
+  @ValidateIf((_dto, titulo: unknown) => titulo !== undefined)
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
+  @Length(5, 255, { message: 'El título debe tener entre 5 y 255 caracteres.' })
+  @Matches(PATRON_TITULO_PUBLICACION, { message: MENSAJE_FORMATO_TITULO })
   titulo?: string;
 
   @IsOptional()

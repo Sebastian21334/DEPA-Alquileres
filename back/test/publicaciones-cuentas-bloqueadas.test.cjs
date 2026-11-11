@@ -2,8 +2,9 @@ require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
+const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
 const { FavoritosService } = require('../dist/favoritos/service/favoritos.service');
-const { publicacionVisible } = require('../dist/publicaciones/politica-publicacion');
+const publicacionVisible = (publicacion) => new PublicacionesService().esVisible(publicacion);
 const { DataSource } = require('typeorm');
 const { Publicacion } = require('../dist/publicaciones/entity/publicacion.entity');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
@@ -17,7 +18,7 @@ function escenario() {
     buscarPorId: async () => publicacion,
     buscarPorAnunciante: async () => [publicacion],
     incrementarVisualizaciones: async () => { vistas++; },
-  }, {}, {}, {});
+  }, {}, {}, {}, new AnunciantesService({}));
   const favoritos = new FavoritosService({
     buscarPorUsuario: async () => [{ publicacion }],
     existe: async () => true,

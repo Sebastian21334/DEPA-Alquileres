@@ -17,12 +17,7 @@ export interface PagoExterno {
 
 export interface IPasarelaPagos {
   validarConfiguracionCheckout(): void;
-  crearCheckout(
-    reserva: Reserva,
-    referencia: string,
-    clave: string,
-    moneda: string,
-  ): Promise<{ id: string; url: string }>;
+  crearCheckout(reserva: Reserva, referencia: string, clave: string, moneda: string): Promise<{ id: string; url: string }>;
   consultarPago(id: string): Promise<PagoExterno>;
   validarWebhook(entrada: WebhookEntrada): void;
 }

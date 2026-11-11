@@ -1,8 +1,10 @@
 import { UsuariosCredencialesService } from '../../usuarios/service/usuarios-credenciales.service';
 import {
+  BadRequestException,
   Injectable,
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Inject,
   Logger,
 } from '@nestjs/common';
@@ -11,6 +13,7 @@ import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { CambiarContraseniaDto } from '../dto/cambiar-contrasenia.dto';
+import type { RestablecerContraseniaDto } from '../dto/restablecer-contrasenia.dto';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 
@@ -18,13 +21,7 @@ import { MAIL_SERVICE } from '../../mail/mail.interface';
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(
-    private readonly usuariosService: UsuariosService,
-    private readonly credencialesService: UsuariosCredencialesService,
-    private readonly jwtService: JwtService,
-    @Inject(MAIL_SERVICE)
-    private readonly mailService: IMailService,
-  ) {}
+  constructor(private readonly usuariosService: UsuariosService, private readonly credencialesService: UsuariosCredencialesService, private readonly jwtService: JwtService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService) {}
 
   /** Registra un usuario nuevo, genera el token de verificación y dispara el mail. */
   async register(dto: RegisterDto) {
@@ -40,8 +37,7 @@ export class AuthService {
       email,
     });
 
-    const token =
-      await this.credencialesService.generarTokenVerificacion(usuario);
+    const token = await this.credencialesService.generarTokenVerificacion(usuario);
 
     // El alta de la cuenta ya quedó confirmada en la base (usuario + token de
     // verificación). Si el proveedor de mail falla o rate-limitea (Azure
@@ -76,9 +72,12 @@ export class AuthService {
     // Se chequea después de la contraseña, para no revelar el estado de
     // verificación de una cuenta con credenciales incorrectas
     if (!user.email_verificado) {
-      throw new ForbiddenException(
-        'Tenés que verificar tu email antes de iniciar sesión',
-      );
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        error: 'Forbidden',
+        message: 'Tu cuenta está inactiva',
+        codigo: 'EMAIL_NO_VERIFICADO',
+      });
     }
 
     const payload = { sub: user.id, email: user.email, rol: user.rol?.nombre };
@@ -154,21 +153,37 @@ export class AuthService {
     };
   }
 
-  async restablecerContrasenia(token: string, nuevaContrasenia: string) {
+  async restablecerContrasenia(dto: RestablecerContraseniaDto) {
+    this.validarConfirmacionContrasenia(
+      dto.nuevaContrasenia,
+      dto.confirmarContrasenia,
+    );
     const usuario = await this.credencialesService.restablecerContrasenia(
-      token,
-      nuevaContrasenia,
+      dto.token,
+      dto.nuevaContrasenia,
     );
     await this.notificarCambioContrasenia(usuario.email);
     return { mensaje: 'Contraseña restablecida correctamente' };
   }
 
   async cambiarContrasenia(idUsuario: number, dto: CambiarContraseniaDto) {
+    this.validarConfirmacionContrasenia(
+      dto.nuevaContrasenia,
+      dto.confirmarContrasenia,
+    );
     const usuario = await this.credencialesService.cambiarContrasenia(
-      idUsuario, dto.contraseniaActual, dto.nuevaContrasenia,
+      idUsuario,
+      dto.contraseniaActual,
+      dto.nuevaContrasenia,
     );
     await this.notificarCambioContrasenia(usuario.email);
     return { mensaje: 'Contraseña actualizada correctamente' };
+  }
+
+  private validarConfirmacionContrasenia(nuevaContrasenia: string, confirmarContrasenia: string): void {
+    if (nuevaContrasenia !== confirmarContrasenia) {
+      throw new BadRequestException(['Las contraseñas no coinciden']);
+    }
   }
 
   private async notificarCambioContrasenia(email: string | null): Promise<void> {

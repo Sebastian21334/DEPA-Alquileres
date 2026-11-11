@@ -1,3 +1,4 @@
+import { EstadoPagoReserva } from '../../catalogos/estados';
 import { PresupuestosService } from './presupuestos.service';
 import {
   BadRequestException,
@@ -17,7 +18,6 @@ import type {
   IPasarelaPagos,
   PagoExterno,
 } from '../repository/pasarela-pagos.interface';
-import { EstadoPagoReserva } from '../../reservas/entity/reserva.entity';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { DisputasService } from '../../disputas/service/disputas.service';
@@ -28,15 +28,7 @@ import { Pago } from '../entity/pago.entity';
 export class PagosService {
   private readonly logger = new Logger(PagosService.name);
 
-  constructor(
-    private readonly presupuestos: PresupuestosService,
-    @Inject(PAGOS_REPOSITORY) private readonly pagos: IPagosRepository,
-    private readonly reservasService: ReservasService,
-    private readonly reembolsosService: ReembolsosService,
-    private readonly disputasService: DisputasService,
-    private readonly config: ConfigService,
-    @Inject(PASARELA_PAGOS) private readonly pasarela: IPasarelaPagos,
-  ) {}
+  constructor(private readonly presupuestos: PresupuestosService, @Inject(PAGOS_REPOSITORY) private readonly pagos: IPagosRepository, private readonly reservasService: ReservasService, private readonly reembolsosService: ReembolsosService, private readonly disputasService: DisputasService, private readonly config: ConfigService, @Inject(PASARELA_PAGOS) private readonly pasarela: IPasarelaPagos) {}
 
   async crearCheckout(dto: CrearCheckoutDto, idUsuario: number) {
     this.pasarela.validarConfiguracionCheckout();
@@ -79,7 +71,7 @@ export class PagosService {
         idempotencyKey,
         currency,
       );
-      pago.registrarPreferencia(preference.id);
+      pago.preference_id = preference.id;
       await this.pagos.guardar(pago);
       return {
         reserva_id: reserva.id,
@@ -134,7 +126,7 @@ export class PagosService {
       idReserva,
       idUsuario,
     );
-    if (!reserva.esDelInquilino(idUsuario)) {
+    if (!this.reservasService.esDelInquilino(reserva, idUsuario)) {
       throw new ForbiddenException('Solo el inquilino puede validar este pago');
     }
 
@@ -160,28 +152,26 @@ export class PagosService {
     const pago = await this.pagos.buscarPorReferencia(externalReference);
     if (!pago) throw new BadRequestException('No existe el pago informado');
 
-    if (!pago.importeCoincide(Number(payment.transaction_amount))) {
+    const importeInformado = Number(payment.transaction_amount);
+    if (!Number.isFinite(importeInformado) ||
+        !(Math.abs(importeInformado - Number(pago.amount)) <= 0.009)) {
       this.logger.warn(`Importe inválido para ${externalReference}`);
       throw new BadRequestException(
         'El importe del pago no coincide con la reserva',
       );
     }
-    if (!pago.monedaCoincide(payment.currency_id)) {
+    if (payment.currency_id !== pago.currency) {
       this.logger.warn(`Moneda inválida para ${externalReference}`);
       throw new BadRequestException(
         'La moneda del pago no coincide con la reserva',
       );
     }
 
-    pago.registrarResultado({
-      paymentId: String(payment.id),
-      status: payment.status ?? 'unknown',
-      statusDetail: payment.status_detail ?? null,
-      paymentMethodId: payment.payment_method_id ?? null,
-      approvedAt: payment.date_approved
-        ? new Date(payment.date_approved)
-        : null,
-    });
+    pago.payment_id = String(payment.id);
+    pago.status = payment.status ?? 'unknown';
+    pago.status_detail = payment.status_detail ?? null;
+    pago.payment_method_id = payment.payment_method_id ?? null;
+    pago.approved_at = payment.date_approved ? new Date(payment.date_approved) : null;
     await this.pagos.guardar(pago);
 
     if (payment.status === 'approved') {
@@ -205,7 +195,9 @@ export class PagosService {
           pago.reserva.id,
         )
       )
-        return pago;
+        return Object.assign(pago, {
+          reserva: this.reservasService.prepararRespuesta(pago.reserva),
+        });
       const importe = Number(payment.transaction_amount ?? pago.amount);
       const reembolso = await this.reembolsosService.registrarDesdeWebhook({
         pago,
@@ -231,7 +223,9 @@ export class PagosService {
       );
     }
 
-    return pago;
+    return Object.assign(pago, {
+      reserva: this.reservasService.prepararRespuesta(pago.reserva),
+    });
   }
 
   async consultarEstado(idReserva: number, idUsuario: number) {
@@ -239,7 +233,7 @@ export class PagosService {
       idReserva,
       idUsuario,
     );
-    if (!reserva.esDelInquilino(idUsuario)) {
+    if (!this.reservasService.esDelInquilino(reserva, idUsuario)) {
       throw new ForbiddenException(
         'Solo el inquilino puede consultar el estado del pago',
       );

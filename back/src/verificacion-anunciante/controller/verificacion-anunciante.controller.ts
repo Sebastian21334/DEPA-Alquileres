@@ -85,10 +85,7 @@ const EVIDENCIAS_VITALIDAD_INTERCEPTOR = FileFieldsInterceptor(
 
 @Controller('anunciantes')
 export class VerificacionAnuncianteController {
-  constructor(
-    private readonly verificacionService: VerificacionAnuncianteService,
-    private readonly pruebaVidaService: PruebaVidaService,
-  ) {}
+  constructor(private readonly verificacionService: VerificacionAnuncianteService, private readonly pruebaVidaService: PruebaVidaService) {}
 
   @Get('verificacion-facial/desafio')
   @UseGuards(JwtAuthGuard)
@@ -98,22 +95,14 @@ export class VerificacionAnuncianteController {
 
   @Post('verificacion-facial/desafio/cambiar')
   @UseGuards(JwtAuthGuard)
-  cambiarDesafioFacial(
-    @Req() req: AuthenticatedRequest,
-    @Body('challengeToken') challengeToken: string,
-  ) {
+  cambiarDesafioFacial(@Req() req: AuthenticatedRequest, @Body('challengeToken') challengeToken: string) {
     return this.pruebaVidaService.cambiarDesafio(req.user.id, challengeToken);
   }
 
   @Post('verificacion-facial/validar')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(EVIDENCIAS_VITALIDAD_INTERCEPTOR)
-  validarVitalidad(
-    @Req() req: AuthenticatedRequest,
-    @Body('challengeToken') challengeToken: string,
-    @UploadedFiles()
-    archivos: Record<string, Express.Multer.File[] | undefined> = {},
-  ) {
+  validarVitalidad(@Req() req: AuthenticatedRequest, @Body('challengeToken') challengeToken: string, @UploadedFiles() archivos: Record<string, Express.Multer.File[] | undefined> = {}) {
     return this.pruebaVidaService.validarVitalidad(
       req.user.id,
       challengeToken,
@@ -124,19 +113,13 @@ export class VerificacionAnuncianteController {
   @Post('solicitar')
   @UseGuards(JwtAuthGuard)
   // La solicitud queda vinculada al usuario del JWT.
-  async solicitarAlta(
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: SolicitarAnuncianteDto,
-  ) {
+  async solicitarAlta(@Req() req: AuthenticatedRequest, @Body() dto: SolicitarAnuncianteDto) {
     return this.verificacionService.solicitarAlta(req.user.id, dto);
   }
 
   @Patch('mi-solicitud/datos-inmobiliaria')
   @UseGuards(JwtAuthGuard)
-  actualizarDatosInmobiliaria(
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: DatosInmobiliariaDto,
-  ) {
+  actualizarDatosInmobiliaria(@Req() req: AuthenticatedRequest, @Body() dto: DatosInmobiliariaDto) {
     return this.verificacionService.actualizarDatosInmobiliaria(
       req.user.id,
       dto,
@@ -146,12 +129,7 @@ export class VerificacionAnuncianteController {
   @Post('mi-solicitud/documentos')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(DOCUMENTOS_INTERCEPTOR)
-  async subirDocumentos(
-    @Req() req: AuthenticatedRequest,
-    @Body('verificationToken') verificationToken: string,
-    @UploadedFiles()
-    archivos: Record<string, Express.Multer.File[] | undefined> = {},
-  ) {
+  async subirDocumentos(@Req() req: AuthenticatedRequest, @Body('verificationToken') verificationToken: string, @UploadedFiles() archivos: Record<string, Express.Multer.File[] | undefined> = {}) {
     // El usuario autenticado se obtiene del JWT; nunca se recibe un ID manipulable.
     return this.verificacionService.subirDocumentos(
       req.user.id,
@@ -163,12 +141,7 @@ export class VerificacionAnuncianteController {
   @Post('mi-solicitud/reenviar')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(DOCUMENTOS_INTERCEPTOR)
-  async reenviarDocumentos(
-    @Req() req: AuthenticatedRequest,
-    @Body('verificationToken') verificationToken: string,
-    @UploadedFiles()
-    archivos: Record<string, Express.Multer.File[] | undefined> = {},
-  ) {
+  async reenviarDocumentos(@Req() req: AuthenticatedRequest, @Body('verificationToken') verificationToken: string, @UploadedFiles() archivos: Record<string, Express.Multer.File[] | undefined> = {}) {
     // El servicio solo permite este endpoint si la solicitud anterior fue rechazada.
     return this.verificacionService.subirDocumentos(
       req.user.id,
@@ -198,11 +171,7 @@ export class VerificacionAnuncianteController {
   @Patch(':id/aprobar')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  async aprobar(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: RevisarVerificacionDto,
-  ) {
+  async aprobar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest, @Body() dto: RevisarVerificacionDto) {
     // La aprobación cambia verificado y habilita la creación de publicaciones.
     return this.verificacionService.aprobar(id, req.user.id, dto);
   }
@@ -210,11 +179,7 @@ export class VerificacionAnuncianteController {
   @Delete(':id/rechazar')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  async rechazar(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: RechazarVerificacionDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  async rechazar(@Param('id', ParseIntPipe) id: number, @Body() dto: RechazarVerificacionDto, @Req() req: AuthenticatedRequest) {
     // El motivo se valida mediante DTO y queda guardado en el historial.
     return this.verificacionService.rechazar(id, req.user.id, dto);
   }

@@ -3,12 +3,10 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LucideArrowLeft, LucideEye, LucideEyeOff } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
+import { ApiError } from '../../../core/interceptors/api-error';
 
-// RF2 (autenticación) + caso de uso "Iniciar sesión" (ID 2). Los mensajes de
-// error específicos (credenciales inválidas, cuenta sin verificar, usuario
-// bloqueado) ya vienen legibles desde el backend — ver
-// back/src/auth/service/auth.service.ts#login y el errorInterceptor, que los
-// deja disponibles en err.message.
+const MENSAJE_EMAIL_NO_VERIFICADO = 'Tenés que verificar tu email antes de iniciar sesión';
+
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -24,6 +22,7 @@ export class LoginComponent {
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
+  protected readonly puedeReenviarVerificacion = signal(false);
   protected readonly reenviandoVerificacion = signal(false);
   protected readonly verificacionReenviada = signal<string | null>(null);
   protected readonly verContrasenia = signal(false);
@@ -47,6 +46,7 @@ export class LoginComponent {
 
     this.enviando.set(true);
     this.error.set(null);
+    this.puedeReenviarVerificacion.set(false);
     this.verificacionReenviada.set(null);
 
     const { email, contrasenia } = this.form.getRawValue();
@@ -57,15 +57,14 @@ export class LoginComponent {
         const destino = this.route.snapshot.queryParamMap.get('returnUrl');
         this.router.navigateByUrl(destino?.startsWith('/') ? destino : '/');
       },
-      error: (err: Error) => {
+      error: (err: ApiError) => {
         this.enviando.set(false);
-        this.error.set(err.message);
+        const sinVerificar =
+          err.codigo === 'EMAIL_NO_VERIFICADO' || err.message === MENSAJE_EMAIL_NO_VERIFICADO;
+        this.puedeReenviarVerificacion.set(sinVerificar);
+        this.error.set(sinVerificar ? MENSAJE_EMAIL_NO_VERIFICADO : err.message);
       },
     });
-  }
-
-  protected puedeReenviarVerificacion(): boolean {
-    return this.error() === 'Tenés que verificar tu email antes de iniciar sesión';
   }
 
   protected reenviarVerificacion(): void {
@@ -82,6 +81,7 @@ export class LoginComponent {
       next: ({ mensaje }) => {
         this.reenviandoVerificacion.set(false);
         this.error.set(null);
+        this.puedeReenviarVerificacion.set(false);
         this.verificacionReenviada.set(mensaje);
       },
       error: (err: Error) => {

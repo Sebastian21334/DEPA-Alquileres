@@ -1,16 +1,15 @@
-import { IsNotEmpty, IsString } from 'class-validator';
-import { ContraseniaSegura } from '../validators/contrasenia-segura.decorator';
-import { CoincideCon } from '../validators/coincide-con.decorator';
+import { IsByteLength, IsNotEmpty, IsString, Matches } from 'class-validator';
+import { OPCIONES_BYTES_CONTRASENIA } from './contrasenia-segura.dto';
 
 export class CambiarContraseniaDto {
   @IsString()
   @IsNotEmpty()
   contraseniaActual: string;
 
-  @ContraseniaSegura()
+  @Matches(/^(?=.*\p{L})(?=.*[0-9])(?=.*[\p{P}\p{S}])[^\s\p{C}]{12,}$/u)
+  @IsByteLength(0, 72, OPCIONES_BYTES_CONTRASENIA)
   nuevaContrasenia: string;
 
   @IsString()
-  @CoincideCon('nuevaContrasenia')
   confirmarContrasenia: string;
 }

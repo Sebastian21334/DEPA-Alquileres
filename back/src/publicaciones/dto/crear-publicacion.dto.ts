@@ -4,16 +4,22 @@ import {
   IsNumber,
   IsPositive,
   IsInt,
+  Length,
+  Matches,
   Max,
   MaxLength,
   Min,
 } from 'class-validator';
 
+export const PATRON_TITULO_PUBLICACION =
+  /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} .,'’()/-]+(?<! )$/u;
+export const MENSAJE_FORMATO_TITULO =
+  'El título debe incluir letras o números y admite espacios, puntos, comas, apóstrofos, paréntesis, guiones y barras.';
+
 export class CrearPublicacionDto {
-  // Los IDs siguientes representan relaciones con catálogos y ubicación.
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
+  @Length(5, 255, { message: 'El título debe tener entre 5 y 255 caracteres.' })
+  @Matches(PATRON_TITULO_PUBLICACION, { message: MENSAJE_FORMATO_TITULO })
   titulo: string;
 
   @IsString()

@@ -7,10 +7,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  TRANSACCION_CALENDARIO,
-  type ITransaccionCalendario,
-} from '../../disponibilidad/repository/transaccion-calendario.interface';
+import { nombreInquilinoReserva } from './reservas.utils';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { Reserva } from '../entity/reserva.entity';
@@ -20,60 +17,50 @@ import {
 } from '../repository/reserva.repository.interface';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { ReservasService } from './reservas.service';
+import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 
 @Injectable()
 export class ReservaReprogramacionService {
-  constructor(
-    @Inject(TRANSACCION_CALENDARIO)
-    private readonly transaccion: ITransaccionCalendario,
-    @Inject(RESERVA_REPOSITORY)
-    private readonly reservaRepository: IReservaRepository,
-    private readonly disponibilidadService: DisponibilidadService,
-    private readonly notificacionesService: ReservaNotificacionesService,
-    private readonly reservasService: ReservasService,
-  ) {}
+  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reservasService: ReservasService, private readonly anunciantesService: AnunciantesService) {}
 
   /** El inquilino puede cambiar sus fechas si el nuevo rango sigue libre. */
-  async actualizarFechas(
-    id: number,
-    dto: ActualizarFechasReservaDto,
-    idUsuarioQueOpera: number,
-  ): Promise<Reserva> {
-    const idCambio = await this.transaccion.ejecutar(
-      async ({ reservas: reservaRepository, fechas: fechaRepository }) => {
+  async actualizarFechas(id: number, dto: ActualizarFechasReservaDto, idUsuarioQueOpera: number): Promise<Reserva> {
+    const idCambio = await this.reservaRepository.conTransaccion(
+      async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
-        if (!reserva.esDelInquilino(idUsuarioQueOpera)) {
+        if (!this.reservasService.esDelInquilino(reserva, idUsuarioQueOpera)) {
           throw new ForbiddenException(
             'Solo el inquilino que realizó la reserva puede cambiar sus fechas',
           );
         }
         // Una estadía terminada por fecha también cuenta como cerrada.
-        if (reserva.cancelada || reserva.estado_estadia === 'FINALIZADA') {
+        const estadoEstadia = this.reservasService.calcularEstadoEstadia(reserva);
+        if (reserva.cancelada || estadoEstadia === 'FINALIZADA') {
           throw new BadRequestException(
             'No se pueden modificar las fechas de una reserva cerrada',
           );
         }
-        if (!reserva.pagoAprobado()) {
+        if (!this.reservasService.pagoAprobado(reserva)) {
           throw new BadRequestException(
             'No se pueden modificar las fechas hasta que el pago esté aprobado',
           );
         }
         if (
-          reserva.estado_estadia !== 'CONFIRMADA' ||
-          reserva.codigoValidado()
+          estadoEstadia !== 'CONFIRMADA' ||
+          this.reservasService.codigoValidado(reserva)
         ) {
           throw new BadRequestException(
             'Solo se pueden reprogramar reservas antes del inicio de la estadía y sin ingreso validado',
           );
         }
-        if (reserva.liquidacionEnRevision()) {
+        if (this.reservasService.liquidacionEnRevision(reserva)) {
           throw new BadRequestException(
             'No se puede reprogramar una reserva con un reclamo o liquidación en revisión',
           );
         }
-        if (reserva.liquidacionResuelta()) {
+        if (this.reservasService.liquidacionResuelta(reserva)) {
           throw new BadRequestException(
             'No se puede reprogramar una reserva con una liquidación resuelta',
           );
@@ -170,7 +157,7 @@ export class ReservaReprogramacionService {
           inicio,
           fin,
           reserva.id,
-          fechaRepository,
+          transaccion,
         );
         if (!disponible)
           throw new ConflictException(
@@ -178,15 +165,19 @@ export class ReservaReprogramacionService {
           );
         const anteriorInicio = reserva.fecha_inicio;
         const anteriorFin = reserva.fecha_fin;
-        reserva.reprogramar(dto.fecha_inicio, dto.fecha_fin);
+        reserva.fecha_inicio = dto.fecha_inicio;
+        reserva.fecha_fin = dto.fecha_fin;
         await reservaRepository.guardar(reserva);
+        const contactoAnunciante = this.anunciantesService.datosContacto(
+          reserva.publicacion.anunciante,
+        );
         const cambio = await reservaRepository.guardarReprogramacion({
           reserva,
           fecha_inicio_anterior: anteriorInicio,
           fecha_fin_anterior: anteriorFin,
           fecha_inicio_nueva: dto.fecha_inicio,
           fecha_fin_nueva: dto.fecha_fin,
-          destinatario: reserva.emailDelAnunciante() ?? null,
+          destinatario: contactoAnunciante.email ?? null,
           notificada_en: null,
           detalle: {
             conversion:
@@ -205,8 +196,8 @@ export class ReservaReprogramacionService {
                 : undefined,
             idReserva: reserva.id,
             titulo: reserva.publicacion.titulo,
-            nombreAnunciante: reserva.nombreDelAnunciante() || 'Anfitrión',
-            nombreInquilino: reserva.nombreInquilino() || 'Inquilino',
+            nombreAnunciante: contactoAnunciante.nombre || 'Anfitrión',
+            nombreInquilino: nombreInquilinoReserva(reserva) || 'Inquilino',
             inicioAnterior: anteriorInicio,
             finAnterior: anteriorFin,
             inicioNuevo: dto.fecha_inicio,
@@ -225,14 +216,10 @@ export class ReservaReprogramacionService {
     const actualizada = await this.reservaRepository.buscarPorId(id);
     if (!actualizada)
       throw new NotFoundException(`No se encontró la reserva ${id}`);
-    return actualizada;
+    return this.reservasService.prepararRespuesta(actualizada);
   }
 
-  async reintentarAvisoReprogramacion(
-    id: number,
-    idCambio: number,
-    idUsuario: number,
-  ): Promise<Reserva> {
+  async reintentarAvisoReprogramacion(id: number, idCambio: number, idUsuario: number): Promise<Reserva> {
     await this.reservasService.buscarPorId(id, idUsuario);
     await this.notificacionesService.enviarReprogramacion(idCambio, id);
     return this.reservasService.buscarPorId(id, idUsuario);

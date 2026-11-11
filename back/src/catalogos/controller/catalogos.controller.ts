@@ -71,10 +71,7 @@ export class CatalogosController {
   @Put('tipos-anunciante/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  actualizarTipoAnunciante(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() datos: CatalogoDto,
-  ) {
+  actualizarTipoAnunciante(@Param('id', ParseIntPipe) id: number, @Body() datos: CatalogoDto) {
     return this.catalogosService.actualizarTipoAnunciante(id, datos);
   }
 
@@ -103,10 +100,7 @@ export class CatalogosController {
   @Put('tipos-propiedad/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  actualizarTipoPropiedad(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() datos: CatalogoDto,
-  ) {
+  actualizarTipoPropiedad(@Param('id', ParseIntPipe) id: number, @Body() datos: CatalogoDto) {
     return this.catalogosService.actualizarTipoPropiedad(id, datos);
   }
 
@@ -135,10 +129,7 @@ export class CatalogosController {
   @Put('modalidades/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  actualizarModalidad(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() datos: ModalidadDto,
-  ) {
+  actualizarModalidad(@Param('id', ParseIntPipe) id: number, @Body() datos: ModalidadDto) {
     return this.catalogosService.actualizarModalidad(id, datos);
   }
 
@@ -167,10 +158,7 @@ export class CatalogosController {
   @Put('tipos-moneda/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  actualizarTipoMoneda(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() datos: CatalogoDto,
-  ) {
+  actualizarTipoMoneda(@Param('id', ParseIntPipe) id: number, @Body() datos: CatalogoDto) {
     return this.catalogosService.actualizarTipoMoneda(id, datos);
   }
 

@@ -4,8 +4,10 @@ const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
 const { ReservaFinalizacionService } = require('../dist/reservas/service/reserva-finalizacion.service');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
+const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
+const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 
-// Ejecuta los predicados construidos por el servicio sobre una base aislada.
+// Ejecuta los predicados construidos por el repositorio sobre una base aislada.
 function base() {
   const db = new DatabaseSync(':memory:');
   db.exec(`CREATE TABLE reserva (id INTEGER PRIMARY KEY, finalizada BOOLEAN, cancelada BOOLEAN,
@@ -35,7 +37,7 @@ function base() {
     };
     return builder;
   }};
-  return { db, service: new ReservaFinalizacionService(repo) };
+  return { db, service: new ReservaFinalizacionService(new ReservaRepository(repo)) };
 }
 
 test('cierra solo estadías vencidas con pago e ingreso verificados, y conserva la liquidación', async () => {
@@ -54,23 +56,24 @@ test('cierra solo estadías vencidas con pago e ingreso verificados, y conserva 
 });
 
 test('estado calculado respeta el último día, el ingreso y las fechas inválidas', () => {
+  const estadoService = new ReservaEstadoService();
   const reserva = Object.assign(new Reserva(), { estado_pago: 'APROBADO', cancelada: false,
     finalizada: false, fecha_inicio: '2030-01-01', fecha_fin: '2030-01-02', codigo_validado_en: new Date() });
-  assert.equal(reserva.calcularEstadoEstadia(new Date('2030-01-03T02:59:59Z')), 'EN_CURSO');
-  assert.equal(reserva.calcularEstadoEstadia(new Date('2030-01-03T03:00:00Z')), 'FINALIZADA');
+  assert.equal(estadoService.calcularEstadoEstadia(reserva, new Date('2030-01-03T02:59:59Z')), 'EN_CURSO');
+  assert.equal(estadoService.calcularEstadoEstadia(reserva, new Date('2030-01-03T03:00:00Z')), 'FINALIZADA');
   reserva.codigo_validado_en = null;
-  assert.equal(reserva.calcularEstadoEstadia(new Date('2030-01-03T03:00:00Z')), 'INGRESO_NO_VERIFICADO');
+  assert.equal(estadoService.calcularEstadoEstadia(reserva, new Date('2030-01-03T03:00:00Z')), 'INGRESO_NO_VERIFICADO');
   reserva.fecha_inicio = '2030-01-04';
-  assert.equal(reserva.calcularEstadoEstadia(new Date('2030-01-03T03:00:00Z')), 'FECHAS_A_REVISAR');
+  assert.equal(estadoService.calcularEstadoEstadia(reserva, new Date('2030-01-03T03:00:00Z')), 'FECHAS_A_REVISAR');
 });
 
 test('si falla una ejecución se vuelve a intentar en la siguiente', async () => {
   const { db, service } = base();
-  const crear = service.reservas.createQueryBuilder.bind(service.reservas);
+  const finalizar = service.reservas.finalizarEstadiasVencidas.bind(service.reservas);
   let primerIntento = true;
-  service.reservas.createQueryBuilder = () => {
+  service.reservas.finalizarEstadiasVencidas = async (hoy) => {
     if (primerIntento) { primerIntento = false; throw new Error('base no disponible'); }
-    return crear();
+    return finalizar(hoy);
   };
   service.logger.error = () => {};
   try {

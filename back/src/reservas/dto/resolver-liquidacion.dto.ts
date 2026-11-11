@@ -1,15 +1,15 @@
+import { EstadoLiquidacionReserva } from '../../catalogos/estados';
 import {
-  IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   MaxLength,
 } from 'class-validator';
-import { EstadoLiquidacionReserva } from '../entity/reserva.entity';
 
 export class ResolverLiquidacionDto {
-  @IsEnum(EstadoLiquidacionReserva)
+  @IsIn(Object.values(EstadoLiquidacionReserva))
   estado: EstadoLiquidacionReserva;
 
   @IsOptional()

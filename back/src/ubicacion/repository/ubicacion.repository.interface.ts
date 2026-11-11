@@ -6,10 +6,7 @@ export interface IUbicacionRepository {
   buscarTodasProvincias(): Promise<Provincia[]>;
   buscarProvinciaPorId(id: number): Promise<Provincia | null>;
   crearProvincia(datos: Partial<Provincia>): Promise<Provincia>;
-  actualizarProvincia(
-    id: number,
-    datos: Partial<Provincia>,
-  ): Promise<Provincia | null>;
+  actualizarProvincia(id: number, datos: Partial<Provincia>): Promise<Provincia | null>;
   eliminarProvincia(id: number): Promise<void>;
 
   // Ciudades

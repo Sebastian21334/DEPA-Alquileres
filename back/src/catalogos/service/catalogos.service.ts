@@ -6,17 +6,70 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
+  type OnModuleInit,
 } from '@nestjs/common';
 import { CATALOGOS_REPOSITORY } from '../repository/catalogos.repository.interface';
 import type { ICatalogosRepository } from '../repository/catalogos.repository.interface';
+import type { TipoAnunciante } from '../entity/tipo-anunciante.entity';
+import { PATRON_RESERVA_POR_FECHA, type Modalidad } from '../entity/modalidad.entity';
+import type { ModalidadRespuestaDto } from '../dto/modalidad-respuesta.dto';
+import { ESTADOS_INICIALES, type CodigoAmbitoEstado } from '../estados';
+import catalogosIniciales from '../catalogos-iniciales.json';
 
 @Injectable()
-export class CatalogosService {
-  constructor(
-    @Inject(CATALOGOS_REPOSITORY)
-    private readonly catalogosRepo: ICatalogosRepository,
-  ) {}
+export class CatalogosService implements OnModuleInit {
+  constructor(@Inject(CATALOGOS_REPOSITORY) private readonly catalogosRepo: ICatalogosRepository) {}
+
+  async onModuleInit(): Promise<void> {
+    const [roles, estados] = await Promise.all([
+      this.catalogosRepo.buscarTodosRoles(),
+      this.catalogosRepo.listarClavesEstado(),
+    ]);
+    const rolesCargados = new Set(roles.map(({ nombre }) => nombre));
+    const estadosCargados = new Set(estados.map(({ codigoAmbito, codigo }) => `${codigoAmbito}/${codigo}`));
+    const faltantes = [
+      ...catalogosIniciales.rol
+        .filter(({ nombre }) => !rolesCargados.has(nombre))
+        .map(({ nombre }) => `rol ${nombre}`),
+      ...Object.entries(ESTADOS_INICIALES).flatMap(([codigoAmbito, { estados }]) =>
+        Object.keys(estados)
+          .map((codigo) => `${codigoAmbito}/${codigo}`)
+          .filter((clave) => !estadosCargados.has(clave)),
+      ),
+    ];
+    if (faltantes.length) {
+      throw new InternalServerErrorException(
+        `Faltan datos base (${faltantes.join(', ')}). Ejecutá npm run db:seed desde back.`,
+      );
+    }
+  }
+
+  esInmobiliaria(tipo?: TipoAnunciante | null): boolean {
+    return /inmobiliaria|institucional/i.test(tipo?.nombre ?? '');
+  }
+
+  admiteReservaPorFecha(modalidad?: Modalidad | null): boolean {
+    if (modalidad?.permite_reservas_por_fecha != null) {
+      return modalidad.permite_reservas_por_fecha;
+    }
+    return new RegExp(PATRON_RESERVA_POR_FECHA, 'i').test(modalidad?.nombre ?? '');
+  }
+
+  prepararModalidad(modalidad: Modalidad): ModalidadRespuestaDto {
+    return Object.assign(modalidad, {
+      admite_reservas_por_fecha: this.admiteReservaPorFecha(modalidad),
+    });
+  }
+
+  async obtenerEstado(codigoAmbito: CodigoAmbitoEstado, codigo: string) {
+    const estado = await this.catalogosRepo.buscarEstadoPorCodigo(codigoAmbito, codigo);
+    if (!estado) {
+      throw new InternalServerErrorException(`Falta el estado ${codigo} del ámbito ${codigoAmbito}`);
+    }
+    return estado;
+  }
 
   // --- ROLES ---
   /** Lista los roles disponibles para administracion y registro de usuarios. */
@@ -40,6 +93,9 @@ export class CatalogosService {
   async actualizarRol(id: number, datos: RolDto) {
     const rol = await this.catalogosRepo.buscarRolPorId(id);
     if (!rol) throw new NotFoundException(`El rol con ID ${id} no existe`);
+    if (datos.nombre !== rol.nombre && this.esRolInicial(rol.nombre)) {
+      throw new ConflictException(`El rol ${rol.nombre} debe conservar su nombre`);
+    }
     const duplicado = await this.catalogosRepo.buscarRolPorNombre(datos.nombre);
     if (duplicado && duplicado.id !== id)
       throw new ConflictException('Ya existe un rol con ese nombre');
@@ -51,8 +107,15 @@ export class CatalogosService {
   async eliminarRol(id: number) {
     const rol = await this.catalogosRepo.buscarRolPorId(id);
     if (!rol) throw new NotFoundException(`El rol con ID ${id} no existe`);
+    if (this.esRolInicial(rol.nombre)) {
+      throw new ConflictException(`El rol ${rol.nombre} es necesario para el sistema`);
+    }
     await this.eliminarSeguro(() => this.catalogosRepo.eliminarRol(id), 'rol');
     return { mensaje: `Rol con ID ${id} eliminado correctamente` };
+  }
+
+  private esRolInicial(nombre: string): boolean {
+    return catalogosIniciales.rol.some((rol) => rol.nombre === nombre);
   }
 
   // --- TIPOS ANUNCIANTE ---
@@ -185,8 +248,9 @@ export class CatalogosService {
 
   // --- MODALIDADES ---
   /** Lista las modalidades de alquiler disponibles. */
-  getModalidades() {
-    return this.catalogosRepo.buscarTodasModalidades();
+  async getModalidades() {
+    const modalidades = await this.catalogosRepo.buscarTodasModalidades();
+    return modalidades.map((modalidad) => this.prepararModalidad(modalidad));
   }
   /** Crea una modalidad sin duplicar nombres existentes. */
   async crearModalidad(datos: ModalidadDto) {
@@ -196,7 +260,7 @@ export class CatalogosService {
     if (existente) {
       throw new ConflictException(`Ya existe la modalidad '${datos.nombre}'`);
     }
-    return this.catalogosRepo.crearModalidad(datos);
+    return this.prepararModalidad(await this.catalogosRepo.crearModalidad(datos));
   }
   /** Actualiza una modalidad existente. */
   async actualizarModalidad(id: number, datos: ModalidadDto) {
@@ -210,7 +274,7 @@ export class CatalogosService {
       throw new ConflictException('Ya existe un modalidad con ese nombre');
     const actualizado = await this.catalogosRepo.actualizarModalidad(id, datos);
     if (!actualizado) throw new NotFoundException('El modalidad ya no existe');
-    return actualizado;
+    return this.prepararModalidad(actualizado);
   }
   /** Elimina una modalidad despues de validar que exista. */
   async eliminarModalidad(id: number) {
@@ -228,7 +292,7 @@ export class CatalogosService {
     const item = await this.catalogosRepo.buscarModalidadPorId(id);
     if (!item)
       throw new NotFoundException(`La modalidad con ID ${id} no existe`);
-    return item;
+    return this.prepararModalidad(item);
   }
 
   // --- TIPOS MONEDA ---
@@ -285,10 +349,7 @@ export class CatalogosService {
     return item;
   }
 
-  private async eliminarSeguro(
-    accion: () => Promise<void>,
-    nombre: string,
-  ): Promise<void> {
+  private async eliminarSeguro(accion: () => Promise<void>, nombre: string): Promise<void> {
     try {
       await accion();
     } catch (error: unknown) {

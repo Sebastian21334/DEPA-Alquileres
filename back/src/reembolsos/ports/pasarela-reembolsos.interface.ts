@@ -8,13 +8,6 @@ export interface ResultadoReembolsoExterno {
 }
 
 export interface IPasarelaReembolsos {
-  reembolsar(
-    paymentId: string,
-    importe: number,
-    idempotencyKey: string,
-  ): Promise<ResultadoReembolsoExterno>;
-  consultarReembolso(
-    paymentId: string,
-    refundId: string,
-  ): Promise<ResultadoReembolsoExterno>;
+  reembolsar(paymentId: string, importe: number, idempotencyKey: string): Promise<ResultadoReembolsoExterno>;
+  consultarReembolso(paymentId: string, refundId: string): Promise<ResultadoReembolsoExterno>;
 }

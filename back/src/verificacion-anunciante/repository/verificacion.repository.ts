@@ -1,43 +1,34 @@
+import { EstadoVerificacion } from '../../catalogos/estados';
 import {
   type IVerificacionRepository,
   type PersistenciaVerificacion,
+  type PersistenciaEliminacion,
 } from './verificacion.repository.interface';
 import { Injectable } from '@nestjs/common';
+import { CAMPOS_PRUEBA_PRIVADOS } from '../dto/solicitud-verificacion-respuesta.dto';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, type EntityManager } from 'typeorm';
 import { RevisionVerificacion } from '../entity/revision-verificacion.entity';
-import {
-  EstadoVerificacion,
-  SolicitudVerificacion,
-} from '../entity/solicitud-verificacion.entity';
-import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
+import { SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
 import { EliminacionDocumento } from '../entity/eliminacion-documento.entity';
 
 @Injectable()
 export class VerificacionRepository implements IVerificacionRepository {
-  constructor(
-    // Repositorio TypeORM de la solicitud vigente por anunciante.
-    // Repositorio separado para conservar todas las decisiones administrativas.
-    @InjectRepository(SolicitudVerificacion)
-    private readonly solicitudes: Repository<SolicitudVerificacion>,
-    @InjectRepository(RevisionVerificacion)
-    private readonly revisiones: Repository<RevisionVerificacion>,
-    @InjectDataSource() private readonly dataSource: DataSource,
-  ) {}
+  // Repositorio TypeORM de la solicitud vigente por anunciante.
+  // Repositorio separado para conservar todas las decisiones administrativas.
+  constructor(@InjectRepository(SolicitudVerificacion) private readonly solicitudes: Repository<SolicitudVerificacion>, @InjectRepository(RevisionVerificacion) private readonly revisiones: Repository<RevisionVerificacion>, @InjectDataSource() private readonly dataSource: DataSource) {}
 
-  conSolicitudBloqueada<T>(
-    idAnunciante: number,
-    operacion: (
-      solicitud: SolicitudVerificacion | null,
-      persistencia: PersistenciaVerificacion,
-    ) => Promise<T>,
-  ): Promise<T> {
-    return this.dataSource.transaction(async (manager) => {
+  conTransaccion<T>(operacion: (transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.dataSource.transaction(operacion);
+  }
+
+  conSolicitudBloqueada<T>(idAnunciante: number, operacion: (solicitud: SolicitudVerificacion | null, persistencia: PersistenciaVerificacion, transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.conTransaccion(async (manager) => {
       const solicitudes = manager.getRepository(SolicitudVerificacion);
       const solicitud = await solicitudes
         .createQueryBuilder('solicitud')
         .addSelect(
-          SolicitudVerificacion.CAMPOS_PRUEBA_PRIVADOS.map(
+          CAMPOS_PRUEBA_PRIVADOS.map(
             (campo) => `solicitud.${campo}`,
           ),
         )
@@ -47,32 +38,31 @@ export class VerificacionRepository implements IVerificacionRepository {
         .where('anunciante.idUsuario = :idAnunciante', { idAnunciante })
         .setLock('pessimistic_write', undefined, ['solicitud'])
         .getOne();
-      return operacion(solicitud, {
-        programarEliminacionDocumentos: async (urls) => {
-          if (!urls.length) return;
-          await manager
-            .getRepository(EliminacionDocumento)
-            .createQueryBuilder()
-            .insert()
-            .values([...new Set(urls)].map((url) => ({ url })))
-            .orIgnore()
-            .execute();
+      return operacion(
+        solicitud,
+        {
+          programarEliminacionDocumentos: async (urls) => {
+            if (!urls.length) return;
+            await manager
+              .getRepository(EliminacionDocumento)
+              .createQueryBuilder()
+              .insert()
+              .values([...new Set(urls)].map((url) => ({ url })))
+              .orIgnore()
+              .execute();
+          },
+          guardarSolicitud: (actual) => solicitudes.save(actual),
+          guardarRevision: (revision) =>
+            manager.getRepository(RevisionVerificacion).save(revision),
         },
-        guardarSolicitud: (actual) => solicitudes.save(actual),
-        guardarAnunciante: (actual) =>
-          manager.getRepository(Anunciante).save(actual),
-        guardarRevision: (revision) =>
-          manager.getRepository(RevisionVerificacion).save(revision),
-      });
+        manager,
+      );
     });
   }
 
   /** Solo bloquea la cola; no mantiene bloqueada la solicitud durante Azure. */
-  procesarEliminacionesPendientes(
-    eliminar: (url: string) => Promise<void>,
-    ahora = new Date(),
-  ): Promise<{ eliminados: number; fallidos: number }> {
-    return this.dataSource.transaction(async (manager) => {
+  conEliminacionesPendientes<T>(operacion: (documentos: EliminacionDocumento[], persistencia: PersistenciaEliminacion) => Promise<T>, ahora = new Date()): Promise<T> {
+    return this.conTransaccion(async (manager) => {
       const cola = manager.getRepository(EliminacionDocumento);
       const documentos = await cola
         .createQueryBuilder('documento')
@@ -83,28 +73,10 @@ export class VerificacionRepository implements IVerificacionRepository {
         .setLock('pessimistic_write')
         .setOnLocked('skip_locked')
         .getMany();
-      let eliminados = 0;
-      let fallidos = 0;
-      for (const documento of documentos) {
-        try {
-          await eliminar(documento.url);
-        } catch {
-          documento.intentos += 1;
-          // Reintenta sin vencimiento, con espera creciente hasta una hora.
-          const espera = Math.min(
-            3_600_000,
-            30_000 * 2 ** Math.min(documento.intentos - 1, 7),
-          );
-          documento.proximo_intento = new Date(ahora.getTime() + espera);
-          await cola.save(documento);
-          fallidos += 1;
-          continue;
-        }
-        // Si falla el COMMIT, repetir el borrado es seguro (deleteIfExists).
-        await cola.delete(documento.id);
-        eliminados += 1;
-      }
-      return { eliminados, fallidos };
+      return operacion(documentos, {
+        guardar: (documento) => cola.save(documento),
+        eliminar: async (id) => { await cola.delete(id); },
+      });
     });
   }
 
@@ -113,9 +85,9 @@ export class VerificacionRepository implements IVerificacionRepository {
     return this.solicitudes.create(datos);
   }
 
-  guardarSolicitud(solicitud: SolicitudVerificacion) {
+  guardarSolicitud(solicitud: SolicitudVerificacion, transaccion?: EntityManager) {
     // Inserta una solicitud nueva o actualiza la existente.
-    return this.solicitudes.save(solicitud);
+    return (transaccion?.getRepository(SolicitudVerificacion) ?? this.solicitudes).save(solicitud);
   }
 
   buscarSolicitudPorAnunciante(idAnunciante: number) {

@@ -62,6 +62,7 @@ describe('CP-08 · Inicio de sesión con tablas de decisión', () => {
     const respuesta = await login(DATA.emailUsuario1, DATA.contraseniaIncorrectaUsuario1);
     expect(respuesta.status).toBe(401);
     expect(normalizar(respuesta.body.message)).toBe(normalizar('Credenciales invalidas'));
+    expect(respuesta.body.codigo).toBeUndefined();
     expect(respuesta.body.access_token).toBeUndefined();
   });
 
@@ -69,8 +70,8 @@ describe('CP-08 · Inicio de sesión con tablas de decisión', () => {
     const respuesta = await login(DATA.emailUsuario1, DATA.contraseniaUsuario1);
     expect(respuesta.status).toBe(403);
     expect(respuesta.body.access_token).toBeUndefined();
-    // Mensaje esperado por el caso de prueba (ver contradicción informada).
     expect(normalizar(respuesta.body.message)).toBe(normalizar('Tu cuenta esta inactiva'));
+    expect(respuesta.body.codigo).toBe('EMAIL_NO_VERIFICADO');
   });
 
   test('Paso 3 · el usuario 1 verifica su email → su cuenta queda activa', async () => {

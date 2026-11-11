@@ -58,11 +58,7 @@ export class ReclamosController {
 
   @Post(':id/evidencias')
   @UseInterceptors(EVIDENCIAS_INTERCEPTOR)
-  subirEvidencias(
-    @Param('id', ParseIntPipe) id: number,
-    @UploadedFiles() archivos: Express.Multer.File[],
-    @Req() req: AuthenticatedRequest,
-  ) {
+  subirEvidencias(@Param('id', ParseIntPipe) id: number, @UploadedFiles() archivos: Express.Multer.File[], @Req() req: AuthenticatedRequest) {
     return this.reclamosService.subirEvidencias(
       id,
       req.user.id,
@@ -72,11 +68,7 @@ export class ReclamosController {
   }
 
   @Get(':id/evidencias/:idEvidencia/url')
-  urlEvidencia(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('idEvidencia', ParseIntPipe) idEvidencia: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  urlEvidencia(@Param('id', ParseIntPipe) id: number, @Param('idEvidencia', ParseIntPipe) idEvidencia: number, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.urlEvidencia(
       id,
       idEvidencia,
@@ -86,10 +78,7 @@ export class ReclamosController {
   }
 
   @Get(':id/mensajes')
-  listarMensajes(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  listarMensajes(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.listarMensajes(
       id,
       req.user.id,
@@ -98,11 +87,7 @@ export class ReclamosController {
   }
 
   @Post(':id/mensajes')
-  enviarMensaje(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: EnviarMensajeReclamoDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  enviarMensaje(@Param('id', ParseIntPipe) id: number, @Body() dto: EnviarMensajeReclamoDto, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.enviarMensaje(
       id,
       dto,
@@ -114,11 +99,7 @@ export class ReclamosController {
   @UseGuards(RolesGuard)
   @Roles('Administrador')
   @Patch(':id/resolver')
-  resolver(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ResolverReclamoDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  resolver(@Param('id', ParseIntPipe) id: number, @Body() dto: ResolverReclamoDto, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.resolver(id, dto, req.user.id);
   }
 }

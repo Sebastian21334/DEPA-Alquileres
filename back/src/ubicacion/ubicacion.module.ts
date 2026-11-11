@@ -1,5 +1,3 @@
-import { GEOCODIFICACION_REPOSITORY } from './repository/geocodificacion.repository.interface';
-import { NominatimGeocodificacionRepository } from './repository/nominatim-geocodificacion.repository';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Provincia } from './entity/provincia.entity';
@@ -9,15 +7,17 @@ import { UbicacionRepository } from './repository/ubicacion.repository';
 import { UbicacionService } from './service/ubicacion.service';
 import { UbicacionController } from './controller/ubicacion.controller';
 import { SeguridadModule } from '../seguridad/seguridad.module';
+import { GEOCODIFICACION } from './proveedor/geocodificacion.interface';
+import { NominatimAdapter } from './proveedor/nominatim.adapter';
 
 @Module({
   // Expone la jerarquía Provincia -> Ciudad usada por las publicaciones.
   controllers: [UbicacionController],
   providers: [
-    NominatimGeocodificacionRepository,
+    NominatimAdapter,
     {
-      provide: GEOCODIFICACION_REPOSITORY,
-      useExisting: NominatimGeocodificacionRepository,
+      provide: GEOCODIFICACION,
+      useExisting: NominatimAdapter,
     },
     UbicacionRepository,
     {
@@ -26,11 +26,7 @@ import { SeguridadModule } from '../seguridad/seguridad.module';
     },
     UbicacionService,
   ],
-  imports: [
-    // Ambos repositorios usan las entidades registradas en este módulo.
-    TypeOrmModule.forFeature([Provincia, Ciudad]),
-    SeguridadModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Provincia, Ciudad]), SeguridadModule],
   exports: [UbicacionService],
 })
 export class UbicacionModule {}

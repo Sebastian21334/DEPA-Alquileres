@@ -53,38 +53,25 @@ export class ImagenesController {
     }),
   )
   // AnuncianteGuard agrega req.anunciante después de comprobar que el usuario es un anunciante verificado.
-  async subir(
-    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-    @UploadedFile() archivo: Express.Multer.File,
-    @Req() req: AnuncianteRequest,
-  ) {
+  async subir(@Param('idPublicacion', ParseIntPipe) idPublicacion: number, @UploadedFile() archivo: Express.Multer.File, @Req() req: AnuncianteRequest) {
     if (!archivo) throw new BadRequestException('No se envió ningún archivo');
     return this.imagenesService.subir(idPublicacion, req.anunciante, archivo);
   }
 
   @Patch('publicacion/:idPublicacion/orden')
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
-  ordenar(
-    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-    @Body() dto: OrdenarImagenesDto,
-    @Req() req: AnuncianteRequest,
-  ) {
+  ordenar(@Param('idPublicacion', ParseIntPipe) idPublicacion: number, @Body() dto: OrdenarImagenesDto, @Req() req: AnuncianteRequest) {
     return this.imagenesService.ordenar(idPublicacion, dto.ids, req.anunciante);
   }
 
   @Get('publicacion/:idPublicacion')
-  async listarPorPublicacion(
-    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-  ) {
+  async listarPorPublicacion(@Param('idPublicacion', ParseIntPipe) idPublicacion: number) {
     return this.imagenesService.listarPorPublicacion(idPublicacion);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
-  async eliminar(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AnuncianteRequest,
-  ) {
+  async eliminar(@Param('id', ParseIntPipe) id: number, @Req() req: AnuncianteRequest) {
     return this.imagenesService.eliminar(id, req.anunciante);
   }
 }

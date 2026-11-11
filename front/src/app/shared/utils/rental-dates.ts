@@ -11,11 +11,7 @@ export function rentalDays(start: string | null, end: string | null): number {
   return Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1;
 }
 
-export function isRentalRangeAvailable(
-  start: string,
-  end: string,
-  dates: FechaDisponible[],
-): boolean {
+export function isRentalRangeAvailable(start: string, end: string, dates: FechaDisponible[]): boolean {
   const available = new Set(
     dates.filter((day) => day.disponible && !day.reserva).map((day) => day.fecha.slice(0, 10)),
   );

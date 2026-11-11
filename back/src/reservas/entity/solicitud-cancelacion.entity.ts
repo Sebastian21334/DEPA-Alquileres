@@ -1,6 +1,10 @@
 import type { Relation } from 'typeorm';
+import { Estado } from '../../catalogos/entity/estado.entity';
+import { AmbitoEstado, EstadoSolicitudCancelacion } from '../../catalogos/estados';
 import {
+  Check,
   Column,
+  ForeignKey,
   CreateDateColumn,
   Entity,
   JoinColumn,
@@ -10,15 +14,13 @@ import {
 import { Reserva } from './reserva.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
-export enum EstadoSolicitudCancelacion {
-  PENDIENTE = 'PENDIENTE',
-  APROBADA = 'APROBADA',
-  RECHAZADA = 'RECHAZADA',
-  VENCIDA = 'VENCIDA',
-}
-
 /** Pedido de cancelación de una reserva pagada, con su decisión administrativa. */
 @Entity('solicitud_cancelacion')
+@Check('ck_solicitud_cancelacion_estado_ambito', `"ambito_estado" = '${AmbitoEstado.SOLICITUD_CANCELACION}'`)
+@ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
+  name: 'fk_solicitud_cancelacion_estado',
+  onDelete: 'RESTRICT',
+})
 export class SolicitudCancelacion {
   @PrimaryGeneratedColumn({ name: 'id_solicitud_cancelacion' })
   id: number;
@@ -37,26 +39,32 @@ export class SolicitudCancelacion {
   })
   solicitante: Relation<Usuario>;
 
-  @Column({ type: 'varchar', length: 500 })
+  @Column({ name: 'motivo', type: 'varchar', length: 500 })
   motivo: string;
 
-  @Column({
-    type: 'enum',
-    enum: EstadoSolicitudCancelacion,
-    default: EstadoSolicitudCancelacion.PENDIENTE,
-  })
+  @Column({ name: 'estado', type: 'varchar', length: 40, default: EstadoSolicitudCancelacion.PENDIENTE })
   estado: EstadoSolicitudCancelacion;
+
+  @Column({
+    name: 'ambito_estado',
+    type: 'varchar',
+    length: 40,
+    select: false,
+    insert: false,
+    update: false,
+  })
+  readonly ambitoEstado: typeof AmbitoEstado.SOLICITUD_CANCELACION;
 
   @ManyToOne(() => Usuario, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_decidida_por' })
   decidida_por: Relation<Usuario | null>;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'decidida_en', type: 'timestamp', nullable: true })
   decidida_en: Date | null;
 
-  @Column({ type: 'varchar', length: 500, nullable: true })
+  @Column({ name: 'observacion', type: 'varchar', length: 500, nullable: true })
   observacion: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'creada_en', type: 'timestamp' })
   creada_en: Date;
 }

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   Logger,
@@ -9,8 +10,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { COTIZACION_REPOSITORY } from '../repository/cotizacion.repository.interface';
 import type { ICotizacionRepository } from '../repository/cotizacion.repository.interface';
-import { PROVEEDOR_DOLAR } from '../repository/proveedor-dolar.interface';
-import type { IProveedorDolar } from '../repository/proveedor-dolar.interface';
+import { PROVEEDOR_DOLAR } from '../proveedor/proveedor-dolar.interface';
+import type { IProveedorDolar } from '../proveedor/proveedor-dolar.interface';
+import type { HistorialCotizacionesDto } from '../dto/historial-cotizaciones.dto';
 import type { CotizacionDolar } from '../entity/cotizacion-dolar.entity';
 import type { ConsultaCotizacion } from '../entity/consulta-cotizacion.entity';
 
@@ -18,6 +20,8 @@ interface EstadoDolar {
   cotizacion: CotizacionDolar | null;
   consulta: ConsultaCotizacion | null;
 }
+
+const TOLERANCIA_FUTURO_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class CotizacionesService
@@ -29,11 +33,7 @@ export class CotizacionesService
   private readonly intervalo = 3 * 60 * 60 * 1000;
   private readonly reintento = 5 * 60 * 1000;
   private readonly maxAntiguedad: number;
-  constructor(
-    @Inject(COTIZACION_REPOSITORY) private readonly repo: ICotizacionRepository,
-    @Inject(PROVEEDOR_DOLAR) private readonly proveedor: IProveedorDolar,
-    config: ConfigService,
-  ) {
+  constructor(@Inject(COTIZACION_REPOSITORY) private readonly repo: ICotizacionRepository, @Inject(PROVEEDOR_DOLAR) private readonly proveedor: IProveedorDolar, config: ConfigService) {
     const horas = Number(
       config.get<string>('DOLAR_MAX_ANTIGUEDAD_FUENTE_HORAS') ?? 96,
     );
@@ -58,14 +58,35 @@ export class CotizacionesService
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
   }
-  private fuenteVigente(
-    cotizacion: CotizacionDolar | null,
-  ): cotizacion is CotizacionDolar {
-    if (!cotizacion) return false;
-    const edad =
-      Date.now() - new Date(cotizacion.actualizada_fuente_en).getTime();
+  private fuenteVigente(actualizadaEn: Date, ahora: number): boolean {
+    const edad = ahora - new Date(actualizadaEn).getTime();
+    return edad >= -TOLERANCIA_FUTURO_MS && edad <= this.maxAntiguedad;
+  }
+
+  private dentroDeVentana(fecha: Date, ahora: number, limite: number): boolean {
+    const edad = ahora - new Date(fecha).getTime();
+    return edad >= -TOLERANCIA_FUTURO_MS && edad < limite;
+  }
+
+  private importesValidos(compra: number, venta: number): boolean {
     return (
-      Number.isFinite(edad) && edad >= -300000 && edad <= this.maxAntiguedad
+      Number.isFinite(compra) &&
+      Number.isFinite(venta) &&
+      compra > 0 &&
+      venta >= compra &&
+      venta <= 100_000_000
+    );
+  }
+
+  private estaVigente(estado: EstadoDolar, ahora: number): estado is { cotizacion: CotizacionDolar; consulta: ConsultaCotizacion } {
+    const { cotizacion, consulta } = estado;
+    return (
+      !!consulta?.exitosa &&
+      !!cotizacion &&
+      this.importesValidos(Number(cotizacion.compra), Number(cotizacion.venta)) &&
+      this.fuenteVigente(cotizacion.actualizada_fuente_en, ahora) &&
+      this.dentroDeVentana(cotizacion.consultada_en, ahora, this.intervalo) &&
+      this.dentroDeVentana(consulta.realizada_en, ahora, this.intervalo)
     );
   }
   private async estado(repo: ICotizacionRepository): Promise<EstadoDolar> {
@@ -77,12 +98,10 @@ export class CotizacionesService
   }
   private esperarRevision(estado: EstadoDolar): boolean {
     if (!estado.consulta) return false;
-    const edad = Date.now() - new Date(estado.consulta.realizada_en).getTime();
-    return (
-      edad >= -300000 &&
-      edad < (estado.consulta.exitosa ? this.intervalo : this.reintento) &&
-      (!estado.consulta.exitosa || this.fuenteVigente(estado.cotizacion))
-    );
+    const ahora = Date.now();
+    return estado.consulta.exitosa
+      ? this.estaVigente(estado, ahora)
+      : this.dentroDeVentana(estado.consulta.realizada_en, ahora, this.reintento);
   }
   async actualizarSiCorresponde(): Promise<EstadoDolar> {
     // La promesa solo agrupa peticiones simultáneas; la vigencia siempre sale de la BD.
@@ -95,16 +114,12 @@ export class CotizacionesService
       if (this.esperarRevision(actual)) return actual;
       try {
         const datos = await this.proveedor.consultar();
-        const candidata = {
-          actualizada_fuente_en: datos.actualizadaEn,
-        } as CotizacionDolar;
+        const compra = datos.compra.toFixed(6);
+        const venta = datos.venta.toFixed(6);
         if (
-          !Number.isFinite(datos.compra) ||
-          !Number.isFinite(datos.venta) ||
-          datos.compra <= 0 ||
-          datos.venta < datos.compra ||
-          datos.venta > 100000000 ||
-          !this.fuenteVigente(candidata) ||
+          !this.importesValidos(datos.compra, datos.venta) ||
+          !this.importesValidos(Number(compra), Number(venta)) ||
+          !this.fuenteVigente(datos.actualizadaEn, Date.now()) ||
           (actual.cotizacion &&
             datos.actualizadaEn.getTime() <
               new Date(actual.cotizacion.actualizada_fuente_en).getTime())
@@ -114,8 +129,8 @@ export class CotizacionesService
           );
         }
         await repo.guardar({
-          compra: datos.compra.toFixed(6),
-          venta: datos.venta.toFixed(6),
+          compra,
+          venta,
           actualizada_fuente_en: datos.actualizadaEn,
           tipo: 'blue',
           proveedor: 'DolarApi / DolarHoy',
@@ -146,46 +161,46 @@ export class CotizacionesService
         'No pudimos verificar la cotización del dólar. Intentá nuevamente.',
       );
     }
-    if (
-      !estado.consulta?.exitosa ||
-      !this.fuenteVigente(estado.cotizacion) ||
-      Date.now() - new Date(estado.cotizacion.consultada_en).getTime() >=
-        this.intervalo ||
-      Date.now() - new Date(estado.consulta.realizada_en).getTime() < -300000 ||
-      Date.now() - new Date(estado.consulta.realizada_en).getTime() >=
-        this.intervalo
-    ) {
+    if (!this.estaVigente(estado, Date.now())) {
       throw new ServiceUnavailableException(
         'No hay una cotización del dólar verificada y vigente. Las reservas en pesos continúan disponibles.',
       );
     }
     return estado.cotizacion;
   }
-  async administracion(
-    desde: Date | undefined,
-    hasta: Date | undefined,
-    pagina: number,
-  ) {
+  async verificarAdministracion() {
+    await this.actualizarSiCorresponde();
+    return this.administracion({ pagina: 1 });
+  }
+
+  async administracion({ desde, hasta, pagina }: HistorialCotizacionesDto) {
+    if (desde && hasta && desde > hasta) {
+      throw new BadRequestException('El rango de fechas no es válido');
+    }
+    const inicio = desde ? new Date(`${desde}T00:00:00-03:00`) : undefined;
+    const finExclusivo = hasta
+      ? new Date(new Date(`${hasta}T00:00:00-03:00`).getTime() + 86_400_000)
+      : undefined;
     const [estado, historial, consultas] = await Promise.all([
       this.estado(this.repo),
-      this.repo.historial(desde, hasta, pagina),
+      this.repo.historial(inicio, finExclusivo, pagina),
       this.repo.consultas(),
     ]);
+    const ahora = Date.now();
+    const vigente = this.estaVigente(estado, ahora);
     return {
       ...estado,
       ...historial,
       consultas,
       pagina,
       por_pagina: 25,
-      vigente:
-        !!estado.consulta?.exitosa &&
-        this.fuenteVigente(estado.cotizacion) &&
-        Date.now() - new Date(estado.consulta.realizada_en).getTime() <
-          this.intervalo,
+      vigente,
       proxima_revision_en: estado.consulta
         ? new Date(
-            new Date(estado.consulta.realizada_en).getTime() +
-              (estado.consulta.exitosa ? this.intervalo : this.reintento),
+            estado.consulta.exitosa && !vigente
+              ? ahora
+              : new Date(estado.consulta.realizada_en).getTime() +
+                (estado.consulta.exitosa ? this.intervalo : this.reintento),
           )
         : null,
       max_antiguedad_fuente_horas: this.maxAntiguedad / 3600000,

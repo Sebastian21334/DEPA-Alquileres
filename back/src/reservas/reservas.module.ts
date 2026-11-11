@@ -16,8 +16,10 @@ import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
+import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { MailModule } from '../mail/mail.module';
 import { ReembolsosModule } from '../reembolsos/reembolsos.module';
+import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.module';
 
 @Module({
   imports: [
@@ -31,8 +33,10 @@ import { ReembolsosModule } from '../reembolsos/reembolsos.module';
     SeguridadModule,
     UsuariosModule,
     PublicacionesModule,
+    AnunciantesModule,
     MailModule,
     ReembolsosModule,
+    ReservasConsultaModule,
   ],
   controllers: [ReservasController],
   providers: [

@@ -9,10 +9,7 @@ export class AzureCorreoRepository implements ICorreoRepository {
   private readonly logger = new Logger(AzureCorreoRepository.name);
   private readonly remitente: string;
 
-  constructor(
-    config: ConfigService,
-    @Inject(CLIENTE_CORREO) private readonly client: ClienteCorreo,
-  ) {
+  constructor(config: ConfigService, @Inject(CLIENTE_CORREO) private readonly client: ClienteCorreo) {
     this.remitente = config.getOrThrow<string>('ACS_SENDER_ADDRESS');
   }
 
