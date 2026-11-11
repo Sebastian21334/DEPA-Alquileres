@@ -1,3 +1,4 @@
+import type { EntityManager } from 'typeorm';
 import {
   EstadoLiquidacionReserva,
   EstadoPagoReserva,
@@ -479,10 +480,17 @@ export class ReservasService
     return this.prepararRespuesta(reserva);
   }
 
-  async buscarParaReclamo(id: number): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarParaReclamo(id);
-    if (!reserva) throw new NotFoundException('No se encontró la reserva');
-    return this.prepararRespuesta(reserva);
+  conReservaParaReclamo<T>(id: number, crearReclamo: (reserva: Reserva, transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.reservaRepository.conTransaccion(async (reservas, transaccion) => {
+      const reserva = await reservas.buscarParaReclamo(id);
+      if (!reserva) throw new NotFoundException('No se encontró la reserva');
+      const reclamo = await crearReclamo(reserva, transaccion);
+      reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+      reserva.observacion_liquidacion = 'Reclamo del inquilino en revisión';
+      reserva.fecha_resolucion_liquidacion = null;
+      await reservas.guardar(reserva);
+      return reclamo;
+    });
   }
 
   prepararRespuesta(reserva: Reserva): ReservaRespuestaDto {
@@ -608,13 +616,6 @@ export class ReservasService
   private aplicarReembolsoParcial(reserva: Reserva): void {
     reserva.estado_liquidacion = EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
     reserva.fecha_resolucion_liquidacion = new Date();
-  }
-
-  async congelarPorReclamo(reserva: Reserva): Promise<Reserva> {
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    reserva.observacion_liquidacion = 'Reclamo del inquilino en revisión';
-    reserva.fecha_resolucion_liquidacion = null;
-    return this.prepararRespuesta(await this.reservaRepository.guardar(reserva));
   }
 
   async resolverReclamoSinDevolucion(reserva: Reserva, observacion?: string): Promise<Reserva> {

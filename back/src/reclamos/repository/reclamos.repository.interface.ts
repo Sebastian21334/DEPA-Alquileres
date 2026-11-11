@@ -1,10 +1,12 @@
 import type { Reclamo } from '../entity/reclamo.entity';
 import type { ReclamoEvidencia } from '../entity/reclamo-evidencia.entity';
 import type { ReclamoMensaje } from '../entity/reclamo-mensaje.entity';
+import type { EntityManager } from 'typeorm';
 
 export const RECLAMOS_REPOSITORY = 'RECLAMOS_REPOSITORY';
 
 export interface IReclamosRepository {
+  enTransaccion(transaccion: EntityManager): IReclamosRepository;
   existeAbierto(idReserva: number): Promise<boolean>;
   guardar(reclamo: Partial<Reclamo>): Promise<Reclamo>;
   listarPorParticipante(idUsuario: number): Promise<Reclamo[]>;

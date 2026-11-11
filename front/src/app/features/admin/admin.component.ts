@@ -3,6 +3,7 @@ import { Component, computed, DestroyRef, ElementRef, inject, PLATFORM_ID, signa
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { forkJoin, Subscription } from 'rxjs';
+import { ToastService } from '../../core/services/toast.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
 import {
@@ -27,6 +28,7 @@ import {
   VerificationRequest,
 } from './admin.service';
 import { Reclamo } from '../../shared/services/reservation.service';
+import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 
 interface CatalogSection {
   key: CatalogKey;
@@ -39,6 +41,7 @@ interface CatalogSection {
   standalone: true,
   imports: [
     CotizacionesAdminComponent,
+    ClaimHistoryComponent,
     CurrencyPipe,
     DatePipe,
     FormsModule,
@@ -54,6 +57,7 @@ interface CatalogSection {
 })
 export class AdminComponent {
   private readonly api = inject(AdminService);
+  private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private publicationsRequest?: Subscription;
   private usersRequest?: Subscription;
@@ -86,14 +90,19 @@ export class AdminComponent {
   protected readonly requests = signal<VerificationRequest[]>([]);
   protected readonly settlements = signal<AdminSettlement[]>([]);
   protected readonly claims = signal<Reclamo[]>([]);
+  protected readonly errorReclamos = signal('');
+  protected readonly gestionReclamo = signal<{ id: number; accion: 'mensaje' | 'resolver' } | null>(null);
+  protected textoReclamo = '';
+  protected resolucionReclamo: NonNullable<Reclamo['resolucion']> = 'SIN_DEVOLUCION';
+  protected importeReclamo: number | null = null;
+  protected referenciaReclamo = '';
+  protected observacionReclamo = '';
   protected readonly cancellations = signal<AdminCancellationRequest[]>([]);
   protected readonly refunds = signal<AdminReembolso[]>([]);
   protected readonly otherLoading = signal(true);
   protected readonly loading = computed(() =>
     this.otherLoading() || this.publicationsLoading() || this.usersLoading(),
   );
-  protected readonly error = signal<string | null>(null);
-  protected readonly notice = signal<string | null>(null);
   protected readonly query = signal('');
   protected readonly busy = signal<string | null>(null);
   protected readonly rejectId = signal<number | null>(null);
@@ -126,7 +135,6 @@ export class AdminComponent {
   }
   protected reload(): void {
     this.otherLoading.set(true);
-    this.error.set(null);
     this.loadPublications(this.publicationsPage());
     this.loadUsers(this.usersPage());
     this.cargarBloqueados();
@@ -140,7 +148,7 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
-        this.error.set(e.message);
+        this.toast.mostrar(e.message, 'error');
         done();
       },
     });
@@ -150,17 +158,18 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
-        this.error.set(e.message);
+        this.toast.mostrar(e.message, 'error');
         done();
       },
     });
     this.api.listarReclamos().subscribe({
       next: (v) => {
         this.claims.set(v);
+        this.errorReclamos.set('');
         done();
       },
       error: (e: Error) => {
-        this.error.set(e.message);
+        this.errorReclamos.set(e.message);
         done();
       },
     });
@@ -170,7 +179,7 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
-        this.error.set(e.message);
+        this.toast.mostrar(e.message, 'error');
         done();
       },
     });
@@ -180,7 +189,7 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
-        this.error.set(e.message);
+        this.toast.mostrar(e.message, 'error');
         done();
       },
     });
@@ -200,7 +209,6 @@ export class AdminComponent {
     if (page < 1 || page > this.publicationsPages()) return;
     this.publicationsRequest?.unsubscribe();
     this.publicationsLoading.set(true);
-    this.error.set(null);
     this.bajaId.set(null);
     this.publicationsRequest = this.api.listarPublicaciones(page, this.publicationQuery().trim())
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -216,7 +224,7 @@ export class AdminComponent {
           this.publicationsTotal.set(0);
           this.publicationsPage.set(1);
           this.publicationsPages.set(1);
-          this.error.set(e.message);
+          this.toast.mostrar(e.message, 'error');
           this.publicationsLoading.set(false);
         },
       });
@@ -226,7 +234,6 @@ export class AdminComponent {
     if (page < 1 || page > this.usersPages()) return;
     this.usersRequest?.unsubscribe();
     this.usersLoading.set(true);
-    this.error.set(null);
     this.usersRequest = this.api.listarUsuarios(page, this.query().trim())
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (result) => {
@@ -242,7 +249,7 @@ export class AdminComponent {
           this.usersTotal.set(0);
           this.usersPage.set(1);
           this.usersPages.set(1);
-          this.error.set(e.message);
+          this.toast.mostrar(e.message, 'error');
           this.usersLoading.set(false);
         },
       });
@@ -267,12 +274,15 @@ export class AdminComponent {
         );
         this.bajaId.set(null);
         if (!result.correoEnviado) {
-          this.error.set(
+          this.toast.mostrar(
             'La publicación fue desactivada, pero no se pudo enviar el correo. Podés repetir la baja para reintentar el aviso.',
+            'advertencia',
           );
+          return;
         }
+        this.toast.mostrar('Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.', 'exito');
       },
-      'Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.',
+      null,
     );
   }
 
@@ -317,7 +327,7 @@ export class AdminComponent {
   protected verEvidencia(reclamo: Reclamo, evidencia: { id: number; nombre_archivo: string }): void {
     this.api.urlEvidenciaReclamo(reclamo.id, evidencia.id).subscribe({
       next: ({ url }) => window.open(url, '_blank', 'noopener'),
-      error: (e: Error) => this.error.set(e.message),
+      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
   }
 
@@ -340,24 +350,25 @@ export class AdminComponent {
           reembolso: { id: number; importe: number; moneda: string } | null;
         };
         if (!resultado.reembolso) {
-          this.notice.set('Cancelación aprobada sin devolución.');
+          this.toast.mostrar('Cancelación aprobada sin devolución.', 'exito');
           return;
         }
         const referencia = window
           .prompt('Referencia o comprobante de la devolución:')
           ?.trim();
         if (!referencia) {
-          this.notice.set(
-            'Cancelación aprobada. La devolución quedó pendiente de registrar.',
-          );
+          this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente de registrar.', 'exito');
           return;
         }
         this.api.registrarReembolso(resultado.reembolso.id, referencia).subscribe({
-          next: () => this.notice.set('Cancelación y devolución registradas.'),
-          error: (e: Error) => this.error.set(e.message),
+          next: () => this.toast.mostrar('Cancelación y devolución registradas.', 'exito'),
+          error: (e: Error) => this.toast.mostrar(
+            `Cancelación aprobada. No se pudo registrar la devolución. ${e.message}`,
+            'error',
+          ),
         });
       },
-      'Solicitud de cancelación aprobada.',
+      null,
     );
   }
 
@@ -397,40 +408,55 @@ export class AdminComponent {
     );
   }
 
+  protected abrirGestionReclamo(id: number, accion: 'mensaje' | 'resolver'): void {
+    if (this.busy()) return;
+    this.textoReclamo = '';
+    this.resolucionReclamo = 'SIN_DEVOLUCION';
+    this.importeReclamo = null;
+    this.referenciaReclamo = '';
+    this.observacionReclamo = '';
+    this.gestionReclamo.set({ id, accion });
+  }
+
   protected responderReclamo(reclamo: Reclamo): void {
-    const texto = window.prompt('Mensaje para el Inquilino y el Anunciante:')?.trim();
-    if (!texto) return;
+    const texto = this.textoReclamo.trim();
+    if (!texto || texto.length > 1000 || this.busy()) return;
     this.run(
       `claim-${reclamo.id}`,
       () => this.api.responderReclamo(reclamo.id, texto),
-      () => undefined,
+      (value) => {
+        const mensaje = value as NonNullable<Reclamo['mensajes']>[number];
+        this.claims.update((items) => items.map((item) => item.id === reclamo.id ? {
+          ...item,
+          estado: item.estado === 'ABIERTO' ? 'EN_REVISION' : item.estado,
+          mensajes: [...(item.mensajes ?? []).filter((previo) => previo.id !== mensaje.id), mensaje],
+        } : item));
+        this.gestionReclamo.set(null);
+      },
       'Mensaje enviado al hilo del reclamo.',
     );
   }
 
-  protected resolverReclamoReserva(reclamo: Reclamo, resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL'): void {
-    let importe: number | undefined;
-    if (resolucion === 'DEVOLUCION_PARCIAL') {
-      const valor = window.prompt('Importe parcial a devolver:')?.trim();
-      importe = Number(valor);
-      if (!Number.isFinite(importe) || importe <= 0) {
-        this.error.set('Indicá un importe parcial válido.');
-        return;
-      }
+  protected resolverReclamoReserva(reclamo: Reclamo): void {
+    if (this.busy()) return;
+    const resolucion = this.resolucionReclamo;
+    const importe = resolucion === 'DEVOLUCION_PARCIAL' ? this.importeReclamo : undefined;
+    const referencia = resolucion === 'SIN_DEVOLUCION' ? undefined : this.referenciaReclamo.trim() || undefined;
+    const observacion = this.observacionReclamo.trim();
+    if (!observacion || observacion.length > 500) return;
+    if (resolucion === 'DEVOLUCION_PARCIAL' && (importe == null || !Number.isFinite(importe) || importe <= 0)) {
+      this.toast.mostrar('Indicá un importe parcial válido.', 'error');
+      return;
     }
-    const referencia = window.prompt('Referencia o comprobante (obligatorio para devoluciones manuales):')?.trim();
-    const observacion = window.prompt('Conclusión de la revisión:')?.trim();
     this.run(
       `claim-${reclamo.id}`,
-      () =>
-        this.api.resolverReclamo(
-          reclamo.id,
-          resolucion,
-          importe,
-          referencia,
-          observacion,
-        ),
-      () => this.claims.update((items) => items.filter((item) => item.id !== reclamo.id)),
+      () => this.api.resolverReclamo(reclamo.id, resolucion, importe ?? undefined, referencia, observacion),
+      (value) => {
+        const resuelto = value as Reclamo;
+        this.claims.update((items) => items.map((item) => item.id === reclamo.id ? resuelto : item));
+        this.gestionReclamo.set(null);
+        this.reload();
+      },
       'Reclamo resuelto.',
     );
   }
@@ -511,7 +537,7 @@ export class AdminComponent {
         this.bloqueando.set(false);
         this.cerrarBloqueo();
         this.actualizarBloqueoUsuario(usuario.id, true);
-        this.notice.set('Usuario bloqueado.');
+        this.toast.mostrar('Usuario bloqueado.', 'exito');
       },
       error: (error: Error) => {
         this.bloqueando.set(false);
@@ -596,19 +622,17 @@ export class AdminComponent {
   protected esVideo(url: string): boolean {
     return /\.(mp4|webm|mov)(?:\?|$)/i.test(url);
   }
-  private run(key: string, request: () => any, success: (value: unknown) => void, message: string, failure?: () => void): void {
+  private run(key: string, request: () => any, success: (value: unknown) => void, message: string | null, failure?: () => void): void {
     this.busy.set(key);
-    this.error.set(null);
-    this.notice.set(null);
     request().subscribe({
       next: (v: unknown) => {
         success(v);
-        this.notice.set(message);
+        if (message) this.toast.mostrar(message, 'exito');
         this.busy.set(null);
       },
       error: (e: Error) => {
         failure?.();
-        this.error.set(e.message);
+        this.toast.mostrar(e.message, 'error');
         this.busy.set(null);
       },
     });
@@ -618,7 +642,7 @@ export class AdminComponent {
     const sections = this.catalogs();
     forkJoin(sections.map((s) => this.api.listarCatalogo(s.key))).subscribe({
       next: (values) => this.catalogs.set(sections.map((s, i) => ({ ...s, items: values[i] }))),
-      error: (e: Error) => this.error.set(e.message),
+      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
   }
   protected addCatalog(s: CatalogSection): void {
@@ -679,14 +703,14 @@ export class AdminComponent {
       next: (v) => {
         this.provinces.set(v);
       },
-      error: (e: Error) => this.error.set(e.message),
+      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
   }
   protected selectProvince(id: number): void {
     this.selectedProvince.set(id);
     this.api.listarCiudades(id).subscribe({
       next: (v) => this.cities.set(v),
-      error: (e: Error) => this.error.set(e.message),
+      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
   }
   protected addProvince(): void {

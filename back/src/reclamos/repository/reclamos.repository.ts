@@ -1,7 +1,7 @@
 import { EstadoReclamo } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, type FindOptionsRelations } from 'typeorm';
+import { In, Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
 import { Reclamo } from '../entity/reclamo.entity';
 import { ReclamoEvidencia } from '../entity/reclamo-evidencia.entity';
 import { ReclamoMensaje } from '../entity/reclamo-mensaje.entity';
@@ -18,6 +18,14 @@ const RELACIONES_RECLAMO: FindOptionsRelations<Reclamo> = {
 @Injectable()
 export class ReclamosRepository implements IReclamosRepository {
   constructor(@InjectRepository(Reclamo) private readonly reclamos: Repository<Reclamo>, @InjectRepository(ReclamoEvidencia) private readonly evidencias: Repository<ReclamoEvidencia>, @InjectRepository(ReclamoMensaje) private readonly mensajes: Repository<ReclamoMensaje>) {}
+
+  enTransaccion(transaccion: EntityManager): IReclamosRepository {
+    return new ReclamosRepository(
+      transaccion.getRepository(Reclamo),
+      transaccion.getRepository(ReclamoEvidencia),
+      transaccion.getRepository(ReclamoMensaje),
+    );
+  }
 
   existeAbierto(idReserva: number): Promise<boolean> {
     return this.reclamos.existsBy({
