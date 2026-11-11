@@ -1,4 +1,4 @@
-import { Usuario } from "../entity/usuario.entity";
+import { Usuario, type DetalleBloqueo } from "../entity/usuario.entity";
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { Pagina } from '../../common/persistence/paginacion';
 import type { EntityManager } from 'typeorm';
@@ -14,6 +14,12 @@ export interface OperacionesPendientesCuenta {
 
 export const USUARIOS_REPOSITORY = 'USUARIOS_REPOSITORY';
 
+export interface BloqueoAdministrativo {
+  usuario: { id: number; nombre: string; apellido: string; email: string | null };
+  detalle: DetalleBloqueo;
+  administrador: { nombre: string; apellido: string } | null;
+}
+
 export interface IUsuariosRepository {
   crear(datos: Partial<Usuario>): Usuario;
   guardar(usuario: Usuario, transaccion?: EntityManager): Promise<Usuario>;
@@ -26,6 +32,8 @@ export interface IUsuariosRepository {
   listarAdministracion(consulta: ListarAdministracionDto): Promise<Pagina<Usuario>>;
   buscarPorId(id: number): Promise<Usuario | null>;
   buscarParaLogin(email: string): Promise<Usuario | null>;
+  buscarConBloqueo(id: number, transaccion?: EntityManager): Promise<Usuario | null>;
+  listarBloqueados(): Promise<BloqueoAdministrativo[]>;
   buscarPorTokenVerificacion(token: string): Promise<Usuario | null>;
   buscarPorTokenRecuperacion(token: string): Promise<Usuario | null>;
   buscarCredencialesPorId(id: number): Promise<Usuario | null>;

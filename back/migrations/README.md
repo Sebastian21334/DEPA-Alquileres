@@ -1,3 +1,11 @@
+# Apelaciones de bloqueo
+
+Antes de arrancar esta versión, ejecutar `npm run db:apelaciones-bloqueo` desde
+`back/` con el `DATABASE_URL` del entorno configurado en `back/.env`.
+La migración se puede repetir y conserva los bloqueos existentes. Cuando el
+motivo o el administrador original no están registrados, se muestran como
+datos no disponibles.
+
 # Cancelaciones, devoluciones, reclamos y contracargos
 
 Para habilitar el circuito del ítem 14, con el backend detenido y sobre una

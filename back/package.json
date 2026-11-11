@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "db:apelaciones-bloqueo": "node scripts/apelaciones-bloqueo.cjs",
     "db:eliminacion-documentos": "node scripts/eliminacion-documentos.cjs --aplicar",
     "test:eliminacion-documentos": "npm run build && node --test test/eliminacion-documentos.test.cjs",
     "db:inicializar": "node scripts/inicializar-base.cjs --aplicar",

@@ -2,7 +2,7 @@ import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
-import { LucideBadgeCheck, LucideBuilding2, LucideMapPin } from '@lucide/angular';
+import { LucideBadgeCheck, LucideBuilding2, LucideMapPin, LucideSearch } from '@lucide/angular';
 import { ListingService } from '../home/listing.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { ListingCardComponent } from '../../shared/components/listing-card/listing-card.component';
@@ -10,10 +10,14 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es-AR');
+}
+
 @Component({
   selector: 'app-advertiser-profile',
   standalone: true,
-  imports: [RouterLink, ListingCardComponent, SpinnerComponent, RevealDirective, AvatarComponent, LucideBadgeCheck, LucideBuilding2, LucideMapPin],
+  imports: [RouterLink, ListingCardComponent, SpinnerComponent, RevealDirective, AvatarComponent, LucideBadgeCheck, LucideBuilding2, LucideMapPin, LucideSearch],
   templateUrl: './advertiser-profile.component.html',
   styleUrl: './advertiser-profile.component.scss',
 })
@@ -26,12 +30,23 @@ export class AdvertiserProfileComponent {
   private readonly requestedPage = signal(1);
   protected readonly pageSize = 6;
   protected readonly publications = signal<Publicacion[]>([]);
-  protected readonly totalPages = computed(() => Math.ceil(this.publications().length / this.pageSize));
+  protected readonly searchText = signal('');
+  protected readonly matchingPublications = computed(() => {
+    const query = normalizeSearchText(this.searchText()).trim();
+    if (!query) return this.publications();
+
+    const terms = query.split(/\s+/);
+    return this.publications().filter(({ titulo, descripcion }) => {
+      const text = normalizeSearchText(`${titulo} ${descripcion ?? ''}`);
+      return terms.every((term) => text.includes(term));
+    });
+  });
+  protected readonly totalPages = computed(() => Math.ceil(this.matchingPublications().length / this.pageSize));
   protected readonly page = computed(() => Math.min(this.requestedPage(), this.totalPages() || 1));
   protected readonly firstPublication = computed(() => (this.page() - 1) * this.pageSize + 1);
-  protected readonly lastPublication = computed(() => Math.min(this.page() * this.pageSize, this.publications().length));
+  protected readonly lastPublication = computed(() => Math.min(this.page() * this.pageSize, this.matchingPublications().length));
   protected readonly visiblePublications = computed(() =>
-    this.publications().slice((this.page() - 1) * this.pageSize, this.page() * this.pageSize),
+    this.matchingPublications().slice((this.page() - 1) * this.pageSize, this.page() * this.pageSize),
   );
   protected readonly loading = signal(true);
   protected readonly error = signal('');
@@ -70,6 +85,19 @@ export class AdvertiserProfileComponent {
         if (!items.length) this.error.set('Este anunciante no tiene publicaciones activas.');
       },
       error: () => this.error.set('No pudimos cargar este perfil.'),
+    });
+  }
+
+  protected updateSearch(text: string): void {
+    this.searchText.set(text);
+    if (this.requestedPage() === 1) return;
+
+    this.requestedPage.set(1);
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { pagina: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
     });
   }
 

@@ -7,6 +7,7 @@ import {
   HttpStatus,
   Inject,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
@@ -16,6 +17,8 @@ import { CambiarContraseniaDto } from '../dto/cambiar-contrasenia.dto';
 import type { RestablecerContraseniaDto } from '../dto/restablecer-contrasenia.dto';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
+
+const AUDIENCIA_BLOQUEO = 'depa:apelacion-bloqueo';
 
 @Injectable()
 export class AuthService {
@@ -67,7 +70,23 @@ export class AuthService {
     const user = await this.credencialesService.validarCredenciales(
       email,
       dto.contrasenia,
+      true,
     );
+
+    if (user.bloqueado) {
+      const bloqueoId = user.bloqueoDetalle?.id;
+      const tokenBloqueo = bloqueoId && await this.jwtService.signAsync(
+        { usuarioBloqueadoId: user.id, bloqueoId },
+        { audience: AUDIENCIA_BLOQUEO, expiresIn: '15m' },
+      );
+      throw new ForbiddenException({
+        statusCode: HttpStatus.FORBIDDEN,
+        error: 'Forbidden',
+        message: 'Tu usuario está bloqueado',
+        codigo: 'USUARIO_BLOQUEADO',
+        tokenBloqueo,
+      });
+    }
 
     // Se chequea después de la contraseña, para no revelar el estado de
     // verificación de una cuenta con credenciales incorrectas
@@ -84,6 +103,31 @@ export class AuthService {
     return {
       access_token: await this.jwtService.signAsync(payload),
     };
+  }
+
+  private async verificarTokenBloqueo(token: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync<{ usuarioBloqueadoId?: number; bloqueoId?: string }>(
+        token, { audience: AUDIENCIA_BLOQUEO, algorithms: ['HS256'] },
+      );
+      if (typeof payload.usuarioBloqueadoId === 'number' && Number.isSafeInteger(payload.usuarioBloqueadoId)
+        && payload.usuarioBloqueadoId > 0 && typeof payload.bloqueoId === 'string') {
+        return { usuarioId: payload.usuarioBloqueadoId, bloqueoId: payload.bloqueoId };
+      }
+    } catch {
+      // Un token vencido o con otra audiencia requiere volver al login.
+    }
+    throw new UnauthorizedException('Volvé a ingresar para consultar el bloqueo.');
+  }
+
+  async consultarBloqueo(token: string) {
+    const { usuarioId, bloqueoId } = await this.verificarTokenBloqueo(token);
+    return this.usuariosService.consultarBloqueo(usuarioId, bloqueoId);
+  }
+
+  async apelarBloqueo(token: string, texto: string) {
+    const { usuarioId, bloqueoId } = await this.verificarTokenBloqueo(token);
+    return this.usuariosService.apelarBloqueo(usuarioId, bloqueoId, texto);
   }
 
   /** Genera un token nuevo y reenvía el mail para una cuenta aún no verificada. */

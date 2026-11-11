@@ -30,11 +30,24 @@
       <main>
         <div class="heading" #publicationsHeading appReveal="right">
           <h2>Publicaciones de {{ owner.usuario?.nombre ?? name() }}</h2>
-          <span>{{ publications().length }} {{ publications().length === 1 ? 'Propiedad' : 'Propiedades' }}</span>
         </div>
-        @if (totalPages() > 1) {
-          <p class="listings-range" role="status">Mostrando {{ firstPublication() }}–{{ lastPublication() }} de {{ publications().length }} publicaciones</p>
-        }
+        <div class="publication-search" role="search" aria-label="Publicaciones del anunciante">
+          <label for="advertiser-publication-search">Buscar publicaciones</label>
+          <div class="publication-search__field">
+            <svg lucideSearch [size]="18" aria-hidden="true"></svg>
+            <input #searchInput id="advertiser-publication-search" type="search" placeholder="Buscá por título o descripción"
+              [value]="searchText()" (input)="updateSearch(searchInput.value)" />
+          </div>
+        </div>
+        <p class="listings-range" role="status">
+          @if (!matchingPublications().length) {
+            No encontramos publicaciones que coincidan con tu búsqueda.
+          } @else if (totalPages() > 1) {
+            Mostrando {{ firstPublication() }}-{{ lastPublication() }} de {{ matchingPublications().length }} publicaciones
+          } @else {
+            {{ matchingPublications().length }} {{ matchingPublications().length === 1 ? 'publicación' : 'publicaciones' }}
+          }
+        </p>
         <div class="listings">
           @for (item of visiblePublications(); track item.id; let i = $index) {
             <app-listing-card [publicacion]="item" appReveal="zoom" [revealDelay]="(i % 3) * 100" />

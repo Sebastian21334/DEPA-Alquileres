@@ -8,6 +8,7 @@ import { Usuario } from '../entity/usuario.entity';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import type {
   IUsuariosRepository,
+  BloqueoAdministrativo,
   OperacionesPendientesCuenta,
   ParticipacionEnReserva,
 } from './usuarios.repository.interface';
@@ -158,12 +159,30 @@ export class UsuariosRepository implements IUsuariosRepository {
     return (
       this.repo
         .createQueryBuilder('u')
-        .addSelect('u.contrasenia')
+        .addSelect(['u.contrasenia', 'u.bloqueoDetalle'])
         // El rol se necesita para autorizar la sesión y para incluirlo en el JWT.
         .leftJoinAndSelect('u.rol', 'rol')
         .where('u.email = :email', { email })
         .getOne()
     );
+  }
+
+  buscarConBloqueo(id: number, transaccion?: EntityManager): Promise<Usuario | null> {
+    const consulta = (transaccion?.getRepository(Usuario) ?? this.repo)
+      .createQueryBuilder('u').addSelect('u.bloqueoDetalle').where('u.id = :id', { id });
+    if (transaccion) consulta.setLock('pessimistic_write');
+    return consulta.getOne();
+  }
+
+  listarBloqueados(): Promise<BloqueoAdministrativo[]> {
+    return this.repo.createQueryBuilder('u')
+      .leftJoin(Usuario, 'operador', "operador.id_usuario = (u.bloqueo_detalle->>'administradorId')::int")
+      .select("jsonb_build_object('id', u.id_usuario, 'nombre', u.nombre, 'apellido', u.apellido, 'email', u.email)", 'usuario')
+      .addSelect('u.bloqueoDetalle', 'detalle')
+      .addSelect("CASE WHEN operador.id_usuario IS NOT NULL THEN jsonb_build_object('nombre', operador.nombre, 'apellido', operador.apellido) END", 'administrador')
+      .where('u.activa = true AND u.bloqueado = true AND u.bloqueo_detalle IS NOT NULL')
+      .orderBy('u.id', 'DESC')
+      .getRawMany<BloqueoAdministrativo>();
   }
 
   buscarPorTokenVerificacion(token: string): Promise<Usuario | null> {

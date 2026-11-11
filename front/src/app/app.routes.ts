@@ -122,6 +122,12 @@ export const routes: Routes = [
     title: 'Iniciar sesión — DEPA',
   },
   {
+    path: 'cuenta-bloqueada',
+    loadComponent: () =>
+      import('./features/auth/cuenta-bloqueada/cuenta-bloqueada.component').then((m) => m.CuentaBloqueadaComponent),
+    title: 'Cuenta bloqueada - DEPA',
+  },
+  {
     path: 'registro',
     loadComponent: () =>
       import('./features/auth/register/register.component').then((m) => m.RegisterComponent),

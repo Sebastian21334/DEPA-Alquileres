@@ -8,6 +8,15 @@ import {
 } from 'typeorm';
 import { Rol } from '../../catalogos/entity/rol.entity';
 
+export interface DetalleBloqueo {
+  id: string;
+  motivo: string | null;
+  administradorId: number | null;
+  fecha: string | null;
+  apelacion?: { texto: string; fecha: string };
+  respuesta?: { texto: string; fecha: string; administradorId: number };
+}
+
 @Entity('usuario')
 export class Usuario {
   @PrimaryGeneratedColumn({ name: 'id_usuario' })
@@ -47,6 +56,9 @@ export class Usuario {
 
   @Column({ name: 'bloqueado', type: 'boolean', default: false })
   bloqueado: boolean;
+
+  @Column({ name: 'bloqueo_detalle', type: 'jsonb', nullable: true, select: false })
+  bloqueoDetalle?: DetalleBloqueo | null;
 
   // Baja lógica: la cuenta se conserva, pero no puede iniciar sesión.
   @Column({ name: 'activa', type: 'boolean', default: true })

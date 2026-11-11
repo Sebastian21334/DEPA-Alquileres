@@ -5,6 +5,28 @@
   min-height: calc(100dvh - 70px);
 }
 
+.block-dialog {
+  width: min(520px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  border: 1px solid #dfe6ea;
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+}
+.block-dialog::backdrop { background: rgb(16 42 58 / 55%); }
+.block-form { display: grid; gap: 12px; }
+.block-form h2, .block-form p, .blocked-user h3, .blocked-user p { margin: 0; }
+.block-form label { font-weight: 700; }
+.block-form textarea { width: 100%; padding: 10px 12px; border: 1px solid #dfe6ea; border-radius: 8px; font: inherit; resize: vertical; }
+.block-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.blocked-users { display: grid; gap: 12px; padding: 16px; }
+.blocked-user { display: grid; justify-items: start; gap: 10px; padding: 16px; border: 1px solid #dfe6ea; border-radius: 10px; }
+.blocked-user p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.blocked-user p strong { display: block; }
+.blocked-user .block-form { width: min(100%, 560px); }
+
 .management {
   overflow: visible;
 }

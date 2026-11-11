@@ -17,6 +17,23 @@
     <div class="alert alert--success" role="status">{{ notice() }}</div>
   }
 
+  <dialog #bloqueoDialog class="block-dialog" aria-labelledby="block-dialog-title" (cancel)="cerrarBloqueo($event)">
+      <form class="block-form" (ngSubmit)="confirmarBloqueo()">
+        <h2 id="block-dialog-title">Bloquear a {{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</h2>
+        <p>El usuario verá este motivo al intentar iniciar sesión y podrá apelar el bloqueo.</p>
+        <label for="block-reason">Motivo del bloqueo</label>
+        <textarea id="block-reason" name="motivoBloqueo" [(ngModel)]="motivoBloqueo"
+          placeholder="Explicá por qué se bloquea esta cuenta" rows="5" maxlength="500" required autofocus></textarea>
+        @if (bloqueoError()) { <p class="alert alert--error" role="alert">{{ bloqueoError() }}</p> }
+        <div class="block-actions">
+          <button type="button" class="button button--ghost" (click)="cerrarBloqueo()" [disabled]="bloqueando()">Cancelar</button>
+          <button type="submit" class="button button--danger-outline" [disabled]="bloqueando() || !motivoBloqueo.trim()">
+            {{ bloqueando() ? 'Bloqueando…' : 'Confirmar bloqueo' }}
+          </button>
+        </div>
+      </form>
+  </dialog>
+
   <div class="stats">
     <article>
       <svg lucideUsers [size]="25"></svg>
@@ -518,6 +535,59 @@
       </div>
     </nav>
   </section>
+  <section class="panel" aria-labelledby="blocked-users-title">
+    <div class="panel__title">
+      <div>
+        <h2 id="blocked-users-title">Usuarios bloqueados</h2>
+        <p>Consultá los bloqueos vigentes y respondé las apelaciones.</p>
+      </div>
+      <button type="button" class="button button--ghost" (click)="cargarBloqueados()" [disabled]="bloqueadosCargando()">Actualizar</button>
+    </div>
+    @if (bloqueadosError()) {
+      <p class="alert alert--error" role="alert">{{ bloqueadosError() }}</p>
+    }
+    @if (bloqueadosCargando()) {
+      <p class="empty" role="status">Cargando usuarios bloqueados…</p>
+    } @else {
+      <div class="blocked-users">
+        @for (bloqueo of bloqueados(); track bloqueo.detalle.id) {
+          <article class="blocked-user">
+            <header>
+              <h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3>
+              <p>{{ bloqueo.usuario.email }}</p>
+            </header>
+            <p><strong>Bloqueado por</strong> {{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p>
+            @if (bloqueo.detalle.fecha) {
+              <p><strong>Fecha del bloqueo</strong> {{ bloqueo.detalle.fecha | date: 'dd/MM/yyyy' }}</p>
+            }
+            <p><strong>Motivo</strong> {{ bloqueo.detalle.motivo || 'Sin registro' }}</p>
+            @if (bloqueo.detalle.apelacion; as apelacion) {
+              <p><strong>Apelación del {{ apelacion.fecha | date: 'dd/MM/yyyy' }}</strong> {{ apelacion.texto }}</p>
+              @if (bloqueo.detalle.respuesta; as respuesta) {
+                <p><strong>Respuesta del {{ respuesta.fecha | date: 'dd/MM/yyyy' }}</strong> {{ respuesta.texto }}</p>
+              } @else if (apelacionSeleccionada() === bloqueo.detalle.id) {
+                <form class="block-form" (ngSubmit)="responderApelacion(bloqueo)">
+                  <label [for]="'reply-' + bloqueo.detalle.id">Respuesta de administración</label>
+                  <textarea [id]="'reply-' + bloqueo.detalle.id" name="respuesta" [(ngModel)]="respuestaApelacion" rows="4" maxlength="2000" required></textarea>
+                  <div class="block-actions">
+                    <button type="button" class="button button--ghost" (click)="apelacionSeleccionada.set(null)" [disabled]="!!busy()">Cancelar</button>
+                    <button type="submit" class="button button--primary" [disabled]="!!busy() || !respuestaApelacion.trim()">Enviar respuesta</button>
+                  </div>
+                </form>
+              } @else {
+                <button type="button" class="button button--ghost" (click)="abrirRespuesta(bloqueo)" [disabled]="!!busy()">Responder apelación</button>
+              }
+            } @else {
+              <p>Sin apelación.</p>
+            }
+          </article>
+        } @empty {
+          @if (!bloqueadosError()) { <p class="empty">No hay usuarios bloqueados.</p> }
+        }
+      </div>
+    }
+  </section>
+
   <section class="panel management">
     <div class="panel__title">
       <div>

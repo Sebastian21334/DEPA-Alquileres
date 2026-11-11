@@ -59,6 +59,13 @@ export class LoginComponent {
       },
       error: (err: ApiError) => {
         this.enviando.set(false);
+        if (err.codigo === 'USUARIO_BLOQUEADO' && err.tokenBloqueo) {
+          this.authService.logout();
+          this.authService.tokenBloqueo = err.tokenBloqueo;
+          this.form.controls.contrasenia.reset();
+          void this.router.navigate(['/cuenta-bloqueada']);
+          return;
+        }
         const sinVerificar =
           err.codigo === 'EMAIL_NO_VERIFICADO' || err.message === MENSAJE_EMAIL_NO_VERIFICADO;
         this.puedeReenviarVerificacion.set(sinVerificar);

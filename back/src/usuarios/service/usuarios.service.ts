@@ -15,7 +15,7 @@ import {
 import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
 import type { IUsuariosRepository, ParticipacionEnReserva } from '../repository/usuarios.repository.interface';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
-import { Usuario } from '../entity/usuario.entity';
+import { Usuario, type DetalleBloqueo } from '../entity/usuario.entity';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import sharp from 'sharp';
 import type { EntityManager } from 'typeorm';
@@ -208,17 +208,24 @@ export class UsuariosService {
 
     // Serializa el bloqueo con la creación de reservas, que toma la misma
     // fila de publicación y vuelve a leer el estado de la cuenta antes de guardar.
-    await this.usuariosRepo.conTransaccion(async (transaccion) => {
+    const cambio = await this.usuariosRepo.conTransaccion(async (transaccion) => {
       const actual = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion);
       if (!actual) throw new NotFoundException('Usuario no encontrado');
       if (!actual.activa) throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
+      if (actual.bloqueado === bloqueado) return false;
       await this.publicacionesService.bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
       actual.bloqueado = bloqueado;
+      if (bloqueado) {
+        actual.bloqueoDetalle = {
+          id: randomUUID(), motivo: motivo?.trim() || null, administradorId: idOperador, fecha: new Date().toISOString(),
+        };
+      }
       await this.usuariosRepo.guardar(actual, transaccion);
+      return true;
     });
 
     // Una cuenta activa siempre tiene email; la condición solo lo hace explícito.
-    if (usuario.email) {
+    if (cambio && usuario.email) {
       try {
         await this.mailService.enviarCambioBloqueo(
           usuario.email,
@@ -238,6 +245,50 @@ export class UsuariosService {
         ? 'Usuario bloqueado correctamente'
         : 'Usuario habilitado correctamente',
     };
+  }
+
+  listarBloqueados() {
+    return this.usuariosRepo.listarBloqueados();
+  }
+
+  private bloqueoVigente(usuario: Usuario | null, idBloqueo: string): DetalleBloqueo {
+    if (!usuario?.activa || !usuario.bloqueado || usuario.bloqueoDetalle?.id !== idBloqueo) {
+      throw new ForbiddenException('El bloqueo ya no está vigente. Volvé a ingresar.');
+    }
+    return usuario.bloqueoDetalle;
+  }
+
+  private vistaBloqueo(detalle: DetalleBloqueo) {
+    const { motivo, fecha, apelacion, respuesta } = detalle;
+    return { motivo, fecha, apelacion: apelacion ?? null,
+      respuesta: respuesta ? { texto: respuesta.texto, fecha: respuesta.fecha } : null };
+  }
+
+  async consultarBloqueo(idUsuario: number, idBloqueo: string) {
+    const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario);
+    return this.vistaBloqueo(this.bloqueoVigente(usuario, idBloqueo));
+  }
+
+  async apelarBloqueo(idUsuario: number, idBloqueo: string, texto: string) {
+    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+      const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion);
+      const detalle = this.bloqueoVigente(usuario, idBloqueo);
+      if (detalle.apelacion) throw new ConflictException('Ya enviaste una apelación para este bloqueo.');
+      detalle.apelacion = { texto, fecha: new Date().toISOString() };
+      await this.usuariosRepo.guardar(usuario!, transaccion);
+      return this.vistaBloqueo(detalle);
+    });
+  }
+
+  async responderApelacion(idUsuario: number, idBloqueo: string, administradorId: number, texto: string) {
+    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+      const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion);
+      const detalle = this.bloqueoVigente(usuario, idBloqueo);
+      if (!detalle.apelacion || detalle.respuesta) throw new ConflictException('La apelación ya no está pendiente.');
+      detalle.respuesta = { texto, fecha: new Date().toISOString(), administradorId };
+      await this.usuariosRepo.guardar(usuario!, transaccion);
+      return { mensaje: 'Respuesta registrada.' };
+    });
   }
 
   /** Devuelve los datos del usuario autenticado sin exponer secretos de cuenta. */

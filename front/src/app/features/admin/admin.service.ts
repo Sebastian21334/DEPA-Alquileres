@@ -35,6 +35,19 @@ export interface AdminPage<T> {
   totalPaginas: number;
 }
 
+export interface AdminBloqueo {
+  usuario: Pick<AdminUser, 'id' | 'nombre' | 'apellido' | 'email'>;
+  administrador: Pick<AdminUser, 'nombre' | 'apellido'> | null;
+  detalle: {
+    id: string;
+    motivo: string | null;
+    administradorId: number | null;
+    fecha: string | null;
+    apelacion?: { texto: string; fecha: string };
+    respuesta?: { texto: string; fecha: string; administradorId: number };
+  };
+}
+
 export interface VerificationRequest {
   id: number;
   estado: string;
@@ -179,6 +192,14 @@ export class AdminService {
   }
   cambiarBloqueo(id: number, bloquear: boolean, motivo?: string) {
     return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo });
+  }
+
+  listarBloqueados() {
+    return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/bloqueados`);
+  }
+
+  responderApelacion(id: number, bloqueoId: string, texto: string) {
+    return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/${id}/bloqueo/responder`, { bloqueoId, texto });
   }
   cambiarRol(id: number, nombreRol: string) {
     return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });

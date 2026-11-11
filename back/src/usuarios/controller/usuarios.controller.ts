@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Patch,
   Post,
   Param,
@@ -31,7 +32,8 @@ import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { CambiarRolDto } from '../dto/cambiar-rol.dto';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
-import { CambiarBloqueoDto } from '../dto/cambiar-bloqueo.dto';
+import { BloquearUsuarioDto, CambiarBloqueoDto } from '../dto/cambiar-bloqueo.dto';
+import { ResponderApelacionDto } from '../dto/responder-apelacion.dto';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 
 @Controller('usuarios')
@@ -50,6 +52,21 @@ export class UsuariosController {
   @Roles('Administrador')
   listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarAdministracionDto) {
     return this.usuariosService.listarAdministracion(consulta);
+  }
+
+  @Get('administracion/bloqueados')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  listarBloqueados() {
+    return this.usuariosService.listarBloqueados();
+  }
+
+  @Post(':id/bloqueo/responder')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  responderApelacion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true })) dto: ResponderApelacionDto, @Req() req: AuthenticatedRequest) {
+    return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto);
   }
 
   @Get('me')
@@ -117,7 +134,7 @@ export class UsuariosController {
   @Patch(':id/bloquear')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  bloquear(@Param('id', ParseIntPipe) id: number, @Body() dto: CambiarBloqueoDto, @Req() req: AuthenticatedRequest) {
+  bloquear(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true })) dto: BloquearUsuarioDto, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.cambiarBloqueo(
       id,
       true,

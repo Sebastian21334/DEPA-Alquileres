@@ -1,5 +1,5 @@
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
-import { Component, computed, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, PLATFORM_ID, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { forkJoin, Subscription } from 'rxjs';
@@ -14,6 +14,7 @@ import {
   LucideX,
 } from '@lucide/angular';
 import {
+  AdminBloqueo,
   AdminCancellationRequest,
   AdminCatalogItem,
   AdminReembolso,
@@ -56,8 +57,19 @@ export class AdminComponent {
   private readonly destroyRef = inject(DestroyRef);
   private publicationsRequest?: Subscription;
   private usersRequest?: Subscription;
+  private bloqueadosRequest?: Subscription;
+  private readonly bloqueoDialog = viewChild.required<ElementRef<HTMLDialogElement>>('bloqueoDialog');
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   protected readonly users = signal<AdminUser[]>([]);
+  protected readonly bloqueados = signal<AdminBloqueo[]>([]);
+  protected readonly bloqueadosCargando = signal(true);
+  protected readonly bloqueadosError = signal('');
+  protected readonly usuarioPorBloquear = signal<AdminUser | null>(null);
+  protected readonly bloqueando = signal(false);
+  protected readonly bloqueoError = signal('');
+  protected motivoBloqueo = '';
+  protected readonly apelacionSeleccionada = signal<string | null>(null);
+  protected respuestaApelacion = '';
   protected readonly publications = signal<Publicacion[]>([]);
   protected readonly publicationQuery = signal('');
   protected readonly bajaId = signal<number | null>(null);
@@ -117,6 +129,7 @@ export class AdminComponent {
     this.error.set(null);
     this.loadPublications(this.publicationsPage());
     this.loadUsers(this.usersPage());
+    this.cargarBloqueados();
     let pending = 5;
     const done = () => {
       if (--pending === 0) this.otherLoading.set(false);
@@ -448,23 +461,93 @@ export class AdminComponent {
       estado === 'PAGADO_PROPIETARIO' ? 'Pago manual registrado.' : 'Devolución manual registrada.',
     );
   }
+  protected cargarBloqueados(): void {
+    this.bloqueadosRequest?.unsubscribe();
+    this.bloqueadosCargando.set(true);
+    this.bloqueadosError.set('');
+    this.bloqueadosRequest = this.api.listarBloqueados().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (usuarios) => {
+        this.bloqueados.set(usuarios);
+        this.bloqueadosCargando.set(false);
+      },
+      error: (error: Error) => {
+        this.bloqueadosError.set(error.message);
+        this.bloqueadosCargando.set(false);
+      },
+    });
+  }
+
   protected toggleUser(user: AdminUser): void {
-    const bloquear = !user.bloqueado;
-    // El motivo viaja al backend y se incluye en el correo de bloqueo. Cancelar
-    // el cuadro evita cambiar el estado por accidente.
-    const motivo = bloquear
-      ? window.prompt(`Motivo del bloqueo para ${user.nombre} ${user.apellido}. Sus publicaciones dejarán de estar disponibles y no admitirán contacto ni nuevas reservas. Las reservas anteriores, reclamos y liquidaciones se conservan y se gestionan por separado:`)
-      : undefined;
-    if (bloquear && motivo === null) return;
+    if (!user.bloqueado) {
+      this.usuarioPorBloquear.set(user);
+      this.motivoBloqueo = '';
+      this.bloqueoError.set('');
+      this.bloqueoDialog().nativeElement.showModal();
+      return;
+    }
     this.run(
       `user-${user.id}`,
-      () => this.api.cambiarBloqueo(user.id, bloquear, motivo ?? undefined),
-      () =>
-        this.users.update((v) =>
-          v.map((u) => (u.id === user.id ? { ...u, bloqueado: bloquear } : u)),
-        ),
-      'Estado del usuario actualizado.',
+      () => this.api.cambiarBloqueo(user.id, false),
+      () => this.actualizarBloqueoUsuario(user.id, false),
+      'Usuario habilitado.',
     );
+  }
+
+  protected cerrarBloqueo(event?: Event): void {
+    event?.preventDefault();
+    if (this.bloqueando()) return;
+    this.bloqueoDialog().nativeElement.close();
+    this.usuarioPorBloquear.set(null);
+  }
+
+  protected confirmarBloqueo(): void {
+    const usuario = this.usuarioPorBloquear();
+    const motivo = this.motivoBloqueo.trim();
+    if (!usuario || !motivo || motivo.length > 500 || this.bloqueando()) return;
+    this.bloqueando.set(true);
+    this.bloqueoError.set('');
+    this.api.cambiarBloqueo(usuario.id, true, motivo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: () => {
+        this.bloqueando.set(false);
+        this.cerrarBloqueo();
+        this.actualizarBloqueoUsuario(usuario.id, true);
+        this.notice.set('Usuario bloqueado.');
+      },
+      error: (error: Error) => {
+        this.bloqueando.set(false);
+        this.bloqueoError.set(error.message);
+      },
+    });
+  }
+
+  private actualizarBloqueoUsuario(id: number, bloqueado: boolean): void {
+    this.users.update((usuarios) => usuarios.map((usuario) => usuario.id === id ? { ...usuario, bloqueado } : usuario));
+    this.cargarBloqueados();
+  }
+
+  protected abrirRespuesta(bloqueo: AdminBloqueo): void {
+    this.respuestaApelacion = '';
+    this.bloqueadosError.set('');
+    this.apelacionSeleccionada.set(bloqueo.detalle.id);
+  }
+
+  protected responderApelacion(bloqueo: AdminBloqueo): void {
+    const texto = this.respuestaApelacion.trim();
+    if (!texto || texto.length > 2000 || this.busy()) return;
+    this.busy.set(`apelacion-${bloqueo.detalle.id}`);
+    this.bloqueadosError.set('');
+    this.api.responderApelacion(bloqueo.usuario.id, bloqueo.detalle.id, texto)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: () => {
+          this.busy.set(null);
+          this.apelacionSeleccionada.set(null);
+          this.cargarBloqueados();
+        },
+        error: (error: Error) => {
+          this.busy.set(null);
+          this.bloqueadosError.set(error.message);
+        },
+      });
   }
   protected changeRole(user: AdminUser, select: HTMLSelectElement): void {
     const role = select.value;
