@@ -29,6 +29,16 @@ const DATA = {
   titulo7: 'Titulo de prueba correcto',
 };
 
+// Casos complementarios al documento: bordes del largo mínimo y símbolos puntuales.
+const BORDES = {
+  catorceCaracteres: 'Casa en centro',
+  quinceCaracteres: 'Casa en centros',
+  simbolosPermitidos: 'Depto: 2 amb, Centro. Luminoso',
+  conGuion: 'Depto 2 ambientes - Centro',
+  conEmoji: 'Casa amplia con pileta 🏠',
+  soloEspacios: ' '.repeat(20),
+};
+
 describe('CP-06 · Formato del título de una publicación (partición de equivalencias)', () => {
   let ctx: AppDePrueba;
   let token: string;
@@ -124,5 +134,35 @@ describe('CP-06 · Formato del título de una publicación (partición de equiva
     const respuesta = await modificarTitulo(DATA.titulo7);
     expect(respuesta.status).toBe(200);
     expect(tituloPersistido()).toBe(DATA.titulo7);
+  });
+
+  test('Borde · 14 caracteres → error controlado, no se modifica', async () => {
+    expect(BORDES.catorceCaracteres).toHaveLength(14);
+    await esperarRechazo(BORDES.catorceCaracteres);
+  });
+
+  test('Borde · 15 caracteres → se modifica la publicación', async () => {
+    expect(BORDES.quinceCaracteres).toHaveLength(15);
+    const respuesta = await modificarTitulo(BORDES.quinceCaracteres);
+    expect(respuesta.status).toBe(200);
+    expect(tituloPersistido()).toBe(BORDES.quinceCaracteres);
+  });
+
+  test('Símbolos permitidos (espacio, coma, dos puntos y punto) → se modifica la publicación', async () => {
+    const respuesta = await modificarTitulo(BORDES.simbolosPermitidos);
+    expect(respuesta.status).toBe(200);
+    expect(tituloPersistido()).toBe(BORDES.simbolosPermitidos);
+  });
+
+  test('Título válido salvo por un guion → error controlado, no se modifica', async () => {
+    await esperarRechazo(BORDES.conGuion);
+  });
+
+  test('Título válido salvo por un emoji → error controlado, no se modifica', async () => {
+    await esperarRechazo(BORDES.conEmoji);
+  });
+
+  test('Título de 20 espacios → error controlado, no se modifica', async () => {
+    await esperarRechazo(BORDES.soloEspacios);
   });
 });
