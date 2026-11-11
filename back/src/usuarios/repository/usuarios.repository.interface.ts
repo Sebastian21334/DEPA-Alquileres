@@ -1,12 +1,25 @@
 import { Usuario } from "../entity/usuario.entity";
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
-import { Pagina } from '../../common/paginacion';
+import { Pagina } from '../../common/persistence/paginacion';
+import type { EntityManager } from 'typeorm';
+
+export type ParticipacionEnReserva = 'Anunciante' | 'Inquilino';
+
+export interface OperacionesPendientesCuenta {
+  reservasPendientes: number;
+  estadiasVigentes: number;
+  liquidacionesPendientes: number;
+  pagosSinConciliar: number;
+}
 
 export const USUARIOS_REPOSITORY = 'USUARIOS_REPOSITORY';
 
 export interface IUsuariosRepository {
   crear(datos: Partial<Usuario>): Usuario;
-  guardar(usuario: Usuario): Promise<Usuario>;
+  guardar(usuario: Usuario, transaccion?: EntityManager): Promise<Usuario>;
+  conTransaccion<T>(operacion: (transaccion: EntityManager) => Promise<T>): Promise<T>;
+  buscarBloqueado(idUsuario: number, transaccion: EntityManager, incluirRol?: boolean): Promise<Usuario | null>;
+  contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager): Promise<OperacionesPendientesCuenta>;
   buscarPorEmail(email: string): Promise<Usuario | null>;
   contarUsuarios(): Promise<number>;
   listarTodos(): Promise<Usuario[]>;

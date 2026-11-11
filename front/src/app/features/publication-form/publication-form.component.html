@@ -29,6 +29,9 @@
             maxlength="255"
             placeholder="Ej. Departamento luminoso en el centro"
           />
+          @if (formulario.invalido('titulo')) {
+            <small>Ingresá un título de 5 a 255 caracteres, con letras o números y sin emojis.</small>
+          }
         </div>
         <div class="field field--full">
           <label for="description">Descripción *</label

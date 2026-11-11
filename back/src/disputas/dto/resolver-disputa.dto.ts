@@ -1,8 +1,11 @@
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { EstadoDisputa } from '../../catalogos/estados';
+
+const RESULTADOS_DISPUTA = [EstadoDisputa.GANADA, EstadoDisputa.PERDIDA] as const;
 
 export class ResolverDisputaDto {
-  @IsIn(['GANADA', 'PERDIDA'])
-  resultado: 'GANADA' | 'PERDIDA';
+  @IsIn(RESULTADOS_DISPUTA)
+  resultado: (typeof RESULTADOS_DISPUTA)[number];
 
   @IsOptional()
   @IsString()

@@ -20,12 +20,14 @@ async function main() {
             WHERE table_schema = 'public' AND table_name = 'reembolso') AS reembolso,
           (SELECT count(*) FROM information_schema.tables
             WHERE table_schema = 'public' AND table_name = 'disputa') AS disputa,
+          to_regclass('public.ambito') IS NOT NULL AS ambito,
+          to_regclass('public.estado') IS NOT NULL AS estado,
           (SELECT count(*) FROM information_schema.tables
             WHERE table_schema = 'public' AND table_name = 'reclamo_reserva') AS reclamo`);
       console.log(JSON.stringify({
         tablas: rows[0],
         aplicacion:
-          'Con el backend detenido, usar --aplicar. La migración es repetible y no modifica pagos existentes.',
+          'Con el backend detenido, usar --aplicar. La migración de estados por ámbito conserva los códigos existentes.',
       }));
       return;
     }
@@ -33,19 +35,22 @@ async function main() {
     await client.query('BEGIN');
     try {
       await client.query("SET LOCAL lock_timeout = '10s'");
-      await client.query(
-        fs.readFileSync(
-          path.join(
-            __dirname,
-            '..',
-            'migrations',
-            '20261104-cancelaciones-devoluciones.sql',
-          ),
-          'utf8',
-        ),
-      );
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('depa:estados-por-ambito'))");
+      const { rows: [{ catalogoAplicado }] } = await client.query(`
+        SELECT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'public.reserva'::regclass AND conname = 'fk_reserva_estado_pago'
+        ) AS "catalogoAplicado"
+      `);
+      const archivos = catalogoAplicado
+        ? ['20261110-estados-por-ambito.sql']
+        : ['20261104-cancelaciones-devoluciones.sql', '20261110-estados-por-ambito.sql'];
+      for (const archivo of archivos) {
+        const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', archivo), 'utf8');
+        await client.query(sql);
+      }
       await client.query('COMMIT');
-      console.log('Cancelaciones, reembolsos, disputas y reclamos preparados.');
+      console.log('Cancelaciones, reembolsos, disputas, reclamos y estados por ámbito preparados.');
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

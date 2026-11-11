@@ -1,14 +1,13 @@
-import { IsString } from 'class-validator';
+import { IsByteLength, IsString, Matches } from 'class-validator';
 import { VerificarCuentaDto } from './verificar-cuenta.dto';
-import { ContraseniaSegura } from '../validators/contrasenia-segura.decorator';
-import { CoincideCon } from '../validators/coincide-con.decorator';
+import { OPCIONES_BYTES_CONTRASENIA } from './contrasenia-segura.dto';
 
 export class RestablecerContraseniaDto extends VerificarCuentaDto {
   @IsString()
-  @ContraseniaSegura()
+  @Matches(/^(?=.*\p{L})(?=.*[0-9])(?=.*[\p{P}\p{S}])[^\s\p{C}]{12,}$/u)
+  @IsByteLength(0, 72, OPCIONES_BYTES_CONTRASENIA)
   nuevaContrasenia: string;
 
   @IsString()
-  @CoincideCon('nuevaContrasenia')
   confirmarContrasenia: string;
 }

@@ -5,8 +5,8 @@ import { CotizacionDolar } from './entity/cotizacion-dolar.entity';
 import { ConsultaCotizacion } from './entity/consulta-cotizacion.entity';
 import { CotizacionRepository } from './repository/cotizacion.repository';
 import { COTIZACION_REPOSITORY } from './repository/cotizacion.repository.interface';
-import { DolarApiAdapter } from './repository/dolar-api.adapter';
-import { PROVEEDOR_DOLAR } from './repository/proveedor-dolar.interface';
+import { DolarApiAdapter } from './proveedor/dolar-api.adapter';
+import { PROVEEDOR_DOLAR } from './proveedor/proveedor-dolar.interface';
 import { CotizacionesService } from './service/cotizaciones.service';
 import { CotizacionesController } from './controller/cotizaciones.controller';
 

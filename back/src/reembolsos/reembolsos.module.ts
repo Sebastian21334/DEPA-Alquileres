@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Pago } from '../pagos/entity/pago.entity';
+import { PagosPersistenciaModule } from '../pagos/pagos-persistencia.module';
 import { PasarelaModule } from '../pagos/pasarela.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
 import { Reembolso } from './entity/reembolso.entity';
@@ -9,12 +9,15 @@ import { REEMBOLSOS_REPOSITORY } from './repository/reembolsos.repository.interf
 import { ReembolsosController } from './controller/reembolsos.controller';
 import { ReembolsosService } from './service/reembolsos.service';
 import { ReembolsosReconciliacionService } from './service/reembolsos-reconciliacion.service';
+import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Reembolso, Pago]),
+    TypeOrmModule.forFeature([Reembolso]),
+    PagosPersistenciaModule,
     PasarelaModule,
     SeguridadModule,
+    ReservasConsultaModule,
   ],
   controllers: [ReembolsosController],
   providers: [

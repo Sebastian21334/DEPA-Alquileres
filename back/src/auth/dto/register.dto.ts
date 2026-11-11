@@ -4,9 +4,9 @@ import {
   IsString,
   MaxLength,
 } from 'class-validator';
-import { ContraseniaSegura } from '../validators/contrasenia-segura.decorator';
+import { ContraseniaSeguraDto } from './contrasenia-segura.dto';
 
-export class RegisterDto {
+export class RegisterDto extends ContraseniaSeguraDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
@@ -26,8 +26,4 @@ export class RegisterDto {
   @IsNotEmpty()
   @MaxLength(20)
   telefono: string;
-
-  @IsString()
-  @ContraseniaSegura()
-  contrasenia: string;
 }

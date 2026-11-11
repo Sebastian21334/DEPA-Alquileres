@@ -8,7 +8,7 @@ export class Provincia {
   @PrimaryGeneratedColumn({ name: 'id_provincia' })
   id: number;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ name: 'nombre', type: 'varchar', length: 100 })
   nombre: string;
 
   // Relación: Una provincia tiene muchas ciudades

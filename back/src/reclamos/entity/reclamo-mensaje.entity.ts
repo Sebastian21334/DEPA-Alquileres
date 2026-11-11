@@ -34,10 +34,11 @@ export class ReclamoMensaje {
   @JoinColumn({ name: 'id_autor' })
   autor: Relation<Usuario>;
 
-  @Column({ type: 'varchar', length: 1000 })
+  @Column({ name: 'texto', type: 'varchar', length: 1000 })
   texto: string;
 
   @Column({
+    name: 'visible_para',
     type: 'enum',
     enum: VisibilidadMensajeReclamo,
     enumName: 'reclamo_mensaje_visibilidad_enum',
@@ -45,6 +46,6 @@ export class ReclamoMensaje {
   })
   visible_para: VisibilidadMensajeReclamo;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;
 }

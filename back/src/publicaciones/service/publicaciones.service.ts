@@ -1,5 +1,4 @@
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
-import { cuentaAnuncianteHabilitada, publicacionVisible } from '../politica-publicacion';
 import {
   BadRequestException,
   ForbiddenException,
@@ -19,21 +18,17 @@ import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
+import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 import { UbicacionService } from '../../ubicacion/service/ubicacion.service';
 import { Publicacion } from '../entity/publicacion.entity';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import type { IMailService } from '../../mail/mail.interface';
+import type { EntityManager } from 'typeorm';
 
 @Injectable()
 export class PublicacionesService {
   private readonly logger = new Logger(PublicacionesService.name);
-  constructor(
-    @Inject(PUBLICACIONES_REPOSITORY)
-    private readonly publicacionesRepo: IPublicacionesRepository,
-    private readonly catalogosService: CatalogosService,
-    private readonly ubicacionService: UbicacionService,
-    @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
-  ) {}
+  constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService) {}
 
   /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
   async crear(anunciante: Anunciante, dto: CrearPublicacionDto) {
@@ -75,35 +70,80 @@ export class PublicacionesService {
       ciudad,
     });
 
-    return this.publicacionesRepo.guardar(nueva);
+    return this.prepararRespuesta(await this.publicacionesRepo.guardar(nueva));
   }
 
   /** Busca una publicacion o devuelve 404 para los consumidores de la API. */
   async buscarPorId(id: number) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
     if (!publicacion) throw new NotFoundException('Publicación no encontrada');
-    return publicacion;
+    return this.prepararRespuesta(publicacion);
   }
 
   /** El acceso interno conserva el historial; el enlace público respeta el bloqueo. */
   async buscarPublicaPorId(id: number) {
     const publicacion = await this.buscarPorId(id);
-    if (!cuentaAnuncianteHabilitada(publicacion))
+    if (!this.cuentaAnuncianteHabilitada(publicacion))
       throw new NotFoundException('Publicación no disponible');
     return publicacion;
+  }
+
+  esVisible(publicacion: Publicacion): boolean {
+    return publicacion.activa && this.cuentaAnuncianteHabilitada(publicacion) &&
+      !publicacion.motivo_baja_admin && (publicacion.imagenes?.length ?? 0) > 0;
+  }
+
+  perteneceA(publicacion: Publicacion | null | undefined, idUsuario: number): boolean {
+    return publicacion?.anunciante?.idUsuario === idUsuario;
+  }
+
+  direccionCompleta(publicacion?: Publicacion | null): string {
+    return [publicacion?.direccion, publicacion?.ciudad?.nombre, publicacion?.provincia?.nombre]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  admiteReservaPorFecha(publicacion: Publicacion): boolean {
+    return this.catalogosService.admiteReservaPorFecha(publicacion.modalidad);
+  }
+
+  cuentaAnuncianteHabilitada(publicacion: Publicacion): boolean {
+    const usuario = publicacion.anunciante?.usuario;
+    return usuario?.activa === true && usuario.bloqueado === false;
+  }
+
+  prepararRespuesta<T extends Publicacion>(publicacion: T): T {
+    if (publicacion.modalidad) {
+      publicacion.modalidad = this.catalogosService.prepararModalidad(publicacion.modalidad);
+    }
+    return publicacion;
+  }
+
+  bloquearPublicacionesParaCambioDeCuenta(idUsuario: number, transaccion: EntityManager): Promise<boolean> {
+    return this.publicacionesRepo.bloquearPorAnunciante(idUsuario, transaccion);
+  }
+
+  async bloquearParaModificacion(id: number, transaccion: EntityManager): Promise<void> {
+    if (!(await this.publicacionesRepo.bloquearPorId(id, transaccion))) {
+      throw new NotFoundException('Publicación no encontrada');
+    }
+  }
+
+  buscarCondicionesDeReserva(id: number, transaccion: EntityManager): Promise<Publicacion | null> {
+    return this.publicacionesRepo.buscarCondicionesDeReserva(id, transaccion);
+  }
+
+  desactivarPorBajaDeCuenta(idUsuario: number, transaccion: EntityManager): Promise<void> {
+    return this.publicacionesRepo.desactivarPorAnunciante(idUsuario, transaccion);
   }
 
   /**
    * Único punto que autoriza operar sobre una publicación ajena: 404 si no
    * existe y 403 si pertenece a otro anunciante. Cada caso de uso informa su mensaje.
    */
-  async obtenerPropia(
-    id: number,
-    idUsuario: number,
-    mensaje = 'No tenés permiso para administrar esta publicación',
-  ): Promise<Publicacion> {
+  async obtenerPropia(id: number, idUsuario: number, mensaje = 'No tenés permiso para administrar esta publicación'): Promise<Publicacion> {
     const publicacion = await this.buscarPorId(id);
-    if (!publicacion.perteneceA(idUsuario))
+    if (!this.perteneceA(publicacion, idUsuario))
       throw new ForbiddenException(mensaje);
     return publicacion;
   }
@@ -111,7 +151,7 @@ export class PublicacionesService {
   /** Registra una apertura real del detalle; el cliente evita repetirla durante la misma sesión. */
   async registrarVisualizacion(id: number) {
     const publicacion = await this.publicacionesRepo.buscarPorId(id);
-    if (!publicacion || !publicacionVisible(publicacion))
+    if (!publicacion || !this.esVisible(publicacion))
       throw new NotFoundException('Publicación no encontrada');
     await this.publicacionesRepo.incrementarVisualizaciones(id);
     return { visualizaciones: Number(publicacion.visualizaciones ?? 0) + 1 };
@@ -119,25 +159,17 @@ export class PublicacionesService {
 
   /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
   async activar(publicacion: Publicacion) {
-    if (publicacion.activa || publicacion.estaDadaDeBajaPorAdministrador())
+    if (publicacion.activa || publicacion.motivo_baja_admin)
       return;
     // Se actualiza solo la columna: guardar la entidad completa haría que TypeORM
     // sincronice publicacion.imagenes (leída antes de subir la foto, vacía) y
     // desvincule la imagen recién creada (id_publicacion = NULL).
     await this.publicacionesRepo.marcarActiva(publicacion.id);
-    publicacion.activar();
+    publicacion.activa = true;
   }
 
   /** Lista pública paginada; el límite se acota para proteger la base de datos. */
-  async listarActivas(
-    pagina = 1,
-    limite = 12,
-    categoria?: CategoriaInicio,
-    filtros: Omit<
-      Partial<ConsultaPublicaciones>,
-      'pagina' | 'limite' | 'categoria'
-    > = {},
-  ) {
+  async listarActivas(pagina = 1, limite = 12, categoria?: CategoriaInicio, filtros: Omit<Partial<ConsultaPublicaciones>, 'pagina' | 'limite' | 'categoria'> = {}) {
     if (
       filtros.precioMin != null &&
       filtros.precioMax != null &&
@@ -167,7 +199,8 @@ export class PublicacionesService {
           : undefined,
       busqueda: filtros.busqueda?.trim().slice(0, 200) || undefined,
     };
-    return this.publicacionesRepo.buscarPaginadas(consulta);
+    const resultado = await this.publicacionesRepo.buscarPaginadas(consulta);
+    return { ...resultado, datos: resultado.datos.map((publicacion) => this.prepararRespuesta(publicacion)) };
   }
 
   /** Lista publicaciones de un anunciante, opcionalmente solo las activas. */
@@ -177,27 +210,24 @@ export class PublicacionesService {
       soloActivas,
     );
     // El dueño ve todas (para poder completarlas); la vista pública solo las que cumplen la regla.
-    return publicaciones.filter((p) => cuentaAnuncianteHabilitada(p) &&
-      (!soloActivas || publicacionVisible(p)));
+    return publicaciones.filter((p) => this.cuentaAnuncianteHabilitada(p) &&
+      (!soloActivas || this.esVisible(p)))
+      .map((publicacion) => this.prepararRespuesta(publicacion));
   }
 
   /** Modifica una publicación conservando la fecha original y validando propiedad. */
-  async actualizar(
-    id: number,
-    anuncianteQueOpera: Anunciante,
-    dto: ActualizarPublicacionDto,
-  ) {
+  async actualizar(id: number, anuncianteQueOpera: Anunciante, dto: ActualizarPublicacionDto) {
     const publicacion = await this.obtenerPropia(
       id,
       anuncianteQueOpera.idUsuario,
       'No podés modificar una publicación que no es tuya',
     );
-    if (dto.activa === true && publicacion.estaDadaDeBajaPorAdministrador()) {
+    if (dto.activa === true && publicacion.motivo_baja_admin) {
       throw new ForbiddenException('La publicación fue desactivada por un administrador y no puede reactivarse');
     }
 
     // Los catálogos y la ubicación se validan contra la base antes de asignarlos.
-    publicacion.modificar({
+    const cambios = {
       titulo: dto.titulo,
       descripcion: dto.descripcion,
       precio: dto.precio,
@@ -229,14 +259,17 @@ export class PublicacionesService {
         dto.idCiudad === undefined
           ? undefined
           : await this.ubicacionService.getCiudadPorId(dto.idCiudad),
-    });
+    };
+    const informados = Object.entries(cambios).filter(([, valor]) => valor !== undefined);
+    Object.assign(publicacion, Object.fromEntries(informados));
 
-    return this.publicacionesRepo.guardar(publicacion);
+    return this.prepararRespuesta(await this.publicacionesRepo.guardar(publicacion));
   }
 
   /** Incluye publicaciones activas e inactivas de todos los anunciantes. */
-  listarAdministracion(consulta: ListarAdministracionDto) {
-    return this.publicacionesRepo.buscarAdministracion(consulta);
+  async listarAdministracion(consulta: ListarAdministracionDto) {
+    const pagina = await this.publicacionesRepo.buscarAdministracion(consulta);
+    return { ...pagina, datos: pagina.datos.map((publicacion) => this.prepararRespuesta(publicacion)) };
   }
 
   /** El controller restringe esta operación al rol Administrador. */
@@ -247,10 +280,13 @@ export class PublicacionesService {
     }
     const publicacion = await this.buscarPorId(id);
     await this.publicacionesRepo.darDeBaja(id, razon);
-    publicacion.darDeBaja(razon);
+    publicacion.activa = false;
+    publicacion.motivo_baja_admin = razon;
     let correoEnviado = false;
     try {
-      const email = publicacion.emailDelAnunciante();
+      const { email } = this.anunciantesService.datosContacto(
+        publicacion.anunciante,
+      );
       if (!email) throw new Error('El anunciante no tiene un correo registrado');
       await this.mailService.enviarBajaPublicacion(
         email, publicacion.titulo, razon,
@@ -270,6 +306,6 @@ export class PublicacionesService {
       anuncianteQueOpera.idUsuario,
       'No podés eliminar una publicación que no es tuya',
     );
-    return this.publicacionesRepo.eliminar(publicacion);
+    return this.prepararRespuesta(await this.publicacionesRepo.eliminar(publicacion));
   }
 }

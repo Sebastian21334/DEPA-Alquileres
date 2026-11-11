@@ -5,6 +5,8 @@ import { TipoAnunciante } from './entity/tipo-anunciante.entity';
 import { TipoPropiedad } from './entity/tipo-propiedad.entity';
 import { Modalidad } from './entity/modalidad.entity';
 import { TipoMoneda } from './entity/tipo-moneda.entity';
+import { Ambito } from './entity/ambito.entity';
+import { Estado } from './entity/estado.entity';
 import { CatalogosRepository } from './repository/catalogos.repository';
 import { CATALOGOS_REPOSITORY } from './repository/catalogos.repository.interface';
 import { CatalogosService } from './service/catalogos.service';
@@ -20,6 +22,8 @@ import { SeguridadModule } from '../seguridad/seguridad.module';
       TipoPropiedad,
       Modalidad,
       TipoMoneda,
+      Ambito,
+      Estado,
     ]),
     SeguridadModule,
   ],

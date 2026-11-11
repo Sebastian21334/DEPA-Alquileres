@@ -1,8 +1,8 @@
-import { ARCHIVO_REPOSITORY } from '../../common/almacenamiento/archivo.repository.interface';
-import type { IArchivoRepository } from '../../common/almacenamiento/archivo.repository.interface';
+import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -16,20 +16,10 @@ import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 
 @Injectable()
 export class ImagenesService {
-  constructor(
-    @Inject(IMAGENES_REPOSITORY)
-    private readonly imagenesRepo: IImagenesRepository,
-    private readonly publicacionesService: PublicacionesService,
-    @Inject(ARCHIVO_REPOSITORY)
-    private readonly archivosRepo: IArchivoRepository,
-  ) {}
+  constructor(@Inject(IMAGENES_REPOSITORY) private readonly imagenesRepo: IImagenesRepository, private readonly publicacionesService: PublicacionesService, private readonly almacenamientoService: AlmacenamientoService) {}
 
   /** Procesa una imagen, la guarda en Azure y registra su URL en la base. */
-  async subir(
-    idPublicacion: number,
-    anuncianteQueOpera: Anunciante,
-    archivo: Express.Multer.File,
-  ) {
+  async subir(idPublicacion: number, anuncianteQueOpera: Anunciante, archivo: Express.Multer.File) {
     const publicacion = await this.publicacionesService.obtenerPropia(
       idPublicacion,
       anuncianteQueOpera.idUsuario,
@@ -48,7 +38,7 @@ export class ImagenesService {
       throw new BadRequestException('El archivo no es una imagen válida');
     }
 
-    const url = await this.archivosRepo.subir(
+    const url = await this.almacenamientoService.subir(
       'imagenes',
       `publicaciones/${idPublicacion}-${randomUUID()}.jpg`,
       bufferProcesado,
@@ -60,7 +50,11 @@ export class ImagenesService {
       publicacion,
     });
 
-    const guardada = await this.imagenesRepo.guardar(nuevaImagen);
+    const guardada = await this.imagenesRepo.conTransaccion(async (imagenes, transaccion) => {
+      await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion);
+      nuevaImagen.orden = (await imagenes.buscarUltimoOrden(idPublicacion)) + 1;
+      return imagenes.guardar(nuevaImagen);
+    });
     // Con la primera imagen la publicación cumple la regla y pasa a estar visible.
     await this.publicacionesService.activar(publicacion);
     return guardada;
@@ -71,7 +65,7 @@ export class ImagenesService {
     const imagen = await this.imagenesRepo.buscarPorId(idImagen);
     if (!imagen) throw new NotFoundException('Imagen no encontrada');
 
-    if (!imagen.perteneceA(anuncianteQueOpera.idUsuario)) {
+    if (!this.publicacionesService.perteneceA(imagen.publicacion, anuncianteQueOpera.idUsuario)) {
       throw new ForbiddenException(
         'No podés eliminar una imagen que no es tuya',
       );
@@ -87,7 +81,7 @@ export class ImagenesService {
       );
     }
 
-    await this.archivosRepo.eliminarImagenPropia(imagen.url);
+    await this.almacenamientoService.eliminarImagenPropia(imagen.url);
 
     return this.imagenesRepo.eliminar(imagen);
   }
@@ -97,11 +91,30 @@ export class ImagenesService {
       idPublicacion, anunciante.idUsuario,
       'No podés ordenar imágenes de una publicación que no es tuya',
     );
-    return this.imagenesRepo.ordenar(idPublicacion, ids);
+    return this.imagenesRepo.conTransaccion(async (imagenes, transaccion) => {
+      await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion);
+      const actuales = await imagenes.buscarPorPublicacion(idPublicacion);
+      const porId = new Map(actuales.map((imagen) => [imagen.id, imagen]));
+      if (
+        ids.length !== actuales.length ||
+        new Set(ids).size !== ids.length ||
+        ids.some((id) => !porId.has(id))
+      ) {
+        throw new ConflictException('La galería cambió. Recargá la publicación antes de ordenar sus fotos.');
+      }
+      await imagenes.actualizarOrden(idPublicacion, ids);
+      return ids.map((id, orden) => Object.assign(porId.get(id)!, { orden }));
+    });
   }
 
   /** Lista las imagenes asociadas a una publicacion. */
   async listarPorPublicacion(idPublicacion: number) {
-    return this.imagenesRepo.buscarPorPublicacion(idPublicacion);
+    const imagenes = await this.imagenesRepo.buscarPorPublicacion(idPublicacion);
+    for (const imagen of imagenes) {
+      if (imagen.publicacion) {
+        imagen.publicacion = this.publicacionesService.prepararRespuesta(imagen.publicacion);
+      }
+    }
+    return imagenes;
   }
 }

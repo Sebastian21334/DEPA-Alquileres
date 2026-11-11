@@ -8,10 +8,10 @@ export class Rol {
   @PrimaryGeneratedColumn({ name: 'id_rol' })
   id: number;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ name: 'nombre', type: 'varchar', length: 100 })
   nombre: string;
 
-  @Column({ type: 'varchar', length: 250, nullable: true })
+  @Column({ name: 'descripcion', type: 'varchar', length: 250, nullable: true })
   descripcion: string;
 
   // Relación inversa: Un rol puede estar asignado a muchos usuarios

@@ -35,9 +35,7 @@ export function evaluarEncuadre(caras: readonly (readonly PuntoFacial[])[]): str
   return null;
 }
 
-export function detectarGesto(accion: GestoVitalidad | null, pose: PoseFacial,
-  neutral: PoseFacial | null, boca: number,
-  apertura: number | null = null, aperturaNeutral: number | null = null): boolean {
+export function detectarGesto(accion: GestoVitalidad | null, pose: PoseFacial, neutral: PoseFacial | null, boca: number, apertura: number | null = null, aperturaNeutral: number | null = null): boolean {
   if (!accion || !neutral) return false;
   const yaw = pose.yaw - neutral.yaw;
   const roll = pose.roll - neutral.roll;

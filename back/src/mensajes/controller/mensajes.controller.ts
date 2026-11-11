@@ -35,11 +35,7 @@ export class MensajesController {
 
   // Mensajes de una conversación puntual: publicación X con el usuario Y
   @Get('publicacion/:idPublicacion/usuario/:idOtroUsuario')
-  listarConversacion(
-    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-    @Param('idOtroUsuario', ParseIntPipe) idOtroUsuario: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  listarConversacion(@Param('idPublicacion', ParseIntPipe) idPublicacion: number, @Param('idOtroUsuario', ParseIntPipe) idOtroUsuario: number, @Req() req: AuthenticatedRequest) {
     return this.mensajesService.listarConversacion(
       idPublicacion,
       idOtroUsuario,
@@ -48,11 +44,7 @@ export class MensajesController {
   }
 
   @Patch('publicacion/:idPublicacion/usuario/:idOtroUsuario/leer')
-  marcarComoLeida(
-    @Param('idPublicacion', ParseIntPipe) idPublicacion: number,
-    @Param('idOtroUsuario', ParseIntPipe) idOtroUsuario: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  marcarComoLeida(@Param('idPublicacion', ParseIntPipe) idPublicacion: number, @Param('idOtroUsuario', ParseIntPipe) idOtroUsuario: number, @Req() req: AuthenticatedRequest) {
     return this.mensajesService.marcarConversacionComoLeida(
       idPublicacion,
       idOtroUsuario,

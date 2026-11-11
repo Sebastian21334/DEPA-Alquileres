@@ -1,4 +1,4 @@
-import { AlmacenamientoModule } from '../common/almacenamiento/almacenamiento.module';
+import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Imagen } from './entity/imagen.entity';

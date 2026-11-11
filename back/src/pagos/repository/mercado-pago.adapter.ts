@@ -35,12 +35,7 @@ export class MercadoPagoAdapter
       this.configRequerida(variable);
   }
 
-  async crearCheckout(
-    reserva: Reserva,
-    referencia: string,
-    clave: string,
-    moneda: string,
-  ) {
+  async crearCheckout(reserva: Reserva, referencia: string, clave: string, moneda: string) {
     const client = this.crearCliente();
     const successUrl = this.configRequerida('MP_SUCCESS_URL');
     const failureUrl = this.configRequerida('MP_FAILURE_URL');
@@ -90,11 +85,7 @@ export class MercadoPagoAdapter
     return new Payment(this.crearCliente()).get({ id });
   }
 
-  async reembolsar(
-    paymentId: string,
-    importe: number,
-    idempotencyKey: string,
-  ): Promise<ResultadoReembolsoExterno> {
+  async reembolsar(paymentId: string, importe: number, idempotencyKey: string): Promise<ResultadoReembolsoExterno> {
     const client = this.crearCliente();
     return new PaymentRefund(client).create({
       payment_id: paymentId,
@@ -103,10 +94,7 @@ export class MercadoPagoAdapter
     });
   }
 
-  consultarReembolso(
-    paymentId: string,
-    refundId: string,
-  ): Promise<ResultadoReembolsoExterno> {
+  consultarReembolso(paymentId: string, refundId: string): Promise<ResultadoReembolsoExterno> {
     const client = this.crearCliente();
     return new PaymentRefund(client).get({
       payment_id: paymentId,

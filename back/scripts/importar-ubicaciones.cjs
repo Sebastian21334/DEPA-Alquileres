@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { Client } = require('pg');
+const catalogos = require('../src/catalogos/catalogos-iniciales.json');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
 const out = path.join(__dirname, '..', '..', 'datos', 'georef');
@@ -89,20 +90,11 @@ async function main() {
         await client.query('INSERT INTO ciudad(nombre, id_provincia) SELECT nombre, "idProvincia" FROM jsonb_to_recordset($1::jsonb) AS x(nombre text, "idProvincia" integer)', [JSON.stringify(lote)]);
         ciudadesNuevas += lote.length;
       }
-      const catalogos = {
-        rol: [['Administrador','Administra usuarios, verificaciones y catálogos del sistema.'],['Inquilino','Busca propiedades y gestiona sus reservas.']],
-        tipo_anunciante: [['Particular','Persona que publica propiedades de forma particular.'],['Inmobiliaria','Empresa o profesional inmobiliario que publica propiedades.']],
-        tipo_propiedad: [
-          ['Departamento','Unidad independiente dentro de un edificio.'],['Casa','Vivienda independiente.'],['PH','Unidad de vivienda en propiedad horizontal.'],['Dúplex','Vivienda distribuida en dos plantas.'],['Cabaña','Vivienda turística o de descanso.'],['Quinta','Propiedad con vivienda y espacio verde.'],['Local comercial','Inmueble destinado a una actividad comercial.'],['Oficina','Espacio para actividades profesionales o administrativas.'],['Galpón','Inmueble para almacenamiento o actividades productivas.'],['Cochera','Espacio destinado al estacionamiento de vehículos.'],['Terreno','Parcela sin edificación para el uso acordado en el alquiler.']
-        ],
-        modalidad: [['Temporal','Alquiler por fechas con disponibilidad y reserva.',true],['Largo Plazo','Alquiler estable con condiciones acordadas con el anunciante.',false]],
-        tipo_moneda: [['Peso (ARS)','Peso argentino.'],['Dólar (USD)','Dólar estadounidense.']]
-      };
       const aliases = { tipo_moneda: {'Dólar (USD)':'dolar (usd)'} };
       const cambiosCatalogos = {};
       for (const [tabla, items] of Object.entries(catalogos)) {
         cambiosCatalogos[tabla] = { creados:0, completados:0 };
-        for (const [nombre, descripcion, porFecha] of items) {
+        for (const { nombre, descripcion, permite_reservas_por_fecha: porFecha } of items) {
           const match = backup[tabla].find(x => normalizar(x.nombre) === normalizar(nombre) || normalizar(x.nombre) === aliases[tabla]?.[nombre]);
           if (match) {
             const idColumn = `id_${tabla}`;

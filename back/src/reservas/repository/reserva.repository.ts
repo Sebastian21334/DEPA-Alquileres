@@ -1,48 +1,52 @@
 // reservas/repositorio/reserva.repository.ts
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThan, Repository } from 'typeorm';
 import {
   EstadoLiquidacionReserva,
   EstadoPagoReserva,
-  Reserva,
-} from '../entity/reserva.entity';
+  EstadoSolicitudCancelacion,
+} from '../../catalogos/estados';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, LessThan, Repository, type EntityManager } from 'typeorm';
+import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
-import {
-  EstadoSolicitudCancelacion,
-  SolicitudCancelacion,
-} from '../entity/solicitud-cancelacion.entity';
-import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 
 @Injectable()
 export class ReservaRepository implements IReservaRepository {
-  constructor(
-    @InjectRepository(Reserva)
-    private readonly repository: Repository<Reserva>,
-  ) {}
+  constructor(@InjectRepository(Reserva) private readonly repository: Repository<Reserva>) {}
 
   crear(datos: Partial<Reserva>): Reserva {
     return this.repository.create(datos);
   }
 
-  buscarCondicionesPublicacion(id: number): Promise<Publicacion | null> {
-    return this.repository.manager
-      .getRepository(Publicacion)
-      .findOne({ where: { id }, relations: { tipoMoneda: true, anunciante: { usuario: true } } });
+  async finalizarEstadiasVencidas(hoy: string): Promise<void> {
+    // PostgreSQL vuelve a comprobar las condiciones tras adquirir el bloqueo.
+    await this.repository.createQueryBuilder()
+      .update(Reserva)
+      .set({ finalizada: true })
+      .where('finalizada = false')
+      .andWhere('cancelada = false')
+      .andWhere('estado_pago = :aprobado', { aprobado: EstadoPagoReserva.APROBADO })
+      .andWhere('codigo_validado_en IS NOT NULL')
+      .andWhere('fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL')
+      .andWhere('fecha_inicio <= fecha_fin')
+      .andWhere('fecha_fin < :hoy', { hoy })
+      .execute();
   }
 
-  guardarReprogramacion(
-    datos: Partial<ReprogramacionReserva>,
-  ): Promise<ReprogramacionReserva> {
+  conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.repository.manager.transaction('READ COMMITTED', (transaccion) =>
+      operacion(new ReservaRepository(transaccion.getRepository(Reserva)), transaccion),
+    );
+  }
+
+  guardarReprogramacion(datos: Partial<ReprogramacionReserva>): Promise<ReprogramacionReserva> {
     const repo = this.repository.manager.getRepository(ReprogramacionReserva);
     return repo.save(repo.create(datos));
   }
 
-  buscarReprogramacion(
-    id: number,
-    idReserva: number,
-  ): Promise<ReprogramacionReserva | null> {
+  buscarReprogramacion(id: number, idReserva: number): Promise<ReprogramacionReserva | null> {
     const consulta = this.repository.manager
       .getRepository(ReprogramacionReserva)
       .createQueryBuilder('cambio')
@@ -62,16 +66,7 @@ export class ReservaRepository implements IReservaRepository {
       .update(id, { notificada_en: new Date() });
   }
 
-  async registrarNotificaciones(
-    id: number,
-    datos: Partial<
-      Pick<
-        Reserva,
-        | 'email_confirmacion_inquilino_enviado'
-        | 'email_nueva_reserva_anunciante_enviado'
-      >
-    >,
-  ): Promise<void> {
+  async registrarNotificaciones(id: number, datos: Partial<Pick<Reserva, | 'email_confirmacion_inquilino_enviado' | 'email_nueva_reserva_anunciante_enviado'>>): Promise<void> {
     // Un correo lento no debe restaurar fechas o estados leídos antes de otra operación.
     await this.repository.update(id, datos);
   }
@@ -127,6 +122,13 @@ export class ReservaRepository implements IReservaRepository {
       .getOne();
   }
 
+  buscarParaReclamo(id: number): Promise<Reserva | null> {
+    return this.repository.findOne({
+      where: { id },
+      relations: { usuario: true, publicacion: { anunciante: { usuario: true } } },
+    });
+  }
+
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]> {
     // El orden descendente permite mostrar primero las reservas más recientes.
     return this.repository.find({
@@ -153,9 +155,7 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarRecibidasPorAnunciante(
-    idUsuarioAnunciante: number,
-  ): Promise<Reserva[]> {
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
     return this.repository.find({
       where: {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
@@ -186,10 +186,7 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  existeAprobada(
-    idPublicacion: number,
-    idUsuarioInquilino: number,
-  ): Promise<boolean> {
+  existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
     return this.repository.exists({
       where: {
         publicacion: { id: idPublicacion },
@@ -224,22 +221,15 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.manager.getRepository(SolicitudCancelacion);
   }
 
-  crearSolicitudCancelacion(
-    datos: Partial<SolicitudCancelacion>,
-  ): SolicitudCancelacion {
+  crearSolicitudCancelacion(datos: Partial<SolicitudCancelacion>): SolicitudCancelacion {
     return this.solicitudes().create(datos);
   }
 
-  guardarSolicitudCancelacion(
-    solicitud: SolicitudCancelacion,
-  ): Promise<SolicitudCancelacion> {
+  guardarSolicitudCancelacion(solicitud: SolicitudCancelacion): Promise<SolicitudCancelacion> {
     return this.solicitudes().save(solicitud);
   }
 
-  buscarSolicitudCancelacion(
-    id: number,
-    idReserva: number,
-  ): Promise<SolicitudCancelacion | null> {
+  buscarSolicitudCancelacion(id: number, idReserva: number): Promise<SolicitudCancelacion | null> {
     return this.solicitudes().findOne({
       where: { id, reserva: { id: idReserva } },
       relations: {
@@ -253,9 +243,7 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarSolicitudCancelacionActiva(
-    idReserva: number,
-  ): Promise<SolicitudCancelacion | null> {
+  buscarSolicitudCancelacionActiva(idReserva: number): Promise<SolicitudCancelacion | null> {
     return this.solicitudes().findOne({
       where: {
         reserva: { id: idReserva },
@@ -266,9 +254,7 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  listarSolicitudesCancelacionAdministracion(): Promise<
-    SolicitudCancelacion[]
-  > {
+  listarSolicitudesCancelacionAdministracion(): Promise<SolicitudCancelacion[]> {
     return this.solicitudes().find({
       where: { estado: EstadoSolicitudCancelacion.PENDIENTE },
       relations: {

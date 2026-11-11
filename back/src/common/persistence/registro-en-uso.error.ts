@@ -5,9 +5,7 @@ export class RegistroEnUsoError extends Error {
 }
 
 /** Traducción del error específico de PostgreSQL dentro de la capa de datos. */
-export async function eliminarConIntegridad(
-  accion: () => Promise<unknown>,
-): Promise<void> {
+export async function eliminarConIntegridad(accion: () => Promise<unknown>): Promise<void> {
   try {
     await accion();
   } catch (error: unknown) {

@@ -301,10 +301,7 @@ export class AdminComponent {
     );
   }
 
-  protected verEvidencia(
-    reclamo: Reclamo,
-    evidencia: { id: number; nombre_archivo: string },
-  ): void {
+  protected verEvidencia(reclamo: Reclamo, evidencia: { id: number; nombre_archivo: string }): void {
     this.api.urlEvidenciaReclamo(reclamo.id, evidencia.id).subscribe({
       next: ({ url }) => window.open(url, '_blank', 'noopener'),
       error: (e: Error) => this.error.set(e.message),
@@ -398,10 +395,7 @@ export class AdminComponent {
     );
   }
 
-  protected resolverReclamoReserva(
-    reclamo: Reclamo,
-    resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL',
-  ): void {
+  protected resolverReclamoReserva(reclamo: Reclamo, resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL'): void {
     let importe: number | undefined;
     if (resolucion === 'DEVOLUCION_PARCIAL') {
       const valor = window.prompt('Importe parcial a devolver:')?.trim();
@@ -446,12 +440,7 @@ export class AdminComponent {
     });
   }
 
-  private resolverSettlement(
-    settlement: AdminSettlement,
-    estado: 'PAGADO_PROPIETARIO' | 'DEVUELTO_INQUILINO',
-    referencia: string,
-    observacion: string,
-  ): void {
+  private resolverSettlement(settlement: AdminSettlement, estado: 'PAGADO_PROPIETARIO' | 'DEVUELTO_INQUILINO', referencia: string, observacion: string): void {
     this.run(
       `settlement-${settlement.id}`,
       () => this.api.resolverLiquidacion(settlement.id, estado, referencia, observacion),
@@ -524,13 +513,7 @@ export class AdminComponent {
   protected esVideo(url: string): boolean {
     return /\.(mp4|webm|mov)(?:\?|$)/i.test(url);
   }
-  private run(
-    key: string,
-    request: () => any,
-    success: (value: unknown) => void,
-    message: string,
-    failure?: () => void,
-  ): void {
+  private run(key: string, request: () => any, success: (value: unknown) => void, message: string, failure?: () => void): void {
     this.busy.set(key);
     this.error.set(null);
     this.notice.set(null);

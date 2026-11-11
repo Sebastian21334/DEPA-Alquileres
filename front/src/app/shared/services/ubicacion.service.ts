@@ -26,11 +26,7 @@ export class UbicacionService {
   }
 
   /** Búsqueda puntual; el usuario la inicia con el botón del selector de mapa. */
-  buscarDireccion(
-    direccion: string,
-    ciudad: string,
-    provincia: string,
-  ): Observable<ResultadoGeocodificacion[]> {
+  buscarDireccion(direccion: string, ciudad: string, provincia: string): Observable<ResultadoGeocodificacion[]> {
     return this.http.get<ResultadoGeocodificacion[]>(`${this.baseUrl}/buscar-direccion`, {
       params: { direccion, ciudad, provincia },
     });

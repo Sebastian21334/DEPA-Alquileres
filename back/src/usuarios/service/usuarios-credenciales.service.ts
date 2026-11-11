@@ -17,16 +17,10 @@ import {
 
 @Injectable()
 export class UsuariosCredencialesService {
-  constructor(
-    @Inject(USUARIOS_REPOSITORY)
-    private readonly usuariosRepo: IUsuariosRepository,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly configService: ConfigService) {}
 
   hashearContrasenia(contrasenia: string): Promise<string> {
-    const rounds = Number(
-      this.configService.get<string>('BCRYPT_COST') ?? '12',
-    );
+    const rounds = Number(this.configService.get<string>('BCRYPT_COST') ?? '12',);
     if (!Number.isInteger(rounds) || rounds < 12 || rounds > 31) {
       throw new Error('BCRYPT_COST debe ser un entero entre 12 y 31');
     }
@@ -48,7 +42,8 @@ export class UsuariosCredencialesService {
   /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */
   async generarTokenVerificacion(usuario: Usuario): Promise<string> {
     const token = crypto.randomBytes(32).toString('hex');
-    usuario.iniciarVerificacionEmail(token);
+    usuario.token_verificacion = token;
+    usuario.email_verificado = false;
     await this.usuariosRepo.guardar(usuario);
     return token;
   }
@@ -60,7 +55,8 @@ export class UsuariosCredencialesService {
       throw new BadRequestException('Token de verificación inválido');
     }
 
-    usuario.confirmarEmail();
+    usuario.email_verificado = true;
+    usuario.token_verificacion = null;
     await this.usuariosRepo.guardar(usuario);
   }
 
@@ -68,28 +64,25 @@ export class UsuariosCredencialesService {
    * Genera un token de recuperación si el email existe. Devuelve null si no existe,
    * para que AuthService pueda responder siempre igual y no filtrar qué emails están registrados.
    */
-  async generarTokenRecuperacion(
-    email: string,
-  ): Promise<{ token: string; usuario: Usuario } | null> {
+  async generarTokenRecuperacion(email: string): Promise<{ token: string; usuario: Usuario } | null> {
     const usuario = await this.usuariosRepo.buscarPorEmail(email);
 
     if (!usuario || !usuario.activa || usuario.bloqueado) return null;
 
     const token = crypto.randomBytes(32).toString('hex');
-    usuario.iniciarRecuperacion(token, new Date(Date.now() + 2 * 60 * 60 * 1000)); // RN-30: 2 horas
+    usuario.token_recuperacion = token;
+    usuario.token_recuperacion_expira = new Date(Date.now() + 2 * 60 * 60 * 1000); // RN-30: 2 horas
     await this.usuariosRepo.guardar(usuario);
 
     return { token, usuario };
   }
 
   /** Valida el token de recuperación (existencia y vigencia) y setea la nueva contraseña hasheada. */
-  async restablecerContrasenia(
-    token: string,
-    nuevaContrasenia: string,
-  ): Promise<{ email: string | null }> {
+  async restablecerContrasenia(token: string, nuevaContrasenia: string): Promise<{ email: string | null }> {
     const usuario = await this.usuariosRepo.buscarPorTokenRecuperacion(token);
 
-    if (!usuario?.recuperacionVigente() || usuario.bloqueado) {
+    if (!usuario?.token_recuperacion_expira ||
+        !(usuario.token_recuperacion_expira > new Date()) || usuario.bloqueado) {
       throw new BadRequestException('Token inválido o expirado');
     }
 
@@ -101,11 +94,7 @@ export class UsuariosCredencialesService {
     return { email: usuario.email };
   }
 
-  async cambiarContrasenia(
-    id: number,
-    contraseniaActual: string,
-    nuevaContrasenia: string,
-  ): Promise<{ email: string | null }> {
+  async cambiarContrasenia(id: number, contraseniaActual: string, nuevaContrasenia: string): Promise<{ email: string | null }> {
     const usuario = await this.usuariosRepo.buscarCredencialesPorId(id);
     if (!usuario || usuario.bloqueado) {
       throw new ForbiddenException('No podés cambiar la contraseña de esta cuenta');

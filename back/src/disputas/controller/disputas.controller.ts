@@ -27,11 +27,7 @@ export class DisputasController {
   }
 
   @Patch(':id/resolver')
-  resolver(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ResolverDisputaDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  resolver(@Param('id', ParseIntPipe) id: number, @Body() dto: ResolverDisputaDto, @Req() req: AuthenticatedRequest) {
     return this.disputasService.resolver(id, dto, req.user.id);
   }
 }

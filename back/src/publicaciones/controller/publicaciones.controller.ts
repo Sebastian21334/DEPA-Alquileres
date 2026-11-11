@@ -30,16 +30,7 @@ export class PublicacionesController {
 
   @Get()
   // Las publicaciones activas son la vista pública principal del catálogo.
-  async listarActivas(
-    @Query(
-      new ValidationPipe({
-        transform: true,
-        whitelist: true,
-        forbidNonWhitelisted: true,
-      }),
-    )
-    consulta: ListarPublicacionesDto,
-  ) {
+  async listarActivas(@Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true, }),) consulta: ListarPublicacionesDto) {
     const { pagina, limite, categoria, q, ...filtros } = consulta;
     return this.publicacionesService.listarActivas(pagina, limite, categoria, {
       ...filtros,
@@ -57,25 +48,12 @@ export class PublicacionesController {
   @Patch('administracion/:id/baja')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  darDeBajaAdministracion(
-    @Param('id', ParseIntPipe) id: number,
-    @Body(
-      new ValidationPipe({
-        transform: true,
-        whitelist: true,
-        forbidNonWhitelisted: true,
-      }),
-    )
-    dto: BajaPublicacionDto,
-  ) {
+  darDeBajaAdministracion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true, }),) dto: BajaPublicacionDto) {
     return this.publicacionesService.darDeBajaAdministracion(id, dto.motivo);
   }
 
   @Get('anunciante/:idAnunciante')
-  async listarPorAnunciante(
-    @Param('idAnunciante', ParseIntPipe) idAnunciante: number,
-    @Query('activa') activa?: string,
-  ) {
+  async listarPorAnunciante(@Param('idAnunciante', ParseIntPipe) idAnunciante: number, @Query('activa') activa?: string) {
     const soloActivas = activa === 'true';
     // La query llega como texto; solo el valor exacto true activa el filtro.
     return this.publicacionesService.listarPorAnunciante(
@@ -103,20 +81,13 @@ export class PublicacionesController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
-  async actualizar(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AnuncianteRequest,
-    @Body() dto: ActualizarPublicacionDto,
-  ) {
+  async actualizar(@Param('id', ParseIntPipe) id: number, @Req() req: AnuncianteRequest, @Body() dto: ActualizarPublicacionDto) {
     return this.publicacionesService.actualizar(id, req.anunciante, dto);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
-  async eliminar(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AnuncianteRequest,
-  ) {
+  async eliminar(@Param('id', ParseIntPipe) id: number, @Req() req: AnuncianteRequest) {
     return this.publicacionesService.eliminar(id, req.anunciante);
   }
 }

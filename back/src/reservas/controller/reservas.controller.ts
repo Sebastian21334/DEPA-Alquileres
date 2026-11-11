@@ -27,11 +27,7 @@ import { RegistrarReembolsoManualDto } from '../../reembolsos/dto/registrar-reem
 
 @Controller('reservas')
 export class ReservasController {
-  constructor(
-    private readonly reservasService: ReservasService,
-    private readonly liquidacionesService: ReservaLiquidacionesService,
-    private readonly reprogramacionService: ReservaReprogramacionService,
-  ) {}
+  constructor(private readonly reservasService: ReservasService, private readonly liquidacionesService: ReservaLiquidacionesService, private readonly reprogramacionService: ReservaReprogramacionService) {}
 
   @UseGuards(JwtAuthGuard)
   @Get('mis-reservas')
@@ -62,28 +58,19 @@ export class ReservasController {
 
   @UseGuards(JwtAuthGuard)
   @Get('publicacion/:id')
-  listarPorPublicacion(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  listarPorPublicacion(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.listarPorPublicacion(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id')
-  buscarPorId(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  buscarPorId(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.buscarPorId(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id/codigo-alojamiento')
-  consultarCodigo(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  consultarCodigo(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.liquidacionesService.consultarCodigoAlojamiento(
       id,
       req.user.id,
@@ -92,11 +79,7 @@ export class ReservasController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/validar-codigo')
-  validarCodigo(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ValidarCodigoAlojamientoDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  validarCodigo(@Param('id', ParseIntPipe) id: number, @Body() dto: ValidarCodigoAlojamientoDto, @Req() req: AuthenticatedRequest) {
     return this.liquidacionesService.validarCodigoAlojamiento(
       id,
       dto.codigo,
@@ -106,11 +89,7 @@ export class ReservasController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reportar-problema')
-  reportarProblema(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ReportarProblemaReservaDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  reportarProblema(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportarProblemaReservaDto, @Req() req: AuthenticatedRequest) {
     return this.liquidacionesService.reportarProblema(
       id,
       dto.motivo,
@@ -121,51 +100,32 @@ export class ReservasController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   @Patch(':id/liquidacion')
-  resolverLiquidacion(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ResolverLiquidacionDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  resolverLiquidacion(@Param('id', ParseIntPipe) id: number, @Body() dto: ResolverLiquidacionDto, @Req() req: AuthenticatedRequest) {
     return this.liquidacionesService.resolverLiquidacion(id, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/cancelar')
-  cancelar(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  cancelar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.cancelar(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Post(':id/cancelacion')
-  solicitarCancelacion(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: SolicitarCancelacionDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  solicitarCancelacion(@Param('id', ParseIntPipe) id: number, @Body() dto: SolicitarCancelacionDto, @Req() req: AuthenticatedRequest) {
     return this.reservasService.solicitarCancelacion(id, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get(':id/cancelacion')
-  consultarSolicitudCancelacion(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  consultarSolicitudCancelacion(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.consultarSolicitudCancelacion(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   @Patch(':id/cancelacion/:idSolicitud')
-  resolverSolicitudCancelacion(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('idSolicitud', ParseIntPipe) idSolicitud: number,
-    @Body() dto: ResolverSolicitudCancelacionDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  resolverSolicitudCancelacion(@Param('id', ParseIntPipe) id: number, @Param('idSolicitud', ParseIntPipe) idSolicitud: number, @Body() dto: ResolverSolicitudCancelacionDto, @Req() req: AuthenticatedRequest) {
     return this.reservasService.resolverSolicitudCancelacion(
       id,
       idSolicitud,
@@ -177,11 +137,7 @@ export class ReservasController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   @Patch('reembolsos/:id/manual')
-  registrarReembolsoManual(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: RegistrarReembolsoManualDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  registrarReembolsoManual(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarReembolsoManualDto, @Req() req: AuthenticatedRequest) {
     return this.reservasService.registrarReembolsoManual(
       id,
       dto.referencia,
@@ -191,30 +147,19 @@ export class ReservasController {
 
   @UseGuards(JwtAuthGuard)
   @Get(':id/reembolsos')
-  listarReembolsos(
-    @Param('id', ParseIntPipe) id: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  listarReembolsos(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.listarReembolsosReserva(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/fechas')
-  actualizarFechas(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ActualizarFechasReservaDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  actualizarFechas(@Param('id', ParseIntPipe) id: number, @Body() dto: ActualizarFechasReservaDto, @Req() req: AuthenticatedRequest) {
     return this.reprogramacionService.actualizarFechas(id, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reprogramaciones/:idCambio/notificar')
-  reintentarAviso(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('idCambio', ParseIntPipe) idCambio: number,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  reintentarAviso(@Param('id', ParseIntPipe) id: number, @Param('idCambio', ParseIntPipe) idCambio: number, @Req() req: AuthenticatedRequest) {
     return this.reprogramacionService.reintentarAvisoReprogramacion(
       id,
       idCambio,

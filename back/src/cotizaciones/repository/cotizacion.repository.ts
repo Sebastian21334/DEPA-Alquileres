@@ -7,10 +7,7 @@ import type { ICotizacionRepository } from './cotizacion.repository.interface';
 
 @Injectable()
 export class CotizacionRepository implements ICotizacionRepository {
-  constructor(
-    @InjectRepository(CotizacionDolar)
-    private readonly repo: Repository<CotizacionDolar>,
-  ) {}
+  constructor(@InjectRepository(CotizacionDolar) private readonly repo: Repository<CotizacionDolar>) {}
   ultima() {
     return this.repo.findOne({ where: {}, order: { id: 'DESC' } });
   }
@@ -27,11 +24,7 @@ export class CotizacionRepository implements ICotizacionRepository {
       .getRepository(ConsultaCotizacion)
       .insert({ exitosa, error });
   }
-  async historial(
-    desde: Date | undefined,
-    hasta: Date | undefined,
-    pagina: number,
-  ) {
+  async historial(desde: Date | undefined, hasta: Date | undefined, pagina: number) {
     const consulta = this.repo.createQueryBuilder('cotizacion');
     if (desde)
       consulta.andWhere('cotizacion.consultada_en >= :desde', { desde });
@@ -49,9 +42,7 @@ export class CotizacionRepository implements ICotizacionRepository {
       .getRepository(ConsultaCotizacion)
       .find({ order: { id: 'DESC' }, take: 20 });
   }
-  conBloqueo<T>(
-    operacion: (repo: ICotizacionRepository) => Promise<T>,
-  ): Promise<T> {
+  conBloqueo<T>(operacion: (repo: ICotizacionRepository) => Promise<T>): Promise<T> {
     return this.repo.manager.transaction(async (manager) => {
       await manager.query("SET LOCAL lock_timeout = '8s'");
       // El bloqueo pertenece a esta transacción/conexión: también funciona entre réplicas

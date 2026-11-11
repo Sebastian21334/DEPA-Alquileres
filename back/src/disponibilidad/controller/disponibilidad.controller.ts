@@ -28,9 +28,7 @@ export class DisponibilidadController {
 
   @UseGuards(JwtAuthGuard, PropietarioPublicacionGuard)
   @Get('publicacion/:idPublicacion/administracion')
-  listarPorPublicacionParaAdministracion(
-    @Param('idPublicacion', ParseIntPipe) id: number,
-  ) {
+  listarPorPublicacionParaAdministracion(@Param('idPublicacion', ParseIntPipe) id: number) {
     return this.disponibilidadService.listarPorPublicacionParaAdministracion(
       id,
     );
@@ -44,10 +42,7 @@ export class DisponibilidadController {
 
   @UseGuards(JwtAuthGuard, PropietarioPublicacionGuard)
   @Patch(':id')
-  actualizar(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ActualizarDisponibilidadDto,
-  ) {
+  actualizar(@Param('id', ParseIntPipe) id: number, @Body() dto: ActualizarDisponibilidadDto) {
     return this.disponibilidadService.actualizar(id, dto);
   }
 

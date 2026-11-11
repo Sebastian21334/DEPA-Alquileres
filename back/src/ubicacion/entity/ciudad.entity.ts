@@ -14,7 +14,7 @@ export class Ciudad {
   @PrimaryGeneratedColumn({ name: 'id_ciudad' })
   id: number;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ name: 'nombre', type: 'varchar', length: 100 })
   nombre: string;
 
   // Relación: Muchas ciudades pertenecen a una provincia

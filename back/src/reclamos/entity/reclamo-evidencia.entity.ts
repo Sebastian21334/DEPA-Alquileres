@@ -29,15 +29,15 @@ export class ReclamoEvidencia {
   @JoinColumn({ name: 'id_usuario' })
   usuario: Relation<Usuario | null>;
 
-  @Column({ type: 'varchar', length: 500 })
+  @Column({ name: 'url', type: 'varchar', length: 500 })
   url: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ name: 'nombre_archivo', type: 'varchar', length: 255 })
   nombre_archivo: string;
 
-  @Column({ type: 'varchar', length: 100, default: 'image/jpeg' })
+  @Column({ name: 'tipo', type: 'varchar', length: 100, default: 'image/jpeg' })
   tipo: string;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;
 }

@@ -15,17 +15,17 @@ export class Mensaje {
   @PrimaryGeneratedColumn({ name: 'id_mensaje' })
   id: number;
 
-  @Column({ type: 'varchar', length: 250 })
+  @Column({ name: 'texto', type: 'varchar', length: 250 })
   texto: string;
 
-  @Column({ type: 'timestamp' })
+  @Column({ name: 'fecha', type: 'timestamp' })
   fecha: Date;
 
   // Permite mostrar el doble tilde al remitente y los pendientes al destinatario.
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'leido', type: 'boolean', default: false })
   leido: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_lectura', type: 'timestamp', nullable: true })
   fecha_lectura: Date | null;
 
   // Se separan origen y destino para reconstruir ambos sentidos de una conversación.

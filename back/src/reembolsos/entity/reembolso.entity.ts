@@ -1,6 +1,10 @@
 import type { Relation } from 'typeorm';
+import { Estado } from '../../catalogos/entity/estado.entity';
+import { AmbitoEstado, EstadoReembolso } from '../../catalogos/estados';
 import {
+  Check,
   Column,
+  ForeignKey,
   CreateDateColumn,
   Entity,
   JoinColumn,
@@ -25,17 +29,13 @@ export enum OrigenReembolso {
   AJUSTE_ADMIN = 'AJUSTE_ADMIN',
 }
 
-export enum EstadoReembolso {
-  PENDIENTE = 'PENDIENTE',
-  EN_PROCESO = 'EN_PROCESO',
-  APROBADO = 'APROBADO',
-  RECHAZADO = 'RECHAZADO',
-  FALLIDO = 'FALLIDO',
-  CANCELADO = 'CANCELADO',
-}
-
 /** Registro auditable de una devolución total o parcial. */
 @Entity('reembolso')
+@Check('ck_reembolso_estado_ambito', `"ambito_estado" = '${AmbitoEstado.REEMBOLSO}'`)
+@ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
+  name: 'fk_reembolso_estado',
+  onDelete: 'RESTRICT',
+})
 export class Reembolso {
   @PrimaryGeneratedColumn({ name: 'id_reembolso' })
   id: number;
@@ -54,38 +54,66 @@ export class Reembolso {
   })
   pago: Relation<Pago>;
 
-  @Column({ type: 'enum', enum: TipoReembolso })
+  @Column({ name: 'tipo', type: 'enum', enum: TipoReembolso })
   tipo: TipoReembolso;
 
-  @Column({ type: 'enum', enum: OrigenReembolso })
+  @Column({ name: 'origen', type: 'enum', enum: OrigenReembolso })
   origen: OrigenReembolso;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'importe', type: 'decimal', precision: 10, scale: 2 })
   importe: number;
 
-  @Column({ type: 'varchar', length: 3, default: 'ARS' })
+  @Column({ name: 'moneda', type: 'varchar', length: 3, default: 'ARS' })
   moneda: string;
 
-  @Column({
-    type: 'enum',
-    enum: EstadoReembolso,
-    default: EstadoReembolso.PENDIENTE,
-  })
+  @Column({ name: 'estado', type: 'varchar', length: 40, default: EstadoReembolso.PENDIENTE })
   estado: EstadoReembolso;
 
-  @Column({ type: 'varchar', length: 500 })
+  @Column({
+    name: 'ambito_estado',
+    type: 'varchar',
+    length: 40,
+    select: false,
+    insert: false,
+    update: false,
+  })
+  readonly ambitoEstado: typeof AmbitoEstado.REEMBOLSO;
+
+  @Column({ name: 'motivo', type: 'varchar', length: 500 })
   motivo: string;
 
-  @Column({ type: 'varchar', length: 150, nullable: true })
+  @Column({
+    name: 'referencia_interna',
+    type: 'varchar',
+    length: 150,
+    nullable: true,
+  })
   referencia_interna: string | null;
 
-  @Column({ type: 'varchar', length: 150, nullable: true, unique: true })
+  @Column({
+    name: 'referencia_externa',
+    type: 'varchar',
+    length: 150,
+    nullable: true,
+    unique: true,
+  })
   referencia_externa: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true, unique: true })
+  @Column({
+    name: 'id_externo',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    unique: true,
+  })
   id_externo: string | null;
 
-  @Column({ type: 'varchar', length: 36, unique: true })
+  @Column({
+    name: 'idempotency_key',
+    type: 'varchar',
+    length: 36,
+    unique: true,
+  })
   idempotency_key: string;
 
   @ManyToOne(() => Usuario, { nullable: true, onDelete: 'SET NULL' })
@@ -96,16 +124,18 @@ export class Reembolso {
   @JoinColumn({ name: 'id_resuelto_por' })
   resuelto_por: Relation<Usuario | null>;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'resuelto_en', type: 'timestamp', nullable: true })
   resuelto_en: Date | null;
 
-  @Column({ type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 'error_detalle',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   error_detalle: string | null;
 
-  get esTotal(): boolean {
-    return this.tipo === TipoReembolso.TOTAL || this.tipo === TipoReembolso.CONTRACARGO;
-  }
 }

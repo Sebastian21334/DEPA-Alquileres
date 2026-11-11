@@ -19,96 +19,93 @@ export class Pago {
   @JoinColumn({ name: 'id_reserva' })
   reserva: Relation<Reserva>;
 
-  @Column({ type: 'varchar', length: 100, unique: true })
+  @Column({
+    name: 'external_reference',
+    type: 'varchar',
+    length: 100,
+    unique: true,
+  })
   external_reference: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({
+    name: 'preference_id',
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+  })
   preference_id: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true, unique: true })
+  @Column({
+    name: 'payment_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+    unique: true,
+  })
   payment_id: string | null;
 
-  @Column({ type: 'varchar', length: 50, default: 'pending' })
+  @Column({ name: 'status', type: 'varchar', length: 50, default: 'pending' })
   status: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'status_detail',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   status_detail: string | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'amount', type: 'decimal', precision: 10, scale: 2 })
   amount: number;
 
-  @Column({ type: 'varchar', length: 3, default: 'ARS' })
+  @Column({ name: 'currency', type: 'varchar', length: 3, default: 'ARS' })
   currency: string;
 
   // Medio confirmado por Mercado Pago; no depende de un catálogo local.
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'payment_method_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   payment_method_id: string | null;
 
-  @Column({ type: 'varchar', length: 36, unique: true })
+  @Column({
+    name: 'idempotency_key',
+    type: 'varchar',
+    length: 36,
+    unique: true,
+  })
   idempotency_key: string;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'approved_at', type: 'timestamp', nullable: true })
   approved_at: Date | null;
 
   // Agregado de los reembolsos aprobados. La fuente de verdad es la tabla reembolso.
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({
+    name: 'amount_refunded',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+  })
   amount_refunded: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'refunded_at', type: 'timestamp', nullable: true })
   refunded_at: Date | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'chargeback_id',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   chargeback_id: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   created_at: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updated_at: Date;
 
-  // Tolerancia de redondeo al comparar importes con dos decimales.
-  private static readonly TOLERANCIA_IMPORTE = 0.009;
-
-  importeCoincide(importe: number): boolean {
-    return (
-      Number.isFinite(importe) &&
-      Math.abs(importe - Number(this.amount)) <= Pago.TOLERANCIA_IMPORTE
-    );
-  }
-
-  monedaCoincide(moneda: string | undefined): boolean {
-    return moneda === this.currency;
-  }
-
-  registrarPreferencia(preferenceId: string): void {
-    this.preference_id = preferenceId;
-  }
-
-  /** Guarda el resultado que informó la pasarela para este pago. */
-  registrarResultado(resultado: {
-    paymentId: string;
-    status: string;
-    statusDetail: string | null;
-    paymentMethodId: string | null;
-    approvedAt: Date | null;
-  }): void {
-    this.payment_id = resultado.paymentId;
-    this.status = resultado.status;
-    this.status_detail = resultado.statusDetail;
-    this.payment_method_id = resultado.paymentMethodId;
-    this.approved_at = resultado.approvedAt;
-  }
-
-  saldoReembolsable(): number {
-    return Math.max(0, Number(this.amount) - Number(this.amount_refunded ?? 0));
-  }
-
-  acumularReembolso(importe: number): void {
-    this.amount_refunded = Number(this.amount_refunded ?? 0) + importe;
-    if (this.amount_refunded >= Number(this.amount)) {
-      this.amount_refunded = Number(this.amount);
-      this.status = 'refunded';
-      this.refunded_at = new Date();
-    }
-  }
 }

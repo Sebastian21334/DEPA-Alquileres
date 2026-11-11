@@ -1,10 +1,16 @@
 # Cancelaciones, devoluciones, reclamos y contracargos
 
 Para habilitar el circuito del ítem 14, con el backend detenido y sobre una
-copia o base descartable, aplicar `20261104-cancelaciones-devoluciones.sql`.
-La migración es repetible y agrega las tablas `solicitud_cancelacion`,
+copia o base descartable, ejecutar `npm run db:cancelaciones-devoluciones` desde `back/`.
+La primera migración, `20261104-cancelaciones-devoluciones.sql`, agrega las tablas `solicitud_cancelacion`,
 `reembolso`, `disputa`, `reclamo_reserva`, `reclamo_evidencia` y
 `reclamo_mensaje`, además de las columnas de cancelación y reembolso.
+La migración `20261110-estados-por-ambito.sql` crea los catálogos `ambito` y
+`estado` y migra los estados persistidos de reservas, solicitudes de
+cancelación, reembolsos, reclamos, verificación de anunciantes y disputas.
+Acepta bases con el enum de disputas y bases con el catálogo histórico
+`estado_disputa`. El comando es repetible, conserva los códigos existentes y
+mantiene el índice de una sola solicitud de cancelación pendiente por reserva.
 
 La ejecución automática de devoluciones por Mercado Pago queda apagada por
 defecto con `MP_REFUNDS_ENABLED=false`. En ese modo el Administrador registra
@@ -34,8 +40,34 @@ Para probar la creación completa y revertirla al finalizar, ejecutar
 `node scripts/inicializar-base.cjs --verificar`.
 
 La migración inicial es una copia de la estructura disponible al 02/11/2026.
-Después de inicializar, se deben cargar catálogos y datos ficticios para RNF8.
+Después de inicializar, aplicar las migraciones de esta versión, incluida
+`npm run db:cancelaciones-devoluciones`, y cargar los datos base.
 Se conserva `synchronize: false` en la aplicación.
+
+# Cargar datos base
+
+Con el esquema de esta versión migrado y `DATABASE_URL` configurada en
+`back/.env` para el entorno que se quiere preparar, ejecutar desde `back`:
+
+```sh
+npm run db:seed
+```
+
+La seed carga los roles `Administrador` e `Inquilino`, los ámbitos y estados,
+las monedas, modalidades, tipos de anunciante y propiedad, y las provincias y
+localidades. Se puede repetir: inserta lo faltante y conserva los valores
+existentes. Informa cuántas filas agregó por tabla. Al arrancar, el backend
+comprueba que los roles y estados obligatorios estén disponibles.
+
+Las ubicaciones vienen de una copia local de
+[GeoRef, Dirección de Datos Abiertos de Argentina](https://www.argentina.gob.ar/georef/descarga-de-la-base-completa),
+bajo [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Se agrupan los
+registros por provincia, departamento y nombre. Los homónimos de distintos
+departamentos incluyen el departamento en su nombre visible.
+
+El primer administrador se crea mediante el registro del sistema. Los datos
+ficticios de rendimiento se cargan por separado con `npm run db:datos-rnf8`
+en el entorno de pruebas.
 
 # Unicidad del calendario y concurrencia de reservas
 

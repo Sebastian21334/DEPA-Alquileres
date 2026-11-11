@@ -38,49 +38,18 @@ export interface ReprogramacionEmailDetalle {
 }
 
 export interface IMailService {
-  enviarReprogramacionReserva(
-    destinatario: string,
-    detalle: ReprogramacionEmailDetalle,
-  ): Promise<void>;
-  enviarBajaPublicacion(
-    destinatario: string,
-    titulo: string,
-    motivo: string,
-  ): Promise<void>;
+  enviarReprogramacionReserva(destinatario: string, detalle: ReprogramacionEmailDetalle): Promise<void>;
+  enviarBajaPublicacion(destinatario: string, titulo: string, motivo: string): Promise<void>;
   enviarVerificacion(destinatario: string, token: string): Promise<void>;
   enviarRecuperacion(destinatario: string, token: string): Promise<void>;
   enviarCambioContrasenia(destinatario: string): Promise<void>;
-  enviarResultadoVerificacion(
-    destinatario: string,
-    aprobada: boolean,
-    motivo?: string,
-  ): Promise<void>;
-  enviarReservaConfirmada(
-    destinatario: string,
-    detalle: ReservaEmailDetalle,
-  ): Promise<void>;
-  enviarNuevaReserva(
-    destinatario: string,
-    detalle: ReservaEmailDetalle,
-  ): Promise<void>;
-  enviarMensajeNuevo(
-    destinatario: string,
-    nombreDestinatario: string,
-    nombreRemitente: string,
-    titulo: string,
-    idPublicacion: number,
-  ): Promise<void>;
+  enviarResultadoVerificacion(destinatario: string, aprobada: boolean, motivo?: string): Promise<void>;
+  enviarReservaConfirmada(destinatario: string, detalle: ReservaEmailDetalle): Promise<void>;
+  enviarNuevaReserva(destinatario: string, detalle: ReservaEmailDetalle): Promise<void>;
+  enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number): Promise<void>;
   enviarSolicitudAnunciante(destinatario: string): Promise<void>;
-  enviarSolicitudParaRevision(
-    destinatarios: string[],
-    nombreSolicitante: string,
-    emailSolicitante: string,
-  ): Promise<void>;
-  enviarCambioBloqueo(
-    destinatario: string,
-    bloqueado: boolean,
-    motivo?: string,
-  ): Promise<void>;
+  enviarSolicitudParaRevision(destinatarios: string[], nombreSolicitante: string, emailSolicitante: string): Promise<void>;
+  enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string): Promise<void>;
 }
 
 export const MAIL_SERVICE = 'MAIL_SERVICE';

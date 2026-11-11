@@ -30,25 +30,15 @@ export interface ConversacionResumen {
 @Injectable()
 export class MensajesService {
   private readonly logger = new Logger(MensajesService.name);
-  constructor(
-    @Inject(MENSAJE_REPOSITORY)
-    private readonly mensajeRepository: IMensajeRepository,
-    // Se comunica con el service de Publicaciones, nunca con su repositorio directo
-    private readonly publicacionesService: PublicacionesService,
-    private readonly usuariosService: UsuariosService,
-    private readonly reservasService: ReservasService,
-    @Inject(MAIL_SERVICE) private readonly mailService: IMailService,
-  ) {}
+  // Se comunica con el service de Publicaciones, nunca con su repositorio directo
+  constructor(@Inject(MENSAJE_REPOSITORY) private readonly mensajeRepository: IMensajeRepository, private readonly publicacionesService: PublicacionesService, private readonly usuariosService: UsuariosService, private readonly reservasService: ReservasService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService) {}
 
   /**
    * Envía un mensaje. No hace falta crear un "chat" antes: la conversación
    * queda implícitamente definida por (publicacion, origen, destino) apenas
    * se guarda el primer mensaje.
    */
-  async enviar(
-    dto: EnviarMensajeDto,
-    idUsuarioOrigen: number,
-  ): Promise<Mensaje> {
+  async enviar(dto: EnviarMensajeDto, idUsuarioOrigen: number): Promise<Mensaje> {
     if (idUsuarioOrigen === dto.id_destino_usuario) {
       throw new BadRequestException('No podés enviarte un mensaje a vos mismo');
     }
@@ -60,8 +50,8 @@ export class MensajesService {
       dto.id_publicacion,
     );
 
-    if (!publicacion.perteneceA(dto.id_destino_usuario)) {
-      const esAnunciante = publicacion.perteneceA(idUsuarioOrigen);
+    if (!this.publicacionesService.perteneceA(publicacion, dto.id_destino_usuario)) {
+      const esAnunciante = this.publicacionesService.perteneceA(publicacion, idUsuarioOrigen);
       const [hayConversacion, hayReservaAprobada] = esAnunciante
         ? await Promise.all([
             this.mensajeRepository.existeConversacion(
@@ -124,8 +114,8 @@ export class MensajesService {
       try {
         await this.mailService.enviarMensajeNuevo(
           destinatario.email,
-          destinatario.nombreCompleto(),
-          remitente.nombreCompleto(),
+          this.usuariosService.nombreCompleto(destinatario),
+          this.usuariosService.nombreCompleto(remitente),
           publicacion.titulo,
           publicacion.id,
         );
@@ -143,11 +133,7 @@ export class MensajesService {
    * Devuelve todos los mensajes de una conversación puntual, validando
    * que quien pide sea uno de los dos participantes.
    */
-  async listarConversacion(
-    idPublicacion: number,
-    idOtroUsuario: number,
-    idUsuarioActual: number,
-  ): Promise<Mensaje[]> {
+  async listarConversacion(idPublicacion: number, idOtroUsuario: number, idUsuarioActual: number): Promise<Mensaje[]> {
     // El repositorio busca ambos sentidos del intercambio (A->B y B->A).
     const mensajes = await this.mensajeRepository.buscarConversacion(
       idPublicacion,
@@ -167,7 +153,7 @@ export class MensajesService {
       throw new ForbiddenException('No formás parte de esta conversación');
     }
 
-    return mensajes;
+    return mensajes.map((mensaje) => this.prepararRespuesta(mensaje));
   }
 
   /**
@@ -176,9 +162,7 @@ export class MensajesService {
    * Se resuelve en memoria aprovechando que buscarPorUsuario ya viene
    * ordenado DESC por fecha.
    */
-  async listarConversaciones(
-    idUsuario: number,
-  ): Promise<ConversacionResumen[]> {
+  async listarConversaciones(idUsuario: number): Promise<ConversacionResumen[]> {
     const mensajes = await this.mensajeRepository.buscarPorUsuario(idUsuario);
 
     // La consulta llega ordenada del mensaje mas nuevo al mas viejo. El Map
@@ -199,7 +183,7 @@ export class MensajesService {
         conversaciones.set(clave, {
           idPublicacion: mensaje.publicacion.id,
           idOtroUsuario,
-          ultimoMensaje: mensaje,
+          ultimoMensaje: this.prepararRespuesta(mensaje),
           cantidadNoLeidos: 0,
         });
       }
@@ -211,12 +195,14 @@ export class MensajesService {
     return Array.from(conversaciones.values());
   }
 
+  private prepararRespuesta(mensaje: Mensaje): Mensaje {
+    return Object.assign(new Mensaje(), mensaje, {
+      publicacion: this.publicacionesService.prepararRespuesta(mensaje.publicacion),
+    });
+  }
+
   /** Marca como leídos solamente los mensajes que el usuario recibió en este chat. */
-  async marcarConversacionComoLeida(
-    idPublicacion: number,
-    idOtroUsuario: number,
-    idUsuarioActual: number,
-  ): Promise<void> {
+  async marcarConversacionComoLeida(idPublicacion: number, idOtroUsuario: number, idUsuarioActual: number): Promise<void> {
     await this.mensajeRepository.marcarConversacionComoLeida(
       idPublicacion,
       idOtroUsuario,

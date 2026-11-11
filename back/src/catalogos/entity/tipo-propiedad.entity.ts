@@ -5,9 +5,9 @@ export class TipoPropiedad {
   @PrimaryGeneratedColumn({ name: 'id_tipo_propiedad' })
   id: number;
 
-  @Column({ type: 'varchar', length: 100 })
+  @Column({ name: 'nombre', type: 'varchar', length: 100 })
   nombre: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'descripcion', type: 'varchar', length: 255, nullable: true })
   descripcion: string;
 }

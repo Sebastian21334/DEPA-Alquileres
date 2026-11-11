@@ -1,17 +1,16 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
 
 import { AuthController } from '../../../src/auth/controller/auth.controller';
 import { AuthService } from '../../../src/auth/service/auth.service';
-import { JwtStrategy } from '../../../src/auth/strategy/jwt.strategy';
+import { AlmacenamientoService } from '../../../src/almacenamiento/service/almacenamiento.service';
 import { Anunciante } from '../../../src/anunciantes/entity/anunciante.entity';
 import { ANUNCIANTES_REPOSITORY } from '../../../src/anunciantes/repository/anunciantes.repository.interface';
 import { AnunciantesService } from '../../../src/anunciantes/service/anunciantes.service';
 import { Rol } from '../../../src/catalogos/entity/rol.entity';
 import { CatalogosService } from '../../../src/catalogos/service/catalogos.service';
-import { ARCHIVO_REPOSITORY } from '../../../src/common/almacenamiento/archivo.repository.interface';
 import { MAIL_SERVICE } from '../../../src/mail/mail.interface';
 import { PublicacionesController } from '../../../src/publicaciones/controller/publicaciones.controller';
 import { Publicacion } from '../../../src/publicaciones/entity/publicacion.entity';
@@ -22,9 +21,11 @@ import { UbicacionService } from '../../../src/ubicacion/service/ubicacion.servi
 import { UsuariosController } from '../../../src/usuarios/controller/usuarios.controller';
 import { Usuario } from '../../../src/usuarios/entity/usuario.entity';
 import { USUARIOS_REPOSITORY } from '../../../src/usuarios/repository/usuarios.repository.interface';
+import { UsuariosConsultaService } from '../../../src/usuarios/service/usuarios-consulta.service';
 import { UsuariosCredencialesService } from '../../../src/usuarios/service/usuarios-credenciales.service';
 import { UsuariosService } from '../../../src/usuarios/service/usuarios.service';
-import { DataSource } from 'typeorm';
+import { UsuariosConsultaModule } from '../../../src/usuarios/usuarios-consulta.module';
+import type { EntityManager } from 'typeorm';
 
 /**
  * App de prueba para los casos CP-06, CP-07 y CP-08.
@@ -50,6 +51,13 @@ function copiar<T extends object>(objeto: T): T {
 
 /** Reemplaza la tabla `usuario` de PostgreSQL. */
 export class UsuariosEnMemoria {
+  conTransaccion<T>(operacion: (transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return operacion({} as EntityManager);
+  }
+
+  buscarBloqueado(id: number): Promise<Usuario | null> {
+    return this.buscarPorId(id);
+  }
   readonly filas = new Map<number, Usuario>();
   private ultimoId = 0;
 
@@ -125,6 +133,9 @@ export class UsuariosEnMemoria {
 
 /** Reemplaza la tabla `publicacion` de PostgreSQL. */
 export class PublicacionesEnMemoria {
+  async bloquearPorAnunciante(id: number): Promise<boolean> {
+    return [...this.filas.values()].some((publicacion) => publicacion.anunciante?.idUsuario === id);
+  }
   readonly filas = new Map<number, Publicacion>();
 
   async buscarPorId(id: number) {
@@ -167,42 +178,6 @@ export class CorreoEnMemoria {
   }
 }
 
-/**
- * Transacción mínima que usa UsuariosService.cambiarBloqueo (bloquear y
- * habilitar). Lee y escribe sobre los repositorios en memoria.
- */
-function fuenteDeDatos(usuarios: UsuariosEnMemoria, publicaciones: PublicacionesEnMemoria) {
-  const consulta = (entidad: unknown) => {
-    let parametros: Record<string, unknown> = {};
-    const builder = {
-      select: () => builder,
-      orderBy: () => builder,
-      setLock: () => builder,
-      where: (_sql: string, valores: Record<string, unknown> = {}) => {
-        parametros = { ...parametros, ...valores };
-        return builder;
-      },
-      andWhere: (sql: string, valores?: Record<string, unknown>) => builder.where(sql, valores),
-      getOne: async () =>
-        entidad === Usuario ? usuarios.buscarPorId(Number(parametros.idUsuario)) : null,
-      getMany: async () =>
-        entidad === Publicacion
-          ? [...publicaciones.filas.values()].filter(
-              (p) => p.anunciante?.idUsuario === Number(parametros.idUsuario),
-            )
-          : [],
-    };
-    return builder;
-  };
-  const manager = {
-    getRepository: (entidad: unknown) => ({
-      createQueryBuilder: () => consulta(entidad),
-      save: async (fila: Usuario) => usuarios.guardar(fila),
-    }),
-  };
-  return { transaction: async <T>(fn: (m: typeof manager) => Promise<T>) => fn(manager) };
-}
-
 export interface AppDePrueba {
   app: INestApplication;
   usuarios: UsuariosEnMemoria;
@@ -210,14 +185,7 @@ export interface AppDePrueba {
   anunciantes: Map<number, Anunciante>;
   correo: CorreoEnMemoria;
   /** Inserta un usuario directamente en la "base" (precondiciones). */
-  crearUsuario(datos: {
-    nombre: string;
-    apellido?: string;
-    email: string;
-    contrasenia: string;
-    rol: keyof typeof ROLES;
-    emailVerificado?: boolean;
-  }): Promise<Usuario>;
+  crearUsuario(datos: { nombre: string; apellido?: string; email: string; contrasenia: string; rol: keyof typeof ROLES; emailVerificado?: boolean; }): Promise<Usuario>;
   cerrar(): Promise<void>;
 }
 
@@ -230,6 +198,13 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
   const publicaciones = new PublicacionesEnMemoria();
   const anunciantes = new Map<number, Anunciante>();
   const correo = new CorreoEnMemoria();
+  const usuariosRepository = { provide: USUARIOS_REPOSITORY, useValue: usuarios };
+
+  @Module({
+    providers: [UsuariosConsultaService, usuariosRepository],
+    exports: [UsuariosConsultaService],
+  })
+  class UsuariosConsultaEnMemoriaModule {}
 
   const catalogos = {
     getRolPorNombre: async (nombre: string) => ROLES[nombre] ?? null,
@@ -241,12 +216,11 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
     controllers: [AuthController, UsuariosController, PublicacionesController],
     providers: [
       AuthService,
-      JwtStrategy,
       UsuariosService,
       UsuariosCredencialesService,
       AnunciantesService,
       PublicacionesService,
-      { provide: USUARIOS_REPOSITORY, useValue: usuarios },
+      usuariosRepository,
       { provide: PUBLICACIONES_REPOSITORY, useValue: publicaciones },
       {
         provide: ANUNCIANTES_REPOSITORY,
@@ -255,10 +229,12 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
       { provide: CatalogosService, useValue: catalogos },
       { provide: UbicacionService, useValue: {} },
       { provide: MAIL_SERVICE, useValue: correo.servicio() },
-      { provide: ARCHIVO_REPOSITORY, useValue: {} },
-      { provide: DataSource, useValue: fuenteDeDatos(usuarios, publicaciones) },
+      { provide: AlmacenamientoService, useValue: {} },
     ],
-  }).compile();
+  })
+    .overrideModule(UsuariosConsultaModule)
+    .useModule(UsuariosConsultaEnMemoriaModule)
+    .compile();
 
   const app = modulo.createNestApplication({ logger: false });
   // Misma validación global que src/main.ts.

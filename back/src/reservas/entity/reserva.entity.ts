@@ -1,9 +1,12 @@
-import { timingSafeEqual } from 'node:crypto';
 import type { Relation } from 'typeorm';
+import { Estado } from '../../catalogos/entity/estado.entity';
+import { AmbitoEstado, EstadoPagoReserva, EstadoLiquidacionReserva } from '../../catalogos/estados';
 import {
   Entity,
   PrimaryGeneratedColumn,
+  Check,
   Column,
+  ForeignKey,
   ManyToOne,
   JoinColumn,
   OneToMany,
@@ -12,128 +15,90 @@ import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
 import { ReprogramacionReserva } from './reprogramacion-reserva.entity';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
-import {
-  esFechaCalendarioValida,
-  fechaArgentina,
-} from '../../common/utils/fechas';
-
-export type EstadoEstadia =
-  | 'PENDIENTE_PAGO'
-  | 'CONFIRMADA'
-  | 'PENDIENTE_INGRESO'
-  | 'EN_CURSO'
-  | 'FINALIZADA'
-  | 'INGRESO_NO_VERIFICADO'
-  | 'CANCELADA'
-  | 'REEMBOLSADA'
-  | 'PAGO_RECHAZADO'
-  | 'EN_DISPUTA'
-  | 'FECHAS_A_REVISAR';
-
-export type ActorCancelacion =
-  | 'INQUILINO'
-  | 'ANUNCIANTE'
-  | 'ADMINISTRADOR'
-  | 'SISTEMA';
-
-export enum EstadoPagoReserva {
-  PENDIENTE = 'PENDIENTE',
-  APROBADO = 'APROBADO',
-  RECHAZADO = 'RECHAZADO',
-  CANCELADO = 'CANCELADO',
-  REEMBOLSADO = 'REEMBOLSADO',
-  CONTRACARGO = 'CONTRACARGO',
-}
-
-export enum EstadoLiquidacionReserva {
-  NO_APLICA = 'NO_APLICA',
-  RETENIDO = 'RETENIDO',
-  PENDIENTE_PAGO_PROPIETARIO = 'PENDIENTE_PAGO_PROPIETARIO',
-  EN_REVISION = 'EN_REVISION',
-  PAGADO_PROPIETARIO = 'PAGADO_PROPIETARIO',
-  DEVUELTO_INQUILINO = 'DEVUELTO_INQUILINO',
-  DEVUELTO_PARCIAL_INQUILINO = 'DEVUELTO_PARCIAL_INQUILINO',
-}
+import type { ActorCancelacion } from '../actor-cancelacion';
 
 @Entity('reserva')
+@Check('ck_reserva_estado_pago_ambito', `"ambito_estado_pago" = '${AmbitoEstado.PAGO_RESERVA}'`)
+@ForeignKey(() => Estado, ['ambitoEstadoPago', 'estado_pago'], ['codigoAmbito', 'codigo'], {
+  name: 'fk_reserva_estado_pago',
+  onDelete: 'RESTRICT',
+})
+@Check('ck_reserva_estado_liquidacion_ambito', `"ambito_estado_liquidacion" = '${AmbitoEstado.LIQUIDACION_RESERVA}'`)
+@ForeignKey(() => Estado, ['ambitoEstadoLiquidacion', 'estado_liquidacion'], ['codigoAmbito', 'codigo'], {
+  name: 'fk_reserva_estado_liquidacion',
+  onDelete: 'RESTRICT',
+})
 export class Reserva {
-  /** Intentos fallidos de código antes de pasar la liquidación a revisión. */
-  static readonly MAX_INTENTOS_CODIGO = 5;
-
-  // No es una columna: se evalúa también al serializar reservas históricas.
-  get estado_estadia(): EstadoEstadia {
-    return this.calcularEstadoEstadia();
-  }
-
-  /** Estado derivado: no modifica el pago, la liquidación ni el calendario. */
-  calcularEstadoEstadia(ahora = new Date()): EstadoEstadia {
-    if (this.estado_pago === EstadoPagoReserva.CONTRACARGO)
-      return 'EN_DISPUTA';
-    if (this.estado_pago === EstadoPagoReserva.REEMBOLSADO)
-      return 'REEMBOLSADA';
-    if (this.estado_pago === EstadoPagoReserva.RECHAZADO)
-      return 'PAGO_RECHAZADO';
-    if (this.cancelada || this.estado_pago === EstadoPagoReserva.CANCELADO)
-      return 'CANCELADA';
-    if (this.estado_pago === EstadoPagoReserva.PENDIENTE)
-      return 'PENDIENTE_PAGO';
-    // Conserva los cierres manuales existentes.
-    if (this.finalizada) return 'FINALIZADA';
-    if (
-      !esFechaCalendarioValida(this.fecha_inicio) ||
-      !esFechaCalendarioValida(this.fecha_fin) ||
-      this.fecha_inicio > this.fecha_fin
-    )
-      return 'FECHAS_A_REVISAR';
-
-    const hoy = fechaArgentina(ahora);
-    if (hoy < this.fecha_inicio) return 'CONFIRMADA';
-    if (hoy > this.fecha_fin) {
-      return this.codigo_validado_en ? 'FINALIZADA' : 'INGRESO_NO_VERIFICADO';
-    }
-    return this.codigo_validado_en ? 'EN_CURSO' : 'PENDIENTE_INGRESO';
-  }
-
-  toJSON(): object {
-    return { ...this, estado_estadia: this.estado_estadia };
-  }
 
   // La reserva registra el pago y vincula al inquilino con una publicación.
   @PrimaryGeneratedColumn({ name: 'id_reserva' })
   id: number;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'finalizada', type: 'boolean', default: false })
   finalizada: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'cancelada', type: 'boolean', default: false })
   cancelada: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_cancelacion', type: 'timestamp', nullable: true })
   fecha_cancelacion: Date | null;
 
-  @Column({ type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 'motivo_cancelacion',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   motivo_cancelacion: string | null;
 
-  @Column({ type: 'varchar', length: 20, nullable: true })
+  @Column({
+    name: 'cancelada_por',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
   cancelada_por: ActorCancelacion | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ name: 'monto_pago', type: 'decimal', precision: 10, scale: 2 })
   monto_pago: number;
 
   // Condiciones aceptadas al reservar; nunca se recalculan al cambiar fechas.
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'precio_unitario_contratado',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   precio_unitario_contratado: number | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'importe_contratado',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   importe_contratado: number | null;
 
-  @Column({ type: 'varchar', length: 3, nullable: true })
+  @Column({
+    name: 'moneda_contratada',
+    type: 'varchar',
+    length: 3,
+    nullable: true,
+  })
   moneda_contratada: string | null;
 
-  @Column({ type: 'varchar', length: 3, nullable: true })
+  @Column({ name: 'moneda_origen', type: 'varchar', length: 3, nullable: true })
   moneda_origen: string | null;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'importe_origen',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   importe_origen: number | null;
 
   @ManyToOne(() => CotizacionDolar, { nullable: true, onDelete: 'RESTRICT' })
@@ -143,88 +108,156 @@ export class Reserva {
   })
   cotizacion_dolar: Relation<CotizacionDolar | null>;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'cotizacion_aceptada_en',
+    type: 'timestamptz',
+    nullable: true,
+  })
   cotizacion_aceptada_en: Date | null;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({
+    name: 'presupuesto_emitido_en',
+    type: 'timestamptz',
+    nullable: true,
+  })
   presupuesto_emitido_en: Date | null;
 
-  @Column({ type: 'timestamptz', nullable: true })
+  @Column({ name: 'presupuesto_vence_en', type: 'timestamptz', nullable: true })
   presupuesto_vence_en: Date | null;
 
   @OneToMany(() => ReprogramacionReserva, (cambio) => cambio.reserva)
   reprogramaciones: Relation<ReprogramacionReserva[]>;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_pago', type: 'timestamp', nullable: true })
   fecha_pago: Date | null;
 
-  @Column({
-    type: 'enum',
-    enum: EstadoPagoReserva,
-    default: EstadoPagoReserva.APROBADO,
-  })
+  @Column({ name: 'estado_pago', type: 'varchar', length: 40, default: EstadoPagoReserva.APROBADO })
   estado_pago: EstadoPagoReserva;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({
+    name: 'ambito_estado_pago',
+    type: 'varchar',
+    length: 40,
+    select: false,
+    insert: false,
+    update: false,
+  })
+  readonly ambitoEstadoPago: typeof AmbitoEstado.PAGO_RESERVA;
+
+  @Column({ name: 'pago_vencimiento', type: 'timestamp', nullable: true })
   pago_vencimiento: Date | null;
 
   // El código se excluye de todas las consultas normales. Solo puede
   // recuperarlo el inquilino mediante el endpoint protegido específico.
-  @Column({ type: 'varchar', length: 8, nullable: true, select: false })
+  @Column({
+    name: 'codigo_alojamiento',
+    type: 'varchar',
+    length: 8,
+    nullable: true,
+    select: false,
+  })
   codigo_alojamiento: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'codigo_generado_en', type: 'timestamp', nullable: true })
   codigo_generado_en: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'codigo_validado_en', type: 'timestamp', nullable: true })
   codigo_validado_en: Date | null;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'intentos_codigo', type: 'int', default: 0 })
   intentos_codigo: number;
 
-  @Column({
-    type: 'enum',
-    enum: EstadoLiquidacionReserva,
-    default: EstadoLiquidacionReserva.NO_APLICA,
-  })
+  @Column({ name: 'estado_liquidacion', type: 'varchar', length: 40, default: EstadoLiquidacionReserva.NO_APLICA })
   estado_liquidacion: EstadoLiquidacionReserva;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({
+    name: 'ambito_estado_liquidacion',
+    type: 'varchar',
+    length: 40,
+    select: false,
+    insert: false,
+    update: false,
+  })
+  readonly ambitoEstadoLiquidacion: typeof AmbitoEstado.LIQUIDACION_RESERVA;
+
+  @Column({
+    name: 'fecha_resolucion_liquidacion',
+    type: 'timestamp',
+    nullable: true,
+  })
   fecha_resolucion_liquidacion: Date | null;
 
-  @Column({ type: 'varchar', length: 150, nullable: true })
+  @Column({
+    name: 'referencia_liquidacion',
+    type: 'varchar',
+    length: 150,
+    nullable: true,
+  })
   referencia_liquidacion: string | null;
 
-  @Column({ type: 'varchar', length: 500, nullable: true })
+  @Column({
+    name: 'observacion_liquidacion',
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
   observacion_liquidacion: string | null;
 
   // Se conserva una copia del periodo para mantener el historial aunque
   // posteriormente se elimine la publicación o su calendario.
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'fecha_inicio', type: 'date', nullable: true })
   fecha_inicio: string | null;
 
-  @Column({ type: 'date', nullable: true })
+  @Column({ name: 'fecha_fin', type: 'date', nullable: true })
   fecha_fin: string | null;
 
   // Copia historica de los datos del inquilino al momento de reservar.
   // La relacion con Usuario puede quedar NULL si la cuenta se elimina.
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'usuario_nombre',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   usuario_nombre: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({
+    name: 'usuario_apellido',
+    type: 'varchar',
+    length: 100,
+    nullable: true,
+  })
   usuario_apellido: string | null;
 
-  @Column({ type: 'varchar', length: 150, nullable: true })
+  @Column({
+    name: 'usuario_email',
+    type: 'varchar',
+    length: 150,
+    nullable: true,
+  })
   usuario_email: string | null;
 
-  @Column({ type: 'varchar', length: 20, nullable: true })
+  @Column({
+    name: 'usuario_telefono',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
   usuario_telefono: string | null;
 
   // Permiten reintentar correos fallidos sin duplicar los ya entregados.
-  @Column({ type: 'boolean', default: false })
+  @Column({
+    name: 'email_confirmacion_inquilino_enviado',
+    type: 'boolean',
+    default: false,
+  })
   email_confirmacion_inquilino_enviado: boolean;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({
+    name: 'email_nueva_reserva_anunciante_enviado',
+    type: 'boolean',
+    default: false,
+  })
   email_nueva_reserva_anunciante_enviado: boolean;
 
   // Usuario que realiza la reserva (Inquilino)
@@ -236,252 +269,4 @@ export class Reserva {
   @ManyToOne(() => Publicacion, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Relation<Publicacion | null>;
-
-  // --- Participantes ---
-
-  esDelInquilino(idUsuario: number): boolean {
-    return this.usuario?.id === idUsuario;
-  }
-
-  esDelAnunciante(idUsuario: number): boolean {
-    return this.publicacion?.perteneceA(idUsuario) ?? false;
-  }
-
-  /** El detalle de una reserva solo corresponde al inquilino o al anunciante dueño. */
-  participa(idUsuario: number): boolean {
-    return this.esDelInquilino(idUsuario) || this.esDelAnunciante(idUsuario);
-  }
-
-  /** Copia histórica del nombre del inquilino; vacía si no se registró. */
-  nombreInquilino(): string {
-    return [this.usuario_nombre, this.usuario_apellido]
-      .filter(Boolean)
-      .join(' ');
-  }
-
-  emailDelAnunciante(): string | undefined {
-    return this.publicacion?.emailDelAnunciante();
-  }
-
-  nombreDelAnunciante(): string {
-    return this.publicacion?.nombreDelAnunciante() ?? '';
-  }
-
-  // --- Pago ---
-
-  pagoAprobado(): boolean {
-    return this.estado_pago === EstadoPagoReserva.APROBADO;
-  }
-
-  /** Pagada y vigente: habilita el código de alojamiento, los reclamos y la liquidación. */
-  estaConfirmada(): boolean {
-    return this.pagoAprobado() && !this.cancelada;
-  }
-
-  /** Ya no admite cambios del inquilino. */
-  estaCerrada(): boolean {
-    return this.cancelada || this.finalizada;
-  }
-
-  /** Aprueba el pago, emite el código de alojamiento y retiene el dinero hasta la estadía. */
-  confirmarPago(fechaPago: Date, codigoAlojamiento: string): void {
-    this.estado_pago = EstadoPagoReserva.APROBADO;
-    this.fecha_pago = fechaPago;
-    this.pago_vencimiento = null;
-    this.codigo_alojamiento = codigoAlojamiento;
-    this.codigo_generado_en = new Date();
-    this.codigo_validado_en = null;
-    this.intentos_codigo = 0;
-    this.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
-  }
-
-  /** Cierra la reserva cuyo pago falló, venció o fue devuelto. */
-  cerrarSinPago(estado: EstadoPagoReserva): void {
-    this.estado_pago = estado;
-    this.estado_liquidacion =
-      estado === EstadoPagoReserva.REEMBOLSADO
-        ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
-        : EstadoLiquidacionReserva.NO_APLICA;
-    this.cancelar();
-    // Se conserva el vencimiento original para poder conciliar un pago
-    // aprobado que llegue después del cierre.
-  }
-
-  /** Indica si el pago fue aprobado antes de que venciera la reserva. */
-  pagoDentroDelPlazo(fechaPago: Date): boolean {
-    if (!this.pago_vencimiento) return false;
-    return (
-      new Date(fechaPago).getTime() <= new Date(this.pago_vencimiento).getTime()
-    );
-  }
-
-  /** Reactiva una reserva vencida y la confirma conservando sus condiciones. */
-  reactivarPago(fechaPago: Date, codigoAlojamiento: string): void {
-    this.cancelada = false;
-    this.fecha_cancelacion = null;
-    this.confirmarPago(fechaPago, codigoAlojamiento);
-  }
-
-  /**
-   * Registra un pago aprobado que no puede confirmarse porque la reserva ya
-   * fue cerrada o las fechas fueron reasignadas. Queda para revisión y devolución.
-   */
-  registrarPagoParaRevision(fechaPago: Date, motivo: string): void {
-    this.estado_pago = EstadoPagoReserva.APROBADO;
-    this.fecha_pago = fechaPago;
-    this.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    this.observacion_liquidacion = motivo.trim();
-    this.fecha_resolucion_liquidacion = null;
-    this.codigo_alojamiento = null;
-    this.codigo_generado_en = null;
-    this.codigo_validado_en = null;
-    this.intentos_codigo = 0;
-  }
-
-  cancelar(actor?: ActorCancelacion, motivo?: string): void {
-    this.cancelada = true;
-    this.fecha_cancelacion = new Date();
-    if (actor) this.cancelada_por = actor;
-    if (motivo?.trim()) this.motivo_cancelacion = motivo.trim();
-  }
-
-  /** Terminó la estadía. Las fechas no se liberan: quedan como historial. */
-  finalizar(): void {
-    this.finalizada = true;
-  }
-
-  /** Cambia el período conservando el importe contratado. */
-  reprogramar(inicio: string, fin: string): void {
-    this.fecha_inicio = inicio;
-    this.fecha_fin = fin;
-  }
-
-  // --- Código de alojamiento ---
-
-  /** Emite el código si falta (reservas aprobadas antes de existir el código). */
-  asegurarCodigoAlojamiento(codigo: string): boolean {
-    if (this.codigo_alojamiento) return false;
-    this.codigo_alojamiento = codigo;
-    this.codigo_generado_en = new Date();
-    this.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
-    return true;
-  }
-
-  codigoValidado(): boolean {
-    return !!this.codigo_validado_en;
-  }
-
-  codigoBloqueado(): boolean {
-    return this.intentos_codigo >= Reserva.MAX_INTENTOS_CODIGO;
-  }
-
-  intentosCodigoRestantes(): number {
-    return Math.max(0, Reserva.MAX_INTENTOS_CODIGO - this.intentos_codigo);
-  }
-
-  /**
-   * Compara el código presentado por el anunciante. Si coincide, libera la
-   * liquidación al propietario; si no, suma un intento y al llegar al límite
-   * deja la reserva en revisión administrativa.
-   */
-  registrarIntentoCodigo(codigo: string): boolean {
-    const recibido = codigo.trim().toUpperCase();
-    const esperado = this.codigo_alojamiento ?? '';
-    const coincide =
-      recibido.length === esperado.length &&
-      timingSafeEqual(Buffer.from(recibido), Buffer.from(esperado));
-    if (!coincide) {
-      this.intentos_codigo += 1;
-      if (this.codigoBloqueado()) {
-        this.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-        this.observacion_liquidacion =
-          'Código bloqueado después de cinco intentos incorrectos';
-      }
-      return false;
-    }
-    this.codigo_validado_en = new Date();
-    this.estado_liquidacion =
-      EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO;
-    this.observacion_liquidacion =
-      'Código de alojamiento validado por el anunciante';
-    return true;
-  }
-
-  // --- Liquidación ---
-
-  liquidacionEnRevision(): boolean {
-    return this.estado_liquidacion === EstadoLiquidacionReserva.EN_REVISION;
-  }
-
-  /** El dinero ya se pagó al propietario o se devolvió al inquilino. */
-  liquidacionResuelta(): boolean {
-    return [
-      EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
-      EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
-      EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
-    ].includes(this.estado_liquidacion);
-  }
-
-  /** El reclamo del inquilino congela cualquier liquidación pendiente. */
-  reportarProblema(motivo: string): void {
-    this.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    this.observacion_liquidacion = `Reclamo del inquilino: ${motivo.trim()}`;
-    this.fecha_resolucion_liquidacion = null;
-  }
-
-  /** Registra la decisión administrativa; devolver al inquilino también cancela la reserva. */
-  resolverLiquidacion(
-    estado: EstadoLiquidacionReserva,
-    referencia?: string,
-    observacion?: string,
-  ): void {
-    this.estado_liquidacion = estado;
-    this.referencia_liquidacion = referencia?.trim() || null;
-    this.observacion_liquidacion =
-      observacion?.trim() || this.observacion_liquidacion;
-    this.fecha_resolucion_liquidacion = this.liquidacionResuelta()
-      ? new Date()
-      : null;
-    if (estado === EstadoLiquidacionReserva.RETENIDO) this.intentos_codigo = 0;
-    if (estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO) {
-      this.estado_pago = EstadoPagoReserva.REEMBOLSADO;
-      this.cancelar('ADMINISTRADOR');
-    }
-    if (estado === EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO) {
-      // El pago conserva su estado; el reembolso parcial vive en la entidad Reembolso.
-      this.fecha_resolucion_liquidacion = new Date();
-    }
-  }
-
-  /** Marca la reserva mientras Mercado Pago tramita un contracargo. */
-  marcarContracargo(): void {
-    this.estado_pago = EstadoPagoReserva.CONTRACARGO;
-  }
-
-  /** Restaura el pago aprobado cuando el contracargo se resuelve a favor del Anunciante. */
-  restaurarPagoAprobado(): void {
-    if (this.estado_pago === EstadoPagoReserva.CONTRACARGO)
-      this.estado_pago = EstadoPagoReserva.APROBADO;
-  }
-
-  /** Aplica un reembolso total confirmado. */
-  aplicarReembolsoTotal(): void {
-    this.estado_pago = EstadoPagoReserva.REEMBOLSADO;
-    this.estado_liquidacion = EstadoLiquidacionReserva.DEVUELTO_INQUILINO;
-    this.fecha_resolucion_liquidacion = new Date();
-  }
-
-  /** Registra el resultado de un reembolso parcial sin alterar el pago aprobado. */
-  aplicarReembolsoParcial(): void {
-    this.estado_liquidacion = EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
-    this.fecha_resolucion_liquidacion = new Date();
-  }
-
-  // --- Avisos ---
-
-  marcarAvisoEnviado(destinatario: 'inquilino' | 'anunciante'): void {
-    if (destinatario === 'inquilino')
-      this.email_confirmacion_inquilino_enviado = true;
-    else this.email_nueva_reserva_anunciante_enviado = true;
-  }
 }

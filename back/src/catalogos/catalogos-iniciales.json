@@ -1,0 +1,39 @@
+{
+  "rol": [
+    { "nombre": "Administrador", "descripcion": "Administra usuarios, verificaciones y catálogos del sistema." },
+    { "nombre": "Inquilino", "descripcion": "Busca propiedades y gestiona sus reservas." }
+  ],
+  "tipo_anunciante": [
+    { "nombre": "Particular", "descripcion": "Persona que publica propiedades de forma particular." },
+    { "nombre": "Inmobiliaria", "descripcion": "Empresa o profesional inmobiliario que publica propiedades." }
+  ],
+  "tipo_propiedad": [
+    { "nombre": "Departamento", "descripcion": "Unidad independiente dentro de un edificio." },
+    { "nombre": "Casa", "descripcion": "Vivienda independiente." },
+    { "nombre": "PH", "descripcion": "Unidad de vivienda en propiedad horizontal." },
+    { "nombre": "Dúplex", "descripcion": "Vivienda distribuida en dos plantas." },
+    { "nombre": "Cabaña", "descripcion": "Vivienda turística o de descanso." },
+    { "nombre": "Quinta", "descripcion": "Propiedad con vivienda y espacio verde." },
+    { "nombre": "Local comercial", "descripcion": "Inmueble destinado a una actividad comercial." },
+    { "nombre": "Oficina", "descripcion": "Espacio para actividades profesionales o administrativas." },
+    { "nombre": "Galpón", "descripcion": "Inmueble para almacenamiento o actividades productivas." },
+    { "nombre": "Cochera", "descripcion": "Espacio destinado al estacionamiento de vehículos." },
+    { "nombre": "Terreno", "descripcion": "Parcela sin edificación para el uso acordado en el alquiler." }
+  ],
+  "modalidad": [
+    {
+      "nombre": "Temporal",
+      "descripcion": "Alquiler por fechas con disponibilidad y reserva.",
+      "permite_reservas_por_fecha": true
+    },
+    {
+      "nombre": "Largo Plazo",
+      "descripcion": "Alquiler estable con condiciones acordadas con el anunciante.",
+      "permite_reservas_por_fecha": false
+    }
+  ],
+  "tipo_moneda": [
+    { "nombre": "Peso (ARS)", "descripcion": "Peso argentino.", "codigo": "ARS", "alias": ["Peso", "Pesos", "Peso argentino", "Pesos argentinos", "$", "$ARS", "AR$"] },
+    { "nombre": "Dólar (USD)", "descripcion": "Dólar estadounidense.", "codigo": "USD", "alias": ["Dólar", "Dólares", "Dólar estadounidense", "Dólares estadounidenses", "US$", "U$S", "$USD"] }
+  ]
+}

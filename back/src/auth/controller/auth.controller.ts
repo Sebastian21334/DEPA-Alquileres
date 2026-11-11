@@ -44,18 +44,12 @@ export class AuthController {
 
   @Post('restablecer-contrasenia')
   restablecerContrasenia(@Body() dto: RestablecerContraseniaDto) {
-    return this.authService.restablecerContrasenia(
-      dto.token,
-      dto.nuevaContrasenia,
-    );
+    return this.authService.restablecerContrasenia(dto);
   }
 
   @Patch('cambiar-contrasenia')
   @UseGuards(JwtAuthGuard)
-  cambiarContrasenia(
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: CambiarContraseniaDto,
-  ) {
+  cambiarContrasenia(@Req() req: AuthenticatedRequest, @Body() dto: CambiarContraseniaDto) {
     return this.authService.cambiarContrasenia(req.user.id, dto);
   }
 }

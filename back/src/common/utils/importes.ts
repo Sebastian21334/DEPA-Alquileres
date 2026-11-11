@@ -1,8 +1,5 @@
 /** Aritmética decimal con enteros: evita redondear por día antes de calcular el total. */
-export function decimalEntero(
-  valor: string | number,
-  decimales: number,
-): bigint {
+export function decimalEntero(valor: string | number, decimales: number): bigint {
   const texto = String(valor);
   if (!/^\d+(\.\d+)?$/.test(texto)) throw new Error('Importe decimal inválido');
   const [entero, fraccion = ''] = texto.split('.');

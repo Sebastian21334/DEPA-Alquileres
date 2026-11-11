@@ -33,12 +33,7 @@ export class VerificacionFacialService {
     return this.http.post<DesafioVitalidad>(`${this.api}/desafio/cambiar`, { challengeToken });
   }
 
-  validarVitalidad(
-    challengeToken: string,
-    neutralPhoto: File,
-    actionPhotos: File[][],
-    livePhoto: File,
-  ) {
+  validarVitalidad(challengeToken: string, neutralPhoto: File, actionPhotos: File[][], livePhoto: File) {
     const body = new FormData();
     body.append('challengeToken', challengeToken);
     body.append('neutralPhoto', neutralPhoto);

@@ -10,7 +10,14 @@ const { UsuariosService } = require('../dist/usuarios/service/usuarios.service')
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
 const { AnunciantesService, MENSAJE_CUIT_EN_USO } = require('../dist/anunciantes/service/anunciantes.service');
 const { AnunciantesRepository } = require('../dist/anunciantes/repository/anunciantes.repository');
+const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
+const { PublicacionesRepository } = require('../dist/publicaciones/repository/publicaciones.repository');
 const { ValorDuplicadoError, guardarSinDuplicados } = require('../dist/common/persistence/valor-duplicado.error');
+const { SolicitudVerificacion } = require('../dist/verificacion-anunciante/entity/solicitud-verificacion.entity');
+const { RevisionVerificacion } = require('../dist/verificacion-anunciante/entity/revision-verificacion.entity');
+const { VerificacionRepository } = require('../dist/verificacion-anunciante/repository/verificacion.repository');
+const { VerificacionAnuncianteService } = require('../dist/verificacion-anunciante/service/verificacion-anunciante.service');
+const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 
 // Metadatos reales de TypeORM para PostgreSQL, sin conectarse a una base.
 const source = new DataSource({ type: 'postgres', entities: [__dirname + '/../dist/**/*.entity.js'] });
@@ -101,18 +108,31 @@ function servicioUsuarios(db) {
       return qb;
     },
   };
-  return new UsuariosService({}, {}, {}, { transaction: (fn) => fn(manager) }, {}, {});
+  const repo = new UsuariosRepository({ manager: { transaction: (fn) => fn(manager) } });
+  return new UsuariosService(repo, {}, {}, {}, {},
+    new PublicacionesService(new PublicacionesRepository()),
+    new AnunciantesService(new AnunciantesRepository()));
 }
 
 const fila = (db, sql, id) => db.prepare(sql).get(id);
 
-test('la baja de la cuenta mueve el email al histórico y lo libera', () => {
+test('la baja de la cuenta mueve el email al histórico y lo libera', async () => {
   const usuario = Object.assign(new Usuario(), { id: 1, activa: true, email: 'ana@mail.com' });
-  usuario.darDeBaja();
+  const repo = {
+    conTransaccion: (operacion) => operacion({}),
+    buscarBloqueado: async () => usuario,
+    contarOperacionesPendientes: async () => ({
+      reservasPendientes: 0, estadiasVigentes: 0, liquidacionesPendientes: 0, pagosSinConciliar: 0,
+    }),
+    guardar: async (cuenta) => cuenta,
+  };
+  const servicio = new UsuariosService(repo, {}, {}, {}, {},
+    { bloquearPublicacionesParaCambioDeCuenta: async () => false, desactivarPorBajaDeCuenta: async () => {} },
+    { archivarCuitPorBajaDeCuenta: async () => {} });
+  await servicio.darDeBajaPropia(usuario.id);
   assert.equal(usuario.activa, false);
   assert.equal(usuario.email, null);
   assert.equal(usuario.email_historico, 'ana@mail.com');
-  assert.equal(usuario.emailParaHistorial(), 'ana@mail.com');
 });
 
 test('la baja de un Anunciante mueve su CUIT/CUIL y su email al histórico', async () => {
@@ -130,14 +150,6 @@ test('la baja de un usuario sin perfil de Anunciante no toca otros CUIT/CUIL', a
   await servicioUsuarios(db).darDeBajaPropia(2);
   assert.equal(fila(db, 'SELECT cuit_cuil FROM anunciante WHERE id_usuario = ?', 1).cuit_cuil, '20-12345678-9');
   assert.equal(fila(db, 'SELECT email_historico FROM usuario WHERE id = ?', 2).email_historico, 'beto@mail.com');
-});
-
-test('el CUIT/CUIL para mostrar es el vigente o, tras la baja, el histórico', () => {
-  assert.equal(Anunciante.digitosCuit('20-12345678-9'), '20123456789');
-  const vigente = Object.assign(new Anunciante(), { cuit_cuil: '20123456789', cuit_cuil_historico: null });
-  const deBaja = Object.assign(new Anunciante(), { cuit_cuil: null, cuit_cuil_historico: '27-11111111-1' });
-  assert.equal(vigente.cuitParaHistorial(), '20123456789');
-  assert.equal(deBaja.cuitParaHistorial(), '27-11111111-1');
 });
 
 // Ejecuta en SQLite la consulta real de existeCuitVigente.
@@ -212,6 +224,47 @@ test('una solicitud con un CUIT/CUIL libre se guarda', async () => {
   await servicio.crearPendiente(solicitud);
   assert.equal(guardados.length, 1);
   assert.equal(guardados[0].cuit_cuil, '20-12345678-9');
+});
+
+test('si falla el borrador, revierte el alta del anunciante y permite reintentar', async () => {
+  const { source: db, cerrar } = await crearPostgresPruebas();
+  try {
+    const usuarios = db.getRepository(Usuario);
+    const anunciantes = db.getRepository(Anunciante);
+    const solicitudes = db.getRepository(SolicitudVerificacion);
+    const usuario = await usuarios.save({
+      nombre: 'Usuario', apellido: 'Prueba', email: 'alta@example.invalid',
+      telefono: '351', contrasenia: 'hash-de-prueba', email_verificado: true,
+    });
+    const [{ id }] = await db.query(
+      "INSERT INTO tipo_anunciante (nombre) VALUES ('Particular') RETURNING id_tipo_anunciante AS id",
+    );
+    let notificaciones = 0;
+    const servicio = new VerificacionAnuncianteService(
+      new AnunciantesService(new AnunciantesRepository(anunciantes)),
+      new UsuariosService(new UsuariosRepository(usuarios)),
+      { getTipoAnunciantePorId: async () => ({ id }), esInmobiliaria: () => false },
+      new VerificacionRepository(solicitudes, db.getRepository(RevisionVerificacion), db),
+      { enviarSolicitudAnunciante: async () => { notificaciones++; } },
+    );
+    servicio.logger = { error() {} };
+    const datos = { cuit: '20-12345678-9', numero_contacto: '351', idTipoAnunciante: id };
+
+    await db.query('ALTER TABLE solicitud_verificacion ADD CONSTRAINT fallo_alta_prueba CHECK (numero_revision > 1)');
+    await assert.rejects(servicio.solicitarAlta(usuario.id, datos), /No se pudo iniciar la solicitud/);
+    assert.equal(await anunciantes.count(), 0);
+    assert.equal(await solicitudes.count(), 0);
+    assert.equal(notificaciones, 0);
+
+    await db.query('ALTER TABLE solicitud_verificacion DROP CONSTRAINT fallo_alta_prueba');
+    const anunciante = await servicio.solicitarAlta(usuario.id, datos);
+    assert.equal(anunciante.verificado, false);
+    assert.equal((await solicitudes.findOneByOrFail({ anunciante: { idUsuario: usuario.id } })).estado, 'borrador');
+    assert.equal(notificaciones, 1);
+    await assert.rejects(servicio.solicitarAlta(usuario.id, datos), ConflictException);
+  } finally {
+    await cerrar();
+  }
 });
 
 function sqlListado(q) {
