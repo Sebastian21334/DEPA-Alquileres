@@ -13,12 +13,18 @@ import {
   Min,
   ValidateIf,
 } from 'class-validator';
-import { MENSAJE_FORMATO_TITULO, PATRON_TITULO_PUBLICACION } from './crear-publicacion.dto';
+import {
+  LARGO_MAXIMO_TITULO,
+  LARGO_MINIMO_TITULO,
+  MENSAJE_FORMATO_TITULO,
+  MENSAJE_LARGO_TITULO,
+  PATRON_TITULO_PUBLICACION,
+} from './crear-publicacion.dto';
 
 export class ActualizarPublicacionDto {
   @ValidateIf((_dto, titulo: unknown) => titulo !== undefined)
   @IsString()
-  @Length(5, 255, { message: 'El título debe tener entre 5 y 255 caracteres.' })
+  @Length(LARGO_MINIMO_TITULO, LARGO_MAXIMO_TITULO, { message: MENSAJE_LARGO_TITULO })
   @Matches(PATRON_TITULO_PUBLICACION, { message: MENSAJE_FORMATO_TITULO })
   titulo?: string;
 
