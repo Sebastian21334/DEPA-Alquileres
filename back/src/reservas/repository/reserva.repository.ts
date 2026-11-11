@@ -122,7 +122,8 @@ export class ReservaRepository implements IReservaRepository {
       .getOne();
   }
 
-  buscarParaReclamo(id: number): Promise<Reserva | null> {
+  async buscarParaReclamo(id: number): Promise<Reserva | null> {
+    await this.bloquear(id);
     return this.repository.findOne({
       where: { id },
       relations: { usuario: true, publicacion: { anunciante: { usuario: true } } },
@@ -137,12 +138,13 @@ export class ReservaRepository implements IReservaRepository {
         reprogramaciones: true,
         cotizacion_dolar: true,
         publicacion: {
+          imagenes: true,
           anunciante: { usuario: true },
           ciudad: true,
           provincia: true,
         },
       },
-      order: { id: 'DESC' },
+      order: { id: 'DESC', publicacion: { imagenes: { orden: 'ASC', id: 'ASC' } } },
     });
   }
 
@@ -167,12 +169,13 @@ export class ReservaRepository implements IReservaRepository {
         cotizacion_dolar: true,
         usuario: true,
         publicacion: {
+          imagenes: true,
           anunciante: { usuario: true },
           ciudad: true,
           provincia: true,
         },
       },
-      order: { fecha_inicio: 'ASC' },
+      order: { fecha_inicio: 'ASC', publicacion: { imagenes: { orden: 'ASC', id: 'ASC' } } },
     });
   }
 

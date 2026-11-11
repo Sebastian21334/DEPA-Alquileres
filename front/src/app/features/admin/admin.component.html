@@ -10,13 +10,6 @@
     </button>
   </header>
 
-  @if (error()) {
-    <div class="alert alert--error" role="alert">{{ error() }}</div>
-  }
-  @if (notice()) {
-    <div class="alert alert--success" role="status">{{ notice() }}</div>
-  }
-
   <dialog #bloqueoDialog class="block-dialog" aria-labelledby="block-dialog-title" (cancel)="cerrarBloqueo($event)">
       <form class="block-form" (ngSubmit)="confirmarBloqueo()">
         <h2 id="block-dialog-title">Bloquear a {{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</h2>
@@ -243,67 +236,69 @@
       </div>
       <span class="counter">{{ claims().length }}</span>
     </div>
-    @if (!claims().length) {
-      <p class="empty">No hay reclamos registrados.</p>
-    } @else {
-      <div class="settlement-list">
-        @for (claim of claims(); track claim.id) {
-          <article class="settlement-card">
-            <div>
-              <span class="status" [class.status--blocked]="claim.estado === 'EN_REVISION'">{{ claim.estado }}</span>
-              <h3>Reclamo #{{ claim.id }} · Reserva #{{ claim.reserva?.id ?? '—' }}</h3>
-              <p><strong>Categoría:</strong> {{ claim.categoria }}</p>
-              <p>{{ claim.descripcion }}</p>
-              <p class="muted">
-                {{ claim.evidencias?.length ?? 0 }} imagen(es) ·
-                {{ claim.mensajes?.length ?? 0 }} mensaje(s)
-              </p>
-              @if (claim.mensajes?.length) {
-                <details>
-                  <summary>Ver mensajes</summary>
-                  <ul>
-                    @for (mensaje of claim.mensajes; track mensaje.id) {
-                      <li>
-                        <strong>{{ mensaje.autor?.nombre ?? 'Usuario' }}:</strong>
-                        {{ mensaje.texto }}
-                        @if (mensaje.visible_para === 'ADMIN') { <em>(nota interna)</em> }
-                      </li>
-                    }
-                  </ul>
-                </details>
-              }
-              @if (claim.evidencias?.length) {
-                <details>
-                  <summary>Ver evidencias</summary>
-                  <ul>
-                    @for (evidencia of claim.evidencias; track evidencia.id) {
-                      <li>
-                        <button type="button" class="link-button" (click)="verEvidencia(claim, evidencia)">
-                          {{ evidencia.nombre_archivo }}
-                        </button>
-                      </li>
-                    }
-                  </ul>
-                </details>
-              }
-              @if (claim.resolucion) {
-                <p><strong>Resolución:</strong> {{ claim.resolucion }}
-                  @if (claim.importe_reembolso) { · {{ claim.importe_reembolso | currency: 'ARS' }} }
-                </p>
-              }
-            </div>
-            <div class="actions">
-              <button type="button" class="button button--ghost" [disabled]="busy() === 'claim-' + claim.id" (click)="responderReclamo(claim)">Responder</button>
-              @if (claim.estado !== 'RESUELTO_INQUILINO' && claim.estado !== 'RESUELTO_ANUNCIANTE' && claim.estado !== 'CERRADO') {
-                <button type="button" class="button button--danger-outline" [disabled]="busy() === 'claim-' + claim.id" (click)="resolverReclamoReserva(claim, 'DEVOLUCION_PARCIAL')">Devolución parcial</button>
-                <button type="button" class="button button--danger-outline" [disabled]="busy() === 'claim-' + claim.id" (click)="resolverReclamoReserva(claim, 'DEVOLUCION_TOTAL')">Devolución total</button>
-                <button type="button" class="button button--ghost" [disabled]="busy() === 'claim-' + claim.id" (click)="resolverReclamoReserva(claim, 'SIN_DEVOLUCION')">Sin devolución</button>
-              }
-            </div>
-          </article>
-        }
-      </div>
+    @if (errorReclamos()) {
+      <p class="alert alert--error" role="alert">{{ errorReclamos() }}</p>
     }
+    @if (!claims().length && !errorReclamos()) {
+      <p class="empty">{{ loading() ? 'Cargando reclamos…' : 'No hay reclamos registrados.' }}</p>
+    }
+    <div class="settlement-list">
+      @for (claim of claims(); track claim.id) {
+        <article class="settlement-card claim-card">
+          <app-claim-history [reclamo]="claim" (verArchivo)="verEvidencia(claim, $event)" />
+          @if (claim.estado !== 'CERRADO') {
+            <div class="actions">
+              <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'mensaje')">Escribir mensaje</button>
+              @if (claim.estado === 'ABIERTO' || claim.estado === 'EN_REVISION') {
+                <button type="button" class="button button--light" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'resolver')">Resolver reclamo</button>
+              }
+            </div>
+          }
+          @if (gestionReclamo(); as gestion) {
+            @if (gestion.id === claim.id && gestion.accion === 'mensaje') {
+              <form class="claim-form" (ngSubmit)="responderReclamo(claim)">
+                <label>Mensaje para el inquilino y el anunciante
+                  <textarea name="textoReclamo" [(ngModel)]="textoReclamo" rows="3" maxlength="1000" required [disabled]="!!busy()"></textarea>
+                </label>
+                <div class="actions">
+                  <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
+                  <button type="submit" class="button button--light" [disabled]="!!busy() || !textoReclamo.trim()">Enviar mensaje</button>
+                </div>
+              </form>
+            }
+            @if (gestion.id === claim.id && gestion.accion === 'resolver') {
+              <form class="claim-form" (ngSubmit)="resolverReclamoReserva(claim)">
+                <label>Resultado de la revisión
+                  <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
+                    <option value="SIN_DEVOLUCION">Sin devolución</option>
+                    <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
+                    <option value="DEVOLUCION_TOTAL">Devolución total</option>
+                  </select>
+                </label>
+                @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
+                  <label>Importe a devolver en pesos
+                    <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required [disabled]="!!busy()" />
+                  </label>
+                }
+                @if (resolucionReclamo !== 'SIN_DEVOLUCION') {
+                  <label>Referencia o comprobante de la devolución
+                    <input name="referenciaReclamo" [(ngModel)]="referenciaReclamo" maxlength="150" [disabled]="!!busy()" />
+                    <small>Obligatorio para devoluciones manuales.</small>
+                  </label>
+                }
+                <label>Conclusión de la revisión
+                  <textarea name="observacionReclamo" [(ngModel)]="observacionReclamo" rows="3" maxlength="500" required [disabled]="!!busy()"></textarea>
+                </label>
+                <div class="actions">
+                  <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
+                  <button type="submit" class="button button--light" [disabled]="!!busy() || !observacionReclamo.trim() || (resolucionReclamo === 'DEVOLUCION_PARCIAL' && !(importeReclamo && importeReclamo > 0))">Confirmar resolución</button>
+                </div>
+              </form>
+            }
+          }
+        </article>
+      }
+    </div>
   </section>
 
   <section class="panel">

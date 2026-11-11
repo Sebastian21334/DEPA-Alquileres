@@ -41,50 +41,51 @@ export class ReclamosService {
   constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService) {}
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
-    const reserva = await this.reservas.buscarParaReclamo(dto.id_reserva);
-    if (!this.reservas.esDelInquilino(reserva, idUsuario))
-      throw new ForbiddenException(
-        'Solo el Inquilino de la reserva puede iniciar un reclamo',
-      );
-    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO)
-      throw new ConflictException('La reserva no tiene un pago aprobado');
-    if (reserva.cancelada)
-      throw new ConflictException('La reserva está cancelada');
-    if (
-      !reserva.fecha_inicio ||
-      !reserva.fecha_fin ||
-      reserva.fecha_inicio > reserva.fecha_fin
-    )
-      throw new ConflictException('Las fechas de la reserva no son válidas');
+    const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
+      const reclamos = this.reclamos.enTransaccion(transaccion);
+      if (!this.reservas.esDelInquilino(reserva, idUsuario))
+        throw new ForbiddenException(
+          'Solo el Inquilino de la reserva puede iniciar un reclamo',
+        );
+      if (reserva.estado_pago !== EstadoPagoReserva.APROBADO)
+        throw new ConflictException('La reserva no tiene un pago aprobado');
+      if (reserva.cancelada)
+        throw new ConflictException('La reserva está cancelada');
+      if (
+        !reserva.fecha_inicio ||
+        !reserva.fecha_fin ||
+        reserva.fecha_inicio > reserva.fecha_fin
+      )
+        throw new ConflictException('Las fechas de la reserva no son válidas');
 
-    if (!reserva.usuario)
-      throw new ConflictException('La reserva no tiene un Inquilino asociado');
+      if (!reserva.usuario)
+        throw new ConflictException('La reserva no tiene un Inquilino asociado');
 
-    const hoy = fechaArgentina();
-    if (hoy < reserva.fecha_inicio)
-      throw new BadRequestException(
-        'Antes del inicio usá la solicitud de cancelación; el reclamo es para una estadía iniciada o finalizada',
-      );
-    if (this.fueraDePlazo(reserva.fecha_fin, hoy))
-      throw new BadRequestException(
-        `El plazo para reclamar vence a los ${DIAS_RECLAMO} días corridos del fin de la estadía`,
-      );
+      const hoy = fechaArgentina();
+      if (hoy < reserva.fecha_inicio)
+        throw new BadRequestException(
+          'Antes del inicio usá la solicitud de cancelación; el reclamo es para una estadía iniciada o finalizada',
+        );
+      if (this.fueraDePlazo(reserva.fecha_fin, hoy))
+        throw new BadRequestException(
+          `El plazo para reclamar vence a los ${DIAS_RECLAMO} días corridos del fin de la estadía`,
+        );
 
-    if (await this.reclamos.existeAbierto(reserva.id))
-      throw new ConflictException('La reserva ya tiene un reclamo abierto');
+      if (await reclamos.existeAbierto(reserva.id))
+        throw new ConflictException('La reserva ya tiene un reclamo abierto');
 
-    await this.reservas.congelarPorReclamo(reserva);
-    const reclamo = await this.reclamos.guardar({
-      reserva,
-      inquilino: reserva.usuario,
-      anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
-      categoria: dto.categoria,
-      descripcion: dto.descripcion.trim(),
-      estado: EstadoReclamo.ABIERTO,
-      resolucion: null,
-      importe_reembolso: null,
-      administrador_resolucion: null,
-      resuelto_en: null,
+      return reclamos.guardar({
+        reserva,
+        inquilino: reserva.usuario,
+        anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
+        categoria: dto.categoria,
+        descripcion: dto.descripcion.trim(),
+        estado: EstadoReclamo.ABIERTO,
+        resolucion: null,
+        importe_reembolso: null,
+        administrador_resolucion: null,
+        resuelto_en: null,
+      });
     });
     return this.prepararRespuesta(reclamo);
   }

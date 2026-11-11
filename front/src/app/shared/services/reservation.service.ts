@@ -82,6 +82,7 @@ export interface Reserva {
   publicacion?: {
     id: number;
     titulo: string;
+    imagenes?: { url: string }[];
     direccion?: string;
     ciudad?: { id?: number; nombre: string };
     provincia?: { id?: number; nombre: string };
@@ -253,6 +254,10 @@ export class ReservationService {
 
   myClaims(): Observable<Reclamo[]> {
     return this.http.get<Reclamo[]>(`${environment.apiUrl}/reclamos/mios`);
+  }
+
+  claimEvidenceUrl(id: number, evidencia: number): Observable<{ url: string }> {
+    return this.http.get<{ url: string }>(`${environment.apiUrl}/reclamos/${id}/evidencias/${evidencia}/url`);
   }
 
   uploadClaimEvidence(id: number, archivos: File[]): Observable<ReclamoEvidencia[]> {
