@@ -152,7 +152,15 @@ Guards de resolución:
 - La devolución total cancela la reserva y libera fechas futuras sin código validado; la parcial conserva el pago aprobado y registra `DEVUELTO_PARCIAL_INQUILINO`.
 - La clave de idempotencia de una devolución administrativa es `liq:<idReserva>:<t|p>:<importeEnCentavos>`.
 
-Verificación específica: `npm run test:liquidaciones`.
+### Registro auditable
+
+`back/src/reservas/entity/liquidacion.entity.ts` define `Liquidacion` (tabla `public.liquidacion`), el registro completo y auditable de la liquidación de una reserva. Tiene una fila por reserva (`uq_liquidacion_reserva`) y estos campos: `id_liquidacion` (PK), `id_reserva` (FK `ON DELETE CASCADE`), `estado` (varchar 40, por defecto `NO_APLICA`), `ambito_estado` fijo en `LIQUIDACION_RESERVA` y validado por FK compuesta a `estado` más `CHECK`, `importe` (`numeric(10,2)`), `moneda`, `referencia`, `observacion`, `id_admin_resolucion` (FK a `usuario`, `ON DELETE SET NULL`), `fecha_resolucion`, `fecha_pago_propietario` y `creado_en`/`actualizado_en`. El índice `IX_liquidacion_estado` cubre las consultas administrativas por estado.
+
+La migración `back/migrations/20261112-liquidaciones.sql` crea el ámbito `LIQUIDACION_RESERVA`, sus siete estados y la tabla con las restricciones anteriores. El backfill inserta una fila por reserva copiando `estado_liquidacion`, `referencia_liquidacion`, `observacion_liquidacion` y `fecha_resolucion_liquidacion`; copia el importe solo si la liquidación ya está resuelta y `fecha_pago_propietario` solo para `PAGADO_PROPIETARIO`. Usa `ON CONFLICT (id_reserva) DO NOTHING`, por lo que es repetible y no modifica ni elimina columnas de `reserva`. El runner `back/scripts/liquidaciones.cjs` (`npm run db:liquidaciones`) informa el estado sin `--aplicar`; con `--aplicar` abre una transacción con `lock_timeout` de 10 s y un advisory lock `depa:liquidaciones`, y aplica antes las migraciones de catálogo si faltan.
+
+`reserva.estado_liquidacion` —junto con `referencia_liquidacion`, `observacion_liquidacion` y `fecha_resolucion_liquidacion`— sigue como caché de compatibilidad para los circuitos y la API existentes; la fuente de auditoría es `Liquidacion`. `LiquidacionesService.sincronizarDesdeReserva` mantiene la caché alineada: copia estado, observación, referencia y fecha de resolución, completa el importe de una liquidación resuelta si faltaba y no pisa la resolución administrativa ni un importe ya registrado. `asegurarParaReserva` crea la fila si falta y resuelve la carrera contra `uq_liquidacion_reserva`; `registrarRetencion`, `registrarValidacionCodigo`, `registrarRevision`, `registrarResolucion` y `registrarDevolucion` escriben la entidad y la caché en la misma transacción.
+
+Verificación específica: `npm run test:liquidaciones` (5/5) y `npm run test:liquidaciones-entidad` (9/9). Al cierre de la fase 2, el 12/11/2026, pasan las suites completas: 173/173 pruebas `node:test` y 34/34 Jest (este último requiere Node 24.9 o superior).
 
 ## 8. Integraciones externas
 
@@ -190,11 +198,14 @@ npm run build
 npm run lint
 node --test test/*.test.cjs
 npm run test:liquidaciones
+npm run test:liquidaciones-entidad
 node --test test/bloqueo-anunciante.test.cjs
 npm run test:jest          # requiere Node 24.9 o superior
 ```
 
-`package.json` define `test:bloqueo-anunciante`, que compila y luego ejecuta `node --test test/bloqueo-anunciante.test.cjs`, igual que los demás scripts `test:*`.
+`package.json` define `test:bloqueo-anunciante` y `test:liquidaciones-entidad`, que compilan y luego ejecutan su archivo con `node --test`, igual que los demás scripts `test:*`.
+
+Resultado al 12/11/2026: 173/173 pruebas `node:test` y 34/34 pruebas Jest.
 
 Frontend, desde `Proyect/front`:
 
