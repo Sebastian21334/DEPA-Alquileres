@@ -38,6 +38,37 @@ function repositorio(reserva, sobreescribir = {}) {
   return repo;
 }
 
+function liquidacionesService() {
+  return {
+    asegurarParaReserva: async (reserva) => {
+      reserva.liquidacion ??= { reserva };
+      return reserva.liquidacion;
+    },
+    registrarResolucion: async (reserva, estado, datos) => {
+      reserva.estado_liquidacion = estado;
+      reserva.referencia_liquidacion = datos.referencia?.trim() || null;
+      reserva.observacion_liquidacion =
+        datos.observacion?.trim() || reserva.observacion_liquidacion;
+      reserva.fecha_resolucion_liquidacion = [
+        'PAGADO_PROPIETARIO',
+        'DEVUELTO_INQUILINO',
+        'DEVUELTO_PARCIAL_INQUILINO',
+      ].includes(estado)
+        ? new Date()
+        : null;
+      return reserva.liquidacion;
+    },
+    registrarRevision: async (reserva, motivo) => {
+      reserva.estado_liquidacion = 'EN_REVISION';
+      reserva.observacion_liquidacion = motivo.trim();
+      reserva.fecha_resolucion_liquidacion = null;
+      return reserva.liquidacion;
+    },
+    registrarRetencion: async (reserva) => reserva.liquidacion,
+    registrarValidacionCodigo: async (reserva) => reserva.liquidacion,
+  };
+}
+
 test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro importe', async () => {
   const reserva = crearReserva();
   const pago = { id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' };
@@ -62,6 +93,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
+    liquidacionesService(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', importe: 1 }, 7);
@@ -96,6 +128,7 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
+    liquidacionesService(),
   );
 
   await assert.rejects(
@@ -115,6 +148,7 @@ test('exige referencia cuando la devolución es manual', async () => {
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
+    liquidacionesService(),
   );
 
   await assert.rejects(
@@ -142,6 +176,7 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
+    liquidacionesService(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
@@ -169,6 +204,7 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
+    liquidacionesService(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);

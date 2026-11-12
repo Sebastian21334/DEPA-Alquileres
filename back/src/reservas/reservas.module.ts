@@ -2,6 +2,7 @@ import { ReservaCicloVidaService } from './service/reserva-ciclo-vida.service';
 import { ReservaDecisionService } from './service/reserva-decision.service';
 import { ReservaFinalizacionService } from './service/reserva-finalizacion.service';
 import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
+import { LiquidacionesService } from './service/liquidaciones.service';
 import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
 import { ReservaReprogramacionService } from './service/reserva-reprogramacion.service';
 import { ReservaReembolsoAplicacionService } from './service/reserva-reembolso-aplicacion.service';
@@ -13,10 +14,13 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Reserva } from './entity/reserva.entity';
 import { ReprogramacionReserva } from './entity/reprogramacion-reserva.entity';
 import { SolicitudCancelacion } from './entity/solicitud-cancelacion.entity';
+import { Liquidacion } from './entity/liquidacion.entity';
 import { ReservasService } from './service/reservas.service';
 import { ReservasController } from './controller/reservas.controller';
 import { ReservaRepository } from './repository/reserva.repository';
 import { RESERVA_REPOSITORY } from './repository/reserva.repository.interface';
+import { LiquidacionRepository } from './repository/liquidacion.repository';
+import { LIQUIDACION_REPOSITORY } from './repository/liquidacion.repository.interface';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
@@ -33,6 +37,7 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
       Reserva,
       ReprogramacionReserva,
       SolicitudCancelacion,
+      Liquidacion,
     ]),
     DisponibilidadModule,
     SeguridadModule,
@@ -49,6 +54,7 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
     ReservaDecisionService,
     ReservaFinalizacionService,
     ReservaLiquidacionesService,
+    LiquidacionesService,
     ReservaNotificacionesService,
     ReservaReprogramacionService,
     ReservaReembolsoAplicacionService,
@@ -61,6 +67,11 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
       provide: RESERVA_REPOSITORY,
       useExisting: ReservaRepository, // el token apunta a la misma instancia de ReservaRepository
     },
+    LiquidacionRepository,
+    {
+      provide: LIQUIDACION_REPOSITORY,
+      useExisting: LiquidacionRepository,
+    },
   ],
   exports: [
     ReservasService,
@@ -68,6 +79,7 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
     ReservaDecisionService,
     ReservaBloqueoAnuncianteService,
     ReservaReembolsoAplicacionService,
+    LiquidacionesService,
   ],
 })
 export class ReservasModule {}

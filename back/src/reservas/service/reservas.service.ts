@@ -18,7 +18,7 @@ import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.enti
 import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { ReservaDecisionService } from './reserva-decision.service';
-import { generarCodigoAlojamiento } from './reservas.utils';
+import { generarCodigoAlojamiento, esLiquidacionResuelta } from './reservas.utils';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
 import { fechaArgentina } from '../../common/utils/fechas';
@@ -566,12 +566,7 @@ export class ReservasService
 
   /** El dinero ya se pagó al propietario o se devolvió al inquilino. */
   liquidacionResuelta(reserva: Reserva): boolean {
-    const estadosResueltos: EstadoLiquidacionReserva[] = [
-      EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
-      EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
-      EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
-    ];
-    return estadosResueltos.includes(reserva.estado_liquidacion);
+    return esLiquidacionResuelta(reserva.estado_liquidacion);
   }
 
   codigoValidado(reserva: Reserva): boolean {
