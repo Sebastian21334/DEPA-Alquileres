@@ -33,6 +33,7 @@
     "test:cuit-email-historicos": "npm run build && node --test test/cuit-email-historicos.test.cjs",
     "test:baja-registro-email": "npm run build && node --test test/baja-registro-email.test.cjs",
     "test:liquidaciones": "npm run build && node --test test/liquidaciones.test.cjs",
+    "test:bloqueo-anunciante": "npm run build && node --test test/bloqueo-anunciante.test.cjs",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config test/jest/jest.config.cjs",
     "db:retirar-metodo-pago": "node scripts/retirar-metodo-pago.cjs --aplicar",
     "deploy": "nest deploy",
