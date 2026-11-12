@@ -23,6 +23,17 @@ import { AnunciantesService } from '../../anunciantes/service/anunciantes.servic
 export class ReservaReprogramacionService {
   constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reservasService: ReservasService, private readonly anunciantesService: AnunciantesService) {}
 
+  async listarFechasDisponibles(id: number, idUsuario: number) {
+    const reserva = await this.reservasService.buscarPorId(id, idUsuario);
+    if (!this.reservasService.esDelInquilino(reserva, idUsuario)) {
+      throw new ForbiddenException('Solo el inquilino puede consultar fechas para reprogramar');
+    }
+    if (!reserva.publicacion) {
+      throw new BadRequestException('La publicación de la reserva ya no está disponible');
+    }
+    return this.disponibilidadService.listarParaReprogramacion(reserva.publicacion.id, reserva.id);
+  }
+
   /** El inquilino puede cambiar sus fechas si el nuevo rango sigue libre. */
   async actualizarFechas(id: number, dto: ActualizarFechasReservaDto, idUsuarioQueOpera: number): Promise<Reserva> {
     const idCambio = await this.reservaRepository.conTransaccion(

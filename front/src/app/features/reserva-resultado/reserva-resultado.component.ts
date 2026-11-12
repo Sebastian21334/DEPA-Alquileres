@@ -3,12 +3,13 @@ import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { etiquetasEstadia, puedeConsultarCodigo } from '../../shared/utils/reservation-state';
+import { etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LucideCheck, LucideCopy, LucideKeyRound } from '@lucide/angular';
+import { LucideCalendar, LucideCheck, LucideCopy, LucideKeyRound } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
 import { ChatService } from '../../core/services/chat.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ReservaReprogramacionComponent } from './reserva-reprogramacion.component';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import {
   CodigoAlojamiento,
@@ -20,7 +21,7 @@ import {
 @Component({
   selector: 'app-reserva-resultado',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck],
+  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, ReservaReprogramacionComponent],
   templateUrl: './reserva-resultado.component.html',
   styleUrl: './reserva-resultado.component.scss',
 })
@@ -42,12 +43,20 @@ export class ReservaResultadoComponent {
   protected readonly copiado = signal(false);
   protected readonly errorCopiar = signal('');
   protected readonly reintentoCodigo = signal(0);
+  protected readonly imagenFallida = signal<string | null>(null);
+  protected readonly reprogramando = signal(this.route.snapshot.queryParamMap.get('reprogramar') === '1');
+  protected readonly avisoReprogramacion = signal('');
 
   protected readonly reserva = computed(() => this.resumen()?.reserva ?? null);
   protected readonly pago = computed(() => this.resumen()?.pago ?? null);
   protected readonly esInquilino = computed(
     () => this.reserva()?.usuario?.id === Number(this.auth.currentUser()?.sub),
   );
+  protected readonly puedeCambiarFechas = computed(() => {
+    const reserva = this.reserva();
+    return !!reserva && this.esInquilino() && puedeReprogramar(reserva);
+  });
+
   protected readonly mostrarCodigo = computed(() => {
     const reserva = this.reserva();
     return this.esInquilino() && !!reserva &&
@@ -116,7 +125,9 @@ export class ReservaResultadoComponent {
 
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
     activarActualizacionReservas(() => {
-      if (!this.cargando()) this.cargarResumen(idReserva, true);
+      if (!this.cargando() && !(this.reprogramando() && this.puedeCambiarFechas())) {
+        this.cargarResumen(idReserva, true);
+      }
     });
     const paymentId =
       this.route.snapshot.queryParamMap.get('payment_id') ??
@@ -131,6 +142,26 @@ export class ReservaResultadoComponent {
     }
 
     this.cargarResumen(idReserva);
+  }
+
+  protected abrirReprogramacion(): void {
+    if (!this.puedeCambiarFechas() || this.reprogramando()) return;
+    this.consultaResumen?.unsubscribe();
+    this.avisoReprogramacion.set('');
+    this.reprogramando.set(true);
+  }
+
+  protected guardarReprogramacion(actualizada: Reserva): void {
+    this.consultaResumen?.unsubscribe();
+    this.resumen.update((resumen) => resumen ? { ...resumen, reserva: actualizada } : null);
+    this.reprogramando.set(false);
+    const cambios = actualizada.reprogramaciones ?? [];
+    const ultimo = cambios.reduce<(typeof cambios)[number] | undefined>(
+      (mayor, cambio) => !mayor || cambio.id > mayor.id ? cambio : mayor, undefined,
+    );
+    this.avisoReprogramacion.set(ultimo && !ultimo.notificada_en
+      ? 'Fechas actualizadas. El aviso al anunciante está pendiente. Podés reintentarlo en Mis reservas.'
+      : 'Fechas actualizadas. Se mantuvieron la duración y el total pagado.');
   }
 
   protected reintentarCodigo(): void {

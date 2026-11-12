@@ -13,6 +13,38 @@
         <a class="acct-btn acct-btn--primary" routerLink="/mis-reservas">Ir a Mis reservas</a>
       </section>
     } @else if (reserva(); as item) {
+      @if (puedeCambiarFechas()) {
+        <nav class="reservation-breadcrumb" aria-label="Ubicación">
+          <a routerLink="/mis-reservas">Mis reservas</a><span aria-hidden="true">/</span><span>Reserva #{{ item.id }}</span>
+        </nav>
+        <header class="reservation-heading">
+          <h1>Detalle de la reserva</h1>
+          <button type="button" class="acct-btn change-dates" [attr.aria-expanded]="reprogramando()" (click)="abrirReprogramacion()">
+            <svg lucideCalendar [size]="18" aria-hidden="true"></svg> Cambiar fechas
+          </button>
+        </header>
+        <section class="receipt-card reservation-summary">
+          @if (item.publicacion?.imagenes?.[0]?.url; as portada) {
+            @if (imagenFallida() !== portada) {
+              <img [src]="portada" alt="" (error)="imagenFallida.set(portada)" />
+            }
+          }
+          <div class="reservation-summary__stay">
+            <h2>{{ item.publicacion?.titulo }}</h2><span class="reservation-confirmed">Confirmada</span>
+            <dl>
+              <div><dt>Ingreso</dt><dd>{{ fecha(item.fecha_inicio) }}</dd></div>
+              <div><dt>Salida</dt><dd>{{ fecha(item.fecha_fin) }}</dd></div>
+            </dl>
+          </div>
+          <div class="reservation-summary__total">
+            <span>Total</span>
+            <strong>{{ monto(item.importe_contratado ?? item.monto_pago, item.moneda_contratada ?? 'ARS') }}</strong>
+          </div>
+        </section>
+        @if (reprogramando()) {
+          <app-reserva-reprogramacion [reserva]="item" (cancelar)="reprogramando.set(false)" (guardada)="guardarReprogramacion($event)" />
+        }
+      } @else {
       <header
         class="receipt-hero"
         [class.is-approved]="item.estado_pago === 'APROBADO'"
@@ -28,6 +60,10 @@
         </div>
         <a class="acct-btn acct-btn--ghost" routerLink="/mis-reservas">Ver todas mis reservas</a>
       </header>
+      }
+      @if (avisoReprogramacion()) {
+        <p class="receipt-card reservation-notice" role="status">{{ avisoReprogramacion() }}</p>
+      }
 
       <div class="receipt-grid">
         <section class="receipt-card stay-card">
@@ -46,6 +82,7 @@
               >
             }
           </div>
+          @if (!puedeCambiarFechas()) {
           <div class="date-grid">
             <div>
               <span>Ingreso</span><strong>{{ fecha(item.fecha_inicio) }}</strong
@@ -56,6 +93,7 @@
               ><small>Último día incluido</small>
             </div>
           </div>
+          }
           @if (mostrarCodigo()) {
             <section class="entry-code" aria-labelledby="entry-code-title">
               <div class="entry-code__heading">

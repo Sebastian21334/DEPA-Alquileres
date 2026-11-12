@@ -102,8 +102,10 @@ export class ReservaRepository implements IReservaRepository {
           ciudad: true,
           provincia: true,
           tipoMoneda: true,
+          imagenes: true,
         },
       },
+      order: { publicacion: { imagenes: { orden: 'ASC', id: 'ASC' } } },
     });
   }
 

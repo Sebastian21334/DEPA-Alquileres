@@ -2,6 +2,7 @@ import { EstadoReclamo } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
+import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Reclamo } from '../entity/reclamo.entity';
 import { ReclamoEvidencia } from '../entity/reclamo-evidencia.entity';
 import { ReclamoMensaje } from '../entity/reclamo-mensaje.entity';
@@ -12,7 +13,7 @@ const RELACIONES_RECLAMO: FindOptionsRelations<Reclamo> = {
   inquilino: true,
   anunciante: true,
   evidencias: true,
-  mensajes: { autor: true },
+  mensajes: { autor: { rol: true } },
 };
 
 @Injectable()
@@ -46,12 +47,19 @@ export class ReclamosRepository implements IReclamosRepository {
     });
   }
 
-  listarAdministracion(): Promise<Reclamo[]> {
-    return this.reclamos.find({
-      relations: RELACIONES_RECLAMO,
+  async listarAdministracion(): Promise<Reclamo[]> {
+    const reclamos = await this.reclamos.find({
+      relations: {
+        ...RELACIONES_RECLAMO,
+        reserva: { publicacion: { imagenes: true, anunciante: { usuario: true } }, usuario: true },
+      },
       order: { id: 'DESC' },
       take: 200,
     });
+    for (const reclamo of reclamos) {
+      reclamo.reserva?.publicacion?.imagenes?.sort((a, b) => a.orden - b.orden || a.id - b.id);
+    }
+    return reclamos;
   }
 
   buscarPorId(id: number): Promise<Reclamo | null> {
@@ -73,7 +81,12 @@ export class ReclamosRepository implements IReclamosRepository {
     return this.evidencias.findOneBy({ id: idEvidencia, reclamo: { id: idReclamo } });
   }
 
-  guardarMensaje(mensaje: Partial<ReclamoMensaje>): Promise<ReclamoMensaje> {
-    return this.mensajes.save(this.mensajes.create(mensaje));
+  async guardarMensaje(mensaje: Omit<Partial<ReclamoMensaje>, 'autor'> & { autor: Pick<Usuario, 'id'> }): Promise<ReclamoMensaje> {
+    const autor = await this.mensajes.manager.getRepository(Usuario).findOneOrFail({
+      where: { id: mensaje.autor.id },
+      select: { id: true, nombre: true, apellido: true, rol: { id: true, nombre: true } },
+      relations: { rol: true },
+    });
+    return this.mensajes.save(this.mensajes.create({ ...mensaje, autor }));
   }
 }

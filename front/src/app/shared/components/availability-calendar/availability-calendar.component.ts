@@ -3,9 +3,9 @@ import {
   FechaDisponible,
   FechaDisponibleAdministracion,
 } from '../../services/availability.service';
-import { RentalDateRange, isRentalRangeAvailable, rentalDays } from '../../utils/rental-dates';
+import { RentalDateRange, availableRentalStarts, isRentalRangeAvailable, rentalDays, rentalEnd } from '../../utils/rental-dates';
 
-export type CalendarMode = 'select' | 'manage' | 'setup';
+export type CalendarMode = 'select' | 'manage' | 'setup' | 'reschedule';
 interface CalendarDay {
   iso: string;
   day: number;
@@ -25,10 +25,18 @@ export class AvailabilityCalendarComponent {
   readonly selectedStart = input<string | null>(null);
   readonly selectedEnd = input<string | null>(null);
   readonly loading = input(false);
+  readonly fixedDays = input(1);
+  readonly currentStart = input<string | null>(null);
+  readonly locked = input(false);
   @Output() rangeChange = new EventEmitter<RentalDateRange>();
   @Output() availabilityToggle = new EventEmitter<FechaDisponibleAdministracion>();
 
-  protected readonly today = this.toIso(new Date());
+  protected get today(): string {
+    const now = new Date();
+    return this.mode() === 'reschedule'
+      ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(now)
+      : this.toIso(now);
+  }
   protected readonly month = signal(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   protected readonly selectionType = signal<'single' | 'range'>('range');
   protected readonly activeField = signal<'start' | 'end'>('start');
@@ -65,10 +73,14 @@ export class AvailabilityCalendarComponent {
     }
     return result;
   });
+  protected readonly monthLabel = computed(() =>
+    new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(this.month()),
+  );
+  private readonly fixedStarts = computed(() => availableRentalStarts(this.dates(), this.fixedDays()));
   protected readonly preview = computed(() => {
     const start = this.selectedStart();
     const hover = this.hoveredDate();
-    if (!start || !hover || this.selectedEnd() || this.selectionType() === 'single') return null;
+    if (this.mode() === 'reschedule' || !start || !hover || this.selectedEnd() || this.selectionType() === 'single') return null;
     const range = { start: start < hover ? start : hover, end: start < hover ? hover : start };
     return this.canSelectRange(range.start, range.end) ? range : null;
   });
@@ -76,7 +88,7 @@ export class AvailabilityCalendarComponent {
 
   constructor() {
     effect(() => {
-      const start = this.selectedStart();
+      const start = this.selectedStart() ?? this.currentStart();
       const first = this.dates()
         .filter(
           (day) =>
@@ -149,6 +161,10 @@ export class AvailabilityCalendarComponent {
     }
     this.error.set('');
     this.hoveredDate.set(null);
+    if (this.mode() === 'reschedule') {
+      this.rangeChange.emit({ start: day.iso, end: rentalEnd(day.iso, this.fixedDays()) });
+      return;
+    }
     if (this.selectionType() === 'single') {
       this.rangeChange.emit({ start: day.iso, end: day.iso });
       return;
@@ -172,7 +188,8 @@ export class AvailabilityCalendarComponent {
   }
 
   protected isDisabled(day: CalendarDay): boolean {
-    if (day.past || this.loading()) return true;
+    if (day.past || this.loading() || this.locked()) return true;
+    if (this.mode() === 'reschedule') return day.iso === this.currentStart() || !this.fixedStarts().has(day.iso);
     if (this.mode() === 'setup') return false;
     if (this.mode() === 'manage')
       return (

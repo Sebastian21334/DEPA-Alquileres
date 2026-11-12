@@ -91,7 +91,17 @@ export interface AdminReembolso {
   estado: 'PENDIENTE' | 'EN_PROCESO' | 'APROBADO' | 'RECHAZADO' | 'FALLIDO' | 'CANCELADO';
   motivo: string;
   creado_en: string;
-  reserva?: { id: number; publicacion?: { titulo?: string } | null } | null;
+  ejecucion_automatica?: boolean;
+  referencia_externa?: string | null;
+  resuelto_en?: string | null;
+  pago?: { id: number; payment_id?: string | null } | null;
+  reserva?: {
+    id: number;
+    fecha_inicio?: string | null;
+    fecha_fin?: string | null;
+    usuario?: { nombre?: string; apellido?: string } | null;
+    publicacion?: { id?: number; titulo?: string } | null;
+  } | null;
 }
 
 export interface AdminCancellationRequest {
@@ -129,6 +139,10 @@ export class AdminService {
       `${this.api}/publicaciones/administracion/${id}/baja`, { motivo },
     );
   }
+  obtenerPerfilUsuario(id: number) {
+    return this.http.get<AdminUser & { foto_url: string | null }>(`${this.api}/usuarios/administracion/${id}`);
+  }
+
   listarUsuarios(pagina = 1, q = '') {
     const params = new HttpParams().set('pagina', pagina).set('limite', 10).set('q', q);
     return this.http.get<AdminPage<AdminUser> & { totalRegistros: number }>(`${this.api}/usuarios/administracion`, { params });
@@ -163,7 +177,7 @@ export class AdminService {
       observacion,
     });
   }
-  registrarReembolso(id: number, referencia: string) {
+  registrarReembolso(id: number, referencia?: string) {
     return this.http.patch(`${this.api}/reservas/reembolsos/${id}/manual`, {
       referencia,
     });

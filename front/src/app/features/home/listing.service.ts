@@ -46,6 +46,10 @@ export class ListingService {
     return this.http.get<Publicacion>(`${this.baseUrl}/${id}`);
   }
 
+  getByIdForAdmin(id: number): Observable<Publicacion> {
+    return this.http.get<Publicacion>(`${this.baseUrl}/administracion/${id}`);
+  }
+
   registerView(id: number): Observable<{ visualizaciones: number }> {
     return this.http.post<{ visualizaciones: number }>(`${this.baseUrl}/${id}/visualizacion`, {});
   }

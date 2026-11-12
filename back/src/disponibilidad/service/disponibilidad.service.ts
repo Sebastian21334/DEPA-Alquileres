@@ -116,6 +116,14 @@ export class DisponibilidadService {
     return fechas.map(({ fecha, disponible }) => ({ fecha, disponible }));
   }
 
+  async listarParaReprogramacion(idPublicacion: number, idReserva: number): Promise<FechaDisponibilidadPublicaDto[]> {
+    const fechas = await this.fechaRepository.buscarPorPublicacionParaAdministracion(idPublicacion);
+    return fechas.map(({ fecha, disponible, reserva }) => ({
+      fecha,
+      disponible: reserva ? reserva.id === idReserva : disponible,
+    }));
+  }
+
   async listarPorPublicacionParaAdministracion(idPublicacion: number): Promise<FechaDisponibilidadAdministracionDto[]> {
     const fechas =
       await this.fechaRepository.buscarPorPublicacionParaAdministracion(

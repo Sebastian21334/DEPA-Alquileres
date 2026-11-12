@@ -175,7 +175,7 @@ export class ReclamosService {
     }
     const mensaje = await this.reclamos.guardarMensaje({
       reclamo,
-      autor: { id: idUsuario } as never,
+      autor: { id: idUsuario },
       texto: dto.texto.trim(),
       visible_para: dto.visible_para ?? VisibilidadMensajeReclamo.TODOS,
     });

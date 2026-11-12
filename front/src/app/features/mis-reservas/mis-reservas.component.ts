@@ -1,9 +1,8 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { LucideCalendar, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
-import { rentalDays, isRentalRangeAvailable } from '../../shared/utils/rental-dates';
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
+import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, EMPTY, finalize, forkJoin, of, Subscription, switchMap } from 'rxjs';
+import { catchError, finalize, forkJoin, of, Subscription, switchMap } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
@@ -11,12 +10,11 @@ import {
   ReprogramacionReserva,
   Reclamo,
 } from '../../shared/services/reservation.service';
-import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo } from '../../shared/utils/reservation-state';
+import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
@@ -26,7 +24,7 @@ import { ClaimHistoryComponent } from '../../shared/components/claim-history/cla
   standalone: true,
   imports: [
     RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, NgTemplateOutlet,
-    LucideCalendar, LucideChevronRight, LucideEllipsis, LucideExternalLink,
+    LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
   ],
   templateUrl: './mis-reservas.component.html',
@@ -38,11 +36,10 @@ export class MisReservasComponent {
   private readonly perfil = inject(PerfilService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly calendarioApi = inject(AvailabilityService);
   private readonly destroyRef = inject(DestroyRef);
-  private consultaCalendario?: Subscription;
   private consultaReservas?: Subscription;
   protected readonly estadiaActiva = estadiaActiva;
+  protected readonly puedeReprogramar = puedeReprogramar;
   protected readonly imagenesConError = signal<Record<number, string>>({});
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
   protected readonly esAnunciante = this.perfil.esAnuncianteVerificado;
@@ -64,46 +61,20 @@ export class MisReservasComponent {
   protected readonly codigos = signal<Record<number, string>>({});
   protected codigoIngresado: Record<number, string> = {};
   protected readonly mensaje = signal('');
-  protected readonly editando = signal<Reserva | null>(null);
+  private readonly dialogoCancelacion = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoCancelacion');
+  private consultaCancelacion?: Subscription;
+  private accionCancelacion?: HTMLButtonElement;
+  protected readonly reservaACancelar = signal<Reserva | null>(null);
+  protected readonly estadoCancelacion = signal<'consultando' | 'formulario' | 'pendiente' | 'error'>('consultando');
+  protected readonly motivoCancelacion = signal('');
+  protected readonly errorCancelacion = signal('');
+  protected readonly enviandoCancelacion = signal(false);
+
   protected readonly reclamoAbierto = signal<Reserva | null>(null);
   protected readonly reclamoCategoria = signal<Reclamo['categoria']>('OTRO');
   protected readonly reclamoDescripcion = signal('');
   protected readonly reclamoArchivos = signal<File[]>([]);
   protected readonly reclamoEnviando = signal(false);
-  protected readonly inicioNuevo = signal('');
-  protected readonly calendario = signal<FechaDisponible[]>([]);
-  protected readonly cargandoCalendario = signal(false);
-  protected readonly errorCalendario = signal('');
-  protected readonly finNuevo = computed(() => {
-    const inicio = this.inicioNuevo();
-    const reserva = this.editando();
-    if (!reserva || !/^\d{4}-\d{2}-\d{2}$/.test(inicio)) return '';
-    const fecha = new Date(`${inicio}T00:00:00Z`);
-    if (!Number.isFinite(fecha.getTime())) return '';
-    fecha.setUTCDate(fecha.getUTCDate() + this.dias(reserva) - 1);
-    return fecha.toISOString().slice(0, 10);
-  });
-  protected readonly rangoDisponible = computed(() => {
-    const reserva = this.editando();
-    const inicio = this.inicioNuevo();
-    const fin = this.finNuevo();
-    if (
-      !reserva ||
-      !fin ||
-      inicio < this.hoy() ||
-      this.cargandoCalendario() ||
-      this.errorCalendario()
-    )
-      return false;
-    const fechas = this.calendario().map((f) => {
-      const dia = f.fecha.slice(0, 10);
-      return dia >= reserva.fecha_inicio! && dia <= reserva.fecha_fin!
-        ? { ...f, disponible: true, reserva: null }
-        : f;
-    });
-    return isRentalRangeAvailable(inicio, fin, fechas);
-  });
-
   constructor() {
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
     if (paymentResult) {
@@ -145,11 +116,6 @@ export class MisReservasComponent {
         this.codigos.update((codigos) => Object.fromEntries(
           Object.entries(codigos).filter(([id]) => propias.some((r) => r.id === +id && puedeConsultarCodigo(r))),
         ));
-        const editada = this.editando();
-        if (editada) {
-          const vigente = propias.find((r) => r.id === editada.id);
-          if (!vigente || !this.puedeReprogramar(vigente)) this.cerrarReprogramacion();
-        }
         this.cargando.set(false);
       },
       error: (err: ApiError) => {
@@ -160,102 +126,10 @@ export class MisReservasComponent {
     });
   }
 
-  protected puedeReprogramar(reserva: Reserva): boolean {
-    return (
-      !reserva.cancelada &&
-      !reserva.finalizada &&
-      reserva.estado_estadia === 'CONFIRMADA' &&
-      !reserva.codigo_validado_en &&
-      reserva.estado_pago === 'APROBADO' &&
-      reserva.estado_liquidacion !== 'EN_REVISION' &&
-      reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' &&
-      reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' &&
-      !!reserva.publicacion &&
-      !!reserva.fecha_inicio &&
-      !!reserva.fecha_fin &&
-      this.dias(reserva) > 0 &&
-      (reserva.precio_unitario_contratado ?? 0) > 0 &&
-      (reserva.importe_contratado ?? 0) > 0 &&
-      !!reserva.moneda_contratada
-    );
-  }
-
-  protected dias(reserva: Reserva): number {
-    return rentalDays(reserva.fecha_inicio, reserva.fecha_fin);
-  }
-
   protected hoy(): string {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(new Date());
-  }
-
-  protected abrirReprogramacion(reserva: Reserva): void {
-    if (!this.puedeReprogramar(reserva) || this.ocupada() !== null) return;
-    this.error.set('');
-    this.mensaje.set('');
-    this.editando.set(reserva);
-    this.inicioNuevo.set(reserva.fecha_inicio!);
-    this.cargarCalendario(reserva);
-  }
-
-  protected cargarCalendario(reserva: Reserva): void {
-    this.consultaCalendario?.unsubscribe();
-    this.calendario.set([]);
-    this.errorCalendario.set('');
-    this.cargandoCalendario.set(true);
-    this.consultaCalendario = this.calendarioApi
-      .getByPublication(reserva.publicacion!.id)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (fechas) => {
-          this.calendario.set(fechas);
-          this.cargandoCalendario.set(false);
-        },
-        error: () => {
-          this.errorCalendario.set('No pudimos consultar las fechas disponibles.');
-          this.cargandoCalendario.set(false);
-        },
-      });
-  }
-
-  protected cerrarReprogramacion(): void {
-    if (this.ocupada() !== null) return;
-    this.consultaCalendario?.unsubscribe();
-    this.editando.set(null);
-  }
-
-  protected confirmarReprogramacion(): void {
-    const reserva = this.editando();
-    if (
-      !reserva || !this.puedeReprogramar(reserva) ||
-      !this.rangoDisponible() ||
-      this.inicioNuevo() === reserva.fecha_inicio ||
-      this.ocupada() !== null
-    )
-      return;
-    this.error.set('');
-    this.mensaje.set('');
-    this.iniciarOperacion(reserva.id);
-    this.reservasApi
-      .reschedule(reserva.id, this.inicioNuevo(), this.finNuevo())
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (actualizada) => {
-          this.reemplazar(actualizada);
-          this.cerrarReprogramacion();
-          this.mensaje.set(
-            this.avisosPendientes(actualizada).length
-              ? 'Fechas actualizadas. El correo al anunciante sigue pendiente; podés reintentar el aviso.'
-              : 'Fechas actualizadas. Avisamos al anunciante por correo. Se conserva el total pagado.',
-          );
-        },
-        error: (err: ApiError) => {
-          this.error.set(err.message);
-          this.ocupada.set(null);
-          if (err.status === 409) this.cargarCalendario(reserva);
-        },
-      });
   }
 
   protected ultimoCambio(reserva: Reserva): ReprogramacionReserva | undefined {
@@ -318,36 +192,74 @@ export class MisReservasComponent {
     );
   }
 
-  protected solicitarCancelacion(reserva: Reserva): void {
+  protected solicitarCancelacion(reserva: Reserva, accion: HTMLButtonElement): void {
     if (this.ocupada() !== null || !this.puedeSolicitarCancelacion(reserva)) return;
-    this.ocupada.set(reserva.id);
-    this.error.set('');
-    this.mensaje.set('');
-    this.reservasApi
-      .cancellationRequest(reserva.id)
+    this.accionCancelacion = accion;
+    this.reservaACancelar.set(reserva);
+    this.motivoCancelacion.set('');
+    this.estadoCancelacion.set('consultando');
+    this.errorCancelacion.set('');
+    this.dialogoCancelacion().nativeElement.showModal();
+    this.consultarCancelacion();
+  }
+
+  protected consultarCancelacion(): void {
+    const reserva = this.reservaACancelar();
+    if (!reserva) return;
+    this.estadoCancelacion.set('consultando');
+    this.errorCancelacion.set('');
+    this.consultaCancelacion?.unsubscribe();
+    this.consultaCancelacion = this.reservasApi.cancellationRequest(reserva.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (pendiente) => this.estadoCancelacion.set(pendiente ? 'pendiente' : 'formulario'),
+        error: (err: ApiError) => {
+          this.estadoCancelacion.set('error');
+          this.errorCancelacion.set(err.message);
+        },
+      });
+  }
+
+  protected enviarCancelacion(): void {
+    const reserva = this.reservaACancelar();
+    const motivo = this.motivoCancelacion().trim();
+    if (!reserva || this.estadoCancelacion() !== 'formulario' || this.enviandoCancelacion() ||
+        motivo.length < 10 || motivo.length > 500) return;
+    this.errorCancelacion.set('');
+    this.enviandoCancelacion.set(true);
+    this.reservasApi.requestCancellation(reserva.id, motivo)
       .pipe(
-        switchMap((pendiente) => {
-          if (pendiente) {
-            this.toast.mostrar('Ya enviaste una solicitud de cancelación para esta reserva. Está en revisión.');
-            return EMPTY;
-          }
-          const motivo = window
-            .prompt('Motivo de la cancelación. La solicitud será revisada por un administrador:')
-            ?.trim();
-          if (!motivo) return EMPTY;
-          if (motivo.length < 10 || motivo.length > 500) {
-            this.toast.mostrar('El motivo debe tener entre 10 y 500 caracteres.', 'error');
-            return EMPTY;
-          }
-          return this.reservasApi.requestCancellation(reserva.id, motivo);
-        }),
         takeUntilDestroyed(this.destroyRef),
-        finalize(() => this.ocupada.set(null)),
+        finalize(() => this.enviandoCancelacion.set(false)),
       )
       .subscribe({
-        next: () => this.toast.mostrar('Solicitud de cancelación enviada. Está en revisión.', 'exito'),
-        error: (err: ApiError) => this.toast.mostrar(err.message, 'error'),
+        next: () => {
+          this.estadoCancelacion.set('pendiente');
+          this.toast.mostrar('Solicitud de cancelación enviada. Está en revisión.', 'exito');
+        },
+        error: (err: ApiError) => this.errorCancelacion.set(err.message),
       });
+  }
+
+  protected cerrarCancelacion(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.enviandoCancelacion()) return;
+    this.consultaCancelacion?.unsubscribe();
+    this.dialogoCancelacion().nativeElement.close();
+  }
+
+  protected limpiarCancelacion(): void {
+    this.reservaACancelar.set(null);
+    this.accionCancelacion?.focus();
+    this.accionCancelacion = undefined;
+  }
+
+  protected fechasCancelacion(reserva: Reserva): string {
+    if (!reserva.fecha_inicio || !reserva.fecha_fin) return 'Fechas sin informar';
+    const inicio = new Date(reserva.fecha_inicio);
+    const fin = new Date(reserva.fecha_fin);
+    return new Intl.DateTimeFormat('es-AR', { dateStyle: 'long', timeZone: 'UTC' })
+      .formatRange(inicio, fin);
   }
 
   protected verCodigo(reserva: Reserva): void {

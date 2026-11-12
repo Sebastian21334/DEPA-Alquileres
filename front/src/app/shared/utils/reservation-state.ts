@@ -1,4 +1,5 @@
 import type { Reserva } from '../services/reservation.service';
+import { rentalDays } from './rental-dates';
 
 export type EstadoEstadia =
   | 'PENDIENTE_PAGO'
@@ -34,6 +35,19 @@ export function estadiaActiva(reserva: Reserva): boolean {
     !reserva.finalizada &&
     ['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(reserva.estado_estadia)
   );
+}
+
+export function puedeReprogramar(reserva: Reserva): boolean {
+  return estadiaActiva(reserva) &&
+    reserva.estado_estadia === 'CONFIRMADA' &&
+    !reserva.codigo_validado_en &&
+    !['EN_REVISION', 'PAGADO_PROPIETARIO', 'DEVUELTO_INQUILINO', 'DEVUELTO_PARCIAL_INQUILINO']
+      .includes(reserva.estado_liquidacion) &&
+    !!reserva.publicacion &&
+    rentalDays(reserva.fecha_inicio, reserva.fecha_fin) > 0 &&
+    Number(reserva.precio_unitario_contratado) > 0 &&
+    Number(reserva.importe_contratado) > 0 &&
+    ['ARS', 'USD'].includes(reserva.moneda_contratada ?? '');
 }
 
 export function puedeConsultarCodigo(reserva: Reserva): boolean {

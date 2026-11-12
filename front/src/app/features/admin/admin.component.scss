@@ -534,6 +534,13 @@ select {
 .settlement-card h3 { margin: 10px 0 7px; }
 .settlement-card p { margin: 4px 0; color: #52636c; }
 .settlement-card .actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.claim-card {
+  border-color: #dce4ef;
+  color: #101d36;
+}
+.claim-card > .actions { margin-top: 0; }
+.claim-card .button--ghost { border: 1px solid #10233f; color: #10233f; }
+.button--resolve-claim { background: #081b38; color: #fff; }
 .settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }
 .alert {
   margin: 18px 0;
@@ -575,3 +582,17 @@ select {
   .settlement-card .actions { justify-content: stretch; }
   .settlement-card .actions .button { flex: 1; }
 }
+
+.refund-dialog { box-sizing: border-box; width: min(640px, calc(100% - 32px)); overflow-wrap: anywhere; }
+.refund-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
+.refund-meta, .refund-data dt, .refund-help { color: #52636c; }
+.refund-amount { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .85rem; border-radius: 10px; background: #edf5f1; }
+.refund-amount strong { font-size: 1.25rem; }
+.refund-amount .status { margin-left: auto; }
+.refund-data { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem 1rem; margin: 0; }
+.refund-data dt { font-size: .85rem; }
+.refund-data dd { margin: .2rem 0 0; font-weight: 650; }
+.refund-reason { grid-column: 1 / -1; padding: .75rem; border-radius: 8px; background: #f4f6f8; }
+.refund-reason dd { white-space: pre-wrap; }
+.refund-dialog input { box-sizing: border-box; width: 100%; padding: .65rem .75rem; border: 1px solid #9baab4; border-radius: 8px; font: inherit; }
+.refund-error { color: #a12525; }

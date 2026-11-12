@@ -62,6 +62,14 @@ export class UsuariosController {
     return this.usuariosService.listarBloqueados();
   }
 
+  @Get('administracion/:id')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  obtenerPerfilAdministracion(@Param('id', ParseIntPipe) id: number) {
+    return this.usuariosService.obtenerPerfil(id);
+  }
+
   @Post(':id/bloqueo/responder')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')

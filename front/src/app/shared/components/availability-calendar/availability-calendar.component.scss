@@ -317,3 +317,13 @@ button:disabled {
     min-height: 60px;
   }
 }
+
+.calendar--reschedule {
+  .calendar__month-label { text-align: center; text-transform: capitalize; }
+  .calendar__day:disabled { background: #edf0f4; color: #626d80; opacity: 1; }
+  .calendar__day.is-available:not(:disabled):not(.is-range) { background: #e6f9e8; color: #1e602e; }
+  .calendar__day.is-range { background: #fff0e8; color: #7e2914; }
+  .calendar__day.is-edge[aria-pressed='true'] { border: 1px solid #ae391c; }
+  .calendar__day.is-start { background: #ae391c; color: #fff; }
+  .legend-selected { background: #ae391c; }
+}
