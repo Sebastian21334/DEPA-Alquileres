@@ -38,6 +38,27 @@ El comando exige un certificado TLS válido para conexiones remotas y no
 imprime la cadena de conexión ante errores. Las bases locales conservan su
 configuración de conexión.
 
+# Liquidaciones de reservas (2026-11-12)
+
+Con el backend detenido y sobre una copia o base descartable, ejecutar desde `back/`:
+
+```sh
+node scripts/liquidaciones.cjs
+npm run db:liquidaciones
+```
+
+El primer comando informa si existe `public.liquidacion` y cuántas filas hay. El
+segundo aplica `20261112-liquidaciones.sql` en una transacción con bloqueo. La
+migración crea el registro auditable de la liquidación, completa una fila por
+reserva desde `reserva.estado_liquidacion` y no modifica ni elimina columnas de
+`reserva`. Es repetible: la segunda ejecución conserva las filas y los datos ya
+registrados por la aplicación. Si el catálogo `ambito`/`estado` todavía no
+existe, el runner aplica antes las migraciones de cancelaciones y de estados por
+ámbito.
+
+`reserva.estado_liquidacion` se mantiene como caché de compatibilidad; la
+entidad `Liquidacion` es la fuente de auditoría.
+
 # Cancelaciones, devoluciones, reclamos y contracargos
 
 Para habilitar el circuito del ítem 14, con el backend detenido y sobre una

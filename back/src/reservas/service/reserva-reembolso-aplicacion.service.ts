@@ -22,6 +22,7 @@ import {
 } from '../repository/reserva.repository.interface';
 import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservaDecisionService } from './reserva-decision.service';
+import { LiquidacionesService } from './liquidaciones.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 /**
@@ -37,6 +38,7 @@ export class ReservaReembolsoAplicacionService {
     private readonly reembolsosService: ReembolsosService,
     private readonly decision: ReservaDecisionService,
     private readonly ciclo: ReservaCicloVidaService,
+    private readonly liquidaciones: LiquidacionesService,
   ) {}
 
   async aplicarReembolsoConfirmado(
@@ -108,6 +110,7 @@ export class ReservaReembolsoAplicacionService {
         }
 
         const guardada = await reservaRepository.guardar(reserva);
+        await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
         if (cancelaReserva && puedeLiberarFechas) {
           await this.disponibilidadService.liberarReserva(
             reserva.id,

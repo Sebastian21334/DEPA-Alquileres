@@ -22,6 +22,7 @@ import { MOTIVO_CANCELACION_BLOQUEO } from '../reserva.constants';
 import { ReservaDecisionService } from './reserva-decision.service';
 import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservasService } from './reservas.service';
+import { LiquidacionesService } from './liquidaciones.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 export type ResultadoBloqueoAnunciante =
@@ -57,6 +58,7 @@ export class ReservaBloqueoAnuncianteService {
     private readonly reservasService: ReservasService,
     private readonly aplicacion: ReservaReembolsoAplicacionService,
     private readonly devolucion: ReservaBloqueoDevolucionService,
+    private readonly liquidaciones: LiquidacionesService,
   ) {}
 
   async cancelarReservasPorBloqueoAnunciante(
@@ -418,6 +420,7 @@ export class ReservaBloqueoAnuncianteService {
           );
           actual.fecha_resolucion_liquidacion = null;
           await reservaRepository.guardar(actual);
+          await this.liquidaciones.sincronizarDesdeReserva(actual, transaccion);
           return 'enRevision';
         }
         if (actual.cancelada && !this.esCancelacionPorBloqueo(actual))
@@ -445,6 +448,7 @@ export class ReservaBloqueoAnuncianteService {
           );
           actual.fecha_resolucion_liquidacion = null;
           await reservaRepository.guardar(actual);
+          await this.liquidaciones.sincronizarDesdeReserva(actual, transaccion);
           return 'enRevision';
         }
 
@@ -461,6 +465,7 @@ export class ReservaBloqueoAnuncianteService {
         );
         actual.fecha_resolucion_liquidacion = null;
         await reservaRepository.guardar(actual);
+        await this.liquidaciones.sincronizarDesdeReserva(actual, transaccion);
         await this.disponibilidadService.liberarReserva(
           actual.id,
           transaccion,
@@ -475,7 +480,7 @@ export class ReservaBloqueoAnuncianteService {
     motivo: string,
   ): Promise<void> {
     await this.reservaRepository.conTransaccion(
-      async (reservaRepository) => {
+      async (reservaRepository, transaccion) => {
         const actual = await reservaRepository.buscarPorId(reserva.id);
         if (!actual || this.decision.liquidacionResuelta(actual)) return;
         actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
@@ -485,6 +490,7 @@ export class ReservaBloqueoAnuncianteService {
         );
         actual.fecha_resolucion_liquidacion = null;
         await reservaRepository.guardar(actual);
+        await this.liquidaciones.sincronizarDesdeReserva(actual, transaccion);
       },
     );
   }
