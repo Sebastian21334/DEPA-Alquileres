@@ -10,10 +10,14 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  OneToOne,
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import { Pago } from '../../pagos/entity/pago.entity';
+import { Reembolso } from '../../reembolsos/entity/reembolso.entity';
 import { ReprogramacionReserva } from './reprogramacion-reserva.entity';
+import { Liquidacion } from './liquidacion.entity';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import type { ActorCancelacion } from '../actor-cancelacion';
 
@@ -269,4 +273,15 @@ export class Reserva {
   @ManyToOne(() => Publicacion, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Relation<Publicacion | null>;
+
+  // Registro auditable de la liquidación; la reserva conserva la caché del estado.
+  @OneToOne(() => Liquidacion, (liquidacion) => liquidacion.reserva)
+  liquidacion: Relation<Liquidacion | null>;
+
+  // Relaciones de lectura para la auditoría de la liquidación.
+  @OneToOne(() => Pago, (pago) => pago.reserva)
+  pago: Relation<Pago | null>;
+
+  @OneToMany(() => Reembolso, (reembolso) => reembolso.reserva)
+  reembolsos: Relation<Reembolso[]>;
 }

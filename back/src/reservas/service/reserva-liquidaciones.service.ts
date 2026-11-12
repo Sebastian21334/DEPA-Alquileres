@@ -30,17 +30,18 @@ import { fechaArgentina } from '../../common/utils/fechas';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { timingSafeEqual } from 'node:crypto';
 import { ReservasService } from './reservas.service';
+import { LiquidacionesService } from './liquidaciones.service';
 
 const MAX_INTENTOS_CODIGO = 5;
 
 @Injectable()
 export class ReservaLiquidacionesService {
-  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService) {}
+  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService) {}
 
   /** Devuelve el código únicamente al inquilino que realizó la reserva. */
   async consultarCodigoAlojamiento(id: number, idUsuario: number) {
     return this.reservaRepository.conTransaccion(
-      async (reservaRepository) => {
+      async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorIdConCodigo(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
@@ -64,8 +65,15 @@ export class ReservaLiquidacionesService {
           );
         }
         // Compatibilidad con reservas aprobadas antes de incorporar RF21.
-        if (this.asegurarCodigoAlojamiento(reserva, generarCodigoAlojamiento()))
+        const emitido = this.asegurarCodigoAlojamiento(
+          reserva,
+          generarCodigoAlojamiento(),
+        );
+        await this.liquidaciones.asegurarParaReserva(reserva, transaccion);
+        if (emitido) {
+          await this.liquidaciones.registrarRetencion(reserva, null, transaccion);
           await reservaRepository.guardar(reserva);
+        }
         return {
           reserva_id: reserva.id,
           codigo: reserva.codigo_alojamiento,
@@ -80,7 +88,7 @@ export class ReservaLiquidacionesService {
   /** El anunciante presenta el código entregado físicamente por el huésped. */
   async validarCodigoAlojamiento(id: number, codigo: string, idUsuarioAnunciante: number): Promise<Reserva> {
     const resultado = await this.reservaRepository.conTransaccion(
-      async (reservaRepository) => {
+      async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorIdConCodigo(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
@@ -114,6 +122,16 @@ export class ReservaLiquidacionesService {
         }
 
         const coincide = this.registrarIntentoCodigo(reserva, codigo);
+        await this.liquidaciones.asegurarParaReserva(reserva, transaccion);
+        if (!coincide && this.codigoBloqueado(reserva))
+          await this.liquidaciones.registrarRevision(
+            reserva,
+            reserva.observacion_liquidacion ??
+              'Código bloqueado después de cinco intentos incorrectos',
+            transaccion,
+          );
+        if (coincide)
+          await this.liquidaciones.registrarValidacionCodigo(reserva, transaccion);
         await reservaRepository.guardar(reserva);
         if (!coincide) {
           return new BadRequestException(
@@ -134,7 +152,7 @@ export class ReservaLiquidacionesService {
   /** El reclamo del inquilino congela cualquier liquidación manual pendiente. */
   async reportarProblema(id: number, motivo: string, idUsuario: number): Promise<Reserva> {
     return this.reservaRepository.conTransaccion(
-      async (reservaRepository) => {
+      async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
@@ -154,6 +172,13 @@ export class ReservaLiquidacionesService {
           );
         }
         this.registrarProblema(reserva, motivo);
+        await this.liquidaciones.asegurarParaReserva(reserva, transaccion);
+        await this.liquidaciones.registrarRevision(
+          reserva,
+          reserva.observacion_liquidacion ??
+            `Reclamo del inquilino: ${motivo.trim()}`,
+          transaccion,
+        );
         return this.reservasService.prepararRespuesta(await reservaRepository.guardar(reserva));
       },
     );
@@ -190,6 +215,15 @@ export class ReservaLiquidacionesService {
     const esDevolucion =
       dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO ||
       dto.estado === EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
+    let importeResolucion: number | null = null;
+    let monedaResolucion = 'ARS';
+
+    if (dto.estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO) {
+      const pago = await this.reembolsosService.buscarPagoPorReserva(id);
+      importeResolucion = pago
+        ? this.reembolsosService.saldoReembolsable(pago)
+        : Number(reserva.monto_pago);
+    }
 
     if (esDevolucion) {
       if (
@@ -217,6 +251,8 @@ export class ReservaLiquidacionesService {
         throw new ConflictException(
           `La devolución supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
         );
+      importeResolucion = importe;
+      monedaResolucion = pago.currency || 'ARS';
 
       await this.prepararLiquidacion(id);
       const existentes = await this.reembolsosService.listarPorReserva(id);
@@ -309,6 +345,18 @@ export class ReservaLiquidacionesService {
           dto.referencia,
           dto.observacion,
         );
+        await this.liquidaciones.registrarResolucion(
+          actual,
+          dto.estado,
+          {
+            importe: importeResolucion,
+            moneda: monedaResolucion,
+            referencia: dto.referencia ?? null,
+            observacion: dto.observacion ?? null,
+          },
+          idAdmin,
+          transaccion,
+        );
         // Solo se liberan fechas futuras de una reserva que todavía no comenzó.
         const hoy = fechaArgentina();
         if (
@@ -346,7 +394,7 @@ export class ReservaLiquidacionesService {
 
   private async prepararLiquidacion(id: number): Promise<void> {
     await this.reservaRepository.conTransaccion(
-      async (reservaRepository) => {
+      async (reservaRepository, transaccion) => {
         const actual = await reservaRepository.buscarPorId(id);
         if (!actual)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
@@ -358,6 +406,12 @@ export class ReservaLiquidacionesService {
         actual.observacion_liquidacion =
           'Devolución de liquidación en ejecución';
         actual.fecha_resolucion_liquidacion = null;
+        await this.liquidaciones.asegurarParaReserva(actual, transaccion);
+        await this.liquidaciones.registrarRevision(
+          actual,
+          actual.observacion_liquidacion,
+          transaccion,
+        );
         await reservaRepository.guardar(actual);
       },
     );

@@ -227,6 +227,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
     reservasService,
     aplicacion,
     devolucion,
+    { sincronizarDesdeReserva: async () => ({}) },
   );
 
   return { estado, pago, servicio };

@@ -55,6 +55,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
       ...(estadosPorAmbito ? ['20261110-estados-por-ambito.sql'] : []),
     ].map(leerMigracion);
     await db.exec(`BEGIN;\n${migraciones.join('\n')}\nCOMMIT;`);
+    if (estadosPorAmbito) await db.exec(leerMigracion('20261112-liquidaciones.sql'));
     await db.exec('SET search_path TO public');
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };
