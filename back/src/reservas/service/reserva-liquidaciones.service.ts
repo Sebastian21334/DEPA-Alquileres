@@ -27,11 +27,11 @@ import {
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { fechaArgentina } from '../../common/utils/fechas';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { timingSafeEqual } from 'node:crypto';
 import { ReservasService } from './reservas.service';
 
 const MAX_INTENTOS_CODIGO = 5;
-const TOLERANCIA_MONETARIA = 0.009;
 
 @Injectable()
 export class ReservaLiquidacionesService {
