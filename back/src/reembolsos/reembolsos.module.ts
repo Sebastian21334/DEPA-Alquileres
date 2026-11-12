@@ -8,7 +8,6 @@ import { ReembolsosRepository } from './repository/reembolsos.repository';
 import { REEMBOLSOS_REPOSITORY } from './repository/reembolsos.repository.interface';
 import { ReembolsosController } from './controller/reembolsos.controller';
 import { ReembolsosService } from './service/reembolsos.service';
-import { ReembolsosReconciliacionService } from './service/reembolsos-reconciliacion.service';
 import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.module';
 
 @Module({
@@ -22,7 +21,6 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
   controllers: [ReembolsosController],
   providers: [
     ReembolsosService,
-    ReembolsosReconciliacionService,
     ReembolsosRepository,
     { provide: REEMBOLSOS_REPOSITORY, useExisting: ReembolsosRepository },
   ],

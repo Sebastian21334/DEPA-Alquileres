@@ -67,6 +67,7 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
     ReservaCicloVidaService,
     ReservaDecisionService,
     ReservaBloqueoAnuncianteService,
+    ReservaReembolsoAplicacionService,
   ],
 })
 export class ReservasModule {}
