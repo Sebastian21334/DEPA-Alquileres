@@ -18,6 +18,7 @@ import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.enti
 import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { ReservaDecisionService } from './reserva-decision.service';
+import { LiquidacionesService } from './liquidaciones.service';
 import { generarCodigoAlojamiento, esLiquidacionResuelta } from './reservas.utils';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
@@ -68,7 +69,7 @@ export class ReservasService
   private timer?: ReturnType<typeof setInterval>;
   private expiracion?: Promise<number>;
 
-  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService, private readonly decision: ReservaDecisionService) {}
+  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService, private readonly decision: ReservaDecisionService, private readonly liquidaciones: LiquidacionesService) {}
 
   /**
    * Libera las reservas vencidas al iniciar y cada minuto. El estado se
@@ -318,6 +319,10 @@ export class ReservasService
 
         // Persistimos la reserva primero para obtener su ID antes de asociarlo a las fechas.
         const reservaGuardada = await reservaRepository.guardar(reserva);
+        await this.liquidaciones.sincronizarDesdeReserva(
+          reservaGuardada,
+          transaccion,
+        );
 
         // Primero se guarda la reserva para no enlazar fechas a una reserva sin ID.
         await this.disponibilidadService.marcarComoReservadas(
@@ -358,6 +363,10 @@ export class ReservasService
             'Pago aprobado sobre una reserva de un anunciante bloqueado o inactivo; requiere devolución',
           );
           const guardada = await reservaRepository.guardar(reserva);
+          await this.liquidaciones.sincronizarDesdeReserva(
+            guardada,
+            transaccion,
+          );
           await this.disponibilidadService.liberarReserva(id, transaccion);
           this.logger.warn(
             `La reserva ${reserva.id} recibió un pago aprobado con el anunciante bloqueado o inactivo; requiere devolución`,
@@ -373,6 +382,10 @@ export class ReservasService
             'Pago aprobado sobre una reserva cancelada por bloqueo; requiere revisión y devolución',
           );
           const guardada = await reservaRepository.guardar(reserva);
+          await this.liquidaciones.sincronizarDesdeReserva(
+            guardada,
+            transaccion,
+          );
           this.logger.warn(
             `La reserva ${reserva.id} recibió un pago tardío tras una cancelación por bloqueo; requiere devolución`,
           );
@@ -402,7 +415,6 @@ export class ReservasService
                 transaccion,
               );
               this.reactivarPago(reserva, fechaPago, generarCodigoAlojamiento());
-              return reservaRepository.guardar(reserva);
             } catch (error) {
               if (
                 !(error instanceof ConflictException) &&
@@ -410,6 +422,14 @@ export class ReservasService
               ) {
                 throw error;
               }
+            }
+            if (!reserva.cancelada) {
+              const reactivada = await reservaRepository.guardar(reserva);
+              await this.liquidaciones.sincronizarDesdeReserva(
+                reactivada,
+                transaccion,
+              );
+              return reactivada;
             }
           }
 
@@ -431,11 +451,18 @@ export class ReservasService
           this.logger.warn(
             `La reserva ${reserva.id} recibió un pago aprobado que no puede confirmarse: ${motivo}`,
           );
-          return reservaRepository.guardar(reserva);
+          const enRevision = await reservaRepository.guardar(reserva);
+          await this.liquidaciones.sincronizarDesdeReserva(
+            enRevision,
+            transaccion,
+          );
+          return enRevision;
         }
 
         this.registrarPagoAprobado(reserva, fechaPago, generarCodigoAlojamiento());
-        return reservaRepository.guardar(reserva);
+        const aprobada = await reservaRepository.guardar(reserva);
+        await this.liquidaciones.sincronizarDesdeReserva(aprobada, transaccion);
+        return aprobada;
       },
     );
 
@@ -459,6 +486,10 @@ export class ReservasService
 
         this.cerrarSinPago(reserva, estado, actor, motivo);
         const guardada = await reservaRepository.guardar(reserva);
+        await this.liquidaciones.sincronizarDesdeReserva(
+          guardada,
+          transaccion,
+        );
         await this.disponibilidadService.liberarReserva(id, transaccion);
         return guardada;
       },
@@ -524,6 +555,7 @@ export class ReservasService
       reserva.observacion_liquidacion = 'Reclamo del inquilino en revisión';
       reserva.fecha_resolucion_liquidacion = null;
       await reservas.guardar(reserva);
+      await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
       return reclamo;
     });
   }
@@ -654,7 +686,9 @@ export class ReservasService
       : EstadoLiquidacionReserva.RETENIDO;
     reserva.observacion_liquidacion =
       observacion?.trim() || 'Reclamo resuelto a favor del Anunciante';
-    return this.prepararRespuesta(await this.reservaRepository.guardar(reserva));
+    const guardada = await this.reservaRepository.guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada);
+    return this.prepararRespuesta(guardada);
   }
 
   async resolverReclamoConDevolucion(reserva: Reserva, total: boolean, observacion?: string): Promise<Reserva> {
@@ -662,7 +696,9 @@ export class ReservasService
     else this.aplicarReembolsoParcial(reserva);
     reserva.observacion_liquidacion =
       observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
-    return this.prepararRespuesta(await this.reservaRepository.guardar(reserva));
+    const guardada = await this.reservaRepository.guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada);
+    return this.prepararRespuesta(guardada);
   }
 
   async buscarParaContracargo(id: number): Promise<Reserva> {
@@ -678,7 +714,9 @@ export class ReservasService
     reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
     reserva.observacion_liquidacion =
       'Contracargo abierto: liquidación congelada hasta su resolución';
-    return this.prepararRespuesta(await this.reservaRepository.guardar(reserva));
+    const guardada = await this.reservaRepository.guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada);
+    return this.prepararRespuesta(guardada);
   }
 
   async restaurarPorContracargoGanado(reserva: Reserva, estadoLiquidacionPrevio: string | null): Promise<Reserva> {
@@ -688,7 +726,9 @@ export class ReservasService
       EstadoLiquidacionReserva.RETENIDO;
     reserva.observacion_liquidacion =
       'Contracargo resuelto a favor del Anunciante';
-    return this.prepararRespuesta(await this.reservaRepository.guardar(reserva));
+    const guardada = await this.reservaRepository.guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada);
+    return this.prepararRespuesta(guardada);
   }
 
   private restaurarPagoAprobado(reserva: Reserva): void {
@@ -723,6 +763,10 @@ export class ReservasService
           'Cancelación de reserva pendiente de pago',
         );
         const guardada = await reservaRepository.guardar(reserva);
+        await this.liquidaciones.sincronizarDesdeReserva(
+          guardada,
+          transaccion,
+        );
         await this.disponibilidadService.liberarReserva(
           reserva.id,
           transaccion,
@@ -877,6 +921,10 @@ export class ReservasService
         actual.observacion_liquidacion =
           'Cancelación con retención total; liquidación pendiente de revisión';
         await reservaRepository.guardar(actual);
+        await this.liquidaciones.sincronizarDesdeReserva(
+          actual,
+          transaccion,
+        );
         await this.disponibilidadService.liberarReserva(
           idReserva,
           transaccion,
@@ -936,6 +984,7 @@ export class ReservasService
     }
 
     const guardada = await this.reservaRepository.guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada);
     if (cancelaReserva && puedeLiberarFechas) {
       await this.reservaRepository.conTransaccion(
         async (_reservas, transaccion) => {

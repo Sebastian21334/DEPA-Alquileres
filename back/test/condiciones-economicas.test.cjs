@@ -78,6 +78,7 @@ function escenario(moneda = 'ARS') {
     { crearSolicitud: async () => ({}) },
     new ReservaEstadoService(publicaciones),
     new ReservaDecisionService(),
+    { sincronizarDesdeReserva: async () => ({}) },
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },

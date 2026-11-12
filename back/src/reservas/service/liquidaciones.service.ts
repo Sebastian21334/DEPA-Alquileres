@@ -62,6 +62,51 @@ export class LiquidacionesService {
     }
   }
 
+  /**
+   * Copia a la liquidación los cambios que la reserva mantiene en su caché de
+   * compatibilidad. No pisa la resolución administrativa ni un importe ya
+   * registrado.
+   */
+  async sincronizarDesdeReserva(reserva: Reserva, transaccion?: EntityManager): Promise<Liquidacion> {
+    const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
+    let cambios = false;
+
+    if (liquidacion.estado !== reserva.estado_liquidacion) {
+      liquidacion.estado = reserva.estado_liquidacion;
+      cambios = true;
+    }
+    if (liquidacion.observacion !== reserva.observacion_liquidacion) {
+      liquidacion.observacion = reserva.observacion_liquidacion;
+      cambios = true;
+    }
+    if (
+      reserva.referencia_liquidacion &&
+      liquidacion.referencia !== reserva.referencia_liquidacion
+    ) {
+      liquidacion.referencia = reserva.referencia_liquidacion;
+      cambios = true;
+    }
+    const fechaReserva = reserva.fecha_resolucion_liquidacion;
+    if (
+      fechaReserva &&
+      liquidacion.fecha_resolucion?.getTime() !== fechaReserva.getTime()
+    ) {
+      liquidacion.fecha_resolucion = fechaReserva;
+      cambios = true;
+    }
+    if (
+      esLiquidacionResuelta(reserva.estado_liquidacion) &&
+      liquidacion.importe == null
+    ) {
+      liquidacion.importe = Number(reserva.monto_pago);
+      cambios = true;
+    }
+
+    return cambios
+      ? this.liquidaciones.guardar(liquidacion, transaccion)
+      : liquidacion;
+  }
+
   /** Registra la decisión administrativa en la entidad y en la caché de la reserva. */
   async registrarResolucion(reserva: Reserva, estado: EstadoLiquidacionReserva, datos: ResolucionLiquidacionDatos, idAdmin: number, transaccion?: EntityManager): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
