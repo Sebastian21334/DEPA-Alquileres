@@ -156,6 +156,86 @@ test('registrarRevision deja la liquidación en revisión y limpia la fecha de r
   assert.equal(reserva.fecha_resolucion_liquidacion, null);
 });
 
+test('sincronizarDesdeReserva copia la caché sin pisar la resolución administrativa ni el importe', async () => {
+  const fecha = new Date('2026-02-03T04:05:06.000Z');
+  const fechaPago = new Date('2026-02-04T04:05:06.000Z');
+  const reserva = crearReserva({
+    estado_liquidacion: 'DEVUELTO_PARCIAL_INQUILINO',
+    referencia_liquidacion: 'ref-2',
+    observacion_liquidacion: 'devolución parcial registrada',
+    fecha_resolucion_liquidacion: fecha,
+  });
+  const repositorio = crearRepositorio();
+  repositorio.filas.set(1, {
+    id: 9,
+    reserva,
+    estado: 'EN_REVISION',
+    importe: 40,
+    moneda: 'ARS',
+    referencia: null,
+    observacion: null,
+    admin_resolucion: { id: 7 },
+    fecha_resolucion: null,
+    fecha_pago_propietario: fechaPago,
+  });
+  const service = new LiquidacionesService(repositorio);
+
+  const liquidacion = await service.sincronizarDesdeReserva(reserva);
+
+  assert.equal(liquidacion.estado, 'DEVUELTO_PARCIAL_INQUILINO');
+  assert.equal(liquidacion.observacion, 'devolución parcial registrada');
+  assert.equal(liquidacion.referencia, 'ref-2');
+  assert.equal(liquidacion.fecha_resolucion, fecha);
+  assert.equal(Number(liquidacion.importe), 40);
+  assert.equal(liquidacion.admin_resolucion.id, 7);
+  assert.equal(liquidacion.fecha_pago_propietario, fechaPago);
+});
+
+test('sincronizarDesdeReserva completa el importe de una liquidación resuelta sin importe', async () => {
+  const fecha = new Date('2026-02-03T04:05:06.000Z');
+  const reserva = crearReserva({
+    estado_liquidacion: 'DEVUELTO_INQUILINO',
+    fecha_resolucion_liquidacion: fecha,
+  });
+  const repositorio = crearRepositorio();
+  repositorio.filas.set(1, {
+    id: 9,
+    reserva,
+    estado: 'EN_REVISION',
+    importe: null,
+    moneda: 'ARS',
+    referencia: null,
+    observacion: null,
+    admin_resolucion: { id: 7 },
+    fecha_resolucion: null,
+    fecha_pago_propietario: null,
+  });
+  const service = new LiquidacionesService(repositorio);
+
+  const liquidacion = await service.sincronizarDesdeReserva(reserva);
+
+  assert.equal(Number(liquidacion.importe), 100);
+  assert.equal(liquidacion.estado, 'DEVUELTO_INQUILINO');
+});
+
+test('sincronizarDesdeReserva no guarda si la reserva no cambió', async () => {
+  const reserva = crearReserva();
+  const repositorio = crearRepositorio();
+  let guardados = 0;
+  const guardar = repositorio.guardar;
+  repositorio.guardar = async (liquidacion) => {
+    guardados += 1;
+    return guardar(liquidacion);
+  };
+  const service = new LiquidacionesService(repositorio);
+
+  await service.asegurarParaReserva(reserva);
+  const liquidacion = await service.sincronizarDesdeReserva(reserva);
+
+  assert.equal(guardados, 1);
+  assert.equal(liquidacion.estado, 'RETENIDO');
+});
+
 test('registrarDevolucion distingue el reembolso total del parcial', async () => {
   const service = new LiquidacionesService(crearRepositorio());
 

@@ -5,6 +5,7 @@ const { CatalogosService } = require('../dist/catalogos/service/catalogos.servic
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
+const { ReservaDecisionService } = require('../dist/reservas/service/reserva-decision.service');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { ReclamosService } = require('../dist/reclamos/service/reclamos.service');
 const { VerificacionAnuncianteService } = require('../dist/verificacion-anunciante/service/verificacion-anunciante.service');
@@ -71,7 +72,9 @@ test('consultar una solicitud activa conserva las relaciones que cargó el repos
     buscarPorId: async () => ({ ...reserva(), usuario: { id: 7 } }),
     buscarSolicitudCancelacionActiva: async () => solicitud,
   };
-  const servicio = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados);
+  const servicio = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados,
+    new ReservaDecisionService(),
+    { sincronizarDesdeReserva: async () => ({}) });
   const respuesta = await servicio.consultarSolicitudCancelacion(1, 7);
   assert.deepEqual(respuesta, solicitud);
   assert.equal(Object.hasOwn(respuesta, 'reserva'), false);

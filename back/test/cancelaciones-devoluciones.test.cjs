@@ -14,6 +14,7 @@ const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolso
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
+const { ReservaDecisionService } = require('../dist/reservas/service/reserva-decision.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
@@ -57,7 +58,9 @@ beforeEach(async () => {
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   reservas = new ReservasService({}, repositorio,
-    { liberarReserva: async () => {} }, {}, {}, {}, reembolsos, estadoReserva);
+    { liberarReserva: async () => {} }, {}, {}, {}, reembolsos, estadoReserva,
+    new ReservaDecisionService(),
+    { sincronizarDesdeReserva: async () => ({}) });
   reclamos = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia),
       source.getRepository(ReclamoMensaje)),
