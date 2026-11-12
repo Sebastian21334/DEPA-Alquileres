@@ -13,12 +13,14 @@ import { UbicacionModule } from './ubicacion/ubicacion.module';
 import { ImagenesModule } from './imagenes/imagenes.module';
 import { DisponibilidadModule } from './disponibilidad/disponibilidad.module';
 import { ReservasModule } from './reservas/reservas.module';
+import { BloqueoAnuncianteModule } from './bloqueo-anunciante/bloqueo-anunciante.module';
 import { MensajesModule } from './mensajes/mensajes.module';
 import { CatalogosModule } from './catalogos/catalogos.module';
 import { MailModule } from './mail/mail.module';
 import { FavoritosModule } from './favoritos/favoritos.module';
 import { PagosModule } from './pagos/pagos.module';
 import { ReclamosModule } from './reclamos/reclamos.module';
+import { ReembolsosAplicacionModule } from './reembolsos/reembolsos-aplicacion.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -55,12 +57,14 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ImagenesModule,
     DisponibilidadModule,
     ReservasModule,
+    BloqueoAnuncianteModule,
     MensajesModule,
     CatalogosModule,
     MailModule,
     FavoritosModule,
     PagosModule,
     ReclamosModule,
+    ReembolsosAplicacionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

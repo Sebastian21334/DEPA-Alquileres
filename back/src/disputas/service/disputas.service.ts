@@ -13,6 +13,7 @@ import {
 } from '../../reembolsos/entity/reembolso.entity';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { type Disputa, OrigenDisputa } from '../entity/disputa.entity';
 import { ResolverDisputaDto } from '../dto/resolver-disputa.dto';
 import {
@@ -108,7 +109,7 @@ export class DisputasService {
     }
 
     disputa.estado = estado;
-    disputa.resuelto_por = { id: idAdmin } as never;
+    disputa.resuelto_por = referenciaUsuario(idAdmin);
     disputa.resuelto_en = new Date();
     return this.respuestaAdministracion(await this.disputas.guardar(disputa));
   }

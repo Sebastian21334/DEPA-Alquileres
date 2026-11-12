@@ -7,6 +7,8 @@ import { AuthController } from '../../../src/auth/controller/auth.controller';
 import { AuthService } from '../../../src/auth/service/auth.service';
 import { AlmacenamientoService } from '../../../src/almacenamiento/service/almacenamiento.service';
 import { Anunciante } from '../../../src/anunciantes/entity/anunciante.entity';
+import { BloqueoAnuncianteController } from '../../../src/bloqueo-anunciante/controller/bloqueo-anunciante.controller';
+import { BloqueoAnuncianteService } from '../../../src/bloqueo-anunciante/service/bloqueo-anunciante.service';
 import { ANUNCIANTES_REPOSITORY } from '../../../src/anunciantes/repository/anunciantes.repository.interface';
 import { AnunciantesService } from '../../../src/anunciantes/service/anunciantes.service';
 import { Rol } from '../../../src/catalogos/entity/rol.entity';
@@ -16,6 +18,7 @@ import { PublicacionesController } from '../../../src/publicaciones/controller/p
 import { Publicacion } from '../../../src/publicaciones/entity/publicacion.entity';
 import { PUBLICACIONES_REPOSITORY } from '../../../src/publicaciones/repository/publicaciones.repository.interface';
 import { PublicacionesService } from '../../../src/publicaciones/service/publicaciones.service';
+import { ReservaBloqueoAnuncianteService } from '../../../src/reservas/service/reserva-bloqueo-anunciante.service';
 import { SeguridadModule } from '../../../src/seguridad/seguridad.module';
 import { UbicacionService } from '../../../src/ubicacion/service/ubicacion.service';
 import { UsuariosController } from '../../../src/usuarios/controller/usuarios.controller';
@@ -220,13 +223,19 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
 
   const modulo = await Test.createTestingModule({
     imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), SeguridadModule],
-    controllers: [AuthController, UsuariosController, PublicacionesController],
+    controllers: [
+      AuthController,
+      UsuariosController,
+      PublicacionesController,
+      BloqueoAnuncianteController,
+    ],
     providers: [
       AuthService,
       UsuariosService,
       UsuariosCredencialesService,
       AnunciantesService,
       PublicacionesService,
+      BloqueoAnuncianteService,
       usuariosRepository,
       { provide: PUBLICACIONES_REPOSITORY, useValue: publicaciones },
       {
@@ -237,6 +246,19 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
       { provide: UbicacionService, useValue: {} },
       { provide: MAIL_SERVICE, useValue: correo.servicio() },
       { provide: AlmacenamientoService, useValue: {} },
+      {
+        provide: ReservaBloqueoAnuncianteService,
+        useValue: {
+          cancelarReservasPorBloqueoAnunciante: async () => ({
+            canceladasPendientes: 0,
+            canceladasConDevolucion: 0,
+            enRevision: 0,
+            sinAccion: 0,
+            fallidas: 0,
+            detalles: [],
+          }),
+        },
+      },
     ],
   })
     .overrideModule(UsuariosConsultaModule)
