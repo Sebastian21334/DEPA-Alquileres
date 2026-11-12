@@ -1,6 +1,18 @@
 import type { Reserva } from '../entity/reserva.entity';
 import { randomBytes } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
+import { EstadoLiquidacionReserva } from '../../catalogos/estados';
+
+/** Estados en los que el dinero ya se pagó al propietario o se devolvió. */
+export const ESTADOS_LIQUIDACION_RESUELTOS: EstadoLiquidacionReserva[] = [
+  EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+  EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+  EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
+];
+
+export function esLiquidacionResuelta(estado: EstadoLiquidacionReserva): boolean {
+  return ESTADOS_LIQUIDACION_RESUELTOS.includes(estado);
+}
 
 /** Normaliza las columnas `date` que PostgreSQL/TypeORM devuelve como texto. */
 export function normalizarFechaReserva(valor: Date | string | null): Date {

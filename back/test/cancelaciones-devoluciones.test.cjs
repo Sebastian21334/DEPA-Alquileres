@@ -214,6 +214,7 @@ test('resolver una liquidación manual exige comprobante antes de crear el reemb
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   const liquidaciones = new ReservaLiquidacionesService(
     repositorio, {}, reembolsos, reservas,
+    { registrarResolucion: async () => {}, registrarRevision: async () => {} },
   );
   await assert.rejects(liquidaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /referencia|comprobante/i);
   assert.equal(await source.getRepository(Reembolso).count(), 0);
