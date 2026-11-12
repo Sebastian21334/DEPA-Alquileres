@@ -1,0 +1,50 @@
+<section class="reschedule" aria-labelledby="reschedule-title">
+  <h2 id="reschedule-title">Reprogramar reserva</h2>
+  <p>Elegí un nuevo ingreso. La salida se calcula automáticamente.</p>
+  @if (errorDisponibilidad()) {
+    <div class="availability" role="alert">
+      {{ errorDisponibilidad() }}
+      <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="consultando()" (click)="consultar()">Reintentar</button>
+    </div>
+  } @else if (horaActualizada(); as hora) {
+    <p class="availability"><span class="availability__dot" aria-hidden="true"></span>Disponibilidad actualizada a las {{ hora }}</p>
+  } @else {
+    <p class="availability" role="status">Consultando disponibilidad…</p>
+  }
+
+  <div class="reschedule__grid">
+    <app-availability-calendar
+      mode="reschedule" [dates]="fechas()" [fixedDays]="dias()" [currentStart]="reserva().fecha_inicio"
+      [selectedStart]="seleccion().start" [selectedEnd]="seleccion().end"
+      [loading]="!actualizado() && consultando()" [locked]="guardando() || !!errorDisponibilidad()"
+      (rangeChange)="elegir($event)"
+    />
+    <section class="change-summary" aria-labelledby="change-summary-title">
+      <h3 id="change-summary-title">Resumen del cambio</h3>
+      <dl aria-live="polite">
+        <div class="change-summary__current">
+          <dt>Fechas actuales</dt>
+          <dd>{{ fecha(reserva().fecha_inicio) }} – {{ fecha(reserva().fecha_fin) }}</dd>
+        </div>
+        <div><dt>Nuevo ingreso</dt><dd>{{ fecha(seleccion().start) || 'Elegí una fecha' }}</dd></div>
+        <div><dt>Nueva salida</dt><dd>{{ fecha(seleccion().end) || '—' }}</dd></div>
+        <div class="change-summary__total">
+          <dt>Total de la reserva</dt>
+          <dd>{{ total() }}</dd>
+        </div>
+      </dl>
+      <p>Se mantiene la duración de <strong>{{ dias() }} {{ dias() === 1 ? 'día' : 'días' }}</strong> y el total pagado.</p>
+      @if (errorCambio()) {
+        <p class="change-summary__error" role="alert">{{ errorCambio() }}</p>
+      } @else if (seleccion().start && !rangoDisponible() && !errorDisponibilidad()) {
+        <p class="change-summary__error" role="alert">Ese período ya no está disponible. Elegí otro ingreso.</p>
+      }
+      <div class="change-summary__actions">
+        <button type="button" class="acct-btn acct-btn--ghost" [disabled]="guardando()" (click)="cancelar.emit()">Cancelar</button>
+        <button type="button" class="acct-btn confirm-change" [disabled]="!rangoDisponible() || consultando() || guardando() || !!errorDisponibilidad()" (click)="confirmar()">
+          {{ guardando() ? 'Guardando…' : 'Confirmar reprogramación' }}
+        </button>
+      </div>
+    </section>
+  </div>
+</section>

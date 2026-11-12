@@ -5,6 +5,7 @@ import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard
 import {
   Controller,
   Get,
+  Header,
   Patch,
   Post,
   Body,
@@ -149,6 +150,13 @@ export class ReservasController {
   @Get(':id/reembolsos')
   listarReembolsos(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.listarReembolsosReserva(id, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get(':id/fechas-disponibles')
+  @Header('Cache-Control', 'no-store')
+  listarFechasDisponibles(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
+    return this.reprogramacionService.listarFechasDisponibles(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)

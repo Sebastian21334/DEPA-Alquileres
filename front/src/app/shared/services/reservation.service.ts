@@ -5,6 +5,7 @@ import { environment } from '../../../environments/environment';
 import { Anunciante } from '../models/anunciante.model';
 import { Usuario } from '../models/usuario.model';
 import { CotizacionDolar } from './cotizaciones.service';
+import type { FechaDisponible } from './availability.service';
 import type { EstadoEstadia } from '../utils/reservation-state';
 
 export interface CrearReservaPayload {
@@ -150,9 +151,20 @@ export interface Reembolso {
   creado_en: string;
 }
 
+export interface ParticipanteReclamo {
+  id: number;
+  nombre?: string;
+  apellido?: string;
+}
+
 export interface Reclamo {
   id: number;
-  reserva?: { id: number; publicacion?: { titulo?: string } | null } | null;
+  reserva?: {
+    id: number;
+    publicacion?: { id?: number; titulo?: string; imagenes?: { url: string }[] } | null;
+  } | null;
+  anunciante?: ParticipanteReclamo | null;
+  inquilino?: ParticipanteReclamo | null;
   categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO';
   descripcion: string;
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
@@ -176,7 +188,7 @@ export interface ReclamoMensaje {
   texto: string;
   visible_para: 'TODOS' | 'ADMIN';
   creado_en: string;
-  autor?: { id: number; nombre?: string; apellido?: string };
+  autor?: ParticipanteReclamo & { rol?: { nombre: string } | null };
 }
 
 @Injectable({ providedIn: 'root' })
@@ -211,6 +223,10 @@ export class ReservationService {
 
   cancel(id: number): Observable<Reserva> {
     return this.http.patch<Reserva>(`${this.baseUrl}/${id}/cancelar`, {});
+  }
+
+  rescheduleAvailability(id: number): Observable<FechaDisponible[]> {
+    return this.http.get<FechaDisponible[]>(`${this.baseUrl}/${id}/fechas-disponibles`);
   }
 
   reschedule(id: number, fecha_inicio: string, fecha_fin: string): Observable<Reserva> {

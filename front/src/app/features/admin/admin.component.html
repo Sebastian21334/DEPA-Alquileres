@@ -212,15 +212,13 @@
         @for (reembolso of refunds(); track reembolso.id) {
           <article class="settlement-card">
             <div>
-              <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ reembolso.estado }}</span>
+              <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ estadosReembolso[reembolso.estado] }}</span>
               <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
               <p><strong>{{ reembolso.tipo }}</strong> · {{ reembolso.importe | currency: reembolso.moneda }}</p>
               <p class="muted">{{ reembolso.origen }} · {{ reembolso.motivo }}</p>
             </div>
             <div class="actions">
-              @if (reembolso.estado !== 'APROBADO' && reembolso.estado !== 'RECHAZADO' && reembolso.estado !== 'CANCELADO') {
-                <button type="button" class="button button--success" [disabled]="busy() === 'refund-' + reembolso.id" (click)="registrarReembolsoPendiente(reembolso)">Registrar devolución</button>
-              }
+              <button type="button" class="button button--ghost" (click)="abrirReembolso(reembolso)">Ver detalle</button>
             </div>
           </article>
         }
@@ -228,7 +226,67 @@
     }
   </section>
 
-  <section class="panel">
+  <dialog #dialogoReembolso class="block-dialog refund-dialog" aria-labelledby="refund-title"
+    (cancel)="cerrarReembolso($event)" (close)="reembolsoSeleccionado.set(null)">
+    @if (reembolsoSeleccionado(); as item) {
+      <form class="block-form" (ngSubmit)="registrarReembolsoPendiente(item)" [attr.aria-busy]="guardandoReembolso()">
+        <header class="refund-heading">
+          <div>
+            <p class="refund-meta">Reembolso #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
+            <h2 id="refund-title">Detalle del reembolso</h2>
+          </div>
+          <button type="button" class="button button--ghost" aria-label="Cerrar"
+            [disabled]="guardandoReembolso()" (click)="cerrarReembolso()"><svg lucideX [size]="20" aria-hidden="true"></svg></button>
+        </header>
+        <div class="refund-amount">
+          <span>{{ item.tipo === 'TOTAL' ? 'Devolución total' : item.tipo === 'PARCIAL' ? 'Devolución parcial' : 'Contracargo' }}</span>
+          <strong>{{ item.importe | currency: item.moneda }} {{ item.moneda }}</strong>
+          <span class="status" [class.status--blocked]="puedeRegistrarReembolso(item)">{{ estadosReembolso[item.estado] }}</span>
+        </div>
+        <dl class="refund-data">
+          <div><dt>Publicación</dt><dd>{{ item.reserva?.publicacion?.titulo || 'Sin datos' }}</dd></div>
+          <div><dt>Inquilino</dt><dd>{{ item.reserva?.usuario?.nombre || 'Sin datos' }} {{ item.reserva?.usuario?.apellido }}</dd></div>
+          <div><dt>Origen</dt><dd>{{ origenesReembolso[item.origen] || item.origen }}</dd></div>
+          <div><dt>Creado</dt><dd>{{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
+          @if (item.reserva?.fecha_inicio && item.reserva?.fecha_fin) {
+            <div><dt>Estadía</dt><dd>{{ item.reserva?.fecha_inicio | date:'dd/MM/yyyy':'UTC' }} – {{ item.reserva?.fecha_fin | date:'dd/MM/yyyy':'UTC' }}</dd></div>
+          }
+          @if (item.pago; as pago) {
+            <div><dt>Pago original</dt><dd>{{ pago.payment_id ? 'Mercado Pago #' + pago.payment_id : 'Pago #' + pago.id }}</dd></div>
+          }
+          @if (item.referencia_externa) {
+            <div><dt>Referencia de devolución</dt><dd>{{ item.referencia_externa }}</dd></div>
+          }
+          @if (item.resuelto_en) {
+            <div><dt>Resuelto</dt><dd>{{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
+          }
+          <div class="refund-reason"><dt>Motivo</dt><dd>{{ item.motivo }}</dd></div>
+        </dl>
+        @if (puedeRegistrarReembolso(item)) {
+          @if (item.ejecucion_automatica) {
+            <p class="refund-help">Al confirmar, se solicitará la devolución a Mercado Pago por el importe indicado.</p>
+          } @else {
+            <label for="refund-reference">Referencia o número de comprobante <span aria-hidden="true">*</span></label>
+            <input id="refund-reference" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
+              required maxlength="150" [disabled]="guardandoReembolso()" aria-describedby="refund-reference-help" />
+            <p class="refund-help" id="refund-reference-help">Ingresá el número del comprobante de una devolución ya realizada. El registro actualiza la reserva.</p>
+          }
+        }
+        @if (errorReembolso()) { <p class="refund-error" role="alert">{{ errorReembolso() }}</p> }
+        <div class="block-actions">
+          <button type="button" class="button button--ghost" [disabled]="guardandoReembolso()" (click)="cerrarReembolso()">Volver</button>
+          @if (puedeRegistrarReembolso(item)) {
+            <button type="submit" class="button button--success"
+              [disabled]="guardandoReembolso() || (!item.ejecucion_automatica && !referenciaReembolso.trim())">
+              {{ guardandoReembolso() ? 'Procesando…' : item.ejecucion_automatica ? 'Solicitar devolución' : 'Registrar devolución' }}
+            </button>
+          }
+        </div>
+      </form>
+    }
+  </dialog>
+
+  <section class="panel" id="reclamos">
     <div class="panel__title">
       <div>
         <h2>Reclamos de reservas</h2>
@@ -245,12 +303,12 @@
     <div class="settlement-list">
       @for (claim of claims(); track claim.id) {
         <article class="settlement-card claim-card">
-          <app-claim-history [reclamo]="claim" (verArchivo)="verEvidencia(claim, $event)" />
+          <app-claim-history [reclamo]="claim" [administracion]="true" (verArchivo)="verEvidencia(claim, $event)" />
           @if (claim.estado !== 'CERRADO') {
             <div class="actions">
               <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'mensaje')">Escribir mensaje</button>
               @if (claim.estado === 'ABIERTO' || claim.estado === 'EN_REVISION') {
-                <button type="button" class="button button--light" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'resolver')">Resolver reclamo</button>
+                <button type="button" class="button button--resolve-claim" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'resolver')">Resolver reclamo</button>
               }
             </div>
           }

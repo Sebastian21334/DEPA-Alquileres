@@ -10,6 +10,19 @@ export const routes: Routes = [
     title: 'Panel administrativo — DEPA',
   },
   {
+    path: 'admin/usuarios/:id',
+    canActivate: [adminGuard],
+    loadComponent: () => import('./features/admin/admin-user-profile.component').then((m) => m.AdminUserProfileComponent),
+    title: 'Perfil de usuario - DEPA',
+  },
+  {
+    path: 'admin/publicaciones/:id',
+    canActivate: [adminGuard],
+    data: { administracion: true },
+    loadComponent: () => import('./features/publication-detail/publication-detail.component').then((m) => m.PublicationDetailComponent),
+    title: 'Publicación de la reserva - DEPA',
+  },
+  {
     path: '403',
     loadComponent: () =>
       import('./features/forbidden/forbidden.component').then((m) => m.ForbiddenComponent),

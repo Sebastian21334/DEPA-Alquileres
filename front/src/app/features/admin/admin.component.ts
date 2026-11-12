@@ -2,7 +2,7 @@ import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
 import { Component, computed, DestroyRef, ElementRef, inject, PLATFORM_ID, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { forkJoin, Subscription } from 'rxjs';
+import { finalize, forkJoin, Subscription } from 'rxjs';
 import { ToastService } from '../../core/services/toast.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
@@ -99,6 +99,19 @@ export class AdminComponent {
   protected observacionReclamo = '';
   protected readonly cancellations = signal<AdminCancellationRequest[]>([]);
   protected readonly refunds = signal<AdminReembolso[]>([]);
+  private readonly dialogoReembolso = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoReembolso');
+  protected readonly reembolsoSeleccionado = signal<AdminReembolso | null>(null);
+  protected readonly guardandoReembolso = signal(false);
+  protected readonly errorReembolso = signal('');
+  protected referenciaReembolso = '';
+  protected readonly estadosReembolso = {
+    PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', APROBADO: 'Aprobado',
+    RECHAZADO: 'Rechazado', FALLIDO: 'Fallido', CANCELADO: 'Cancelado',
+  };
+  protected readonly origenesReembolso: Record<string, string> = {
+    CANCELACION: 'Cancelación', RECLAMO: 'Reclamo', CONTRACARGO: 'Contracargo',
+    PAGO_TARDIO: 'Pago tardío', AJUSTE_ADMIN: 'Ajuste administrativo',
+  };
   protected readonly otherLoading = signal(true);
   protected readonly loading = computed(() =>
     this.otherLoading() || this.publicationsLoading() || this.usersLoading(),
@@ -353,39 +366,59 @@ export class AdminComponent {
           this.toast.mostrar('Cancelación aprobada sin devolución.', 'exito');
           return;
         }
-        const referencia = window
-          .prompt('Referencia o comprobante de la devolución:')
-          ?.trim();
-        if (!referencia) {
-          this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente de registrar.', 'exito');
-          return;
-        }
-        this.api.registrarReembolso(resultado.reembolso.id, referencia).subscribe({
-          next: () => this.toast.mostrar('Cancelación y devolución registradas.', 'exito'),
-          error: (e: Error) => this.toast.mostrar(
-            `Cancelación aprobada. No se pudo registrar la devolución. ${e.message}`,
-            'error',
-          ),
-        });
+        this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente de registrar.', 'exito');
+        this.reload();
       },
       null,
     );
   }
 
+  protected abrirReembolso(reembolso: AdminReembolso): void {
+    this.reembolsoSeleccionado.set(reembolso);
+    this.referenciaReembolso = '';
+    this.errorReembolso.set('');
+    this.dialogoReembolso().nativeElement.showModal();
+  }
+
+  protected cerrarReembolso(evento?: Event): void {
+    evento?.preventDefault();
+    if (!this.guardandoReembolso()) this.dialogoReembolso().nativeElement.close();
+  }
+
+  protected puedeRegistrarReembolso(reembolso: AdminReembolso): boolean {
+    return reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO' ||
+      (reembolso.estado === 'EN_PROCESO' && !reembolso.ejecucion_automatica);
+  }
+
   protected registrarReembolsoPendiente(reembolso: AdminReembolso): void {
-    const referencia = window
-      .prompt('Referencia o comprobante de la devolución:')
-      ?.trim();
-    if (!referencia) return;
-    this.run(
-      `refund-${reembolso.id}`,
-      () => this.api.registrarReembolso(reembolso.id, referencia),
-      () =>
-        this.refunds.update((items) =>
-          items.filter((item) => item.id !== reembolso.id),
-        ),
-      'Reembolso registrado y aplicado a la reserva.',
-    );
+    const referencia = this.referenciaReembolso.trim();
+    if (this.guardandoReembolso() || !this.puedeRegistrarReembolso(reembolso) ||
+        (!reembolso.ejecucion_automatica && (!referencia || referencia.length > 150))) return;
+
+    this.errorReembolso.set('');
+    this.guardandoReembolso.set(true);
+    this.api.registrarReembolso(reembolso.id, reembolso.ejecucion_automatica ? undefined : referencia)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
+      .subscribe({
+        next: () => {
+          this.dialogoReembolso().nativeElement.close();
+          this.toast.mostrar('Reembolso registrado y aplicado a la reserva.', 'exito');
+          this.reload();
+        },
+        error: (e: Error) => {
+          this.errorReembolso.set(e.message);
+          this.api.listarReembolsos().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+            next: (items) => {
+              this.refunds.set(items);
+              const vigente = items.find((item) => item.id === reembolso.id);
+              if (vigente && this.reembolsoSeleccionado()?.id === vigente.id) {
+                this.reembolsoSeleccionado.set(vigente);
+              }
+            },
+            error: () => {},
+          });
+        },
+      });
   }
 
   protected rechazarCancelacion(solicitud: AdminCancellationRequest): void {
@@ -453,7 +486,7 @@ export class AdminComponent {
       () => this.api.resolverReclamo(reclamo.id, resolucion, importe ?? undefined, referencia, observacion),
       (value) => {
         const resuelto = value as Reclamo;
-        this.claims.update((items) => items.map((item) => item.id === reclamo.id ? resuelto : item));
+        this.claims.update((items) => items.map((item) => item.id === reclamo.id ? { ...item, ...resuelto, reserva: item.reserva } : item));
         this.gestionReclamo.set(null);
         this.reload();
       },

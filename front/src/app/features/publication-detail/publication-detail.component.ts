@@ -132,6 +132,8 @@ export class PublicationDetailComponent {
     );
   });
 
+  protected readonly administracion = this.route.snapshot.data['administracion'] === true;
+
   constructor() {
     const id = Number(this.route.snapshot.paramMap.get('id'));
     if (!Number.isInteger(id) || id < 1) {
@@ -139,24 +141,26 @@ export class PublicationDetailComponent {
       this.loading.set(false);
       return;
     }
-    this.listings
-      .getById(id)
+    const publicacion = this.administracion ? this.listings.getByIdForAdmin(id) : this.listings.getById(id);
+    publicacion
       .pipe(finalize(() => this.loading.set(false)))
       .subscribe({
         next: (publication) => {
           this.publication.set(publication);
-          this.registerView(publication);
+          if (!this.administracion) this.registerView(publication);
           const idAnunciante = publication.anunciante?.idUsuario;
           if (idAnunciante) {
             this.listings.getByAdvertiser(idAnunciante).subscribe({
               next: (items) => this.activeCount.set(items.length),
             });
           }
-          if (this.esTemporaria() && !publication.eliminada) {
+          if (!this.administracion && this.esTemporaria() && !publication.eliminada) {
             this.loadAvailability(publication.id);
           }
         },
-        error: () => this.error.set('Esta publicación no está disponible para consultas ni nuevas reservas. Si ya tenés una reserva, podés consultarla en Mis reservas y acudir a soporte.'),
+        error: () => this.error.set(this.administracion
+          ? 'No pudimos cargar la publicación de la reserva.'
+          : 'Esta publicación no está disponible para consultas ni nuevas reservas. Si ya tenés una reserva, podés consultarla en Mis reservas y acudir a soporte.'),
       });
   }
 

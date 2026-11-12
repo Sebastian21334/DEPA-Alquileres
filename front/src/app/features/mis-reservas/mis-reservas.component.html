@@ -11,6 +11,63 @@
       </div>
     </div>
 
+    <dialog #dialogoCancelacion class="cancellation-dialog" aria-labelledby="cancel-title"
+      (cancel)="cerrarCancelacion($event)" (close)="limpiarCancelacion()">
+      <button type="button" class="cancellation-close" aria-label="Cerrar" autofocus
+        [disabled]="enviandoCancelacion()" (click)="cerrarCancelacion()">
+        <svg lucideX [size]="22" aria-hidden="true"></svg>
+      </button>
+      <div class="cancellation-icon"><svg lucideCalendarX [size]="34" aria-hidden="true"></svg></div>
+      <h2 id="cancel-title">Solicitar cancelación</h2>
+      @if (reservaACancelar(); as reserva) {
+        <div class="cancellation-reservation">
+          @let portada = reserva.publicacion?.imagenes?.[0]?.url;
+          @if (portada && imagenesConError()[reserva.id] !== portada) {
+            <img [src]="portada" alt="" (error)="registrarErrorImagen(reserva.id, portada)" />
+          } @else {
+            <div class="cancellation-placeholder"><svg lucideImage [size]="28" aria-hidden="true"></svg></div>
+          }
+          <div>
+            <strong>{{ reserva.publicacion?.titulo || 'Publicación no disponible' }}</strong>
+            <p>Reserva #{{ reserva.id }} · {{ fechasCancelacion(reserva) }}</p>
+          </div>
+        </div>
+        <form (ngSubmit)="enviarCancelacion()" [attr.aria-busy]="enviandoCancelacion()">
+          @if (estadoCancelacion() === 'formulario') {
+            <label for="motivo-cancelacion">Motivo de la cancelación <span aria-hidden="true">*</span></label>
+            <textarea id="motivo-cancelacion" name="motivoCancelacion" rows="4" required minlength="10" maxlength="500"
+              aria-describedby="motivo-cancelacion-ayuda"
+              placeholder="Contanos por qué necesitás cancelar."
+              [ngModel]="motivoCancelacion()" (ngModelChange)="motivoCancelacion.set($event)"
+              [disabled]="enviandoCancelacion()"></textarea>
+            <small id="motivo-cancelacion-ayuda">Entre 10 y 500 caracteres.</small>
+            <div class="cancellation-info">
+              <svg lucideInfo [size]="22" aria-hidden="true"></svg>
+              <p>Un administrador revisará tu solicitud. La reserva seguirá activa hasta que se resuelva.</p>
+            </div>
+          } @else if (estadoCancelacion() === 'pendiente') {
+            <div class="cancellation-info" role="status">
+              <svg lucideInfo [size]="22" aria-hidden="true"></svg>
+              <p>Ya enviaste una solicitud de cancelación para esta reserva. Está en revisión.</p>
+            </div>
+          } @else if (estadoCancelacion() === 'consultando') {
+            <p role="status">Consultando el estado de la solicitud…</p>
+          }
+          @if (errorCancelacion()) { <p class="cancellation-error" role="alert">{{ errorCancelacion() }}</p> }
+          <div class="cancellation-actions">
+            <button type="button" class="acct-btn cancellation-back" [disabled]="enviandoCancelacion()" (click)="cerrarCancelacion()">Volver</button>
+            @if (estadoCancelacion() === 'formulario') {
+              <button type="submit" class="acct-btn cancellation-submit" [disabled]="enviandoCancelacion() || motivoCancelacion().trim().length < 10">
+                {{ enviandoCancelacion() ? 'Enviando…' : 'Enviar solicitud' }}
+              </button>
+            } @else if (estadoCancelacion() === 'error') {
+              <button type="button" class="acct-btn cancellation-submit" (click)="consultarCancelacion()">Reintentar</button>
+            }
+          </div>
+        </form>
+      }
+    </dialog>
+
     @if (mensaje()) { <div class="acct-alert acct-alert--info" role="status">{{ mensaje() }}</div> }
     @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
     @if (cargando()) {
@@ -35,32 +92,6 @@
           @for (reserva of propias(); track reserva.id) {
             <article class="acct-card booking-card">
               <ng-container *ngTemplateOutlet="tarjetaReserva; context: { $implicit: reserva, recibida: false }" />
-              @if (editando()?.id === reserva.id) {
-                <form class="reschedule-form" (ngSubmit)="confirmarReprogramacion()" [attr.aria-busy]="ocupada() === reserva.id">
-                  <h4>Cambiar fechas de la reserva #{{ reserva.id }}</h4>
-                  <p>Elegí otro inicio. El cambio se permite antes del inicio y sin código de ingreso validado. Se mantienen los <strong>{{ dias(reserva) }} días</strong> y el total pagado de
-                    <strong>{{ monto(reserva.importe_contratado ?? reserva.monto_pago, reserva.moneda_contratada) }}</strong>, con la tarifa original.</p>
-                  <p class="muted">Fechas actuales: {{ fecha(reserva.fecha_inicio) }} — {{ fecha(reserva.fecha_fin) }}. Avisaremos al anunciante por correo cuando confirmes.</p>
-                  <div class="reschedule-form__dates">
-                    <label [for]="'inicio-' + reserva.id">Nuevo ingreso
-                      <input type="date" [id]="'inicio-' + reserva.id" name="inicioNuevo" [min]="hoy()" required
-                        [ngModel]="inicioNuevo()" (ngModelChange)="inicioNuevo.set($event)" [disabled]="ocupada() === reserva.id" />
-                    </label>
-                    <div><span>Nueva salida</span><strong>{{ fecha(finNuevo()) }}</strong><small>Se calcula para conservar la duración.</small></div>
-                  </div>
-                  @if (cargandoCalendario()) { <p role="status">Consultando disponibilidad…</p> }
-                  @else if (errorCalendario()) {
-                    <p role="alert">{{ errorCalendario() }}</p>
-                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="cargarCalendario(reserva)">Reintentar disponibilidad</button>
-                  } @else if (inicioNuevo() === reserva.fecha_inicio) { <p>Elegí una fecha de ingreso diferente.</p> }
-                  @else if (!rangoDisponible()) { <p role="alert">El rango elegido no está disponible. Elegí otro inicio.</p> }
-                  @else { <p class="settlement-state" role="status">Las fechas elegidas están disponibles. El total pagado se mantiene.</p> }
-                  <div class="reschedule-form__actions">
-                    <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() !== null || !rangoDisponible() || inicioNuevo() === reserva.fecha_inicio">{{ ocupada() === reserva.id ? 'Guardando cambio…' : 'Confirmar reprogramación' }}</button>
-                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="ocupada() !== null" (click)="cerrarReprogramacion()">Cerrar</button>
-                  </div>
-                </form>
-              }
               @if (reclamoAbierto()?.id === reserva.id) {
                 <form class="claim-form" (ngSubmit)="enviarReclamo()" [attr.aria-busy]="reclamoEnviando()">
                   <h4>Reportar un problema en la reserva #{{ reserva.id }}</h4>
@@ -186,7 +217,7 @@
     && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO'
     && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION';
   @let cancelarDirecto = !recibida && !reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE';
-  @let cambiarFechas = !recibida && puedeReprogramar(reserva) && editando()?.id !== reserva.id;
+  @let cambiarFechas = !recibida && puedeReprogramar(reserva);
   @let solicitarBaja = puedeSolicitarCancelacion(reserva);
   @let menuId = 'acciones-reserva-' + reserva.id;
   <div class="booking-card__cover">
@@ -232,7 +263,7 @@
         }
         <a class="booking-button booking-button--primary" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">{{ recibida ? 'Ver detalle y contactar' : 'Ver detalle' }}</a>
         @if (reserva.publicacion || cambiarFechas || puedeReportar || solicitarBaja || cancelarDirecto) {
-          <button type="button" class="booking-button booking-button--more" [attr.popovertarget]="menuId" [attr.aria-label]="'Más acciones para la reserva ' + reserva.id">
+          <button type="button" class="booking-button booking-button--more" #accionesReserva [attr.popovertarget]="menuId" [attr.aria-label]="'Más acciones para la reserva ' + reserva.id">
             <svg lucideEllipsis [size]="19" aria-hidden="true"></svg>
           </button>
           <div class="booking-menu" [id]="menuId" popover #menu>
@@ -240,7 +271,7 @@
               <a [routerLink]="['/publicaciones', reserva.publicacion.id]" (click)="menu.hidePopover()"><svg lucideExternalLink [size]="16" aria-hidden="true"></svg>Ver publicación</a>
             }
             @if (cambiarFechas) {
-              <button type="button" [disabled]="ocupada() !== null" (click)="menu.hidePopover(); abrirReprogramacion(reserva)"><svg lucideCalendar [size]="16" aria-hidden="true"></svg>Cambiar fechas</button>
+              <a routerLink="/reserva/resultado" [queryParams]="{ reserva_id: reserva.id, reprogramar: 1 }" (click)="menu.hidePopover()"><svg lucideCalendar [size]="16" aria-hidden="true"></svg>Cambiar fechas</a>
             }
             @if (puedeReportar) {
               @if (motivoReclamoNoDisponible(reserva); as motivo) {
@@ -250,7 +281,7 @@
               }
             }
             @if (solicitarBaja || cancelarDirecto) {
-              <button type="button" class="booking-menu__danger" [disabled]="ocupada() !== null" (click)="menu.hidePopover(); solicitarBaja ? solicitarCancelacion(reserva) : cancelar(reserva)"><svg lucideX [size]="16" aria-hidden="true"></svg>{{ solicitarBaja ? 'Solicitar cancelación' : 'Cancelar reserva' }}</button>
+              <button type="button" class="booking-menu__danger" [disabled]="ocupada() !== null" (click)="menu.hidePopover(); solicitarBaja ? solicitarCancelacion(reserva, accionesReserva) : cancelar(reserva)"><svg lucideX [size]="16" aria-hidden="true"></svg>{{ solicitarBaja ? 'Solicitar cancelación' : 'Cancelar reserva' }}</button>
             }
           </div>
         }

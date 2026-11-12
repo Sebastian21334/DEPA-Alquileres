@@ -47,6 +47,13 @@ export class PublicacionesController {
     return this.publicacionesService.listarAdministracion(consulta);
   }
 
+  @Get('administracion/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  obtenerAdministracion(@Param('id', ParseIntPipe) id: number) {
+    return this.publicacionesService.buscarPorId(id);
+  }
+
   @Patch('administracion/:id/baja')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')

@@ -1,5 +1,5 @@
-<section class="calendar" aria-label="Calendario de disponibilidad" [attr.aria-busy]="loading()">
-  @if (mode() !== 'manage') {
+<section class="calendar" [class.calendar--reschedule]="mode() === 'reschedule'" aria-label="Calendario de disponibilidad" [attr.aria-busy]="loading()">
+  @if (mode() === 'select' || mode() === 'setup') {
     <div class="calendar__toolbar">
       <div class="calendar__switch" role="group" aria-label="Duración del alquiler">
         <button
@@ -46,7 +46,9 @@
       }
     </div>
   }
-  <p class="calendar__help" aria-live="polite">{{ instruction() }}</p>
+  @if (mode() !== 'reschedule') {
+    <p class="calendar__help" aria-live="polite">{{ instruction() }}</p>
+  }
   <header class="calendar__header">
     <button
       class="calendar__nav"
@@ -57,16 +59,20 @@
     >
       ‹
     </button>
-    <label class="calendar__month">
-      <span>Mes y año</span>
-      <input
-        type="month"
-        aria-label="Ir a un mes"
-        [min]="today.slice(0, 7)"
-        [value]="monthValue()"
-        (change)="goToMonth($event)"
-      />
-    </label>
+    @if (mode() === 'reschedule') {
+      <strong class="calendar__month-label" aria-live="polite">{{ monthLabel() }}</strong>
+    } @else {
+      <label class="calendar__month">
+        <span>Mes y año</span>
+        <input
+          type="month"
+          aria-label="Ir a un mes"
+          [min]="today.slice(0, 7)"
+          [value]="monthValue()"
+          (change)="goToMonth($event)"
+        />
+      </label>
+    }
     <button class="calendar__nav" type="button" (click)="nextMonth()" aria-label="Mes siguiente">
       ›
     </button>
@@ -87,6 +93,7 @@
           [class.is-unavailable]="!day.past && mode() !== 'setup' && !day.record?.disponible"
           [class.is-booked]="!!day.record?.reserva"
           [class.is-range]="mode() !== 'manage' && isInRange(day.iso)"
+          [class.is-start]="mode() === 'reschedule' && selectedStart() === day.iso"
           [class.is-preview]="isPreview(day.iso)"
           [class.is-edge]="
             mode() !== 'manage' && (selectedStart() === day.iso || selectedEnd() === day.iso)
@@ -126,7 +133,7 @@
         <span><i class="legend-selected"></i>Tu selección</span>
       }
     </div>
-    @if (mode() !== 'manage') {
+    @if (mode() === 'select' || mode() === 'setup') {
       <div class="calendar__summary" aria-live="polite">
         @if (duration()) {
           <strong

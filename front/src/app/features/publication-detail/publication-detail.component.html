@@ -1,17 +1,22 @@
 <section class="detail-shell" aria-live="polite">
+  @if (administracion) {
+    <a routerLink="/admin" fragment="reclamos">← Volver a reclamos</a>
+  }
   @if (loading()) {
     <div class="state"><app-spinner /><p>Cargando publicación…</p></div>
   } @else if (error()) {
     <div class="state state--error">
       <h1>Publicación no disponible</h1>
       <p>{{ error() }}</p>
-      <a routerLink="/">Volver a las publicaciones</a>
+      @if (!administracion) { <a routerLink="/">Volver a las publicaciones</a> }
     </div>
   } @else if (publication(); as item) {
     @if (item.eliminada) {
       <div class="deleted-notice" role="status">
         <strong>Esta publicación ha sido eliminada.</strong>
-        <p>Se mantendrá visible hasta que se cumpla tu reserva. No admite nuevas reservas ni contactos.</p>
+        @if (!administracion) {
+          <p>Se mantendrá visible hasta que se cumpla tu reserva. No admite nuevas reservas ni contactos.</p>
+        }
       </div>
     }
     <div class="gallery">
@@ -49,7 +54,7 @@
           @if (item.anunciante?.verificado) {
             <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> Dueño Verificado</span>
           }
-          @if (esMiPublicacion() && !item.eliminada) {
+          @if (!administracion && esMiPublicacion() && !item.eliminada) {
             <a class="edit-link" [routerLink]="['/publicaciones', item.id, 'editar']">✎ Modificar publicación</a>
           }
         </div>
@@ -59,7 +64,7 @@
             <p class="location"><svg lucideMapPin [size]="16"></svg> {{ location(item) }}</p>
             <p class="published-date">{{ item.fecha_publicacion | relativeTime }}</p>
           </div>
-          @if (!esMiPublicacion() && !item.eliminada) {
+          @if (!administracion && !esMiPublicacion() && !item.eliminada) {
             <button
               type="button"
               class="favorite-button"
@@ -121,7 +126,7 @@
         </section>
       }
 
-      @if (esTemporaria() && !item.eliminada) {
+      @if (!administracion && esTemporaria() && !item.eliminada) {
         <section class="booking-layout" appReveal>
           <div class="booking-calendar">
             <div class="section-heading"><div><span>Disponibilidad</span><h2>Elegí las fechas de tu alquiler</h2></div></div>
@@ -153,7 +158,7 @@
             <small class="external-warning">Si continuás por WhatsApp, la conversación ocurre fuera de DEPA y no podremos intervenir ante inconvenientes.</small>
           </aside>
         </section>
-      } @else if (!item.eliminada) {
+      } @else if (!administracion && !item.eliminada) {
         <section class="price-panel" appReveal="zoom">
           <div class="price-panel__amount">
             <strong>{{ price(item) }}<span class="price-panel__unit"> / mes</span></strong>
