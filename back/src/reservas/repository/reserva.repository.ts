@@ -159,6 +159,25 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
+  buscarPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
+    // Sin filtro de estado: el bloqueo de la cuenta debe resolver también
+    // las reservas pendientes o cerradas del anunciante.
+    return this.repository.find({
+      where: {
+        publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
+      },
+      relations: {
+        usuario: true,
+        publicacion: {
+          anunciante: { usuario: true },
+          ciudad: true,
+          provincia: true,
+        },
+      },
+      order: { fecha_inicio: 'ASC' },
+    });
+  }
+
   buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
     return this.repository.find({
       where: {
