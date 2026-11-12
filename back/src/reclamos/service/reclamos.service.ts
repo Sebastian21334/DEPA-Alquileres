@@ -13,6 +13,7 @@ import { fechaArgentina } from '../../common/utils/fechas';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import {
   OrigenReembolso,
   TipoReembolso,
@@ -143,7 +144,7 @@ export class ReclamosService {
       );
       const evidencia = await this.reclamos.guardarEvidencia({
         reclamo,
-        usuario: { id: idUsuario } as never,
+        usuario: referenciaUsuario(idUsuario),
         url,
         nombre_archivo: archivo.originalname.slice(0, 255),
         tipo: 'image/jpeg',
@@ -175,7 +176,7 @@ export class ReclamosService {
     }
     const mensaje = await this.reclamos.guardarMensaje({
       reclamo,
-      autor: { id: idUsuario },
+      autor: referenciaUsuario(idUsuario),
       texto: dto.texto.trim(),
       visible_para: dto.visible_para ?? VisibilidadMensajeReclamo.TODOS,
     });
@@ -250,7 +251,7 @@ export class ReclamosService {
       reclamo.importe_reembolso = importe;
     }
 
-    reclamo.administrador_resolucion = { id: idAdmin } as never;
+    reclamo.administrador_resolucion = referenciaUsuario(idAdmin);
     reclamo.resuelto_en = new Date();
     return this.prepararRespuesta(await this.reclamos.guardar(reclamo));
   }

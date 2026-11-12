@@ -67,12 +67,50 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
+  buscarPorReservasConEstados(idsReserva: number[], estados: EstadoReembolso[]): Promise<Reembolso[]> {
+    if (idsReserva.length === 0) return Promise.resolve([]);
+    return this.repository.find({
+      where: {
+        reserva: { id: In(idsReserva) },
+        estado: In(estados),
+      },
+      relations: { reserva: true },
+    });
+  }
+
   buscarPendientesPorPago(idPago: number): Promise<Reembolso[]> {
     return this.repository.find({
       where: {
         pago: { id: idPago },
         estado: In([EstadoReembolso.PENDIENTE, EstadoReembolso.EN_PROCESO]),
       },
+    });
+  }
+
+  async sumarImportesReservados(idPago: number): Promise<number> {
+    const filas = await this.repository.find({
+      where: {
+        pago: { id: idPago },
+        estado: In([
+          EstadoReembolso.PENDIENTE,
+          EstadoReembolso.EN_PROCESO,
+          EstadoReembolso.FALLIDO,
+        ]),
+      },
+    });
+    return filas.reduce((total, fila) => total + Number(fila.importe), 0);
+  }
+
+  actualizarEnTransaccion(id: number, operacion: (reembolso: Reembolso) => void | Promise<void>): Promise<Reembolso | null> {
+    return this.repository.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(Reembolso);
+      const reembolso = await repo.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!reembolso) return null;
+      await operacion(reembolso);
+      return repo.save(reembolso);
     });
   }
 
@@ -84,6 +122,14 @@ export class ReembolsosRepository implements IReembolsosRepository {
       relations: { pago: true, reserva: true },
       order: { id: 'ASC' },
       take: 50,
+    });
+  }
+
+  buscarAprobados(): Promise<Reembolso[]> {
+    return this.repository.find({
+      where: { estado: EstadoReembolso.APROBADO },
+      relations: { pago: true, reserva: true },
+      order: { id: 'ASC' },
     });
   }
 

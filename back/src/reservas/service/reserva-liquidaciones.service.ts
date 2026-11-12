@@ -1,4 +1,8 @@
-import { EstadoLiquidacionReserva, EstadoPagoReserva } from '../../catalogos/estados';
+import {
+  EstadoLiquidacionReserva,
+  EstadoPagoReserva,
+  EstadoReembolso,
+} from '../../catalogos/estados';
 import {
   type IReservaRepository,
   RESERVA_REPOSITORY,
@@ -19,9 +23,11 @@ import { generarCodigoAlojamiento } from './reservas.utils';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import {
   OrigenReembolso,
+  Reembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { fechaArgentina } from '../../common/utils/fechas';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { timingSafeEqual } from 'node:crypto';
 import { ReservasService } from './reservas.service';
 
@@ -158,86 +164,147 @@ export class ReservaLiquidacionesService {
     return reservas.map((reserva) => this.reservasService.prepararRespuesta(reserva));
   }
 
-  /** Registra una decisión administrativa; no ejecuta movimientos de dinero reales. */
+  /** Registra una decisión administrativa; la devolución se ejecuta antes de modificar la reserva. */
   async resolverLiquidacion(id: number, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reserva> {
+    const permitidos: EstadoLiquidacionReserva[] = [
+      EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+      EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+      EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
+      EstadoLiquidacionReserva.EN_REVISION,
+      EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
+      EstadoLiquidacionReserva.RETENIDO,
+    ];
+    if (!permitidos.includes(dto.estado)) {
+      throw new BadRequestException(
+        'El estado solicitado no es una resolución administrativa válida',
+      );
+    }
+
+    const reserva = await this.reservaRepository.buscarPorId(id);
+    if (!reserva)
+      throw new NotFoundException(`No se encontró la reserva ${id}`);
+    this.validarResolucion(reserva, dto);
+    if (dto.estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO)
+      await this.asegurarSinDevoluciones(id);
+
+    const esDevolucion =
+      dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO ||
+      dto.estado === EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
+
+    if (esDevolucion) {
+      if (
+        !this.reembolsosService.ejecucionAutomaticaHabilitada &&
+        !dto.referencia?.trim()
+      )
+        throw new BadRequestException(
+          'La referencia del comprobante de devolución es obligatoria',
+        );
+      const pago = await this.reembolsosService.buscarPagoPorReserva(id);
+      if (!pago)
+        throw new ConflictException(
+          'La reserva no tiene un pago registrado para devolver',
+        );
+      const saldo = this.reembolsosService.saldoReembolsable(pago);
+      const importe =
+        dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO
+          ? saldo
+          : Number(dto.importe ?? 0);
+      if (!Number.isFinite(importe) || importe <= 0)
+        throw new BadRequestException(
+          'Indicá el importe de la devolución parcial',
+        );
+      if (importe > saldo + TOLERANCIA_MONETARIA)
+        throw new ConflictException(
+          `La devolución supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
+        );
+
+      await this.prepararLiquidacion(id);
+      const existentes = await this.reembolsosService.listarPorReserva(id);
+      const enCurso = existentes.find(
+        (actual) =>
+          actual.origen === OrigenReembolso.AJUSTE_ADMIN &&
+          (
+            [
+              EstadoReembolso.PENDIENTE,
+              EstadoReembolso.EN_PROCESO,
+              EstadoReembolso.FALLIDO,
+              EstadoReembolso.APROBADO,
+            ] as EstadoReembolso[]
+          ).includes(actual.estado),
+      );
+      let reembolso: Reembolso;
+      if (enCurso) {
+        if (Math.abs(Number(enCurso.importe) - importe) > TOLERANCIA_MONETARIA)
+          throw new ConflictException(
+            'Hay una devolución en curso por otro importe; revisar la liquidación',
+          );
+        reembolso = enCurso;
+      } else {
+        const sufijo =
+          importe >= Number(pago.amount) - TOLERANCIA_MONETARIA ? 't' : 'p';
+        const base = `liq:${id}:${sufijo}:${Math.round(importe * 100)}`;
+        let clave = base;
+        let intento = 1;
+        while (
+          existentes.some(
+            (actual) =>
+              actual.idempotency_key === clave &&
+              (actual.estado === EstadoReembolso.RECHAZADO ||
+                actual.estado === EstadoReembolso.CANCELADO),
+          )
+        )
+          clave = `${base}:r${intento++}`;
+        reembolso = await this.reembolsosService.crearSolicitud({
+          reserva,
+          pago,
+          tipo:
+            importe >= Number(pago.amount) - TOLERANCIA_MONETARIA
+              ? TipoReembolso.TOTAL
+              : TipoReembolso.PARCIAL,
+          origen: OrigenReembolso.AJUSTE_ADMIN,
+          importe,
+          motivo:
+            dto.observacion?.trim() ||
+            'Resolución administrativa de la liquidación',
+          idSolicitadoPor: idAdmin,
+          idempotencyKey: clave,
+        });
+      }
+
+      if (
+        reembolso.estado !== EstadoReembolso.PENDIENTE &&
+        reembolso.estado !== EstadoReembolso.EN_PROCESO &&
+        reembolso.estado !== EstadoReembolso.FALLIDO &&
+        reembolso.estado !== EstadoReembolso.APROBADO
+      )
+        throw new ConflictException(
+          'El reembolso existente no es válido; reintentá la resolución',
+        );
+
+      // La pasarela se ejecuta antes de modificar la reserva. Si falla,
+      // la reserva queda intacta y el reembolso puede reintentarse.
+      const ejecutado = await this.reembolsosService.registrarOejecutar(
+        reembolso.id,
+        dto.referencia,
+        idAdmin,
+      );
+      if (ejecutado.estado !== EstadoReembolso.APROBADO)
+        throw new ConflictException(
+          'La devolución no quedó aprobada; la reserva no se modificó',
+        );
+    }
+
     return this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
-        const permitidos: EstadoLiquidacionReserva[] = [
-          EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
-          EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
-          EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
-          EstadoLiquidacionReserva.EN_REVISION,
-          EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
-          EstadoLiquidacionReserva.RETENIDO,
-        ];
-        if (!permitidos.includes(dto.estado)) {
-          throw new BadRequestException(
-            'El estado solicitado no es una resolución administrativa válida',
-          );
-        }
-        const reserva = await reservaRepository.buscarPorId(id);
-        if (!reserva)
+        const actual = await reservaRepository.buscarPorId(id);
+        if (!actual)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
-        if (!this.reservasService.pagoAprobado(reserva)) {
-          throw new ConflictException(
-            'La reserva no posee un pago aprobado para liquidar',
-          );
-        }
-        if (
-          dto.estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO &&
-          !this.reservasService.codigoValidado(reserva)
-        ) {
-          throw new ConflictException(
-            'No se puede registrar el pago al propietario sin validar el código',
-          );
-        }
-        const esDevolucion =
-          dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO ||
-          dto.estado === EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
-        if (esDevolucion) {
-          if (!this.reembolsosService.ejecucionAutomaticaHabilitada && !dto.referencia?.trim())
-            throw new BadRequestException('La referencia del comprobante de devolución es obligatoria');
-          const pago = await this.reembolsosService.buscarPagoPorReserva(id);
-          if (!pago)
-            throw new ConflictException(
-              'La reserva no tiene un pago registrado para devolver',
-            );
-          const saldo = this.reembolsosService.saldoReembolsable(pago);
-          const importe =
-            dto.importe ??
-            (dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO
-              ? saldo
-              : 0);
-          if (!Number.isFinite(importe) || importe <= 0)
-            throw new BadRequestException(
-              'Indicá el importe de la devolución parcial',
-            );
-          if (importe > saldo + 0.009)
-            throw new ConflictException(
-              `La devolución supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
-            );
-          const reembolso = await this.reembolsosService.crearSolicitud({
-            reserva,
-            pago,
-            tipo:
-              dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO
-                ? TipoReembolso.TOTAL
-                : TipoReembolso.PARCIAL,
-            origen: OrigenReembolso.AJUSTE_ADMIN,
-            importe,
-            motivo:
-              dto.observacion?.trim() ||
-              'Resolución administrativa de la liquidación',
-            idSolicitadoPor: idAdmin,
-          });
-          await this.reembolsosService.registrarOejecutar(
-            reembolso.id,
-            dto.referencia?.trim(),
-            idAdmin,
-          );
-        }
+        this.validarResolucion(actual, dto);
+        if (dto.estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO)
+          await this.asegurarSinDevoluciones(id);
 
-        this.aplicarResolucion(reserva,
+        this.aplicarResolucion(
+          actual,
           dto.estado,
           dto.referencia,
           dto.observacion,
@@ -246,18 +313,104 @@ export class ReservaLiquidacionesService {
         const hoy = fechaArgentina();
         if (
           dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO &&
-          reserva.fecha_inicio &&
-          reserva.fecha_inicio > hoy &&
-          !this.reservasService.codigoValidado(reserva)
+          actual.fecha_inicio &&
+          actual.fecha_inicio > hoy &&
+          !this.reservasService.codigoValidado(actual)
         ) {
           await this.disponibilidadService.liberarReserva(
-            reserva.id,
+            actual.id,
             transaccion,
           );
         }
-        return this.reservasService.prepararRespuesta(await reservaRepository.guardar(reserva));
+        return this.reservasService.prepararRespuesta(
+          await reservaRepository.guardar(actual),
+        );
       },
     );
+  }
+
+  private async asegurarSinDevoluciones(id: number): Promise<void> {
+    const existentes = await this.reembolsosService.listarPorReserva(id);
+    const activa = existentes.find(
+      (reembolso) =>
+        reembolso.estado === EstadoReembolso.PENDIENTE ||
+        reembolso.estado === EstadoReembolso.EN_PROCESO ||
+        reembolso.estado === EstadoReembolso.FALLIDO ||
+        reembolso.estado === EstadoReembolso.APROBADO,
+    );
+    if (activa)
+      throw new ConflictException(
+        'La reserva tiene una devolución registrada; no se puede pagar al propietario',
+      );
+  }
+
+  private async prepararLiquidacion(id: number): Promise<void> {
+    await this.reservaRepository.conTransaccion(
+      async (reservaRepository) => {
+        const actual = await reservaRepository.buscarPorId(id);
+        if (!actual)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        if (this.reservasService.liquidacionResuelta(actual))
+          throw new ConflictException(
+            'La liquidación de la reserva ya fue resuelta',
+          );
+        actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+        actual.observacion_liquidacion =
+          'Devolución de liquidación en ejecución';
+        actual.fecha_resolucion_liquidacion = null;
+        await reservaRepository.guardar(actual);
+      },
+    );
+  }
+
+  private validarResolucion(reserva: Reserva, dto: ResolverLiquidacionDto): void {
+    if (
+      reserva.cancelada &&
+      reserva.estado_liquidacion !== EstadoLiquidacionReserva.EN_REVISION
+    ) {
+      throw new ConflictException('La reserva está cancelada');
+    }
+    const observacion = reserva.observacion_liquidacion ?? '';
+    const devolucionEnEjecucion =
+      observacion.includes('Devolución de') &&
+      observacion.includes('en ejecución');
+    const esDevolucion =
+      dto.estado === EstadoLiquidacionReserva.DEVUELTO_INQUILINO ||
+      dto.estado === EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
+    if (
+      devolucionEnEjecucion &&
+      (observacion.includes('reclamo') || !esDevolucion)
+    ) {
+      throw new ConflictException(
+        'Hay una devolución en ejecución; esperá su resultado',
+      );
+    }
+    if (!this.reservasService.pagoAprobado(reserva)) {
+      throw new ConflictException(
+        'La reserva no posee un pago aprobado para liquidar',
+      );
+    }
+    if (this.reservasService.liquidacionResuelta(reserva)) {
+      throw new ConflictException(
+        'La liquidación de la reserva ya fue resuelta',
+      );
+    }
+    if (
+      dto.estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO &&
+      !this.reservasService.codigoValidado(reserva)
+    ) {
+      throw new ConflictException(
+        'No se puede registrar el pago al propietario sin validar el código',
+      );
+    }
+    if (
+      dto.estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO &&
+      this.reservasService.liquidacionEnRevision(reserva)
+    ) {
+      throw new ConflictException(
+        'No se puede pagar al propietario con una liquidación en revisión',
+      );
+    }
   }
 
   /** Emite el código si falta (reservas aprobadas antes de existir el código). */

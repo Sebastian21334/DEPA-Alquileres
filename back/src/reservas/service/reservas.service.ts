@@ -17,6 +17,7 @@ import {
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
+import { ReservaDecisionService } from './reserva-decision.service';
 import { generarCodigoAlojamiento } from './reservas.utils';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
@@ -40,6 +41,7 @@ import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import {
@@ -66,7 +68,7 @@ export class ReservasService
   private timer?: ReturnType<typeof setInterval>;
   private expiracion?: Promise<number>;
 
-  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService) {}
+  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService, private readonly decision: ReservaDecisionService) {}
 
   /**
    * Libera las reservas vencidas al iniciar y cada minuto. El estado se
@@ -344,6 +346,39 @@ export class ReservasService
         if (this.pagoAprobado(reserva)) return reserva;
         if (this.liquidacionResuelta(reserva)) return reserva;
 
+        // Un anunciante bloqueado o inactivo no puede confirmar ni reactivar reservas.
+        if (
+          reserva.publicacion &&
+          !this.publicacionesService.cuentaAnuncianteHabilitada(reserva.publicacion)
+        ) {
+          this.cerrarSinPago(reserva, EstadoPagoReserva.CANCELADO);
+          this.registrarPagoParaRevision(
+            reserva,
+            fechaPago,
+            'Pago aprobado sobre una reserva de un anunciante bloqueado o inactivo; requiere devolución',
+          );
+          const guardada = await reservaRepository.guardar(reserva);
+          await this.disponibilidadService.liberarReserva(id, transaccion);
+          this.logger.warn(
+            `La reserva ${reserva.id} recibió un pago aprobado con el anunciante bloqueado o inactivo; requiere devolución`,
+          );
+          return guardada;
+        }
+
+        // Una reserva cancelada por bloqueo no se reactiva con un pago tardío.
+        if (this.decision.fueCanceladaPorBloqueo(reserva)) {
+          this.registrarPagoParaRevision(
+            reserva,
+            fechaPago,
+            'Pago aprobado sobre una reserva cancelada por bloqueo; requiere revisión y devolución',
+          );
+          const guardada = await reservaRepository.guardar(reserva);
+          this.logger.warn(
+            `La reserva ${reserva.id} recibió un pago tardío tras una cancelación por bloqueo; requiere devolución`,
+          );
+          return guardada;
+        }
+
         if (reserva.cancelada) {
           const publicacion = reserva.publicacion;
           const inicio = reserva.fecha_inicio;
@@ -413,7 +448,7 @@ export class ReservasService
   }
 
   /** Cierra una reserva cuyo pago falló o cuya preferencia no pudo crearse. */
-  async rechazarPago(id: number, estado: EstadoPagoReserva = EstadoPagoReserva.RECHAZADO): Promise<Reserva> {
+  async rechazarPago(id: number, estado: EstadoPagoReserva = EstadoPagoReserva.RECHAZADO, actor?: ActorCancelacion, motivo?: string): Promise<Reserva> {
     const guardada = await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorId(id);
@@ -422,7 +457,7 @@ export class ReservasService
         if (this.pagoAprobado(reserva)) return reserva;
         if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
 
-        this.cerrarSinPago(reserva, estado);
+        this.cerrarSinPago(reserva, estado, actor, motivo);
         const guardada = await reservaRepository.guardar(reserva);
         await this.disponibilidadService.liberarReserva(id, transaccion);
         return guardada;
@@ -556,13 +591,13 @@ export class ReservasService
   }
 
   /** Cierra la reserva cuyo pago falló, venció o fue devuelto. */
-  private cerrarSinPago(reserva: Reserva, estado: EstadoPagoReserva): void {
+  private cerrarSinPago(reserva: Reserva, estado: EstadoPagoReserva, actor?: ActorCancelacion, motivo?: string): void {
     reserva.estado_pago = estado;
     reserva.estado_liquidacion =
       estado === EstadoPagoReserva.REEMBOLSADO
         ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
         : EstadoLiquidacionReserva.NO_APLICA;
-    this.marcarCancelada(reserva);
+    this.marcarCancelada(reserva, actor, motivo);
     // Se conserva el vencimiento original para poder conciliar un pago
     // aprobado que llegue después del cierre.
   }
@@ -739,7 +774,7 @@ export class ReservasService
 
     const solicitud = this.reservaRepository.crearSolicitudCancelacion({
       reserva,
-      solicitante: Object.assign({}, { id: idUsuario }) as never,
+      solicitante: referenciaUsuario(idUsuario),
       motivo: dto.motivo.trim(),
       estado: EstadoSolicitudCancelacion.PENDIENTE,
       decidida_por: null,
@@ -783,7 +818,7 @@ export class ReservasService
     const hoy = fechaArgentina();
     if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy) {
       solicitud.estado = EstadoSolicitudCancelacion.VENCIDA;
-      solicitud.decidida_por = { id: idAdmin } as never;
+      solicitud.decidida_por = referenciaUsuario(idAdmin);
       solicitud.decidida_en = new Date();
       solicitud.observacion =
         'La estadía comenzó antes de resolver la solicitud';
@@ -793,7 +828,7 @@ export class ReservasService
       );
     }
 
-    solicitud.decidida_por = { id: idAdmin } as never;
+    solicitud.decidida_por = referenciaUsuario(idAdmin);
     solicitud.decidida_en = new Date();
     solicitud.observacion = dto.observacion?.trim() || null;
 

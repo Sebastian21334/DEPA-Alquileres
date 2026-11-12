@@ -1,7 +1,12 @@
+import { ReservaCicloVidaService } from './service/reserva-ciclo-vida.service';
+import { ReservaDecisionService } from './service/reserva-decision.service';
 import { ReservaFinalizacionService } from './service/reserva-finalizacion.service';
 import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
 import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
 import { ReservaReprogramacionService } from './service/reserva-reprogramacion.service';
+import { ReservaReembolsoAplicacionService } from './service/reserva-reembolso-aplicacion.service';
+import { ReservaBloqueoDevolucionService } from './service/reserva-bloqueo-devolucion.service';
+import { ReservaBloqueoAnuncianteService } from './service/reserva-bloqueo-anunciante.service';
 // reservas.module.ts
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -40,10 +45,15 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
   ],
   controllers: [ReservasController],
   providers: [
+    ReservaCicloVidaService,
+    ReservaDecisionService,
     ReservaFinalizacionService,
     ReservaLiquidacionesService,
     ReservaNotificacionesService,
     ReservaReprogramacionService,
+    ReservaReembolsoAplicacionService,
+    ReservaBloqueoDevolucionService,
+    ReservaBloqueoAnuncianteService,
     // El token desacopla el service de la implementación concreta del repositorio.
     ReservasService,
     ReservaRepository,
@@ -52,6 +62,12 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
       useExisting: ReservaRepository, // el token apunta a la misma instancia de ReservaRepository
     },
   ],
-  exports: [ReservasService],
+  exports: [
+    ReservasService,
+    ReservaCicloVidaService,
+    ReservaDecisionService,
+    ReservaBloqueoAnuncianteService,
+    ReservaReembolsoAplicacionService,
+  ],
 })
 export class ReservasModule {}
