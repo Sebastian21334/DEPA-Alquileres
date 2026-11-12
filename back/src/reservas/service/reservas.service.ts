@@ -40,6 +40,7 @@ import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import {
@@ -739,7 +740,7 @@ export class ReservasService
 
     const solicitud = this.reservaRepository.crearSolicitudCancelacion({
       reserva,
-      solicitante: Object.assign({}, { id: idUsuario }) as never,
+      solicitante: referenciaUsuario(idUsuario),
       motivo: dto.motivo.trim(),
       estado: EstadoSolicitudCancelacion.PENDIENTE,
       decidida_por: null,
@@ -783,7 +784,7 @@ export class ReservasService
     const hoy = fechaArgentina();
     if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy) {
       solicitud.estado = EstadoSolicitudCancelacion.VENCIDA;
-      solicitud.decidida_por = { id: idAdmin } as never;
+      solicitud.decidida_por = referenciaUsuario(idAdmin);
       solicitud.decidida_en = new Date();
       solicitud.observacion =
         'La estadía comenzó antes de resolver la solicitud';
@@ -793,7 +794,7 @@ export class ReservasService
       );
     }
 
-    solicitud.decidida_por = { id: idAdmin } as never;
+    solicitud.decidida_por = referenciaUsuario(idAdmin);
     solicitud.decidida_en = new Date();
     solicitud.observacion = dto.observacion?.trim() || null;
 

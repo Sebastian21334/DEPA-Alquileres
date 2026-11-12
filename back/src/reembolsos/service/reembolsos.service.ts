@@ -13,6 +13,7 @@ import type { Pago } from '../../pagos/entity/pago.entity';
 import { PagosRegistroService } from '../../pagos/service/pagos-registro.service';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
+import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import {
   OrigenReembolso,
   Reembolso,
@@ -82,7 +83,7 @@ export class ReembolsosService {
         idempotency_key: datos.idempotencyKey ?? randomUUID(),
         solicitado_por:
           datos.idSolicitadoPor != null
-            ? ({ id: datos.idSolicitadoPor } as never)
+            ? referenciaUsuario(datos.idSolicitadoPor)
             : null,
         resuelto_por: null,
         resuelto_en: null,
@@ -131,7 +132,7 @@ export class ReembolsosService {
       if (actual.estado !== EstadoReembolso.PENDIENTE && actual.estado !== EstadoReembolso.FALLIDO)
         throw new ConflictException('El reembolso no está disponible para ejecutar');
       actual.estado = EstadoReembolso.EN_PROCESO;
-      actual.resuelto_por = { id: idActor } as never;
+      actual.resuelto_por = referenciaUsuario(idActor);
       return repo.guardar(actual);
     });
 
@@ -180,7 +181,7 @@ export class ReembolsosService {
       reembolso.resuelto_en = new Date();
       reembolso.resuelto_por =
         datos.idActor != null
-          ? ({ id: datos.idActor } as never)
+          ? referenciaUsuario(datos.idActor)
           : null;
       reembolso.error_detalle = null;
       await this.pagos.aplicarReembolso(
@@ -204,7 +205,7 @@ export class ReembolsosService {
       reembolso.error_detalle = motivo.trim();
       reembolso.resuelto_en = new Date();
       reembolso.resuelto_por =
-        idActor != null ? ({ id: idActor } as never) : null;
+        idActor != null ? referenciaUsuario(idActor) : null;
       return repo.guardar(reembolso);
     });
     return this.prepararRespuesta(guardado);
