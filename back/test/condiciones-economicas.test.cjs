@@ -7,6 +7,7 @@ const { CrearCheckoutDto } = require('../dist/pagos/dto/crear-checkout.dto');
 const { PresupuestosService } = require('../dist/pagos/service/presupuestos.service');
 const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
+const { ReservaDecisionService } = require('../dist/reservas/service/reserva-decision.service');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
@@ -65,6 +66,7 @@ function escenario(moneda = 'ARS') {
   const disponibilidad = {
     verificarDisponibilidad: async () => true,
     marcarComoReservadas: async () => {},
+    liberarReserva: async () => {},
   };
   const reservas = new ReservasService(
     config,
@@ -75,6 +77,7 @@ function escenario(moneda = 'ARS') {
     { enviarConfirmacion: async () => {} },
     { crearSolicitud: async () => ({}) },
     new ReservaEstadoService(publicaciones),
+    new ReservaDecisionService(),
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },
@@ -216,8 +219,6 @@ for (const moneda of ['ARS', 'USD']) {
       reserva.importe_contratado, reserva.moneda_contratada, reserva.cotizacion_dolar,
     ]);
     e.publicacion.precio *= 3;
-    // El bloqueo posterior no impide conciliar una operación ya iniciada.
-    e.publicacion.anunciante.usuario.bloqueado = true;
     e.publicacion.tipoMoneda.nombre = moneda === 'ARS' ? 'USD' : 'ARS';
     e.cotizacion.venta = '2000.000000';
     e.cotizacion.id = 11;
@@ -234,6 +235,26 @@ for (const moneda of ['ARS', 'USD']) {
     ]), historico);
   });
 }
+
+test('un pago aprobado después de bloquear al anunciante no confirma la reserva', async (t) => {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  t.mock.timers.setTime(AHORA + 60000);
+  await e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO);
+  const reserva = e.estado.reservas[0];
+  e.publicacion.anunciante.usuario.bloqueado = true;
+  e.estado.pagoExterno = {
+    id: 123,
+    external_reference: `reserva:${reserva.id}`,
+    status: 'approved',
+    transaction_amount: Number(presupuesto.total_cobro),
+    currency_id: 'ARS',
+    date_approved: new Date().toISOString(),
+  };
+  await e.pagos.procesarWebhook({ dataId: '123' });
+  assert.equal(reserva.cancelada, true);
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+});
 
 test('USD: una variacion del dolar no invalida la conversion de un presupuesto vigente', async () => {
   const e = escenario('USD');
