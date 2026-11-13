@@ -44,6 +44,7 @@ function base() {
     CREATE TABLE reserva (id INTEGER PRIMARY KEY, id_usuario INTEGER, id_publicacion INTEGER,
       estado_pago TEXT, cancelada BOOLEAN, finalizada BOOLEAN, fecha_inicio TEXT, fecha_fin TEXT,
       estado_liquidacion TEXT);
+    CREATE TABLE liquidacion (id_reserva INTEGER PRIMARY KEY, estado TEXT);
     CREATE TABLE pago (id INTEGER PRIMARY KEY, id_reserva INTEGER, payment_id TEXT, status TEXT, created_at TEXT);
     INSERT INTO usuario VALUES (1, 1, 0, NULL, 'ana@mail.com', NULL), (2, 1, 0, NULL, 'beto@mail.com', NULL);
     INSERT INTO anunciante VALUES (1, 1, '20-12345678-9', NULL, '3510000000', 1);
@@ -71,6 +72,7 @@ function consulta(db, tabla, alias) {
   };
   const b = {
     select() { return b; }, orderBy() { return b; }, setLock() { return b; },
+    leftJoin() { joins.push('LEFT JOIN liquidacion liquidacion ON liquidacion.id_reserva = reserva.id'); return b; },
     innerJoin(ruta) { joins.push(JOINS[ruta]); return b; },
     where(c, v = {}) { condiciones.push(c); Object.assign(params, v); return b; },
     andWhere(c, v) { return b.where(c, v); },

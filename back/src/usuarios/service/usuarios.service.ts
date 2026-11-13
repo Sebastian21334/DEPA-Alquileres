@@ -68,6 +68,34 @@ export class UsuariosService {
     return usuario;
   }
 
+  async cambiarBloqueoAdministrativo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
+    if (idUsuario === idOperador)
+      throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');
+
+    const motivoNormalizado = motivo?.trim();
+    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+      const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion, true);
+      if (!usuario) throw new NotFoundException('Usuario no encontrado');
+      if (!usuario.activa)
+        throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
+      if (usuario.bloqueado === bloqueado) return { usuario, cambio: false };
+
+      await this.publicacionesService.bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
+      usuario.bloqueado = bloqueado;
+      if (bloqueado) {
+        usuario.bloqueoDetalle = {
+          id: randomUUID(),
+          motivo: motivoNormalizado || null,
+          administradorId: idOperador,
+          fecha: new Date().toISOString(),
+        };
+      }
+      await this.usuariosRepo.guardar(usuario, transaccion);
+      return { usuario, cambio: true };
+    });
+
+  }
+
   nombreCompleto(usuario: Usuario): string {
     return formatearNombreCompleto(usuario.nombre, usuario.apellido);
   }

@@ -83,6 +83,8 @@ export interface AdminCity extends AdminCatalogItem {
 export type AdminSettlement = Reserva;
 
 export interface AdminReembolso {
+  aplicado_en?: string | null;
+  revision_aplicacion?: boolean;
   id: number;
   tipo: 'TOTAL' | 'PARCIAL' | 'CONTRACARGO';
   origen: string;
@@ -182,6 +184,10 @@ export class AdminService {
       referencia,
     });
   }
+  conciliarReembolso(id: number, referencia: string) {
+    return this.http.patch(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
+  }
+
   listarReclamos() {
     return this.http.get<Reclamo[]>(`${this.api}/reclamos/administracion`);
   }

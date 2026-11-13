@@ -1,4 +1,5 @@
-const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
+const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
+const { catalogosDePrueba, reservasDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -11,9 +12,6 @@ const {
 } = require('../dist/reembolsos/entity/reembolso.entity');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const MOTIVO_CANCELACION_BLOQUEO = 'Bloqueo de cuenta del anunciante';
-const {
-  ReservaCicloVidaService,
-} = require('../dist/reservas/service/reserva-ciclo-vida.service');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const {
   ReservaBloqueoAnuncianteService,
@@ -205,8 +203,6 @@ function crearEscenario(reserva, reservas = [reserva]) {
     },
   };
 
-  const decision = decisionDePrueba();
-  const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
   const devolucion = new ReembolsosService(undefined, undefined, undefined, undefined, undefined, catalogosDePrueba());
   for (const metodo of ['coberturaDevolucion', 'asegurarDevolucion', 'calcularCobertura']) reembolsosService[metodo] = devolucion[metodo];
   reembolsosService.catalogos = catalogosDePrueba();
@@ -215,10 +211,8 @@ function crearEscenario(reserva, reservas = [reserva]) {
     reservaRepository,
     disponibilidadService,
     reembolsosService,
-    decision,
-    ciclo,
-    reservasService,
-    { sincronizarDesdeReserva: async () => ({}) }, catalogosDePrueba(),
+    Object.assign(reservasDePrueba(), reservasService),
+    { proyectarEnReserva: async reserva => reserva, proyectarListado: async reservas => reservas, sincronizarDesdeReserva: async () => ({}) }, catalogosDePrueba(),
   );
 
   return { estado, pago, servicio };
@@ -422,7 +416,7 @@ function crearEscenarioBloqueo({ bloqueado, rol = 'Anunciante' }) {
 
   return {
     llamadas,
-    servicio: new BloqueoAnuncianteService(repo, bloqueo, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {}),
+    servicio: new BloqueoAnuncianteService(new UsuariosService(repo, {}, {}, {}, {}, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {}), bloqueo, {}),
   };
 }
 
@@ -450,6 +444,14 @@ test('desbloqueo de un Anunciante: cambia el bloqueo y no toca reservas', async 
   assert.deepEqual(resultado, {
     mensaje: 'Usuario habilitado correctamente',
   });
+});
+
+test('repetir el bloqueo permite retomar reservas sin cambiar el motivo original', async () => {
+  const { llamadas, servicio } = crearEscenarioBloqueo({ bloqueado: true });
+  await servicio.cambiarBloqueo(3, true, ADMIN, MOTIVO);
+  await servicio.cambiarBloqueo(3, true, ADMIN + 1, 'Otro motivo');
+  assert.deepEqual(llamadas.cambiarBloqueo, [[3, true, ADMIN, MOTIVO]]);
+  assert.deepEqual(llamadas.cancelarReservas, [[3, ADMIN, MOTIVO], [3, ADMIN, MOTIVO]]);
 });
 
 test('bloqueo de una cuenta que no es Anunciante: no resuelve reservas', async () => {

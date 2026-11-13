@@ -8,7 +8,7 @@ import { ReclamoMensaje } from '../entity/reclamo-mensaje.entity';
 import type { IReclamosRepository } from './reclamos.repository.interface';
 
 const RELACIONES_RECLAMO: FindOptionsRelations<Reclamo> = {
-  reserva: { publicacion: { anunciante: { usuario: true } }, usuario: true },
+  reserva: { liquidacion: true, publicacion: { anunciante: { usuario: true } }, usuario: true },
   inquilino: true,
   anunciante: true,
   evidencias: true,
@@ -50,7 +50,7 @@ export class ReclamosRepository implements IReclamosRepository {
     const reclamos = await this.reclamos.find({
       relations: {
         ...RELACIONES_RECLAMO,
-        reserva: { publicacion: { imagenes: true, anunciante: { usuario: true } }, usuario: true },
+        reserva: { liquidacion: true, publicacion: { imagenes: true, anunciante: { usuario: true } }, usuario: true },
       },
       order: { id: 'DESC' },
       take: 200,

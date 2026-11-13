@@ -75,49 +75,53 @@ export class DisputasService {
     if (disputa.estado.codigo === this.catalogos.codigoEstado('DISPUTA', 'GANADA') || disputa.estado.codigo === this.catalogos.codigoEstado('DISPUTA', 'PERDIDA'))
       throw new ConflictException('La disputa ya fue resuelta');
 
-    const estado = await this.catalogos.obtenerEstado('DISPUTA', dto.resultado);
-    const { reserva, pago } = disputa;
-    if (dto.resultado === this.catalogos.codigoEstado('DISPUTA', 'GANADA')) {
-      await this.pagos.restaurarPagoAprobado(pago);
-      await this.reservasService.restaurarPorContracargoGanado(
-        reserva,
-        disputa.estado_liquidacion_previo,
-      );
-      disputa.resolucion = dto.observacion?.trim() || 'Contracargo ganado';
-    } else {
-      const importe = Number(disputa.importe);
-      const total = importe >= Number(pago.amount) - 0.009;
-      const referencia = `dis:${disputa.id}`;
-      const reembolso = await this.reembolsos.buscarPorOrigen(OrigenReembolso.CONTRACARGO, referencia) ?? await this.reembolsos.crearSolicitud({
+    const resultado = await this.disputas.conTransaccion(async (disputas, transaccion) => {
+      const reserva = await this.reservasService.obtenerReserva(disputa.reserva.id, transaccion);
+      const actual = await disputas.buscarPorId(id);
+      if (!actual || (['GANADA', 'PERDIDA'] as const).some(codigo => actual.estado.codigo === this.catalogos.codigoEstado('DISPUTA', codigo)))
+        throw new ConflictException('La disputa ya fue resuelta');
+      const referencia = `dis:${id}`;
+      const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.CONTRACARGO, referencia, transaccion);
+      if (dto.resultado === this.catalogos.codigoEstado('DISPUTA', 'GANADA')) {
+        if (previo) throw new ConflictException('La disputa tiene una devolución registrada');
+        await this.pagos.restaurarPagoAprobado(actual.pago.id, transaccion);
+        actual.reserva = await this.reservasService.restaurarPorContracargoGanado(reserva, actual.estado_liquidacion_previo, transaccion);
+        actual.estado = await this.catalogos.obtenerEstado('DISPUTA', dto.resultado);
+        actual.resolucion = dto.observacion?.trim() || 'Contracargo ganado';
+        actual.resuelto_por = referenciaUsuario(idAdmin);
+        actual.resuelto_en = new Date();
+        return { disputa: await disputas.guardar(actual), reembolso: null };
+      }
+      const pago = actual.pago;
+      const importe = Number(actual.importe);
+      const reembolso = previo ?? await this.reembolsos.crearSolicitud({
         reserva,
         pago,
-        tipo: total ? TipoReembolso.CONTRACARGO : TipoReembolso.PARCIAL,
+        tipo: importe >= Number(pago.amount) - 0.009 ? TipoReembolso.CONTRACARGO : TipoReembolso.PARCIAL,
         origen: OrigenReembolso.CONTRACARGO,
         importe,
         motivo: 'Contracargo perdido',
         idSolicitadoPor: idAdmin,
         idempotencyKey: referencia,
         referenciaInterna: referencia,
-      });
-      // El contracargo ya revirtió el dinero en Mercado Pago: se registra,
-      // pero no se dispara un segundo reembolso automático.
-      await this.reembolsos.registrarManual(
-        reembolso.id,
-        dto.referencia?.trim() || disputa.chargeback_id || `contracargo-${disputa.id}`,
-        idAdmin,
-      );
-      // El orquestador aplica el estado de la reserva y libera fechas solo
-      // cuando el contracargo perdido ocurre antes del inicio.
-      const aplicada = await this.reembolsos.aplicarConfirmado(reembolso.id, (confirmado, transaccion) =>
-        this.aplicarResolucionReembolso(confirmado, transaccion, dto.observacion),
-      );
-      return this.respuestaAdministracion(aplicada ?? (await this.disputas.buscarPorId(id))!);
-    }
-
-    disputa.estado = estado;
-    disputa.resuelto_por = referenciaUsuario(idAdmin);
-    disputa.resuelto_en = new Date();
-    return this.respuestaAdministracion(await this.disputas.guardar(disputa));
+      }, transaccion);
+      return { disputa: actual, reembolso };
+    });
+    const { reembolso } = resultado;
+    if (!reembolso) return this.respuestaAdministracion(resultado.disputa);
+    // El contracargo ya revirtió el dinero en Mercado Pago: se registra,
+    // pero no se dispara un segundo reembolso automático.
+    await this.reembolsos.registrarManual(
+      reembolso.id,
+      dto.referencia?.trim() || disputa.chargeback_id || `contracargo-${disputa.id}`,
+      idAdmin,
+    );
+    // El orquestador aplica el estado de la reserva y libera fechas solo
+    // cuando el contracargo perdido ocurre antes del inicio.
+    const aplicada = await this.reembolsos.aplicarConfirmado(reembolso.id, (confirmado, transaccion) =>
+      this.aplicarResolucionReembolso(confirmado, transaccion, dto.observacion),
+    );
+    return this.respuestaAdministracion(aplicada ?? (await this.disputas.buscarPorId(id))!);
   }
 
   async aplicarResolucionReembolso(reembolso: Reembolso, transaccion: EntityManager, observacion?: string): Promise<Disputa> {

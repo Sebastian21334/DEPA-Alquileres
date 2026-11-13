@@ -1,4 +1,4 @@
-const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test, before, beforeEach, after } = require('node:test');
@@ -17,7 +17,6 @@ const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolso
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
-const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
@@ -66,11 +65,9 @@ beforeEach(async () => {
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   disponibilidad = { liberarReserva: async () => {} };
-  const decision = decisionDePrueba();
-  const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
   reservas = new ReservasService({}, repositorio, disponibilidad, {}, {}, {}, reembolsos, estadoReserva,
-    decision, liquidaciones, ciclo, catalogosDePrueba());
+    liquidaciones, catalogosDePrueba());
   repositorioCancelaciones = new CancelacionesRepository(source.getRepository(SolicitudCancelacion));
   cancelaciones = new CancelacionesService(repositorioCancelaciones, reservas, reembolsos, catalogosDePrueba());
   reclamos = new ReclamosService(
@@ -329,7 +326,7 @@ test('la cancelación aprobada conserva la reserva hasta confirmar la devolució
   assert.equal(Number(resultado.reembolso.importe), 100);
   assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).cancelada, false);
   await operacionesReembolso.registrarOejecutar(resultado.reembolso.id, 'comprobante-cancelacion', 3);
-  const actual = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+  const actual = await reservas.obtenerReserva(reserva.id);
   assert.equal(actual.cancelada, true);
   assert.equal(actual.estado_pago, 'REEMBOLSADO');
 });
@@ -444,7 +441,7 @@ test('la resolución bloquea la solicitud antes de leer su estado y decide en la
   const bloqueo = posicion(/FROM "solicitud_cancelacion"[\s\S]*FOR UPDATE/i);
   const lectura = consultas.findIndex((sql, indice) => indice > bloqueo && /FROM "solicitud_cancelacion"/i.test(sql));
   const devolucion = posicion(/INSERT INTO "reembolso"/i);
-  const decision = posicion(/UPDATE "solicitud_cancelacion"/i);
+  const decision = posicion(/^UPDATE "solicitud_cancelacion"/i);
   const confirmacion = posicion(/^COMMIT/i);
   assert.ok(inicio >= 0 && inicio < bloqueo, 'la solicitud se bloquea dentro de la transacción');
   assert.ok(bloqueo < lectura && lectura < devolucion, 'el estado se lee con la solicitud ya bloqueada');
@@ -460,9 +457,9 @@ test('si falla la liberación de fechas se revierte la aprobación y se puede re
   const pendiente = await solicitudActual(solicitud.id);
   assert.equal(pendiente.estado, 'PENDIENTE');
   assert.equal(pendiente.decidida_en, null);
-  const sinCambios = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+  const sinCambios = await reservas.obtenerReserva(reserva.id);
   assert.equal(sinCambios.cancelada, false);
-  assert.equal(sinCambios.estado_liquidacion, reserva.estado_liquidacion);
+  assert.equal(sinCambios.estado_liquidacion, 'NO_APLICA');
   assert.equal(await source.getRepository(Liquidacion).countBy({ reserva: { id: reserva.id } }), 0);
 
   let liberadas = 0;
@@ -474,7 +471,6 @@ test('si falla la liberación de fechas se revierte la aprobación y se puede re
   const cancelada = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
   assert.equal(cancelada.cancelada, true);
   assert.equal(cancelada.cancelada_por, 'INQUILINO');
-  assert.equal(cancelada.estado_liquidacion, 'EN_REVISION');
   const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
   assert.equal(liquidacion.estado, 'EN_REVISION');
 });
@@ -542,12 +538,10 @@ test('resolver un reclamo manual exige comprobante antes de crear el reembolso',
 });
 
 test('resolver una liquidación manual exige comprobante antes de crear el reembolso', async () => {
-  const { ReservaLiquidacionesService } = require('../dist/reservas/service/reserva-liquidaciones.service');
+  const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
   const { reserva } = await escenario();
-  const repositorio = new ReservaRepository(source.getRepository(Reserva));
-  const liquidaciones = new ReservaLiquidacionesService(
-    repositorio, reembolsos, reservas,
-    { registrarResolucion: async () => {}, registrarRevision: async () => {} }, undefined, undefined, catalogosDePrueba(),
+  const liquidaciones = new OperacionesLiquidacionService(
+    reembolsos, reservas, { proyectarEnReserva: async reserva => reserva }, catalogosDePrueba(),
   );
   await assert.rejects(liquidaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /referencia|comprobante/i);
   assert.equal(await source.getRepository(Reembolso).count(), 0);
@@ -575,7 +569,7 @@ test('resolver un reclamo con devolución parcial conserva la estadía y registr
   }, 3);
   assert.equal(resultado.estado, 'RESUELTO_INQUILINO');
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 40);
-  const actual = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+  const actual = await reservas.obtenerReserva(reserva.id);
   assert.equal(actual.estado_pago, 'APROBADO');
   assert.equal(actual.cancelada, false);
   assert.equal(actual.estado_liquidacion, 'DEVUELTO_PARCIAL_INQUILINO');
@@ -592,8 +586,8 @@ test('si falla la escritura de la liquidación se revierte la reserva y se puede
   await db.exec("ALTER TABLE liquidacion ADD CONSTRAINT prueba_fallo_liquidacion CHECK (estado <> 'DEVUELTO_PARCIAL_INQUILINO')");
   try {
     await assert.rejects(operacionesReembolso.aplicarReembolsoConfirmado(reembolso.id), /prueba_fallo_liquidacion/);
-    const actual = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
-    assert.equal(actual.estado_liquidacion, reserva.estado_liquidacion);
+    const actual = await reservas.obtenerReserva(reserva.id);
+    assert.equal(actual.estado_liquidacion, 'NO_APLICA');
     assert.equal(actual.cancelada, false);
   } finally {
     await db.exec('ALTER TABLE liquidacion DROP CONSTRAINT prueba_fallo_liquidacion');
@@ -605,7 +599,7 @@ test('si falla la escritura de la liquidación se revierte la reserva y se puede
 });
 
 for (const resultado of ['GANADA', 'PERDIDA']) {
-  test(`el contracargo ${resultado} integra la disputa, el pago y la reserva sin duplicaciones`, async () => {
+  test(`el contracargo ${resultado} integra la disputa, el pago y la reserva sin duplicaciones`, async (t) => {
     const { Disputa } = require('../dist/disputas/entity/disputa.entity');
     const { DisputasService } = require('../dist/disputas/service/disputas.service');
     const { DisputasRepository } = require('../dist/disputas/repository/disputas.repository');
@@ -632,9 +626,17 @@ for (const resultado of ['GANADA', 'PERDIDA']) {
     assert.equal(await source.getRepository(Disputa).count(), 1);
     assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).estado_pago, 'CONTRACARGO');
     assert.equal((await disputas.listarAdministracion())[0].estado, 'ABIERTA');
+    if (resultado === 'GANADA') {
+      const guardar = t.mock.method(DisputasRepository.prototype, 'guardar', async () => { throw new Error('fallo al cerrar disputa'); });
+      await assert.rejects(disputas.resolver(disputa.id, { resultado }, 3), /fallo al cerrar disputa/);
+      assert.equal((await pagos.buscarPorId(pago.id)).status, 'charged_back');
+      assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'CONTRACARGO');
+      guardar.mock.restore();
+    }
     assert.equal((await disputas.resolver(disputa.id, { resultado }, 3)).estado, resultado);
+    await assert.rejects(disputas.resolver(disputa.id, { resultado }, 3), /ya fue resuelta/);
     assert.equal((await disputasRepo.buscarPorId(disputa.id)).estado.codigo, resultado);
-    const actual = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+    const actual = await reservas.obtenerReserva(reserva.id);
     assert.equal(actual.estado_pago, resultado === 'GANADA' ? 'APROBADO' : 'REEMBOLSADO');
     assert.equal(actual.cancelada, resultado === 'PERDIDA');
     assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), resultado === 'GANADA' ? 0 : 100);
@@ -778,6 +780,33 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       reserva_id: reserva.id, estado_pago: 'APROBADO', mercado_pago_status: 'approved', mercado_pago_status_detail: 'accredited',
     });
     assert.equal(await source.getRepository(Pago).count(), 1);
+    const anunciante = `Bearer ${token(2)}`;
+    const hoy = require('../dist/common/utils/fechas').fechaArgentina();
+    const ingreso = await source.getRepository(Reserva).save({
+      monto_pago: 100, estado_pago: 'APROBADO', estado_liquidacion: 'RETENIDO',
+      usuario: { id: 1 }, publicacion: { id: 1 }, fecha_inicio: hoy, fecha_fin: hoy,
+    });
+    const codigoUrl = `/reservas/${ingreso.id}/codigo-alojamiento`;
+    const validarUrl = `/reservas/${ingreso.id}/validar-codigo`;
+    await request(http).get(codigoUrl).set('Authorization', anunciante).expect(403);
+    const { body: acceso } = await request(http).get(codigoUrl).set('Authorization', tenant).expect(200);
+    await request(http).patch(validarUrl).set('Authorization', ajeno).send({ codigo: acceso.codigo }).expect(403);
+    const incorrecto = acceso.codigo === 'AAAAAAAA' ? 'BBBBBBBB' : 'AAAAAAAA';
+    for (let intento = 0; intento < 5; intento++)
+      await request(http).patch(validarUrl).set('Authorization', anunciante).send({ codigo: incorrecto }).expect(400);
+    await request(http).patch(validarUrl).set('Authorization', anunciante).send({ codigo: acceso.codigo }).expect(409);
+    const rutaLiquidacion = `/reservas/${ingreso.id}/liquidacion`;
+    await request(http).patch(rutaLiquidacion).set('Authorization', tenant).send({ estado: 'RETENIDO' }).expect(403);
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'RETENIDO' }).expect(200);
+    const { body: validada } = await request(http).patch(validarUrl).set('Authorization', anunciante).send({ codigo: acceso.codigo }).expect(200);
+    assert.equal(validada.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+    assert.equal(Object.hasOwn(validada, 'codigo_alojamiento'), false);
+    const lista = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
+    assert.equal(lista.body.find(fila => fila.id === ingreso.id).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+    const detalle = await request(http).get(`/reservas/${ingreso.id}`).set('Authorization', tenant).expect(200);
+    assert.equal(detalle.body.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }).expect(200);
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-repetido' }).expect(409);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);
     const disputa = await app.get(DisputasService).registrarContracargo({

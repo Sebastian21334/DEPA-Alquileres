@@ -25,11 +25,6 @@ export type CausaCancelacion = 'BLOQUEO_ANUNCIANTE';
   name: 'fk_reserva_estado_pago',
   onDelete: 'RESTRICT',
 })
-@Check('ck_reserva_estado_liquidacion_ambito', `"ambito_estado_liquidacion" = '${"LIQUIDACION_RESERVA"}'`)
-@ForeignKey(() => Estado, ['ambitoEstadoLiquidacion', 'estado_liquidacion'], ['codigoAmbito', 'codigo'], {
-  name: 'fk_reserva_estado_liquidacion',
-  onDelete: 'RESTRICT',
-})
 export class Reserva {
 
   // La reserva registra el pago y vincula al inquilino con una publicación.
@@ -172,40 +167,9 @@ export class Reserva {
   @Column({ name: 'intentos_codigo', type: 'int', default: 0 })
   intentos_codigo: number;
 
-  @Column({ name: 'estado_liquidacion', type: 'varchar', length: 40, default: 'NO_APLICA' })
   estado_liquidacion: string;
-
-  @Column({
-    name: 'ambito_estado_liquidacion',
-    type: 'varchar',
-    length: 40,
-    select: false,
-    insert: false,
-    update: false,
-  })
-  readonly ambitoEstadoLiquidacion: "LIQUIDACION_RESERVA";
-
-  @Column({
-    name: 'fecha_resolucion_liquidacion',
-    type: 'timestamp',
-    nullable: true,
-  })
   fecha_resolucion_liquidacion: Date | null;
-
-  @Column({
-    name: 'referencia_liquidacion',
-    type: 'varchar',
-    length: 150,
-    nullable: true,
-  })
   referencia_liquidacion: string | null;
-
-  @Column({
-    name: 'observacion_liquidacion',
-    type: 'varchar',
-    length: 500,
-    nullable: true,
-  })
   observacion_liquidacion: string | null;
 
   // Se conserva una copia del periodo para mantener el historial aunque
@@ -277,6 +241,6 @@ export class Reserva {
 
   // Registro auditable de la liquidación; la reserva conserva la caché del estado.
   @OneToOne(() => Liquidacion, (liquidacion) => liquidacion.reserva)
-  liquidacion: Relation<Liquidacion | null>;
+  liquidacion?: Relation<Liquidacion | null>;
 
 }

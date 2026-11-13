@@ -99,6 +99,10 @@ BEGIN
     FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_type t ON t.oid = a.atttypid
     WHERE a.attrelid = tabla_regclass AND a.attname = campo.columna AND NOT a.attisdropped;
 
+    IF tipo_actual IS NULL AND campo.tabla = 'reserva' AND campo.columna = 'estado_liquidacion' THEN
+      CONTINUE;
+    END IF;
+
     IF tipo_actual = 'e' THEN
       IF campo.tabla = 'solicitud_cancelacion' THEN
         DROP INDEX IF EXISTS public.ux_solicitud_cancelacion_pendiente;

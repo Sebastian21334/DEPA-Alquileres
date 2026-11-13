@@ -8,7 +8,6 @@ const bcrypt = require('bcrypt');
 const { JwtService } = require('@nestjs/jwt');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 const { BloqueoAnuncianteService } = require('../dist/bloqueo-anunciante/service/bloqueo-anunciante.service');
-const { BloqueoAnuncianteRepository } = require('../dist/bloqueo-anunciante/repository/bloqueo-anunciante.repository');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
 const { UsuariosCredencialesService } = require('../dist/usuarios/service/usuarios-credenciales.service');
@@ -41,8 +40,7 @@ test('F-04 conserva bloqueos anteriores y permite apelar únicamente el bloqueo 
   const credenciales = new UsuariosCredencialesService(repo, {});
   const usuarios = new UsuariosService(repo, catalogosDePrueba(), credenciales, mail, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {});
-  const bloqueo = new BloqueoAnuncianteService(new BloqueoAnuncianteRepository(source.getRepository(Usuario)), {},
-    { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, mail);
+  const bloqueo = new BloqueoAnuncianteService(usuarios, {}, mail);
   const jwt = new JwtService({ secret: 'clave-jwt-solo-para-pruebas' });
   const auth = new AuthService(usuarios, credenciales, jwt, mail);
   const seguridad = new SeguridadService(repo);

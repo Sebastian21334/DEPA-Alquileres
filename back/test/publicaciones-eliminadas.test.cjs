@@ -196,7 +196,7 @@ test('HTTP: elimina con permiso y conserva el detalle solo para la sesión del i
   const { DisponibilidadService } = require('../dist/disponibilidad/service/disponibilidad.service');
   const { JwtStrategy } = require('../dist/seguridad/strategy/jwt.strategy');
   const { SeguridadService } = require('../dist/seguridad/service/seguridad.service');
-  const { UsuariosConsultaService } = require('../dist/usuarios/service/usuarios-consulta.service');
+  const { UsuariosConsultaService } = require('../dist/usuarios-consulta/service/usuarios-consulta.service');
   const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
   const e = escenario();
   const bloqueados = new Set();

@@ -24,5 +24,4 @@ export interface IReservaRepository {
   buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, aprobado: string): Promise<Reserva[]>;
   buscarPendientesVencidas(fecha: Date, pendiente: string): Promise<Reserva[]>;
   existeAprobada(idPublicacion: number, idUsuarioInquilino: number, aprobado: string): Promise<boolean>;
-  buscarLiquidacionesAdministracion(estados: string[]): Promise<Reserva[]>;
 }

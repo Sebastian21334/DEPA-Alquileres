@@ -1,3 +1,4 @@
+import { codigosCatalogo } from '../../catalogos/codigos-catalogo';
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
 import {
@@ -14,19 +15,11 @@ import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Pago } from '../../pagos/entity/pago.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
-export enum TipoReembolso {
-  TOTAL = 'TOTAL',
-  PARCIAL = 'PARCIAL',
-  CONTRACARGO = 'CONTRACARGO',
-}
+export const TipoReembolso = codigosCatalogo('REEMBOLSO_TIPO');
+export type TipoReembolso = keyof typeof TipoReembolso;
 
-export enum OrigenReembolso {
-  CANCELACION = 'CANCELACION',
-  RECLAMO = 'RECLAMO',
-  CONTRACARGO = 'CONTRACARGO',
-  PAGO_TARDIO = 'PAGO_TARDIO',
-  AJUSTE_ADMIN = 'AJUSTE_ADMIN',
-}
+export const OrigenReembolso = codigosCatalogo('REEMBOLSO_ORIGEN');
+export type OrigenReembolso = keyof typeof OrigenReembolso;
 
 /** Registro auditable de una devolución total o parcial. */
 @Entity('reembolso')
@@ -53,10 +46,10 @@ export class Reembolso {
   })
   pago: Relation<Pago>;
 
-  @Column({ name: 'tipo', type: 'enum', enum: TipoReembolso })
+  @Column({ name: 'tipo', type: 'varchar', length: 40, })
   tipo: TipoReembolso;
 
-  @Column({ name: 'origen', type: 'enum', enum: OrigenReembolso })
+  @Column({ name: 'origen', type: 'varchar', length: 40, })
   origen: OrigenReembolso;
 
   @Column({ name: 'importe', type: 'decimal', precision: 10, scale: 2 })

@@ -207,19 +207,30 @@ export class ReclamosService {
       throw new ConflictException('El reclamo ya fue resuelto');
     const reserva = reclamo.reserva;
 
-    if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
-      await this.reservas.resolverReclamoSinDevolucion(reserva, dto.observacion);
-      reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE');
-      reclamo.resolucion = ResolucionReclamo.SIN_DEVOLUCION;
-    } else {
+    const referencia = `rec:${id}`;
+    const resultado: { reclamo: Reclamo; reembolso?: Reembolso } = { reclamo };
+    await this.reservas.conReservaBloqueada(reserva.id, async (actual, transaccion) => {
+      const repositorio = this.reclamos.enTransaccion(transaccion);
+      const expediente = await repositorio.buscarPorId(id);
+      if (!expediente || estadosCerrados.includes(expediente.estado))
+        throw new ConflictException('El reclamo ya fue resuelto');
+      const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
+      if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
+        if (previo) throw new ConflictException('El reclamo tiene una devolución registrada');
+        expediente.reserva = await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion, transaccion);
+        expediente.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE');
+        expediente.resolucion = ResolucionReclamo.SIN_DEVOLUCION;
+        expediente.administrador_resolucion = referenciaUsuario(idAdmin);
+        expediente.resuelto_en = new Date();
+        resultado.reclamo = await repositorio.guardar(expediente);
+        return;
+      }
       if (!this.reembolsos.ejecucionAutomaticaHabilitada && !dto.referencia?.trim())
         throw new BadRequestException('La referencia del comprobante de devolución es obligatoria');
-      const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id);
+      const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
       if (!pago)
         throw new ConflictException('La reserva no tiene un pago registrado');
       const saldo = this.reembolsos.saldoReembolsable(pago);
-      const referencia = `rec:${reclamo.id}`;
-      const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia);
       const importe = previo ? Number(previo.importe) :
         dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
           ? saldo
@@ -232,7 +243,7 @@ export class ReclamosService {
       if (previo && (previo.tipo !== tipo ||
           (tipo === TipoReembolso.PARCIAL && importe !== Number(dto.importe))))
         throw new ConflictException('El reclamo ya tiene una devolución por otro importe o tipo');
-      const reembolso = previo ?? await this.reembolsos.crearSolicitud({
+      resultado.reembolso = previo ?? await this.reembolsos.crearSolicitud({
         reserva,
         pago,
         tipo,
@@ -242,21 +253,19 @@ export class ReclamosService {
         idSolicitadoPor: idAdmin,
         idempotencyKey: referencia,
         referenciaInterna: referencia,
-      });
-      const ejecutado = await this.reembolsos.registrarOejecutar(
-        reembolso.id,
-        dto.referencia?.trim(),
-        idAdmin,
-      );
-      const aplicado = await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
-        this.aplicarResolucionReembolso(confirmado, transaccion),
-      );
-      return this.prepararRespuesta(aplicado ?? await this.obtener(id, idAdmin, true));
-    }
-
-    reclamo.administrador_resolucion = referenciaUsuario(idAdmin);
-    reclamo.resuelto_en = new Date();
-    return this.prepararRespuesta(await this.reclamos.guardar(reclamo));
+      }, transaccion);
+    });
+    if (!resultado.reembolso) return this.prepararRespuesta(resultado.reclamo);
+    const reembolso = resultado.reembolso;
+    const ejecutado = await this.reembolsos.registrarOejecutar(
+      reembolso.id,
+      dto.referencia?.trim(),
+      idAdmin,
+    );
+    const aplicado = await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
+      this.aplicarResolucionReembolso(confirmado, transaccion),
+    );
+    return this.prepararRespuesta(aplicado ?? await this.obtener(id, idAdmin, true));
   }
 
   async aplicarResolucionReembolso(reembolso: Reembolso, transaccion: EntityManager): Promise<Reclamo> {

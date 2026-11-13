@@ -1,3 +1,4 @@
+import { codigosCatalogo } from '../../catalogos/codigos-catalogo';
 import type { Relation } from 'typeorm';
 import {
   Check,
@@ -13,9 +14,8 @@ import { Pago } from '../../pagos/entity/pago.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Estado } from '../../catalogos/entity/estado.entity';
 
-export enum OrigenDisputa {
-  CONTRACARGO = 'CONTRACARGO',
-}
+export const OrigenDisputa = codigosCatalogo('DISPUTA_ORIGEN');
+export type OrigenDisputa = keyof typeof OrigenDisputa;
 
 /** Expediente de un contracargo informado por Mercado Pago. */
 @Entity('disputa')
@@ -38,7 +38,7 @@ export class Disputa {
   })
   pago: Relation<Pago>;
 
-  @Column({ name: 'origen', type: 'enum', enum: OrigenDisputa })
+  @Column({ name: 'origen', type: 'varchar', length: 40, })
   origen: OrigenDisputa;
 
   @Column({

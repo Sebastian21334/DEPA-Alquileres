@@ -13,12 +13,12 @@ import type { IMailService } from '../../mail/mail.interface';
 import { nombreInquilinoReserva, normalizarFechaReserva } from './reservas.utils';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
-import { ReservaDecisionService } from './reserva-decision.service';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 
 @Injectable()
 export class ReservaNotificacionesService {
   private readonly logger = new Logger(ReservaNotificacionesService.name);
-  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService, private readonly decision: ReservaDecisionService) {}
+  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService, private readonly catalogos: CatalogosService) {}
 
   async enviarReprogramacion(idCambio: number, idReserva: number): Promise<boolean> {
     try {
@@ -50,7 +50,7 @@ export class ReservaNotificacionesService {
     if (reserva.email_confirmacion_inquilino_enviado && reserva.email_nueva_reserva_anunciante_enviado) return;
     const huboErrores = await this.reservaRepository.conTransaccion(async (reservas) => {
       const actual = await reservas.buscarPorId(reserva.id, 'for_no_key_update');
-      if (!actual || !this.decision.estaConfirmada(actual)) return false;
+      if (!actual || (actual.cancelada || actual.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))) return false;
       return this.enviarConfirmacionesPendientes(actual, reservas);
     });
     if (huboErrores) {

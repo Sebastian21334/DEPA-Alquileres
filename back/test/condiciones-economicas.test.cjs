@@ -1,4 +1,4 @@
-const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
+const { catalogosDePrueba, reservasDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test, beforeEach } = require('node:test');
@@ -9,7 +9,6 @@ const { PresupuestosService } = require('../dist/operaciones-reserva/service/pre
 const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
 const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
-const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
@@ -79,9 +78,8 @@ function escenario(moneda = 'ARS') {
     { enviarConfirmacion: async () => {} },
     { crearSolicitud: async () => ({}) },
     new ReservaEstadoService(publicaciones, catalogosDePrueba()),
-    decisionDePrueba(),
-    { sincronizarDesdeReserva: async () => ({}) },
-    new ReservaCicloVidaService(decisionDePrueba(), catalogosDePrueba()), catalogosDePrueba(),
+    { proyectarEnReserva: async reserva => reserva, proyectarListado: async reservas => reservas, sincronizarDesdeReserva: async () => ({}), esLiquidacionResuelta: estado => reservasDePrueba().liquidacionResuelta({ estado_liquidacion: estado }) },
+    catalogosDePrueba(),
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },

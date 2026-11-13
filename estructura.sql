@@ -23,67 +23,42 @@ SET row_security = off;
 -- Name: disputa_origen_enum; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.disputa_origen_enum AS ENUM (
-    'CONTRACARGO'
-);
+
 
 
 --
 -- Name: reclamo_categoria_enum; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.reclamo_categoria_enum AS ENUM (
-    'LIMPIEZA',
-    'MANTENIMIENTO',
-    'INGRESO',
-    'DESCRIPCION',
-    'OTRO'
-);
+
 
 
 --
 -- Name: reclamo_mensaje_visibilidad_enum; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.reclamo_mensaje_visibilidad_enum AS ENUM (
-    'TODOS',
-    'ADMIN'
-);
+
 
 
 --
 -- Name: reclamo_resolucion_enum; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.reclamo_resolucion_enum AS ENUM (
-    'SIN_DEVOLUCION',
-    'DEVOLUCION_TOTAL',
-    'DEVOLUCION_PARCIAL'
-);
+
 
 
 --
 -- Name: reembolso_origen_enum; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.reembolso_origen_enum AS ENUM (
-    'CANCELACION',
-    'RECLAMO',
-    'CONTRACARGO',
-    'PAGO_TARDIO',
-    'AJUSTE_ADMIN'
-);
+
 
 
 --
 -- Name: reembolso_tipo_enum; Type: TYPE; Schema: public; Owner: -
 --
 
-CREATE TYPE public.reembolso_tipo_enum AS ENUM (
-    'TOTAL',
-    'PARCIAL',
-    'CONTRACARGO'
-);
+
 
 
 SET default_tablespace = '';
@@ -220,7 +195,8 @@ CREATE TABLE public.disputa (
     id_disputa integer NOT NULL,
     id_reserva integer NOT NULL,
     id_pago integer NOT NULL,
-    origen public.disputa_origen_enum NOT NULL,
+    ambito_origen character varying(40) GENERATED ALWAYS AS ('DISPUTA_ORIGEN') STORED,
+    origen character varying(40) NOT NULL,
     estado character varying(40) DEFAULT 'ABIERTA'::character varying NOT NULL,
     importe numeric(10,2) NOT NULL,
     moneda character varying(3) DEFAULT 'ARS'::character varying NOT NULL,
@@ -674,7 +650,8 @@ CREATE TABLE public.reclamo_mensaje (
     id_reclamo integer NOT NULL,
     id_autor integer NOT NULL,
     texto character varying(1000) NOT NULL,
-    visible_para public.reclamo_mensaje_visibilidad_enum DEFAULT 'TODOS'::public.reclamo_mensaje_visibilidad_enum NOT NULL,
+    ambito_visible_para character varying(40) GENERATED ALWAYS AS ('RECLAMO_VISIBILIDAD') STORED,
+    visible_para character varying(40) DEFAULT 'TODOS' NOT NULL,
     creado_en timestamp without time zone DEFAULT now() NOT NULL
 );
 
@@ -702,10 +679,12 @@ CREATE TABLE public.reclamo_reserva (
     id_reserva integer NOT NULL,
     id_inquilino integer NOT NULL,
     id_anunciante integer,
-    categoria public.reclamo_categoria_enum NOT NULL,
+    ambito_categoria character varying(40) GENERATED ALWAYS AS ('RECLAMO_CATEGORIA') STORED,
+    categoria character varying(40) NOT NULL,
     descripcion character varying(1000) NOT NULL,
     estado character varying(40) DEFAULT 'ABIERTO'::character varying NOT NULL,
-    resolucion public.reclamo_resolucion_enum,
+    ambito_resolucion character varying(40) GENERATED ALWAYS AS ('RECLAMO_RESOLUCION') STORED,
+    resolucion character varying(40),
     importe_reembolso numeric(10,2),
     id_administrador_resolucion integer,
     creado_en timestamp without time zone DEFAULT now() NOT NULL,
@@ -737,8 +716,10 @@ CREATE TABLE public.reembolso (
     id_reembolso integer NOT NULL,
     id_reserva integer NOT NULL,
     id_pago integer NOT NULL,
-    tipo public.reembolso_tipo_enum NOT NULL,
-    origen public.reembolso_origen_enum NOT NULL,
+    ambito_tipo character varying(40) GENERATED ALWAYS AS ('REEMBOLSO_TIPO') STORED,
+    tipo character varying(40) NOT NULL,
+    ambito_origen character varying(40) GENERATED ALWAYS AS ('REEMBOLSO_ORIGEN') STORED,
+    origen character varying(40) NOT NULL,
     importe numeric(10,2) NOT NULL,
     moneda character varying(3) DEFAULT 'ARS'::character varying NOT NULL,
     estado character varying(40) DEFAULT 'PENDIENTE'::character varying NOT NULL,
@@ -842,10 +823,6 @@ CREATE TABLE public.reserva (
     codigo_generado_en timestamp without time zone,
     codigo_validado_en timestamp without time zone,
     intentos_codigo integer DEFAULT 0 NOT NULL,
-    estado_liquidacion character varying(40) DEFAULT 'NO_APLICA'::character varying NOT NULL,
-    fecha_resolucion_liquidacion timestamp without time zone,
-    referencia_liquidacion character varying(150),
-    observacion_liquidacion character varying(500),
     precio_unitario_contratado numeric(10,2),
     importe_contratado numeric(10,2),
     moneda_contratada character varying(3),
@@ -859,8 +836,6 @@ CREATE TABLE public.reserva (
     causa_cancelacion character varying(40),
     cancelada_por character varying(20),
     ambito_estado_pago character varying(40) DEFAULT 'PAGO_RESERVA'::character varying NOT NULL,
-    ambito_estado_liquidacion character varying(40) DEFAULT 'LIQUIDACION_RESERVA'::character varying NOT NULL,
-    CONSTRAINT ck_reserva_estado_liquidacion_ambito CHECK (((ambito_estado_liquidacion)::text = 'LIQUIDACION_RESERVA'::text)),
     CONSTRAINT ck_reserva_estado_pago_ambito CHECK (((ambito_estado_pago)::text = 'PAGO_RESERVA'::text))
 );
 
@@ -2171,8 +2146,6 @@ ALTER TABLE ONLY public.reembolso
 -- Name: reserva fk_reserva_estado_liquidacion; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.reserva
-    ADD CONSTRAINT fk_reserva_estado_liquidacion FOREIGN KEY (ambito_estado_liquidacion, estado_liquidacion) REFERENCES public.estado(codigo_ambito, codigo) ON DELETE RESTRICT;
 
 
 --
@@ -2234,6 +2207,24 @@ ALTER TABLE ONLY public.solicitud_verificacion
 --
 -- PostgreSQL database dump complete
 --
+
+ALTER TABLE public.disputa ADD CONSTRAINT fk_disputa_origen_catalogo
+      FOREIGN KEY (ambito_origen, origen) REFERENCES public.estado(codigo_ambito, codigo) ON DELETE RESTRICT;
+
+ALTER TABLE public.reclamo_reserva ADD CONSTRAINT fk_reclamo_reserva_categoria_catalogo
+      FOREIGN KEY (ambito_categoria, categoria) REFERENCES public.estado(codigo_ambito, codigo) ON DELETE RESTRICT;
+
+ALTER TABLE public.reclamo_reserva ADD CONSTRAINT fk_reclamo_reserva_resolucion_catalogo
+      FOREIGN KEY (ambito_resolucion, resolucion) REFERENCES public.estado(codigo_ambito, codigo) ON DELETE RESTRICT;
+
+ALTER TABLE public.reclamo_mensaje ADD CONSTRAINT fk_reclamo_mensaje_visible_para_catalogo
+      FOREIGN KEY (ambito_visible_para, visible_para) REFERENCES public.estado(codigo_ambito, codigo) ON DELETE RESTRICT;
+
+ALTER TABLE public.reembolso ADD CONSTRAINT fk_reembolso_tipo_catalogo
+      FOREIGN KEY (ambito_tipo, tipo) REFERENCES public.estado(codigo_ambito, codigo) ON DELETE RESTRICT;
+
+ALTER TABLE public.reembolso ADD CONSTRAINT fk_reembolso_origen_catalogo
+      FOREIGN KEY (ambito_origen, origen) REFERENCES public.estado(codigo_ambito, codigo) ON DELETE RESTRICT;
 
 \unrestrict 7peKf1Rt8kVZd2EGsFuvaqaqoQelcs7HqcsvA3oHvjTxcYLRVGIyCSoWpoHZx6w
 

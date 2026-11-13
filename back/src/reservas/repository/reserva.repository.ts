@@ -1,7 +1,7 @@
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThan, Repository, type EntityManager } from 'typeorm';
+import { LessThan, Repository, type EntityManager } from 'typeorm';
 import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
@@ -217,23 +217,6 @@ export class ReservaRepository implements IReservaRepository {
         estado_pago: aprobado,
         cancelada: false,
       },
-    });
-  }
-
-  buscarLiquidacionesAdministracion(estados: string[]): Promise<Reserva[]> {
-    return this.repository.find({
-      where: {
-        estado_liquidacion: In(estados),
-      },
-      relations: {
-        usuario: true,
-        publicacion: {
-          anunciante: { usuario: true },
-          ciudad: true,
-          provincia: true,
-        },
-      },
-      order: { codigo_validado_en: 'ASC', id: 'DESC' },
     });
   }
 }

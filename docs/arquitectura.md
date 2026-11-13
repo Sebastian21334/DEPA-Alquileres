@@ -56,7 +56,7 @@ Frontend:
 | Identidad y acceso | `auth` | Registro, login, verificación de correo y recuperación de contraseña. | — |
 | Identidad y acceso | `seguridad` | JWT, estrategia, guards de sesión y roles. | `JwtModule`, `PassportModule`, `JwtAuthGuard`, `RolesGuard` |
 | Identidad y acceso | `usuarios` | Perfil, baja lógica, bloqueo/habilitación y credenciales. | `UsuariosService`, `UsuariosCredencialesService` |
-| Identidad y acceso | `usuarios-consulta` | Lecturas de usuario y rol para seguridad y otros dominios. | `UsuariosConsultaService`, `USUARIOS_REPOSITORY` |
+| Identidad y acceso | `usuarios-consulta` | Lecturas de usuario y rol para seguridad y otros dominios. | `UsuariosConsultaService` |
 | Anunciantes | `anunciantes` | Alta, datos de contacto, CUIT y verificación del anunciante. | `AnunciantesService`, `AnuncianteGuard` |
 | Anunciantes | `verificacion-anunciante` | Solicitudes, prueba de vida, análisis facial y eliminación de documentos. | — |
 | Catálogo | `publicaciones` | Publicaciones, visibilidad, propiedad y activación. | `PublicacionesService` |
@@ -66,11 +66,11 @@ Frontend:
 | Catálogo | `favoritos` | Favoritos del inquilino. | — |
 | Catálogo | `mensajes` | Mensajería asociada a publicaciones y reservas. | — |
 | Reservas | `disponibilidad` | Calendario, ocupación, liberación y reprogramación de fechas. | `DisponibilidadService` |
-| Reservas | `reservas` | Ciclo de vida, cancelación de la estadía, código, coordinación de liquidaciones, bloqueo y efectos sobre la reserva. | `ReservasService`, `ReservaCicloVidaService`, `ReservaDecisionService`, `ReservaBloqueoAnuncianteService` |
+| Reservas | `reservas` | Ciclo de vida, cancelación de la estadía, código, coordinación de liquidaciones, bloqueo y efectos sobre la reserva. | `ReservasService`, `ReservaBloqueoAnuncianteService` |
 | Reservas | `cancelaciones` | Solicitud de cancelación de una reserva pagada, su política de devolución y su decisión administrativa. Pide los efectos a Reservas y Reembolsos. | — |
 | Liquidaciones | `liquidaciones` | Registro de liquidaciones y sus estados. | `LiquidacionesService` |
 | Reservas | `reservas-consulta` | Proyección compartida de reservas y cálculo de `estado_estadia`. | `ReservaEstadoService` |
-| Reservas | `bloqueo-anunciante` | Bloqueo administrativo de cuentas y resolución de reservas afectadas. | `IBloqueoAnuncianteRepository` |
+| Reservas | `bloqueo-anunciante` | Coordina el bloqueo a través de Usuarios y la resolución de reservas afectadas. | — |
 | Dinero | `cotizaciones` | Cotización blue, historial y consultas. | `CotizacionesService` |
 | Dinero | `pagos` | Registro y consulta de pagos, saldo reembolsable y cambios de estado del pago. | `PagosService` |
 | Dinero | `mercado-pago` | Preferencias, consultas, validación de firma y ejecución de reembolsos en Mercado Pago. | `MercadoPagoService` |
@@ -163,7 +163,11 @@ Guards de resolución:
 
 La migración `back/migrations/20261112-liquidaciones.sql` crea el ámbito `LIQUIDACION_RESERVA`, sus siete estados y la tabla con las restricciones anteriores. El backfill inserta una fila por reserva copiando `estado_liquidacion`, `referencia_liquidacion`, `observacion_liquidacion` y `fecha_resolucion_liquidacion`; copia el importe solo si la liquidación ya está resuelta y `fecha_pago_propietario` solo para `PAGADO_PROPIETARIO`. Usa `ON CONFLICT (id_reserva) DO NOTHING`, por lo que es repetible y no modifica ni elimina columnas de `reserva`. El runner `back/scripts/liquidaciones.cjs` (`npm run db:liquidaciones`) informa el estado sin `--aplicar`; con `--aplicar` abre una transacción con `lock_timeout` de 10 s y un advisory lock `depa:liquidaciones`, y aplica antes las migraciones de catálogo si faltan.
 
-Las columnas de liquidación en la reserva conservan el contrato de la API. `ReservaDecisionService` concentra las consultas de negocio y `ReservaCicloVidaService` concentra las transiciones de la reserva. `ReservasService` coordina los efectos de la devolución sobre la reserva, su liquidación y la liberación de fechas cuando corresponde. `LiquidacionesService` registra el resultado mediante su repositorio.
+Las respuestas de Reserva conservan los campos de liquidación mediante una proyección. `ReservasService` concentra las reglas y transiciones de estadía y coordina los efectos de la devolución sobre la reserva, su liquidación y la liberación de fechas cuando corresponde. `LiquidacionesService` registra el resultado mediante su repositorio.
+
+El ingreso y el reporte de problemas se atienden en Reservas. El reporte pasa la liquidación a revisión. Las rutas administrativas de liquidación conservan el prefijo `/reservas` y se coordinan en Operaciones de Reserva. El listado administrativo, el detalle y los listados principales de reservas proyectan el estado, la referencia, la observación y la fecha desde `liquidacion`. La tabla `liquidacion` también alimenta la comprobación de operaciones pendientes al dar de baja una cuenta.
+
+`npm run db:liquidaciones` completa las filas faltantes y ejecuta `20261113-reconciliar-liquidaciones.sql`. La migración de retiro verifica la coincidencia de los datos antes de eliminar las columnas duplicadas. La reconciliación recupera una resolución histórica de Reserva si es posterior a la registrada en Liquidaciones y conserva los importes existentes.
 
 Verificación específica: `npm run test:liquidaciones` (5/5) y `npm run test:liquidaciones-entidad` (9/9). Al cierre de la fase 2, el 12/11/2026, pasan las suites completas: 173/173 pruebas `node:test` y 34/34 Jest (este último requiere Node 24.9 o superior).
 
@@ -233,3 +237,5 @@ Las skills del proyecto están en `.agents/skills/`. Para cambios de código, `i
 5. `verificar-seguridad-del-cambio`: revisar entradas externas, permisos, datos sensibles e integraciones.
 
 La skill `implementacion-segura` también exige verificar el cambio completo, probar migraciones y seed en una base descartable cuando corresponda, y preservar el alcance. Este documento es solo de arquitectura; no reemplaza los documentos funcionales de `back/docs/`.
+
+Los tipos y orígenes de reembolso, el origen de disputa y la categoría, resolución y visibilidad de reclamos se validan con claves foráneas a Estado. La migración se aplica con `npm run db:cancelaciones-devoluciones` desde back y la seed conserva sus valores iniciales.
