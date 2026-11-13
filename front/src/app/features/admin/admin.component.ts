@@ -87,7 +87,7 @@ type AdminSection = 'resumen' | typeof ADMIN_NAVIGATION[number]['items'][number]
     LucideWallet,
   ],
   templateUrl: './admin.component.html',
-  styleUrl: './admin.component.scss',
+  styleUrls: ['./admin.component.scss', './admin-dashboard.scss'],
 })
 export class AdminComponent {
   private readonly injector = inject(Injector);
