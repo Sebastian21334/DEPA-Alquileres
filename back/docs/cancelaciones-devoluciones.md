@@ -52,26 +52,24 @@ Responsabilidades:
 
 - crear el registro `reembolso`;
 - validar importe, moneda y saldo;
-- ejecutar por Mercado Pago o registrar manualmente;
+- ejecutar por Mercado Pago y registrar devoluciones externas verificadas;
 - actualizar `pago.amount_refunded`, `pago.refunded_at` y `pago.status`;
 - conciliar webhooks y reintentos;
 - garantizar idempotencia.
 
 El módulo no decide la política, no cancela reservas y no libera fechas.
 
-### Modos de ejecución
+### Ejecución
 
-- `MP_REFUNDS_ENABLED=false` (por defecto): el Administrador registra la
-  devolución manualmente con una referencia o comprobante.
-- `MP_REFUNDS_ENABLED=true`: se reembolsa el pago original con la clave de
-  idempotencia persistida. Si hay un identificador externo, la conciliación
-  consulta el movimiento. Ante un resultado incierto sin identificador, reusa
-  la clave durante los 15 minutos siguientes al primer intento.
+- El administrador solicita la devolución con `PATCH /reservas/reembolsos/:id/ejecutar`.
+  Se reembolsa el pago original por Mercado Pago con la clave de idempotencia
+  persistida. Si ya hay un identificador externo, la conciliación consulta el
+  movimiento. Ante un resultado incierto sin identificador, reutiliza la clave
+  durante los 15 minutos siguientes al primer intento.
 - Para recuperar una operación incierta con el identificador obtenido de
   Mercado Pago, un administrador puede llamar a
   `PATCH /reservas/reembolsos/:id/conciliar` con `{ "referencia": "<id de reembolso>" }`.
   El backend verifica el pago y el importe en la pasarela antes de confirmarla.
-- En ningún modo se marca `APROBADO` sin una referencia o confirmación.
 
 ### Estados
 
@@ -142,7 +140,6 @@ npm run db:seed
 
 Variables:
 
-- `MP_REFUNDS_ENABLED` (`false` por defecto).
 - `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
 
 El comando aplica la migración de cancelaciones si todavía corresponde y luego

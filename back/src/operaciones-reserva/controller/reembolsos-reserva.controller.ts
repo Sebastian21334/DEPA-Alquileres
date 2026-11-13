@@ -11,9 +11,9 @@ import { OperacionesReembolsoService } from '../service/operaciones-reembolso.se
 export class ReembolsosReservaController {
   constructor(private readonly operaciones: OperacionesReembolsoService) {}
 
-  @Patch(':id/manual')
-  registrarReembolsoManual(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarReembolsoManualDto, @Req() req: AuthenticatedRequest) {
-    return this.operaciones.registrarOejecutar(id, dto.referencia, req.user.id);
+  @Patch(':id/ejecutar')
+  ejecutar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
+    return this.operaciones.ejecutar(id, req.user.id);
   }
 
   @Patch(':id/conciliar')

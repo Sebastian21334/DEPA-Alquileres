@@ -80,10 +80,7 @@ Acepta bases con el enum de disputas y bases con el catálogo histórico
 `estado_disputa`. El comando es repetible, conserva los códigos existentes y
 mantiene el índice de una sola solicitud de cancelación pendiente por reserva.
 
-La ejecución automática de devoluciones por Mercado Pago queda apagada por
-defecto con `MP_REFUNDS_ENABLED=false`. En ese modo el Administrador registra
-la devolución manualmente con una referencia. Para el contenedor privado de
-evidencias configurar `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
+Para el contenedor privado de evidencias configurar `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
 
 # Inicializar una base nueva desde back/.env
 

@@ -7,7 +7,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import type { Pago } from '../../pagos/entity/pago.entity';
@@ -54,11 +53,7 @@ export class ReembolsosService {
 
   private readonly logger = new Logger(ReembolsosService.name);
 
-  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, private readonly pasarela: MercadoPagoService, private readonly config: ConfigService, private readonly pagos: PagosService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService) {}
-
-  get ejecucionAutomaticaHabilitada(): boolean {
-    return this.config.get<string>('MP_REFUNDS_ENABLED') === 'true';
-  }
+  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, private readonly pasarela: MercadoPagoService, private readonly pagos: PagosService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService) {}
 
   /**
    * Con `transaccion`, el registro participa de la operación del servicio que
@@ -178,23 +173,15 @@ export class ReembolsosService {
     return this.confirmar(id, { referencia: idExterno, idActor, idExterno });
   }
 
-  /** Ejecuta por Mercado Pago si está habilitado; si no, exige registro manual. */
-  async registrarOejecutar(id: number, referencia: string | null | undefined, idActor: number): Promise<Reembolso> {
-    if (this.ejecucionAutomaticaHabilitada) {
-      const reembolso = await this.ejecutar(id, idActor);
-      if (reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
-        throw new ConflictException('El reembolso todavía no fue confirmado por Mercado Pago');
-      return reembolso;
-    }
-    return this.registrarManual(id, referencia ?? '', idActor);
+  async ejecutarYConfirmar(id: number, idActor: number): Promise<Reembolso> {
+    const reembolso = await this.ejecutar(id, idActor);
+    if (reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
+      throw new ConflictException('El reembolso todavía no fue confirmado por Mercado Pago');
+    return reembolso;
   }
 
   async ejecutar(id: number, idActor: number): Promise<Reembolso> {
     const reembolso = await this.buscar(id);
-    if (!this.ejecucionAutomaticaHabilitada)
-      throw new BadRequestException(
-        'La ejecución automática está deshabilitada. Registrá la devolución manualmente.',
-      );
     if (!reembolso.pago.payment_id)
       throw new ConflictException('El pago no tiene identificador de Mercado Pago');
     if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return reembolso;
@@ -678,7 +665,6 @@ export class ReembolsosService {
   }
 
   async reconciliarPendientes(): Promise<void> {
-    if (!this.ejecucionAutomaticaHabilitada) return;
     const estados = [
       this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'),
       this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),

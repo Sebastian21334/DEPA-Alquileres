@@ -116,8 +116,19 @@ export class ReservasService
     let cerradas = 0;
     for (const reserva of vencidas) {
       try {
-        await this.rechazarPago(reserva.id, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'));
-        cerradas += 1;
+        const cerrada = await this.reservaRepository.conTransaccion(async (repositorio, transaccion) => {
+          const actual = await repositorio.buscarPorId(reserva.id);
+          if (!actual || actual.cancelada ||
+            actual.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE') ||
+            !actual.pago_vencimiento || new Date(actual.pago_vencimiento).getTime() > Date.now()) return false;
+
+          this.cerrarSinPago(actual, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), undefined, 'Venció el plazo de pago');
+          const guardada = await repositorio.guardar(actual);
+          await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
+          await this.disponibilidadService.liberarReserva(actual.id, transaccion);
+          return true;
+        });
+        if (cerrada) cerradas += 1;
       } catch (error) {
         this.logger.error(
           `No se pudo liberar la reserva vencida ${reserva.id}`,
@@ -265,6 +276,7 @@ export class ReservasService
         }
 
         // Las relaciones se crean con solo el ID: TypeORM puede resolver las FK sin cargar entidades completas.
+        const ahora = new Date();
         const reserva = reservaRepository.crear({
           finalizada: false,
           cancelada: false,
@@ -280,7 +292,7 @@ export class ReservasService
                 id: condiciones.cotizacion_id,
               })
             : null,
-          cotizacion_aceptada_en: new Date(),
+          cotizacion_aceptada_en: ahora,
           presupuesto_emitido_en: new Date(condiciones.emitida_en),
           presupuesto_vence_en: new Date(condiciones.vence_en),
           fecha_pago: null,
@@ -293,7 +305,7 @@ export class ReservasService
           fecha_resolucion_liquidacion: null,
           referencia_liquidacion: null,
           observacion_liquidacion: null,
-          pago_vencimiento: new Date(condiciones.vence_en),
+          pago_vencimiento: new Date(ahora.getTime() + 15 * 60_000),
           fecha_inicio: inicio.toISOString().slice(0, 10),
           fecha_fin: fin.toISOString().slice(0, 10),
           usuario_nombre: usuario.nombre,
@@ -981,6 +993,7 @@ export class ReservasService
   reactivarPago(reserva: Reserva, fechaPago: Date, codigoAlojamiento: string): void {
     reserva.cancelada = false;
     reserva.fecha_cancelacion = null;
+    reserva.motivo_cancelacion = null;
     reserva.causa_cancelacion = null;
     this.registrarConfirmacionPago(reserva, fechaPago, codigoAlojamiento);
   }

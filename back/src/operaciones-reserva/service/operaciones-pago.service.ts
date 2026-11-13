@@ -3,6 +3,7 @@ import { PresupuestosService } from './presupuestos.service';
 import { OperacionesReembolsoService } from './operaciones-reembolso.service';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -168,11 +169,6 @@ export class OperacionesPagoService {
       }
     } else if (payment.status === 'approved') {
       await this.reservasService.confirmarPago(pago.reserva.id, pago.approved_at ?? new Date());
-    } else if (['rejected', 'cancelled'].includes(payment.status ?? '')) {
-      await this.reservasService.rechazarPago(
-        pago.reserva.id,
-        this.mapearEstado(payment.status),
-      );
     }
 
     return pago;
@@ -205,6 +201,7 @@ export class OperacionesPagoService {
     const pago = await this.pagos.buscarPorReserva(idReserva, false);
     return {
       reserva,
+      puede_reintentar: this.puedeReintentar(reserva, pago, idUsuario),
       pago: pago
         ? {
             preference_id: pago.preference_id,
@@ -221,8 +218,26 @@ export class OperacionesPagoService {
     };
   }
 
-  private mapearEstado(status?: string): string {
-    if (status === 'cancelled') return this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO');
-    return this.catalogos.codigoEstado('PAGO_RESERVA', 'RECHAZADO');
+  async reintentarCheckout(idReserva: number, idUsuario: number) {
+    const reserva = await this.reservasService.buscarPorId(idReserva, idUsuario);
+    const pago = await this.pagos.buscarPorReserva(idReserva, false);
+    if (!this.puedeReintentar(reserva, pago, idUsuario) || !pago?.preference_id)
+      throw new ConflictException('La reserva no está disponible para reintentar el pago');
+
+    const checkout_url = await this.pasarela.consultarCheckout(pago.preference_id);
+    const vigente = await this.reservasService.buscarPorId(idReserva, idUsuario);
+    const pagoVigente = await this.pagos.buscarPorReserva(idReserva, false);
+    if (!this.puedeReintentar(vigente, pagoVigente, idUsuario))
+      throw new ConflictException('La reserva ya no está disponible para reintentar el pago');
+
+    return { reserva_id: idReserva, preference_id: pago.preference_id, checkout_url, expires_at: vigente.pago_vencimiento };
+  }
+
+  private puedeReintentar(reserva: Awaited<ReturnType<ReservasService['buscarPorId']>>, pago: Pago | null, idUsuario: number): boolean {
+    return this.reservasService.esDelInquilino(reserva, idUsuario) && !reserva.cancelada &&
+      reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE') &&
+      !!reserva.pago_vencimiento && new Date(reserva.pago_vencimiento).getTime() > Date.now() &&
+      !!pago?.preference_id && (pago.status === 'rejected' || pago.status === 'cancelled' ||
+        (pago.status === 'pending' && !pago.payment_id));
   }
 }

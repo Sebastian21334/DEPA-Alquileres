@@ -78,13 +78,6 @@ export class OperacionesLiquidacionService {
 
   private async ejecutarDevolucion(reserva: Reserva, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reembolso> {
     const id = reserva.id;
-    if (
-      !this.reembolsosService.ejecucionAutomaticaHabilitada &&
-      !dto.referencia?.trim()
-    )
-      throw new BadRequestException(
-        'La referencia del comprobante de devolución es obligatoria',
-      );
     const pago = await this.reembolsosService.buscarPagoPorReserva(id);
     if (!pago)
       throw new ConflictException(
@@ -172,11 +165,7 @@ export class OperacionesLiquidacionService {
 
     // La pasarela se ejecuta antes de modificar la reserva. Si falla,
     // la reserva queda intacta y el reembolso puede reintentarse.
-    const ejecutado = await this.reembolsosService.registrarOejecutar(
-      reembolso.id,
-      dto.referencia,
-      idAdmin,
-    );
+    const ejecutado = await this.reembolsosService.ejecutarYConfirmar(reembolso.id, idAdmin);
     if (ejecutado.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
       throw new ConflictException(
         'La devolución no quedó aprobada; la reserva no se modificó',

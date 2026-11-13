@@ -93,7 +93,6 @@ export interface AdminReembolso {
   estado: 'PENDIENTE' | 'EN_PROCESO' | 'APROBADO' | 'RECHAZADO' | 'FALLIDO' | 'CANCELADO';
   motivo: string;
   creado_en: string;
-  ejecucion_automatica?: boolean;
   referencia_externa?: string | null;
   resuelto_en?: string | null;
   pago?: { id: number; payment_id?: string | null } | null;
@@ -179,10 +178,8 @@ export class AdminService {
       observacion,
     });
   }
-  registrarReembolso(id: number, referencia?: string) {
-    return this.http.patch(`${this.api}/reservas/reembolsos/${id}/manual`, {
-      referencia,
-    });
+  solicitarReembolso(id: number) {
+    return this.http.patch(`${this.api}/reservas/reembolsos/${id}/ejecutar`, {});
   }
   conciliarReembolso(id: number, referencia: string) {
     return this.http.patch(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
@@ -202,11 +199,10 @@ export class AdminService {
       visible_para: 'TODOS',
     });
   }
-  resolverReclamo(id: number, resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL', importe?: number, referencia?: string, observacion?: string) {
+  resolverReclamo(id: number, resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL', importe?: number, observacion?: string) {
     return this.http.patch<Reclamo>(`${this.api}/reclamos/${id}/resolver`, {
       resolucion,
       importe,
-      referencia,
       observacion,
     });
   }

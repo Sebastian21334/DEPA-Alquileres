@@ -42,7 +42,7 @@ test('la proyección de modalidades conserva los valores explícitos y el respal
 test('reembolsos y reclamos conservan los campos calculados de las reservas anidadas', async () => {
   const reembolsos = new ReembolsosService({
     listarAdministracion: async () => [{ id: 3, reserva: reserva(), pago: { reserva: reserva() } }],
-  }, {}, {}, {}, estados, catalogosDePrueba());
+  }, {}, {}, estados, catalogosDePrueba());
   const reclamos = new ReclamosService({
     listarAdministracion: async () => [{ id: 4, reserva: reserva() }],
   }, { prepararRespuesta: (actual) => estados.prepararRespuesta(actual) }, undefined, undefined, catalogosDePrueba());

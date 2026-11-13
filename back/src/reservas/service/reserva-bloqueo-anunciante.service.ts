@@ -353,11 +353,7 @@ export class ReservaBloqueoAnuncianteService {
     for (const pendiente of devolucion.pendientes) {
       if (pendiente.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE')) continue;
       try {
-        const ejecutado = await this.reembolsosService.registrarOejecutar(
-          pendiente.id,
-          null,
-          idAdmin,
-        );
+        const ejecutado = await this.reembolsosService.ejecutarYConfirmar(pendiente.id, idAdmin);
         if (ejecutado.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
           await this.reembolsosService.aplicarConfirmado(ejecutado.id, (reembolso, transaccion) =>
             this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),

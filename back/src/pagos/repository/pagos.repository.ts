@@ -20,6 +20,17 @@ export class PagosRepository implements IPagosRepository {
     await (transaccion?.getRepository(Pago) ?? this.pagos).update(id, datos);
   }
 
+  async actualizarIntentoFallido(id: number, datos: Partial<Pago>): Promise<boolean> {
+    const resultado = await this.pagos.createQueryBuilder()
+      .update(Pago)
+      .set(datos)
+      .where('id_pago = :id', { id })
+      .andWhere("status NOT IN ('approved', 'refunded', 'charged_back')")
+      .andWhere("(status NOT IN ('pending', 'in_process', 'authorized', 'in_mediation') OR payment_id IS NULL OR payment_id = :paymentId)", { paymentId: datos.payment_id })
+      .execute();
+    return resultado.affected === 1;
+  }
+
   buscarPorId(id: number): Promise<Pago | null> {
     return this.pagos.findOneBy({ id });
   }

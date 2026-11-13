@@ -44,6 +44,7 @@ export type ResultadoReembolsoExterno = {
 
 export interface IMercadoPago {
   crearCheckout(datos: DatosCheckout): Promise<{ id: string; url: string }>;
+  consultarCheckout(id: string): Promise<string>;
   consultarPago(id: string): Promise<PagoExterno>;
   firmaWebhookValida(entrada: FirmaWebhookPago, secret: string): boolean;
   reembolsar(paymentId: string, importe: number, idempotencyKey: string): Promise<ResultadoReembolsoExterno>;

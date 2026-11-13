@@ -99,9 +99,6 @@ function crearEscenario(reserva, reservas = [reserva]) {
   };
 
   const reembolsosService = {
-    get ejecucionAutomaticaHabilitada() {
-      return true;
-    },
     async listarPorReserva(idReserva) {
       return estado.reembolsos.filter(
         (reembolso) => reembolso.reserva.id === idReserva,
@@ -141,7 +138,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
       estado.reembolsos.push(reembolso);
       return { reembolso, creado: true };
     },
-    async registrarOejecutar(id) {
+    async ejecutarYConfirmar(id) {
       const reembolso = estado.reembolsos.find(
         (actual) => actual.id === id,
       );
@@ -203,7 +200,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
     },
   };
 
-  const devolucion = new ReembolsosService(undefined, undefined, undefined, undefined, undefined, catalogosDePrueba());
+  const devolucion = new ReembolsosService(undefined, undefined, undefined, undefined, catalogosDePrueba());
   for (const metodo of ['coberturaDevolucion', 'asegurarDevolucion', 'calcularCobertura']) reembolsosService[metodo] = devolucion[metodo];
   reembolsosService.catalogos = catalogosDePrueba();
   reembolsosService.aplicarConfirmado = aplicacion.aplicarReembolsoConfirmado;
