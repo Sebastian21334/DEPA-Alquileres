@@ -63,11 +63,28 @@ El módulo no decide la política, no cancela reservas y no libera fechas.
 
 - `MP_REFUNDS_ENABLED=false` (por defecto): el Administrador registra la
   devolución manualmente con una referencia o comprobante.
-- `MP_REFUNDS_ENABLED=true`: se usa la API de reembolsos de Mercado Pago. Si
-  falla, el registro queda `FALLIDO` y puede reintentarse o registrarse manualmente.
+- `MP_REFUNDS_ENABLED=true`: se reembolsa el pago original con la clave de
+  idempotencia persistida. Si hay un identificador externo, la conciliación
+  consulta el movimiento. Ante un resultado incierto sin identificador, reusa
+  la clave durante los 15 minutos siguientes al primer intento.
+- Para recuperar una operación incierta con el identificador obtenido de
+  Mercado Pago, un administrador puede llamar a
+  `PATCH /reservas/reembolsos/:id/conciliar` con `{ "referencia": "<id de reembolso>" }`.
+  El backend verifica el pago y el importe en la pasarela antes de confirmarla.
 - En ningún modo se marca `APROBADO` sin una referencia o confirmación.
 
 ### Estados
+
+`OperacionesReembolsoService` aplica los reembolsos aprobados que tienen
+`aplicado_en` vacío. Actualiza la reserva, la liquidación y el expediente
+asociado, cuando corresponde, en la misma transacción que la marca de
+aplicación. `referencia_interna` identifica la operación que originó el
+reembolso y las claves de idempotencia previas se conservan.
+
+La migración vincula orígenes históricos identificables y marca como
+aplicados los reembolsos con evidencia concordante en la liquidación. El
+listado administrativo expone `revision_aplicacion=true` para los aprobados
+históricos ambiguos. Quedan fuera del proceso automático hasta su revisión.
 
 `Reembolso`: `PENDIENTE`, `EN_PROCESO`, `APROBADO`, `RECHAZADO`, `FALLIDO`,
 `CANCELADO`.
@@ -120,6 +137,7 @@ Con el backend detenido, sobre una copia o base descartable:
 ```sh
 node scripts/cancelaciones-devoluciones.cjs
 npm run db:cancelaciones-devoluciones
+npm run db:seed
 ```
 
 Variables:
@@ -130,3 +148,8 @@ Variables:
 El comando aplica la migración de cancelaciones si todavía corresponde y luego
 `20261110-estados-por-ambito.sql`. Esta conserva los códigos de estado y pasa
 las disputas del enum original o del catálogo histórico al catálogo compartido.
+También crea `politica_cancelacion`, que la seed carga con los plazos y porcentajes
+vigentes hasta este cambio. Cancelaciones elige la versión por la fecha del pago
+en Argentina. Las reservas sin fecha de pago usan la política inicial.
+Para modificar la política, agregar una versión con una fecha de vigencia nueva
+y conservar las versiones anteriores para las reservas ya pagadas.

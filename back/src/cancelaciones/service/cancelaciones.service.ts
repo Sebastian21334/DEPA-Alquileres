@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
@@ -19,6 +20,8 @@ import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
+import type { PoliticaCancelacion } from '../entity/politica-cancelacion.entity';
+import type { EntityManager } from 'typeorm';
 import {
   CANCELACIONES_REPOSITORY,
   type ICancelacionesRepository,
@@ -43,7 +46,27 @@ export class CancelacionesService {
    * el reembolso.
    */
   async solicitar(idReserva: number, dto: SolicitarCancelacionDto, idUsuario: number): Promise<SolicitudCancelacion> {
-    const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
+    return this.cancelaciones.conTransaccion(async (cancelaciones, transaccion) => {
+      const reserva = await this.reservas.buscarPorId(idReserva, idUsuario, transaccion);
+      const activa = await this.buscarEnCurso(cancelaciones, reserva, transaccion);
+      if (activa) return this.prepararRespuesta(activa);
+
+      this.validarReserva(reserva, fechaArgentina());
+      await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
+      const solicitud = cancelaciones.crear({
+        reserva,
+        solicitante: referenciaUsuario(idUsuario),
+        motivo: dto.motivo.trim(),
+        estado: this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'),
+        decidida_por: null,
+        decidida_en: null,
+        observacion: null,
+      });
+      return this.prepararRespuesta(await cancelaciones.guardar(solicitud));
+    });
+  }
+
+  private validarReserva(reserva: Reserva, hoy: string): void {
     if (!this.reservas.pagoAprobado(reserva))
       throw new BadRequestException(
         'La reserva no está pagada. Usá la cancelación inmediata de la reserva pendiente.',
@@ -54,7 +77,7 @@ export class CancelacionesService {
       throw new BadRequestException(
         'La reserva ya finalizó. Solo podés abrir un reclamo.',
       );
-    if (!reserva.fecha_inicio || reserva.fecha_inicio <= fechaArgentina())
+    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
       throw new BadRequestException(
         'La estadía ya comenzó. Para una devolución después del inicio, abrí un reclamo.',
       );
@@ -62,28 +85,27 @@ export class CancelacionesService {
       throw new BadRequestException(
         'No se puede cancelar una reserva con ingreso ya validado',
       );
-
-    const pendiente = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE');
-    const activa = await this.cancelaciones.buscarActiva(idReserva, pendiente);
-    if (activa) return this.prepararRespuesta(activa);
-
-    const solicitud = this.cancelaciones.crear({
-      reserva,
-      solicitante: referenciaUsuario(idUsuario),
-      motivo: dto.motivo.trim(),
-      estado: pendiente,
-      decidida_por: null,
-      decidida_en: null,
-      observacion: null,
-    });
-    // El repositorio copia la reserva al crear la solicitud: se proyecta la copia guardada.
-    return this.prepararRespuesta(await this.cancelaciones.guardar(solicitud));
+    if (this.reservas.liquidacionResuelta(reserva))
+      throw new ConflictException('La liquidación de la reserva ya está resuelta');
   }
 
   async consultarActiva(idReserva: number, idUsuario: number): Promise<SolicitudCancelacion | null> {
-    // Solo los participantes de la reserva pueden ver su solicitud.
-    await this.reservas.buscarPorId(idReserva, idUsuario);
-    return this.cancelaciones.buscarActiva(idReserva, this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'));
+    const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
+    return this.buscarEnCurso(this.cancelaciones, reserva);
+  }
+
+  private async buscarEnCurso(cancelaciones: ICancelacionesRepository, reserva: Reserva, transaccion?: EntityManager): Promise<SolicitudCancelacion | null> {
+    const pendiente = await cancelaciones.buscarActiva(reserva.id, this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'));
+    if (pendiente || reserva.cancelada) return pendiente;
+    const aprobada = await cancelaciones.buscarActiva(reserva.id, this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA'));
+    if (!aprobada || !(await this.reembolsos.tieneDevolucionDeCancelacionActiva(reserva.id, transaccion)))
+      return null;
+    return aprobada;
+  }
+
+  private async asegurarSinDevolucionActiva(idReserva: number, transaccion: EntityManager): Promise<void> {
+    if (await this.reembolsos.tieneDevolucionDeCancelacionActiva(idReserva, transaccion))
+      throw new ConflictException('La reserva ya tiene una devolución por cancelación en curso');
   }
 
   async listarPendientes(): Promise<SolicitudCancelacion[]> {
@@ -102,13 +124,14 @@ export class CancelacionesService {
    */
   async resolver(idReserva: number, idSolicitud: number, dto: ResolverSolicitudCancelacionDto, idAdmin: number): Promise<{ solicitud: SolicitudCancelacion; reembolso: Reembolso | null }> {
     const resultado = await this.cancelaciones.conTransaccion<ResultadoResolucion>(async (cancelaciones, transaccion) => {
+      // El alta y la resolución bloquean primero la reserva y después consultan sus solicitudes.
+      const reserva = await this.reservas.obtenerReserva(idReserva, transaccion);
       const solicitud = await cancelaciones.buscarParaResolver(idSolicitud, idReserva);
       if (!solicitud)
         throw new NotFoundException('No se encontró la solicitud de cancelación');
       if (solicitud.estado !== this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'))
         throw new ConflictException('La solicitud ya fue resuelta');
 
-      const reserva = solicitud.reserva;
       const hoy = fechaArgentina();
       solicitud.decidida_por = referenciaUsuario(idAdmin);
       solicitud.decidida_en = new Date();
@@ -123,13 +146,19 @@ export class CancelacionesService {
 
       solicitud.observacion = dto.observacion?.trim() || null;
 
-      if (dto.decision === 'RECHAZADA') {
-        solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'RECHAZADA');
+      const rechazada = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'RECHAZADA');
+      if (dto.decision === rechazada) {
+        solicitud.estado = rechazada;
         return { vencida: false, solicitud: await cancelaciones.guardar(solicitud), reembolso: null };
       }
 
+      this.validarReserva(reserva, hoy);
+      await this.asegurarSinDevolucionActiva(idReserva, transaccion);
+      const politica = await cancelaciones.buscarPolitica(reserva.fecha_pago ? fechaArgentina(reserva.fecha_pago) : null);
+      if (!politica) throw new InternalServerErrorException('Falta la política de cancelación aplicable a la reserva');
+
       const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
-      const porcentaje = this.porcentajeDevolucion(reserva, actor, hoy);
+      const porcentaje = this.porcentajeDevolucion(reserva, actor, hoy, politica);
       const importe = this.redondear(
         (Number(reserva.monto_pago) * porcentaje) / 100,
       );
@@ -138,7 +167,7 @@ export class CancelacionesService {
       if (importe > 0) {
         // El reembolso y la aprobación se confirman juntos: no queda una
         // solicitud aprobada sin registro económico ni un registro sin decisión.
-        const pago = await this.reembolsos.buscarPagoPorReserva(idReserva);
+        const pago = await this.reembolsos.buscarPagoPorReserva(idReserva, transaccion);
         if (!pago)
           throw new ConflictException('La reserva no tiene un pago registrado');
         const reembolso = await this.reembolsos.crearSolicitud(
@@ -152,6 +181,7 @@ export class CancelacionesService {
             motivo: `Cancelación de reserva: ${solicitud.motivo}`,
             idSolicitadoPor: idAdmin,
             idempotencyKey: this.claveReembolso(solicitud.id),
+              referenciaInterna: this.claveReembolso(solicitud.id),
           },
           transaccion,
         );
@@ -189,15 +219,14 @@ export class CancelacionesService {
     return 'ADMINISTRADOR';
   }
 
-  private porcentajeDevolucion(reserva: Reserva, actor: ActorCancelacion, hoy: string): number {
-    if (actor !== 'INQUILINO') return 100;
-    if (!reserva.fecha_inicio) return 0;
+  private porcentajeDevolucion(reserva: Reserva, actor: ActorCancelacion, hoy: string, politica: PoliticaCancelacion): number {
+    if (actor !== 'INQUILINO') return politica.porcentajeOtrosActores;
     const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
     const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
     const dias = Math.ceil((inicio - ahora) / 86_400_000);
-    if (dias >= 7) return 100;
-    if (dias >= 2) return 50;
-    return 0;
+    if (dias >= politica.diasDevolucionTotal) return politica.porcentajeTotal;
+    if (dias >= politica.diasDevolucionParcial) return politica.porcentajeParcial;
+    return politica.porcentajeFueraDePlazo;
   }
 
   private redondear(valor: number): number {

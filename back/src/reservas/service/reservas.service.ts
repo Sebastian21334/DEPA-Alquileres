@@ -14,7 +14,6 @@ import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { ReservaDecisionService } from './reserva-decision.service';
 import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
-import { ReservaReembolsoAplicacionService } from './reserva-reembolso-aplicacion.service';
 import { LiquidacionesService, type ResolucionLiquidacionDatos } from '../../liquidaciones/service/liquidaciones.service';
 import { generarCodigoAlojamiento } from './reservas.utils';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
@@ -37,7 +36,8 @@ import { DisponibilidadService } from '../../disponibilidad/service/disponibilid
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
-import { Reembolso } from '../../reembolsos/entity/reembolso.entity';
+import { OrigenReembolso, Reembolso } from '../../reembolsos/entity/reembolso.entity';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 export type CondicionesCobro = {
   precio_unitario_origen: string;
@@ -57,7 +57,7 @@ export class ReservasService
   private timer?: ReturnType<typeof setInterval>;
   private expiracion?: Promise<number>;
 
-  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService, private readonly decision: ReservaDecisionService, private readonly liquidaciones: LiquidacionesService, private readonly ciclo: ReservaCicloVidaService, private readonly aplicacionReembolsos: ReservaReembolsoAplicacionService, private readonly catalogos: CatalogosService) {}
+  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService, private readonly decision: ReservaDecisionService, private readonly liquidaciones: LiquidacionesService, private readonly ciclo: ReservaCicloVidaService, private readonly catalogos: CatalogosService) {}
 
   /**
    * Libera las reservas vencidas al iniciar y cada minuto. El estado se
@@ -526,12 +526,19 @@ export class ReservasService
    * El detalle de una reserva solo corresponde al inquilino que la realizó o
    * al anunciante dueño de la publicación. Así no basta un JWT y un ID válido.
    */
-  async buscarPorId(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
+  async buscarPorId(id: number, idUsuarioQueOpera: number, transaccion?: EntityManager): Promise<Reserva> {
+    const reserva = await this.obtenerReserva(id, transaccion);
     this.verificarParticipanteOPropietario(reserva, idUsuarioQueOpera);
     return this.prepararRespuesta(reserva);
+  }
+
+  async obtenerReserva(id: number, transaccion?: EntityManager): Promise<Reserva> {
+    const reservas = transaccion ? this.reservaRepository.enTransaccion(transaccion) : this.reservaRepository;
+    // Serializa cambios de la reserva y permite las lecturas de clave foránea.
+    const reserva = await reservas.buscarPorId(id, transaccion ? 'for_no_key_update' : undefined);
+    if (!reserva)
+      throw new NotFoundException(`No se encontró la reserva ${id}`);
+    return reserva;
   }
 
   conReservaParaReclamo<T>(id: number, crearReclamo: (reserva: Reserva, transaccion: EntityManager) => Promise<T>): Promise<T> {
@@ -602,30 +609,12 @@ export class ReservasService
     });
   }
 
-  async resolverReclamoConDevolucion(idReserva: number, reembolso: Pick<Reembolso, 'importe' | 'moneda'>, total: boolean, observacion?: string): Promise<Reserva> {
-    return this.actualizarLiquidacion(idReserva, (actual) => {
-      if (total) this.ciclo.aplicarReembolsoTotal(actual);
-      else this.ciclo.aplicarReembolsoParcial(actual);
-      actual.observacion_liquidacion =
-        observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
-    }, { importe: Number(reembolso.importe), moneda: reembolso.moneda });
-  }
-
-  async buscarParaContracargo(id: number): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva) {
-      throw new NotFoundException('No se encontró la reserva del contracargo');
-    }
-    return this.prepararRespuesta(reserva);
-  }
-
-  async congelarPorContracargo(reserva: Reserva): Promise<Reserva> {
-    return this.actualizarLiquidacion(reserva.id, (actual) => {
-      actual.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO');
-      actual.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
-      actual.observacion_liquidacion =
-        'Contracargo abierto: liquidación congelada hasta su resolución';
-    });
+  async congelarPorContracargo(reserva: Reserva, transaccion: EntityManager): Promise<void> {
+    reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO');
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+    reserva.observacion_liquidacion = 'Contracargo abierto: liquidación congelada hasta su resolución';
+    const guardada = await this.reservaRepository.enTransaccion(transaccion).guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
   }
 
   async restaurarPorContracargoGanado(reserva: Reserva, estadoLiquidacionPrevio: string | null): Promise<Reserva> {
@@ -699,9 +688,7 @@ export class ReservasService
    */
   async cancelarConRetencionTotal(idReserva: number, actor: ActorCancelacion, motivo: string, transaccion: EntityManager): Promise<Reserva> {
     const reservas = this.reservaRepository.enTransaccion(transaccion);
-    const reserva = await reservas.buscarPorId(idReserva);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${idReserva}`);
+    const reserva = await this.obtenerReserva(idReserva, transaccion);
     this.marcarCancelada(reserva, actor, motivo);
     reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
     reserva.observacion_liquidacion =
@@ -712,20 +699,56 @@ export class ReservasService
     return guardada;
   }
 
-  /** Registra manualmente la devolución y aplica el resultado a la reserva. */
-  async registrarReembolsoManual(idReembolso: number, referencia: string | undefined, idAdmin: number): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
-    await this.reembolsosService.registrarOejecutar(
-      idReembolso,
-      referencia,
-      idAdmin,
-    );
-    return this.aplicarReembolsoConfirmado(idReembolso);
-  }
+  async aplicarEfectoReembolso(reembolso: Reembolso, transaccion: EntityManager, observacion?: string): Promise<Reserva> {
+    const reserva = await this.obtenerReserva(reembolso.reserva.id, transaccion);
+    const esReclamo = reembolso.origen === OrigenReembolso.RECLAMO;
+    const esContracargo = reembolso.origen === OrigenReembolso.CONTRACARGO;
+    if (reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') &&
+        !esReclamo && !esContracargo)
+      throw new ConflictException('La reserva ya fue pagada al propietario; requiere revisar la devolución');
 
-  /** Aplica a la reserva un reembolso ya aprobado por el módulo de reembolsos. */
-  async aplicarReembolsoConfirmado(idReembolso: number): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
-    const { reembolso, reserva } = await this.aplicacionReembolsos.aplicarReembolsoConfirmado(idReembolso);
-    return { reembolso, reserva: this.prepararRespuesta(reserva) };
+    const pago = await this.reembolsosService.buscarPagoPorReserva(reserva.id, transaccion);
+    if (!pago) throw new NotFoundException('La reserva no tiene un pago registrado');
+    const importeDevuelto = Number(pago.amount_refunded);
+    const esTotal = Number(pago.amount) - importeDevuelto <= TOLERANCIA_MONETARIA;
+    const puedeLiberarFechas = !!reserva.fecha_inicio && reserva.fecha_inicio > fechaArgentina() &&
+      !this.decision.codigoValidado(reserva);
+    const ajusteAdmin = reembolso.origen === OrigenReembolso.AJUSTE_ADMIN;
+    const resolucionAdmin = ajusteAdmin && reembolso.referencia_interna === `liq:${reserva.id}`;
+    const reversionSinPago = esTotal && !this.pagoAprobado(reserva) &&
+      reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO') &&
+      reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO');
+    const cancelaReserva = !reserva.cancelada && (
+      reversionSinPago ||
+      reembolso.origen === OrigenReembolso.CANCELACION ||
+      (esTotal && resolucionAdmin) ||
+      (esTotal && puedeLiberarFechas && (esContracargo || ajusteAdmin))
+    );
+
+    if (esTotal) this.ciclo.aplicarReembolsoTotal(reserva);
+    else {
+      if (esContracargo) this.ciclo.restaurarPagoAprobado(reserva);
+      this.ciclo.aplicarReembolsoParcial(reserva);
+    }
+    if (cancelaReserva) this.ciclo.cancelar(reserva, 'ADMINISTRADOR', reembolso.motivo);
+    if (esReclamo) reserva.observacion_liquidacion = observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
+    const datos = {
+      importe: importeDevuelto,
+      moneda: reembolso.moneda,
+      referencia: reembolso.referencia_externa,
+      observacion: observacion?.trim() || reembolso.motivo,
+    };
+    const administrador = reembolso.resuelto_por?.id ?? reembolso.solicitado_por?.id;
+    if (resolucionAdmin && administrador != null) {
+      await this.liquidaciones.registrarResolucion(reserva, reserva.estado_liquidacion, datos, administrador, transaccion);
+    } else {
+      await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion, datos);
+    }
+    const guardada = await this.reservaRepository.enTransaccion(transaccion).guardar(reserva);
+    if ((cancelaReserva && puedeLiberarFechas) || reversionSinPago) {
+      await this.disponibilidadService.liberarReserva(reserva.id, transaccion);
+    }
+    return this.prepararRespuesta(guardada);
   }
 
   async listarReembolsosReserva(idReserva: number, idUsuario: number): Promise<Reembolso[]> {

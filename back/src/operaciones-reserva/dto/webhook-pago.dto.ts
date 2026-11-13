@@ -4,9 +4,3 @@ export type WebhookPago = {
   data?: { id?: string | number };
 };
 
-export type WebhookEntrada = {
-  body: WebhookPago;
-  dataId?: string;
-  signature?: string;
-  requestId?: string;
-};

@@ -1,4 +1,5 @@
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
+import type { EntityManager } from 'typeorm';
 import {
   type IReservaRepository,
   RESERVA_REPOSITORY,
@@ -12,7 +13,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Reserva } from '../entity/reserva.entity';
-import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 import { generarCodigoAlojamiento } from './reservas.utils';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
@@ -21,7 +21,6 @@ import {
   Reembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
-import { fechaArgentina } from '../../common/utils/fechas';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservaDecisionService } from './reserva-decision.service';
@@ -30,7 +29,7 @@ import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.
 
 @Injectable()
 export class ReservaLiquidacionesService {
-  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly ciclo: ReservaCicloVidaService, private readonly decision: ReservaDecisionService, private readonly catalogos: CatalogosService) {}
+  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly ciclo: ReservaCicloVidaService, private readonly decision: ReservaDecisionService, private readonly catalogos: CatalogosService) {}
 
   /** Devuelve el código únicamente al inquilino que realizó la reserva. */
   async consultarCodigoAlojamiento(id: number, idUsuario: number) {
@@ -209,6 +208,14 @@ export class ReservaLiquidacionesService {
     let importeResolucion: number | null = null;
     let monedaResolucion = 'ARS';
 
+    if (esDevolucion) {
+      const devolucion = await this.ejecutarDevolucion(reserva, dto, idAdmin);
+      const aplicada = await this.reembolsosService.aplicarConfirmado(devolucion.id, (confirmado, transaccion) =>
+        this.reservasService.aplicarEfectoReembolso(confirmado, transaccion, dto.observacion),
+      );
+      return aplicada ?? this.reservasService.prepararRespuesta(await this.reservasService.obtenerReserva(id));
+    }
+
     if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO')) {
       const pago = await this.reembolsosService.buscarPagoPorReserva(id);
       importeResolucion = pago
@@ -217,60 +224,28 @@ export class ReservaLiquidacionesService {
       monedaResolucion = pago?.currency || 'ARS';
     }
 
-    if (esDevolucion) {
-      const devolucion = await this.ejecutarDevolucion(reserva, dto, idAdmin);
-      importeResolucion = devolucion.importe;
-      monedaResolucion = devolucion.moneda;
-    }
-
-    return this.reservaRepository.conTransaccion(
-      async (reservaRepository, transaccion) => {
-        const actual = await reservaRepository.buscarPorId(id);
-        if (!actual)
-          throw new NotFoundException(`No se encontró la reserva ${id}`);
-        this.validarResolucion(actual, dto);
-        if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
-          await this.asegurarSinDevoluciones(id);
-
-        this.ciclo.resolverLiquidacion(
-          actual,
-          dto.estado,
-          dto.referencia,
-          dto.observacion,
-        );
-        await this.liquidaciones.registrarResolucion(
-          actual,
-          dto.estado,
-          {
-            importe: importeResolucion,
-            moneda: monedaResolucion,
-            referencia: dto.referencia ?? null,
-            observacion: dto.observacion ?? null,
-          },
-          idAdmin,
-          transaccion,
-        );
-        // Solo se liberan fechas futuras de una reserva que todavía no comenzó.
-        const hoy = fechaArgentina();
-        if (
-          dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO') &&
-          actual.fecha_inicio &&
-          actual.fecha_inicio > hoy &&
-          !this.reservasService.codigoValidado(actual)
-        ) {
-          await this.disponibilidadService.liberarReserva(
-            actual.id,
-            transaccion,
-          );
-        }
-        return this.reservasService.prepararRespuesta(
-          await reservaRepository.guardar(actual),
-        );
-      },
+    return this.reservaRepository.conTransaccion((_reservas, transaccion) =>
+      this.registrarResolucion(id, dto, idAdmin, importeResolucion, monedaResolucion, transaccion),
     );
   }
 
-  private async ejecutarDevolucion(reserva: Reserva, dto: ResolverLiquidacionDto, idAdmin: number): Promise<{ importe: number; moneda: string }> {
+  private async registrarResolucion(id: number, dto: ResolverLiquidacionDto, idAdmin: number, importeResolucion: number | null, monedaResolucion: string, transaccion: EntityManager): Promise<Reserva> {
+    const reservaRepository = this.reservaRepository.enTransaccion(transaccion);
+    const actual = await this.reservasService.obtenerReserva(id, transaccion);
+    this.validarResolucion(actual, dto);
+    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
+      await this.asegurarSinDevoluciones(id);
+    this.ciclo.resolverLiquidacion(actual, dto.estado, dto.referencia, dto.observacion);
+    await this.liquidaciones.registrarResolucion(actual, dto.estado, {
+      importe: importeResolucion,
+      moneda: monedaResolucion,
+      referencia: dto.referencia ?? null,
+      observacion: dto.observacion ?? null,
+    }, idAdmin, transaccion);
+    return this.reservasService.prepararRespuesta(await reservaRepository.guardar(actual));
+  }
+
+  private async ejecutarDevolucion(reserva: Reserva, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reembolso> {
     const id = reserva.id;
     if (
       !this.reembolsosService.ejecucionAutomaticaHabilitada &&
@@ -285,23 +260,26 @@ export class ReservaLiquidacionesService {
         'La reserva no tiene un pago registrado para devolver',
       );
     const saldo = this.reembolsosService.saldoReembolsable(pago);
+    const existentes = await this.reembolsosService.listarPorReserva(id);
+    const previa = existentes.find(actual => actual.referencia_interna === `liq:${id}` &&
+      actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO') && !actual.aplicado_en);
     const importe =
       dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO')
-        ? saldo
+        ? previa ? Number(previa.importe) : saldo
         : Number(dto.importe ?? 0);
     if (!Number.isFinite(importe) || importe <= 0)
       throw new BadRequestException(
         'Indicá el importe de la devolución parcial',
       );
-    if (importe > saldo + TOLERANCIA_MONETARIA)
+    if (!previa && importe > saldo + TOLERANCIA_MONETARIA)
       throw new ConflictException(
         `La devolución supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
       );
     await this.prepararLiquidacion(id);
-    const existentes = await this.reembolsosService.listarPorReserva(id);
     const enCurso = existentes.find(
       (actual) =>
         actual.origen === OrigenReembolso.AJUSTE_ADMIN &&
+        (actual.referencia_interna === `liq:${id}` || actual.idempotency_key.startsWith(`liq:${id}:`)) &&
         (
           [
             this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
@@ -347,6 +325,7 @@ export class ReservaLiquidacionesService {
           'Resolución administrativa de la liquidación',
         idSolicitadoPor: idAdmin,
         idempotencyKey: clave,
+        referenciaInterna: `liq:${id}`,
       });
     }
 
@@ -371,7 +350,7 @@ export class ReservaLiquidacionesService {
       throw new ConflictException(
         'La devolución no quedó aprobada; la reserva no se modificó',
       );
-    return { importe, moneda: pago.currency || 'ARS' };
+    return ejecutado;
   }
 
   private async asegurarSinDevoluciones(id: number): Promise<void> {

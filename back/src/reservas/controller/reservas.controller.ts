@@ -21,7 +21,6 @@ import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ValidarCodigoAlojamientoDto } from '../dto/validar-codigo-alojamiento.dto';
 import { ReportarProblemaReservaDto } from '../dto/reportar-problema-reserva.dto';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
-import { RegistrarReembolsoManualDto } from '../../reembolsos/dto/registrar-reembolso-manual.dto';
 
 @Controller('reservas')
 export class ReservasController {
@@ -99,17 +98,6 @@ export class ReservasController {
   @Patch(':id/cancelar')
   cancelar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.cancelar(id, req.user.id);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  @Patch('reembolsos/:id/manual')
-  registrarReembolsoManual(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarReembolsoManualDto, @Req() req: AuthenticatedRequest) {
-    return this.reservasService.registrarReembolsoManual(
-      id,
-      dto.referencia,
-      req.user.id,
-    );
   }
 
   @UseGuards(JwtAuthGuard)

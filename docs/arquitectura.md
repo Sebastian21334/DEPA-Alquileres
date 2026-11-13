@@ -49,7 +49,7 @@ Frontend:
 
 ## 3. Mapa de módulos
 
-`app.module.ts` registra la configuración global y los módulos de negocio. Algunos módulos llegan de forma transitiva: `CotizacionesModule` y `DisputasModule` por `PagosModule`; `AlmacenamientoModule` por imágenes, reclamos y verificación.
+`app.module.ts` registra la configuración global y los módulos de negocio. `OperacionesReservaModule` integra Pagos, Mercado Pago, Cotizaciones y Disputas. Imágenes, reclamos y verificación importan `AlmacenamientoModule`.
 
 | Grupo | Módulo | Responsabilidad | API exportada |
 | --- | --- | --- | --- |
@@ -66,17 +66,16 @@ Frontend:
 | Catálogo | `favoritos` | Favoritos del inquilino. | — |
 | Catálogo | `mensajes` | Mensajería asociada a publicaciones y reservas. | — |
 | Reservas | `disponibilidad` | Calendario, ocupación, liberación y reprogramación de fechas. | `DisponibilidadService` |
-| Reservas | `reservas` | Ciclo de vida, cancelación de la estadía, código, coordinación de liquidaciones, bloqueo y reembolsos aplicados. | `ReservasService`, `ReservaCicloVidaService`, `ReservaDecisionService`, `ReservaBloqueoAnuncianteService`, `ReservaReembolsoAplicacionService` |
+| Reservas | `reservas` | Ciclo de vida, cancelación de la estadía, código, coordinación de liquidaciones, bloqueo y efectos sobre la reserva. | `ReservasService`, `ReservaCicloVidaService`, `ReservaDecisionService`, `ReservaBloqueoAnuncianteService` |
 | Reservas | `cancelaciones` | Solicitud de cancelación de una reserva pagada, su política de devolución y su decisión administrativa. Pide los efectos a Reservas y Reembolsos. | — |
 | Liquidaciones | `liquidaciones` | Registro de liquidaciones y sus estados. | `LiquidacionesService` |
 | Reservas | `reservas-consulta` | Proyección compartida de reservas y cálculo de `estado_estadia`. | `ReservaEstadoService` |
 | Reservas | `bloqueo-anunciante` | Bloqueo administrativo de cuentas y resolución de reservas afectadas. | `IBloqueoAnuncianteRepository` |
 | Dinero | `cotizaciones` | Cotización blue, historial y consultas. | `CotizacionesService` |
-| Dinero | `pagos` | Checkout, webhook, conciliación y presupuestos. | — |
-| Dinero | `pagos-persistencia` / `pagos-registro` | Persistencia de pagos y registro de reembolsos/contracargos. | `PAGOS_REPOSITORY`, `PagosRegistroService` |
-| Dinero | `pasarela` | Adaptador Mercado Pago compartido por pagos y reembolsos. | `PASARELA_PAGOS`, `PASARELA_REEMBOLSOS` |
+| Dinero | `pagos` | Registro y consulta de pagos, saldo reembolsable y cambios de estado del pago. | `PagosService` |
+| Dinero | `mercado-pago` | Preferencias, consultas, validación de firma y ejecución de reembolsos en Mercado Pago. | `MercadoPagoService` |
+| Dinero | `operaciones-reserva` | Coordina presupuestos, checkout, webhook, conciliación y aplicación de reembolsos. | - |
 | Dinero | `reembolsos` | Registro, saldo, ejecución manual/automática, webhook y compensación. | `ReembolsosService` |
-| Dinero | `reembolsos-aplicacion` | Conciliación periódica de aprobados y aplicación a la reserva. | — |
 | Dinero | `disputas` | Contracargos y resolución administrativa. | `DisputasService` |
 | Dinero | `reclamos` | Reclamos posteriores al ingreso, evidencia y resolución. | `ReclamosService` |
 | Infraestructura | `mail` | Envío de correos por Azure Communication Services. | `MAIL_SERVICE` |
@@ -105,11 +104,12 @@ Los repositorios que coordinan escrituras exponen `conTransaccion`:
 - `ReservaRepository.conTransaccion` abre `READ COMMITTED` y entrega un repositorio transaccional más el `EntityManager`.
 - `FechaRepository.conTransaccion` hace lo mismo y además ofrece `enTransaccion(manager)` para reutilizar el calendario dentro de una transacción ajena.
 - `ReembolsosRepository.conTransaccion` entrega el repositorio de reembolsos y el manager para pagos.
+- `DisputasRepository.conTransaccion` coordina el alta de contracargos con los cambios de pago, reserva y liquidación. La fila de la reserva serializa notificaciones repetidas.
 - `CancelacionesRepository.conTransaccion` abre `READ COMMITTED` para resolver una solicitud y bloquea su fila antes de leer el estado.
 
 Cuando un servicio coordina una operación con otros módulos, abre la transacción con su repositorio y la comparte: `ReservaRepository` y `ReembolsosRepository` ofrecen `enTransaccion(manager)` para participar de ella. Así, `CancelacionesService.resolver` confirma en una sola transacción la decisión, el reembolso (`ReembolsosService.crearSolicitud`) o la cancelación de la estadía con su liberación de fechas (`ReservasService.cancelarConRetencionTotal`). La devolución de una solicitud usa la clave de idempotencia `can:<idSolicitud>`.
 
-El service nunca abre la transacción: decide el caso de uso y llama a `conTransaccion`. El repositorio es el único que conoce TypeORM. Las operaciones que cruzan módulos pasan el `EntityManager` por parámetro a services como `DisponibilidadService` o `PagosRegistroService`.
+Los servicios coordinan las transacciones llamando al repositorio. Las operaciones que cruzan módulos pasan el `EntityManager` por parámetro a servicios como `DisponibilidadService` o `PagosService`.
 
 **Desviación verificada:** no existe hoy un alias opaco `Transaccion`. El contrato expone `EntityManager` de TypeORM en las interfaces y cinco services lo importan como tipo: `anunciantes`, `pagos`, `usuarios`, `disponibilidad` y `publicaciones`. Se declara en §9.
 
@@ -120,7 +120,7 @@ Flujo de composición:
 1. `BloqueoAnuncianteController` conserva las rutas `PATCH /usuarios/:id/bloquear` y `/habilitar`.
 2. `BloqueoAnuncianteService` delega el cambio de cuenta en `UsuariosService`. Si la cuenta es `Anunciante` y queda bloqueada, llama a `ReservaBloqueoAnuncianteService`.
 3. `ReservaBloqueoAnuncianteService` recorre las reservas del anunciante y decide: cancelar pendientes, devolver y cancelar, congelar en revisión o no actuar. Devuelve un resumen con canceladas, devueltas, en revisión, sin acción y fallidas.
-4. `ReservaBloqueoDevolucionService` calcula la cobertura del pago y crea el reembolso faltante. `ReservaReembolsoAplicacionService` aplica a la reserva un reembolso ya aprobado.
+4. `ReembolsosService` calcula la cobertura del pago, registra el reembolso faltante y controla la aplicación de cada confirmación. `ReservasService` registra los efectos sobre la estadía.
 
 Idempotencia y compensación:
 
@@ -129,12 +129,12 @@ Idempotencia y compensación:
 - Si la reserva no se cancela después de crear el reembolso, se llama a `ReembolsosService.compensar`. Solo se compensan `PENDIENTE` o `FALLIDO`; un `FALLIDO` se consulta en Mercado Pago antes de rechazarlo. Nunca se toca un `APROBADO`.
 - La reserva se cancela y libera en una transacción propia. Los avisos y la ejecución de la pasarela quedan fuera de esa transacción.
 
-En `ReservasModule`, `ReembolsosReconciliacionService` consulta a `ReembolsosService` al iniciar y cada 60 segundos. Concilia pendientes con Mercado Pago y delega la aplicación de los aprobados al servicio de reservas correspondiente. Los errores se registran por reembolso y el lote continúa.
+En `OperacionesReservaModule`, `OperacionesReembolsoService` concilia al iniciar y cada 60 segundos. Lee los intentos vencidos y los aprobados que esperan aplicación. Coordina los efectos con Reservas, Reclamos y Disputas. El cambio local y `aplicado_en` comparten una transacción.
 
 Ejecución manual vs automática:
 
 - `MP_REFUNDS_ENABLED=false` (por defecto): la devolución se registra manualmente con referencia o comprobante obligatorio.
-- `MP_REFUNDS_ENABLED=true`: se ejecuta por la API de Mercado Pago. Si falla, el reembolso queda `FALLIDO` y puede reintentarse o registrarse manualmente.
+- `MP_REFUNDS_ENABLED=true`: se ejecuta por la API de Mercado Pago. La conciliación consulta por identificador o reusa la clave de idempotencia en los intentos recientes.
 - En ningún modo se marca `APROBADO` sin referencia o confirmación.
 
 ## 7. Liquidaciones
@@ -163,7 +163,7 @@ Guards de resolución:
 
 La migración `back/migrations/20261112-liquidaciones.sql` crea el ámbito `LIQUIDACION_RESERVA`, sus siete estados y la tabla con las restricciones anteriores. El backfill inserta una fila por reserva copiando `estado_liquidacion`, `referencia_liquidacion`, `observacion_liquidacion` y `fecha_resolucion_liquidacion`; copia el importe solo si la liquidación ya está resuelta y `fecha_pago_propietario` solo para `PAGADO_PROPIETARIO`. Usa `ON CONFLICT (id_reserva) DO NOTHING`, por lo que es repetible y no modifica ni elimina columnas de `reserva`. El runner `back/scripts/liquidaciones.cjs` (`npm run db:liquidaciones`) informa el estado sin `--aplicar`; con `--aplicar` abre una transacción con `lock_timeout` de 10 s y un advisory lock `depa:liquidaciones`, y aplica antes las migraciones de catálogo si faltan.
 
-Las columnas de liquidación en la reserva conservan el contrato de la API. ReservaDecisionService concentra las consultas de negocio y ReservaCicloVidaService concentra las transiciones de la reserva. ReservaReembolsoAplicacionService aplica los reembolsos confirmados y comparte la transacción con la reserva, su liquidación y la liberación de fechas cuando corresponde. LiquidacionesService registra el resultado en la entidad Liquidacion mediante ILiquidacionRepository. La consulta administrativa conserva la proyección de reservas que consume la API.
+Las columnas de liquidación en la reserva conservan el contrato de la API. `ReservaDecisionService` concentra las consultas de negocio y `ReservaCicloVidaService` concentra las transiciones de la reserva. `ReservasService` coordina los efectos de la devolución sobre la reserva, su liquidación y la liberación de fechas cuando corresponde. `LiquidacionesService` registra el resultado mediante su repositorio.
 
 Verificación específica: `npm run test:liquidaciones` (5/5) y `npm run test:liquidaciones-entidad` (9/9). Al cierre de la fase 2, el 12/11/2026, pasan las suites completas: 173/173 pruebas `node:test` y 34/34 Jest (este último requiere Node 24.9 o superior).
 
@@ -176,11 +176,11 @@ Verificación específica: `npm run test:liquidaciones` (5/5) y `npm run test:li
 | Análisis facial | `verificacion-anunciante/proveedor/` | `IAnalisisFacial`; `FaceApiAdapter` carga modelos WASM desde `dist/models` y analiza la evidencia. |
 | Archivos | `almacenamiento/` | `ARCHIVO_REPOSITORY` + `AlmacenamientoService`; Azure Blob, contenedores privados y URLs firmadas. |
 | Correo | `mail/` | `MAIL_SERVICE` + `CORREO_REPOSITORY`; Azure Communication Services. |
-| Pagos | `pagos/pasarela.module.ts` | `PASARELA_PAGOS` y `PASARELA_REEMBOLSOS`; `MercadoPagoAdapter` implementa ambos puertos. |
+| Mercado Pago | `mercado-pago/mercado-pago.module.ts` | `MercadoPagoService` delega al adaptador privado. El webhook de pagos requiere `MP_WEBHOOK_SECRET`. |
 
-Regla: los consumidores importan la interface o el token, nunca el adaptador concreto. Los adaptadores de `proveedor/` no deben exponer HTTP ni decidir reglas de dominio; el service traduce sus errores.
+Los módulos consumidores acceden a Mercado Pago por `MercadoPagoService`. El módulo vincula su interfaz de proveedor con el adaptador.
 
-**Desviación verificada:** `MercadoPagoAdapter` lanza `UnauthorizedException` y `ServiceUnavailableException`, y `FaceApiAdapter` lanza `BadRequestException` y `UnprocessableEntityException`. Dólar y Nominatim sí lanzan `Error` genérico y el service lo traduce. Se declara en §9.
+La configuración y los errores de autenticación de Mercado Pago se validan en `MercadoPagoService`. Los servicios de Dólar y Nominatim traducen los errores de sus adaptadores.
 
 ## 9. Deuda declarada
 
@@ -188,10 +188,9 @@ La arquitectura real conserva estas desviaciones; no se presentan como patrón r
 
 - **Acceso cruzado desde `UsuariosRepository`:** consulta `Reserva` y `Pago` para calcular operaciones pendientes de una cuenta. Es una lectura de tablas de otros módulos desde un repositorio.
 - **Acceso cruzado desde `PublicacionesRepository`:** importa `Reserva` y la registra en `TypeOrmModule.forFeature` para calcular `cantidad_reservas`. La relación no está declarada en la entidad `Publicacion`.
-- **Composición de pagos y reembolsos:** `PagosModule` importa `PagosPersistenciaModule`, `PasarelaModule`, `ReembolsosModule` y `DisputasModule`; `ReembolsosModule` importa `PagosPersistenciaModule`, `PasarelaModule` y `ReservasConsultaModule`. `PagosPersistenciaModule` exporta `PagosRegistroService` y conserva el repositorio como proveedor privado.
 - **`UsuariosConsultaModule` exporta `USUARIOS_REPOSITORY`,** aunque sus consumidores actuales usan `UsuariosConsultaService` o el token dentro del mismo dominio. Es una API más amplia que la necesaria.
 - **`EntityManager` en services:** `anunciantes`, `pagos`, `usuarios`, `disponibilidad` y `publicaciones` importan el tipo de TypeORM. El diseño buscaba un tipo opaco `Transaccion`, que todavía no existe.
-- **Excepciones HTTP en adaptadores:** Mercado Pago y Face API lanzan excepciones de Nest desde la capa de integración, en lugar de errores de infraestructura traducidos por el service.
+- **Excepciones HTTP en adaptadores:** Face API lanza excepciones de Nest desde la capa de integración.
 - **`as never`:** `grep -RIn "as never" back/src` no devuelve coincidencias. La sustitución por referencias tipadas (`referenciaUsuario`) ya está aplicada.
 
 ## 10. Verificación

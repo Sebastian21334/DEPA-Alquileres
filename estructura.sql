@@ -753,6 +753,11 @@ CREATE TABLE public.reembolso (
     resuelto_en timestamp without time zone,
     error_detalle character varying(500),
     ambito_estado character varying(40) DEFAULT 'REEMBOLSO'::character varying NOT NULL,
+    aplicado_en timestamp without time zone,
+    revision_aplicacion boolean DEFAULT false NOT NULL,
+    conciliar_en timestamp with time zone,
+    primer_intento_en timestamp with time zone,
+    CONSTRAINT ck_reembolso_aplicacion CHECK ((aplicado_en IS NULL) OR ((estado = 'APROBADO') AND NOT revision_aplicacion)),
     CONSTRAINT ck_reembolso_estado_ambito CHECK (((ambito_estado)::text = 'REEMBOLSO'::text)),
     CONSTRAINT ck_reembolso_importe CHECK ((importe > (0)::numeric))
 );
@@ -946,6 +951,23 @@ CREATE SEQUENCE public.rol_id_rol_seq
 --
 
 ALTER SEQUENCE public.rol_id_rol_seq OWNED BY public.rol.id_rol;
+
+
+--
+-- Name: politica_cancelacion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.politica_cancelacion (
+    vigente_desde date PRIMARY KEY,
+    dias_devolucion_total integer NOT NULL CHECK (dias_devolucion_total >= 0),
+    dias_devolucion_parcial integer NOT NULL CHECK (dias_devolucion_parcial >= 0),
+    porcentaje_total integer NOT NULL CHECK (porcentaje_total BETWEEN 0 AND 100),
+    porcentaje_parcial integer NOT NULL CHECK (porcentaje_parcial BETWEEN 0 AND 100),
+    porcentaje_fuera_de_plazo integer NOT NULL CHECK (porcentaje_fuera_de_plazo BETWEEN 0 AND 100),
+    porcentaje_otros_actores integer NOT NULL CHECK (porcentaje_otros_actores BETWEEN 0 AND 100),
+    CHECK (dias_devolucion_total > dias_devolucion_parcial),
+    CHECK (porcentaje_total >= porcentaje_parcial AND porcentaje_parcial >= porcentaje_fuera_de_plazo)
+);
 
 
 --
@@ -1731,6 +1753,13 @@ CREATE INDEX ix_reembolso_pago ON public.reembolso USING btree (id_pago);
 --
 
 CREATE INDEX ix_reembolso_reserva ON public.reembolso USING btree (id_reserva);
+
+CREATE INDEX ix_reembolso_pendiente_aplicacion ON public.reembolso USING btree (id_reembolso)
+    WHERE estado = 'APROBADO' AND aplicado_en IS NULL AND NOT revision_aplicacion;
+CREATE INDEX ix_reembolso_conciliar ON public.reembolso USING btree (conciliar_en, id_reembolso)
+    WHERE conciliar_en IS NOT NULL;
+CREATE INDEX ix_reembolso_origen ON public.reembolso USING btree (origen, referencia_interna, id_reembolso)
+    WHERE referencia_interna IS NOT NULL;
 
 
 --

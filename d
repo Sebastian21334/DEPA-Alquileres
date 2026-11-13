@@ -1,0 +1,67 @@
+M	back/.env.example
+M	back/docs/cancelaciones-devoluciones.md
+A	back/migrations/20261113-aplicacion-reembolsos.sql
+A	back/migrations/20261113-politica-cancelacion.sql
+M	back/scripts/cancelaciones-devoluciones.cjs
+M	back/scripts/seed.cjs
+M	back/src/app.module.ts
+M	back/src/cancelaciones/cancelaciones.module.ts
+A	back/src/cancelaciones/entity/politica-cancelacion.entity.ts
+M	back/src/cancelaciones/repository/cancelaciones.repository.interface.ts
+M	back/src/cancelaciones/repository/cancelaciones.repository.ts
+M	back/src/cancelaciones/service/cancelaciones.service.ts
+M	back/src/disputas/disputas.module.ts
+M	back/src/disputas/repository/disputas.repository.interface.ts
+M	back/src/disputas/repository/disputas.repository.ts
+M	back/src/disputas/service/disputas.service.ts
+A	back/src/mercado-pago/mercado-pago.module.ts
+A	back/src/mercado-pago/proveedor/mercado-pago.adapter.ts
+A	back/src/mercado-pago/proveedor/mercado-pago.interface.ts
+A	back/src/mercado-pago/service/mercado-pago.service.ts
+R078	back/src/pagos/controller/pagos.controller.ts	back/src/operaciones-reserva/controller/pagos.controller.ts
+A	back/src/operaciones-reserva/controller/reembolsos-reserva.controller.ts
+R100	back/src/pagos/dto/crear-checkout.dto.ts	back/src/operaciones-reserva/dto/crear-checkout.dto.ts
+R100	back/src/pagos/dto/reconciliar-pago.dto.ts	back/src/operaciones-reserva/dto/reconciliar-pago.dto.ts
+R057	back/src/pagos/dto/webhook-pago.dto.ts	back/src/operaciones-reserva/dto/webhook-pago.dto.ts
+A	back/src/operaciones-reserva/operaciones-reserva.module.ts
+A	back/src/operaciones-reserva/service/operaciones-pago.service.ts
+A	back/src/operaciones-reserva/service/operaciones-reembolso.service.ts
+R100	back/src/pagos/service/presupuestos.service.ts	back/src/operaciones-reserva/service/presupuestos.service.ts
+D	back/src/pagos/pagos-persistencia.module.ts
+M	back/src/pagos/pagos.module.ts
+D	back/src/pagos/pasarela.module.ts
+D	back/src/pagos/proveedor/mercado-pago.adapter.ts
+D	back/src/pagos/proveedor/pasarela-pagos.interface.ts
+M	back/src/pagos/repository/pagos.repository.interface.ts
+M	back/src/pagos/repository/pagos.repository.ts
+D	back/src/pagos/service/pagos-registro.service.ts
+M	back/src/pagos/service/pagos.service.ts
+M	back/src/reclamos/service/reclamos.service.ts
+M	back/src/reembolsos/entity/reembolso.entity.ts
+D	back/src/reembolsos/proveedor/pasarela-reembolsos.interface.ts
+M	back/src/reembolsos/reembolsos.module.ts
+M	back/src/reembolsos/repository/reembolsos.repository.interface.ts
+M	back/src/reembolsos/repository/reembolsos.repository.ts
+M	back/src/reembolsos/service/reembolsos.service.ts
+M	back/src/reservas/controller/reservas.controller.ts
+M	back/src/reservas/repository/reserva.repository.interface.ts
+M	back/src/reservas/repository/reserva.repository.ts
+M	back/src/reservas/reservas.module.ts
+D	back/src/reservas/service/reembolsos-reconciliacion.service.ts
+M	back/src/reservas/service/reserva-bloqueo-anunciante.service.ts
+D	back/src/reservas/service/reserva-bloqueo-devolucion.service.ts
+M	back/src/reservas/service/reserva-liquidaciones.service.ts
+M	back/src/reservas/service/reserva-notificaciones.service.ts
+D	back/src/reservas/service/reserva-reembolso-aplicacion.service.ts
+M	back/src/reservas/service/reservas.service.ts
+M	back/test/bloqueo-anunciante.test.cjs
+M	back/test/cancelaciones-devoluciones.test.cjs
+M	back/test/condiciones-economicas.test.cjs
+M	back/test/liquidaciones.test.cjs
+M	back/test/respuestas-modulos.test.cjs
+M	back/test/seed.test.cjs
+M	back/test/soporte/postgres-pruebas.cjs
+M	docs/arquitectura.md
+M	estructura.sql
+M	front/src/app/features/mis-reservas/mis-reservas.component.html
+M	front/src/app/features/mis-reservas/mis-reservas.component.ts

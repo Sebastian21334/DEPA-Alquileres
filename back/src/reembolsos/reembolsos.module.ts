@@ -1,8 +1,8 @@
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { PagosPersistenciaModule } from '../pagos/pagos-persistencia.module';
-import { PasarelaModule } from '../pagos/pasarela.module';
+import { PagosModule } from '../pagos/pagos.module';
+import { MercadoPagoModule } from '../mercado-pago/mercado-pago.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
 import { Reembolso } from './entity/reembolso.entity';
 import { ReembolsosRepository } from './repository/reembolsos.repository';
@@ -15,8 +15,8 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
   imports: [
     CatalogosModule,
     TypeOrmModule.forFeature([Reembolso]),
-    PagosPersistenciaModule,
-    PasarelaModule,
+    PagosModule,
+    MercadoPagoModule,
     SeguridadModule,
     ReservasConsultaModule,
   ],

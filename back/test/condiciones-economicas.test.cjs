@@ -4,8 +4,9 @@ const assert = require('node:assert/strict');
 const { test, beforeEach } = require('node:test');
 const { ValidationPipe } = require('@nestjs/common');
 const { JwtService } = require('@nestjs/jwt');
-const { CrearCheckoutDto } = require('../dist/pagos/dto/crear-checkout.dto');
-const { PresupuestosService } = require('../dist/pagos/service/presupuestos.service');
+const { CrearCheckoutDto } = require('../dist/operaciones-reserva/dto/crear-checkout.dto');
+const { PresupuestosService } = require('../dist/operaciones-reserva/service/presupuestos.service');
+const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
 const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
@@ -80,30 +81,33 @@ function escenario(moneda = 'ARS') {
     new ReservaEstadoService(publicaciones, catalogosDePrueba()),
     decisionDePrueba(),
     { sincronizarDesdeReserva: async () => ({}) },
-    new ReservaCicloVidaService(decisionDePrueba(), catalogosDePrueba()), undefined, catalogosDePrueba(),
+    new ReservaCicloVidaService(decisionDePrueba(), catalogosDePrueba()), catalogosDePrueba(),
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },
     publicaciones, disponibilidad, new JwtService(), config,
   );
-  const pagos = new PagosService(
+  const pagos = new OperacionesPagoService(
     presupuestos,
-    {
+    new PagosService({
       crear: (datos) => Object.assign(new Pago(), datos),
       guardar: async (pago) => {
-        if (!estado.pagos.includes(pago)) estado.pagos.push(pago);
+        pago.id = estado.pagos.length + 1;
+        pago.reserva = estado.reservas.find(reserva => reserva.id === pago.reserva.id);
+        estado.pagos.push(pago);
         return pago;
       },
+      actualizar: async (id, datos) => Object.assign(estado.pagos.find(pago => pago.id === id), datos),
       buscarPorReferencia: async (referencia) => estado.pagos.find(p => p.external_reference === referencia),
-    },
+    }),
     reservas,
     { registrarDesdeWebhook: async () => ({}), registrarManual: async () => ({}) },
     { registrarContracargo: async () => ({}) },
     config,
     {
       validarConfiguracionCheckout: () => {},
-      crearCheckout: async (reserva, referencia, clave, currency) => {
-        estado.checkouts.push({ amount: reserva.monto_pago, currency });
+      crearCheckout: async ({ importe, moneda: currency }) => {
+        estado.checkouts.push({ amount: importe, currency });
         return { id: 'preferencia-prueba', url: 'https://example.invalid/pago' };
       },
       validarWebhook: () => {},

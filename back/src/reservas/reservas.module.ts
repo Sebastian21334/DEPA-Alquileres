@@ -6,12 +6,9 @@ import { ReservaFinalizacionService } from './service/reserva-finalizacion.servi
 import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
 import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
 import { ReservaReprogramacionService } from './service/reserva-reprogramacion.service';
-import { ReservaReembolsoAplicacionService } from './service/reserva-reembolso-aplicacion.service';
-import { ReservaBloqueoDevolucionService } from './service/reserva-bloqueo-devolucion.service';
 import { ReservaBloqueoAnuncianteService } from './service/reserva-bloqueo-anunciante.service';
 // reservas.module.ts
 import { Module } from '@nestjs/common';
-import { ReembolsosReconciliacionService } from './service/reembolsos-reconciliacion.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Reserva } from './entity/reserva.entity';
 import { ReprogramacionReserva } from './entity/reprogramacion-reserva.entity';
@@ -54,9 +51,6 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
     ReservaLiquidacionesService,
     ReservaNotificacionesService,
     ReservaReprogramacionService,
-    ReservaReembolsoAplicacionService,
-    ReembolsosReconciliacionService,
-    ReservaBloqueoDevolucionService,
     ReservaBloqueoAnuncianteService,
     // El token desacopla el service de la implementación concreta del repositorio.
     ReservasService,

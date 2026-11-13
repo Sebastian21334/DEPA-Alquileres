@@ -78,18 +78,18 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.save(reservas);
   }
 
-  private async bloquear(id: number): Promise<void> {
+  private async bloquear(id: number, modo: 'pessimistic_write' | 'for_no_key_update' = 'pessimistic_write'): Promise<void> {
     if (this.repository.manager.queryRunner?.isTransactionActive) {
       await this.repository
         .createQueryBuilder('reserva')
         .where('reserva.id = :id', { id })
-        .setLock('pessimistic_write')
+        .setLock(modo)
         .getOne();
     }
   }
 
-  async buscarPorId(id: number): Promise<Reserva | null> {
-    await this.bloquear(id);
+  async buscarPorId(id: number, modoBloqueo?: 'pessimistic_write' | 'for_no_key_update'): Promise<Reserva | null> {
+    await this.bloquear(id, modoBloqueo);
     return this.repository.findOne({
       where: { id },
       relations: {

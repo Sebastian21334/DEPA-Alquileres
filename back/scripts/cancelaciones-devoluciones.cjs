@@ -45,12 +45,17 @@ async function main() {
       const archivos = catalogoAplicado
         ? ['20261110-estados-por-ambito.sql']
         : ['20261104-cancelaciones-devoluciones.sql', '20261110-estados-por-ambito.sql'];
-      for (const archivo of archivos) {
+      for (const archivo of [
+        ...archivos,
+        '20261113-politica-cancelacion.sql',
+        '20261112-liquidaciones.sql',
+        '20261113-aplicacion-reembolsos.sql',
+      ]) {
         const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', archivo), 'utf8');
         await client.query(sql);
       }
       await client.query('COMMIT');
-      console.log('Cancelaciones, reembolsos, disputas, reclamos y estados por ámbito preparados.');
+      console.log('Cancelaciones, liquidaciones, reembolsos, disputas, reclamos y estados por ámbito preparados.');
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

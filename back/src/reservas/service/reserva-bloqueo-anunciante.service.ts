@@ -12,8 +12,6 @@ import {
   RESERVA_REPOSITORY,
   type IReservaRepository,
 } from '../repository/reserva.repository.interface';
-import { ReservaBloqueoDevolucionService } from './reserva-bloqueo-devolucion.service';
-import { ReservaReembolsoAplicacionService } from './reserva-reembolso-aplicacion.service';
 import { ReservaDecisionService } from './reserva-decision.service';
 import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservasService } from './reservas.service';
@@ -52,8 +50,6 @@ export class ReservaBloqueoAnuncianteService {
     private readonly decision: ReservaDecisionService,
     private readonly ciclo: ReservaCicloVidaService,
     private readonly reservasService: ReservasService,
-    private readonly aplicacion: ReservaReembolsoAplicacionService,
-    private readonly devolucion: ReservaBloqueoDevolucionService,
     private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService,
   ) {}
 
@@ -242,7 +238,7 @@ export class ReservaBloqueoAnuncianteService {
       creado: boolean;
     };
     try {
-      devolucion = await this.devolucion.asegurarDevolucion(
+      devolucion = await this.reembolsosService.asegurarDevolucion(
         reserva,
         pago,
         existentes,
@@ -294,7 +290,7 @@ export class ReservaBloqueoAnuncianteService {
       return resultado;
     }
 
-    const cobertura = await this.devolucion.coberturaDevolucion(
+    const cobertura = await this.reembolsosService.coberturaDevolucion(
       reserva.id,
       pago,
     );
@@ -315,6 +311,7 @@ export class ReservaBloqueoAnuncianteService {
           importe: cobertura.faltante,
           motivo: this.mensajeLiquidacion(motivo),
           idSolicitadoPor: idAdmin,
+          referenciaInterna: `blq:${idAnunciante}:${reserva.id}`,
           idempotencyKey: `blq:${idAnunciante}:${reserva.id}:r1:${sello}`,
         });
 
@@ -350,7 +347,9 @@ export class ReservaBloqueoAnuncianteService {
     }
 
     if (devolucion.reembolso?.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) {
-      await this.aplicacion.aplicarReembolsoConfirmado(devolucion.reembolso.id);
+      await this.reembolsosService.aplicarConfirmado(devolucion.reembolso.id, (reembolso, transaccion) =>
+        this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
+      );
     }
 
     const errores: string[] = [];
@@ -363,7 +362,9 @@ export class ReservaBloqueoAnuncianteService {
           idAdmin,
         );
         if (ejecutado.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
-          await this.aplicacion.aplicarReembolsoConfirmado(ejecutado.id);
+          await this.reembolsosService.aplicarConfirmado(ejecutado.id, (reembolso, transaccion) =>
+            this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
+          );
       } catch (error) {
         const mensaje =
           error instanceof Error ? error.message : String(error);

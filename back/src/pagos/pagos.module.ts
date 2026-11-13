@@ -1,33 +1,13 @@
-import { CatalogosModule } from '../catalogos/catalogos.module';
 import { Module } from '@nestjs/common';
-import { PagosController } from './controller/pagos.controller';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Pago } from './entity/pago.entity';
+import { PagosRepository } from './repository/pagos.repository';
+import { PAGOS_REPOSITORY } from './repository/pagos.repository.interface';
 import { PagosService } from './service/pagos.service';
-import { ReservasModule } from '../reservas/reservas.module';
-import { SeguridadModule } from '../seguridad/seguridad.module';
-import { CotizacionesModule } from '../cotizaciones/cotizaciones.module';
-import { PublicacionesModule } from '../publicaciones/publicaciones.module';
-import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
-import { PresupuestosService } from './service/presupuestos.service';
-
-import { PagosPersistenciaModule } from './pagos-persistencia.module';
-import { PasarelaModule } from './pasarela.module';
-import { ReembolsosModule } from '../reembolsos/reembolsos.module';
-import { DisputasModule } from '../disputas/disputas.module';
 
 @Module({
-  imports: [
-    CatalogosModule,
-    PagosPersistenciaModule,
-    ReservasModule,
-    SeguridadModule,
-    CotizacionesModule,
-    PublicacionesModule,
-    DisponibilidadModule,
-    PasarelaModule,
-    ReembolsosModule,
-    DisputasModule,
-  ],
-  controllers: [PagosController],
-  providers: [PagosService, PresupuestosService],
+  imports: [TypeOrmModule.forFeature([Pago])],
+  providers: [PagosService, { provide: PAGOS_REPOSITORY, useClass: PagosRepository }],
+  exports: [PagosService],
 })
 export class PagosModule {}
