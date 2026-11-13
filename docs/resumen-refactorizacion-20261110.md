@@ -36,7 +36,7 @@ Archivos principales [SeguridadModule](../back/src/seguridad/seguridad.module.ts
 - `npm run db:seed` carga roles, ámbitos, estados, modalidades, monedas, tipos de anunciante y de propiedad, provincias y localidades de la copia local de GeoRef. Inserta lo que falta y conserva los registros existentes. En una base descartable cargó 24 provincias y 3.923 localidades. Una segunda ejecución agregó cero filas.
 - El backend verifica los roles y estados obligatorios al arrancar. `Administrador` e `Inquilino` conservan sus nombres y no se pueden eliminar desde la API. Sus descripciones se pueden editar.
 
-Archivos principales [Estado](../back/src/catalogos/entity/estado.entity.ts), [Ambito](../back/src/catalogos/entity/ambito.entity.ts), [códigos de estado](../back/src/catalogos/estados.ts), [migración](../back/migrations/20261110-estados-por-ambito.sql) y [seed](../back/scripts/seed.cjs).
+Archivos principales [Estado](../back/src/catalogos/entity/estado.entity.ts), [Ambito](../back/src/catalogos/entity/ambito.entity.ts), [CatalogosService](../back/src/catalogos/service/catalogos.service.ts), [migración](../back/migrations/20261110-estados-por-ambito.sql) y [seed](../back/scripts/seed.cjs).
 
 ## Cambios por módulo
 

@@ -15,7 +15,7 @@ import { IPasarelaPagos, PagoExterno } from './pasarela-pagos.interface';
 import type {
   IPasarelaReembolsos,
   ResultadoReembolsoExterno,
-} from '../../reembolsos/ports/pasarela-reembolsos.interface';
+} from '../../reembolsos/proveedor/pasarela-reembolsos.interface';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 import type { WebhookEntrada } from '../dto/webhook-pago.dto';
 

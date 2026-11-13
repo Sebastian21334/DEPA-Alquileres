@@ -20,6 +20,7 @@
     "db:cotizaciones-cobros": "node scripts/cotizaciones-cobros.cjs --aplicar",
     "db:reprogramacion-reservas": "node scripts/reprogramacion-reservas.cjs --aplicar",
     "db:cancelaciones-devoluciones": "node scripts/cancelaciones-devoluciones.cjs --aplicar",
+    "db:causa-cancelacion-reserva": "node scripts/causa-cancelacion-reserva.cjs",
     "db:liquidaciones": "node scripts/liquidaciones.cjs --aplicar",
     "db:calendario-unico": "node scripts/calendario-unico.cjs --aplicar",
     "db:orden-imagenes": "node scripts/orden-imagenes.cjs --aplicar",

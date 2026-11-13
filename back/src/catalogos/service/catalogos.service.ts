@@ -15,25 +15,30 @@ import type { ICatalogosRepository } from '../repository/catalogos.repository.in
 import type { TipoAnunciante } from '../entity/tipo-anunciante.entity';
 import { PATRON_RESERVA_POR_FECHA, type Modalidad } from '../entity/modalidad.entity';
 import type { ModalidadRespuestaDto } from '../dto/modalidad-respuesta.dto';
-import { ESTADOS_INICIALES, type CodigoAmbitoEstado } from '../estados';
+import type { Estado } from '../entity/estado.entity';
 import catalogosIniciales from '../catalogos-iniciales.json';
+import estadosIniciales from '../estados-iniciales.json';
+
+type CodigoAmbito = keyof typeof estadosIniciales;
+type CodigoEstado<A extends CodigoAmbito> = Extract<keyof typeof estadosIniciales[A]['estados'], string>;
 
 @Injectable()
 export class CatalogosService implements OnModuleInit {
+  private estados = new Map<string, Estado>();
   constructor(@Inject(CATALOGOS_REPOSITORY) private readonly catalogosRepo: ICatalogosRepository) {}
 
   async onModuleInit(): Promise<void> {
     const [roles, estados] = await Promise.all([
       this.catalogosRepo.buscarTodosRoles(),
-      this.catalogosRepo.listarClavesEstado(),
+      this.catalogosRepo.listarEstados(),
     ]);
     const rolesCargados = new Set(roles.map(({ nombre }) => nombre));
-    const estadosCargados = new Set(estados.map(({ codigoAmbito, codigo }) => `${codigoAmbito}/${codigo}`));
+    const estadosCargados = new Map(estados.map((estado) => [`${estado.codigoAmbito}/${estado.codigo}`, estado]));
     const faltantes = [
       ...catalogosIniciales.rol
         .filter(({ nombre }) => !rolesCargados.has(nombre))
         .map(({ nombre }) => `rol ${nombre}`),
-      ...Object.entries(ESTADOS_INICIALES).flatMap(([codigoAmbito, { estados }]) =>
+      ...Object.entries(estadosIniciales).flatMap(([codigoAmbito, { estados }]) =>
         Object.keys(estados)
           .map((codigo) => `${codigoAmbito}/${codigo}`)
           .filter((clave) => !estadosCargados.has(clave)),
@@ -44,6 +49,7 @@ export class CatalogosService implements OnModuleInit {
         `Faltan datos base (${faltantes.join(', ')}). Ejecutá npm run db:seed desde back.`,
       );
     }
+    this.estados = estadosCargados;
   }
 
   esInmobiliaria(tipo?: TipoAnunciante | null): boolean {
@@ -63,12 +69,16 @@ export class CatalogosService implements OnModuleInit {
     });
   }
 
-  async obtenerEstado(codigoAmbito: CodigoAmbitoEstado, codigo: string) {
-    const estado = await this.catalogosRepo.buscarEstadoPorCodigo(codigoAmbito, codigo);
+  obtenerEstado<A extends CodigoAmbito>(codigoAmbito: A, codigo: CodigoEstado<A>): Estado {
+    const estado = this.estados.get(`${codigoAmbito}/${codigo}`);
     if (!estado) {
       throw new InternalServerErrorException(`Falta el estado ${codigo} del ámbito ${codigoAmbito}`);
     }
     return estado;
+  }
+
+  codigoEstado<A extends CodigoAmbito, C extends CodigoEstado<A>>(ambito: A, codigo: C): C {
+    return this.obtenerEstado(ambito, codigo).codigo as C;
   }
 
   // --- ROLES ---

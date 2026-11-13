@@ -1,3 +1,4 @@
+import { CatalogosModule } from '../catalogos/catalogos.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PagosPersistenciaModule } from '../pagos/pagos-persistencia.module';
@@ -12,6 +13,7 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
 
 @Module({
   imports: [
+    CatalogosModule,
     TypeOrmModule.forFeature([Reembolso]),
     PagosPersistenciaModule,
     PasarelaModule,

@@ -1,4 +1,4 @@
-import { EstadoPagoReserva } from '../../catalogos/estados';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { PresupuestosService } from './presupuestos.service';
 import {
   BadRequestException,
@@ -10,14 +10,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
-import { PAGOS_REPOSITORY } from '../repository/pagos.repository.interface';
-import type { IPagosRepository } from '../repository/pagos.repository.interface';
+import { PagosRegistroService } from './pagos-registro.service';
 import type { WebhookEntrada } from '../dto/webhook-pago.dto';
-import { PASARELA_PAGOS } from '../repository/pasarela-pagos.interface';
+import { PASARELA_PAGOS } from '../proveedor/pasarela-pagos.interface';
 import type {
   IPasarelaPagos,
   PagoExterno,
-} from '../repository/pasarela-pagos.interface';
+} from '../proveedor/pasarela-pagos.interface';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { DisputasService } from '../../disputas/service/disputas.service';
@@ -28,7 +27,7 @@ import { Pago } from '../entity/pago.entity';
 export class PagosService {
   private readonly logger = new Logger(PagosService.name);
 
-  constructor(private readonly presupuestos: PresupuestosService, @Inject(PAGOS_REPOSITORY) private readonly pagos: IPagosRepository, private readonly reservasService: ReservasService, private readonly reembolsosService: ReembolsosService, private readonly disputasService: DisputasService, private readonly config: ConfigService, @Inject(PASARELA_PAGOS) private readonly pasarela: IPasarelaPagos) {}
+  constructor(private readonly presupuestos: PresupuestosService, private readonly pagos: PagosRegistroService, private readonly reservasService: ReservasService, private readonly reembolsosService: ReembolsosService, private readonly disputasService: DisputasService, private readonly config: ConfigService, @Inject(PASARELA_PAGOS) private readonly pasarela: IPasarelaPagos, private readonly catalogos: CatalogosService) {}
 
   async crearCheckout(dto: CrearCheckoutDto, idUsuario: number) {
     this.pasarela.validarConfiguracionCheckout();
@@ -206,14 +205,14 @@ export class PagosService {
         idExterno: String(payment.id),
       });
       if (
-        pago.reserva.estado_pago === EstadoPagoReserva.APROBADO ||
-        pago.reserva.estado_pago === EstadoPagoReserva.CONTRACARGO
+        pago.reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO') ||
+        pago.reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO')
       ) {
         await this.reservasService.aplicarReembolsoConfirmado(reembolso.id);
       } else {
         await this.reservasService.rechazarPago(
           pago.reserva.id,
-          EstadoPagoReserva.REEMBOLSADO,
+          this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO'),
         );
       }
     } else if (['rejected', 'cancelled'].includes(payment.status ?? '')) {
@@ -238,7 +237,7 @@ export class PagosService {
         'Solo el inquilino puede consultar el estado del pago',
       );
     }
-    const pago = await this.pagos.buscarPorReserva(idReserva);
+    const pago = await this.pagos.buscarPorReserva(idReserva, false);
     return {
       reserva_id: idReserva,
       estado_pago: reserva.estado_pago,
@@ -252,7 +251,7 @@ export class PagosService {
       idReserva,
       idUsuario,
     );
-    const pago = await this.pagos.buscarPorReserva(idReserva);
+    const pago = await this.pagos.buscarPorReserva(idReserva, false);
     return {
       reserva,
       pago: pago
@@ -271,10 +270,10 @@ export class PagosService {
     };
   }
 
-  private mapearEstado(status?: string): EstadoPagoReserva {
+  private mapearEstado(status?: string): string {
     if (status === 'refunded' || status === 'charged_back')
-      return EstadoPagoReserva.REEMBOLSADO;
-    if (status === 'cancelled') return EstadoPagoReserva.CANCELADO;
-    return EstadoPagoReserva.RECHAZADO;
+      return this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO');
+    if (status === 'cancelled') return this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO');
+    return this.catalogos.codigoEstado('PAGO_RESERVA', 'RECHAZADO');
   }
 }

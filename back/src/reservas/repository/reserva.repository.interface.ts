@@ -6,7 +6,7 @@ import type { EntityManager } from 'typeorm';
 export const RESERVA_REPOSITORY = 'RESERVA_REPOSITORY';
 
 export interface IReservaRepository {
-  finalizarEstadiasVencidas(hoy: string): Promise<void>;
+  finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<void>;
   conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T>;
   guardarReprogramacion(datos: Partial<ReprogramacionReserva>): Promise<ReprogramacionReserva>;
   buscarReprogramacion(id: number, idReserva: number): Promise<ReprogramacionReserva | null>;
@@ -21,13 +21,13 @@ export interface IReservaRepository {
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]>;
   buscarPorPublicacion(idPublicacion: number): Promise<Reserva[]>;
   buscarPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]>;
-  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]>;
-  buscarPendientesVencidas(fecha: Date): Promise<Reserva[]>;
-  existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean>;
-  buscarLiquidacionesAdministracion(): Promise<Reserva[]>;
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, aprobado: string): Promise<Reserva[]>;
+  buscarPendientesVencidas(fecha: Date, pendiente: string): Promise<Reserva[]>;
+  existeAprobada(idPublicacion: number, idUsuarioInquilino: number, aprobado: string): Promise<boolean>;
+  buscarLiquidacionesAdministracion(estados: string[]): Promise<Reserva[]>;
   crearSolicitudCancelacion(datos: Partial<SolicitudCancelacion>): SolicitudCancelacion;
   guardarSolicitudCancelacion(solicitud: SolicitudCancelacion): Promise<SolicitudCancelacion>;
   buscarSolicitudCancelacion(id: number, idReserva: number): Promise<SolicitudCancelacion | null>;
-  buscarSolicitudCancelacionActiva(idReserva: number): Promise<SolicitudCancelacion | null>;
-  listarSolicitudesCancelacionAdministracion(): Promise<SolicitudCancelacion[]>;
+  buscarSolicitudCancelacionActiva(idReserva: number, estado: string): Promise<SolicitudCancelacion | null>;
+  listarSolicitudesCancelacionAdministracion(estado: string): Promise<SolicitudCancelacion[]>;
 }

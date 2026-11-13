@@ -1,4 +1,3 @@
-import { EstadoReembolso } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, type EntityManager } from 'typeorm';
@@ -67,7 +66,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  buscarPorReservasConEstados(idsReserva: number[], estados: EstadoReembolso[]): Promise<Reembolso[]> {
+  buscarPorReservasConEstados(idsReserva: number[], estados: string[]): Promise<Reembolso[]> {
     if (idsReserva.length === 0) return Promise.resolve([]);
     return this.repository.find({
       where: {
@@ -78,24 +77,11 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  buscarPendientesPorPago(idPago: number): Promise<Reembolso[]> {
-    return this.repository.find({
-      where: {
-        pago: { id: idPago },
-        estado: In([EstadoReembolso.PENDIENTE, EstadoReembolso.EN_PROCESO]),
-      },
-    });
-  }
-
-  async sumarImportesReservados(idPago: number): Promise<number> {
+  async sumarImportesReservados(idPago: number, estados: string[]): Promise<number> {
     const filas = await this.repository.find({
       where: {
         pago: { id: idPago },
-        estado: In([
-          EstadoReembolso.PENDIENTE,
-          EstadoReembolso.EN_PROCESO,
-          EstadoReembolso.FALLIDO,
-        ]),
+        estado: In(estados),
       },
     });
     return filas.reduce((total, fila) => total + Number(fila.importe), 0);
@@ -114,10 +100,10 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  buscarPendientesConciliacion(): Promise<Reembolso[]> {
+  buscarPendientesConciliacion(estados: string[]): Promise<Reembolso[]> {
     return this.repository.find({
       where: {
-        estado: In([EstadoReembolso.EN_PROCESO, EstadoReembolso.FALLIDO]),
+        estado: In(estados),
       },
       relations: { pago: true, reserva: true },
       order: { id: 'ASC' },
@@ -125,9 +111,9 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  buscarAprobados(): Promise<Reembolso[]> {
+  buscarAprobados(estado: string): Promise<Reembolso[]> {
     return this.repository.find({
-      where: { estado: EstadoReembolso.APROBADO },
+      where: { estado },
       relations: { pago: true, reserva: true },
       order: { id: 'ASC' },
     });

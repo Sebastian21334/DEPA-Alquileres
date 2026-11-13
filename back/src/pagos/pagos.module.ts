@@ -1,3 +1,4 @@
+import { CatalogosModule } from '../catalogos/catalogos.module';
 import { Module } from '@nestjs/common';
 import { PagosController } from './controller/pagos.controller';
 import { PagosService } from './service/pagos.service';
@@ -15,6 +16,7 @@ import { DisputasModule } from '../disputas/disputas.module';
 
 @Module({
   imports: [
+    CatalogosModule,
     PagosPersistenciaModule,
     ReservasModule,
     SeguridadModule,

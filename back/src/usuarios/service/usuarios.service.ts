@@ -171,6 +171,16 @@ export class UsuariosService {
       fechaArgentina(),
       new Date(Date.now() - MARGEN_CHECKOUT_SIN_PAGO_MS),
       transaccion,
+      {
+        pagoPendiente: this.catalogosService.codigoEstado('PAGO_RESERVA', 'PENDIENTE'),
+        pagoAprobado: this.catalogosService.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+        liquidacionesResueltas: [
+          this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
+          this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
+          this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
+        ],
+        enRevision: this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
+      },
     );
     const motivos: string[] = [];
     if (reservasPendientes) motivos.push(`${reservasPendientes} reserva(s) pendiente(s) de pago`);
@@ -184,67 +194,6 @@ export class UsuariosService {
     if (participacion === 'Anunciante' && pagosSinConciliar)
       motivos.push(`${pagosSinConciliar} pago(s) sin conciliar con Mercado Pago`);
     return motivos;
-  }
-
-  /** Bloquea o habilita el acceso de un usuario desde el panel administrativo. */
-  async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
-    if (idUsuario === idOperador) {
-      throw new BadRequestException(
-        'No podés bloquearte o habilitarte a vos mismo',
-      );
-    }
-
-    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
-    if (!usuario) {
-      throw new NotFoundException('Usuario no encontrado');
-    }
-    // La baja es definitiva y ya impide el acceso; bloquear o habilitar una
-    // cuenta dada de baja solo le enviaría un aviso sin efecto.
-    if (!usuario.activa) {
-      throw new ConflictException(
-        'La cuenta fue dada de baja: no se puede bloquear ni habilitar',
-      );
-    }
-
-    // Serializa el bloqueo con la creación de reservas, que toma la misma
-    // fila de publicación y vuelve a leer el estado de la cuenta antes de guardar.
-    const cambio = await this.usuariosRepo.conTransaccion(async (transaccion) => {
-      const actual = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion);
-      if (!actual) throw new NotFoundException('Usuario no encontrado');
-      if (!actual.activa) throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
-      if (actual.bloqueado === bloqueado) return false;
-      await this.publicacionesService.bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
-      actual.bloqueado = bloqueado;
-      if (bloqueado) {
-        actual.bloqueoDetalle = {
-          id: randomUUID(), motivo: motivo?.trim() || null, administradorId: idOperador, fecha: new Date().toISOString(),
-        };
-      }
-      await this.usuariosRepo.guardar(actual, transaccion);
-      return true;
-    });
-
-    // Una cuenta activa siempre tiene email; la condición solo lo hace explícito.
-    if (cambio && usuario.email) {
-      try {
-        await this.mailService.enviarCambioBloqueo(
-          usuario.email,
-          bloqueado,
-          motivo?.trim(),
-        );
-      } catch (error) {
-        this.logger.error(
-          `No se pudo notificar el cambio de acceso a ${usuario.email}`,
-          error as Error,
-        );
-      }
-    }
-
-    return {
-      mensaje: bloqueado
-        ? 'Usuario bloqueado correctamente'
-        : 'Usuario habilitado correctamente',
-    };
   }
 
   listarBloqueados() {

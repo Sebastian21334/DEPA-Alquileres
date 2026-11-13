@@ -20,7 +20,6 @@ import { MailModule } from './mail/mail.module';
 import { FavoritosModule } from './favoritos/favoritos.module';
 import { PagosModule } from './pagos/pagos.module';
 import { ReclamosModule } from './reclamos/reclamos.module';
-import { ReembolsosAplicacionModule } from './reembolsos/reembolsos-aplicacion.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -64,7 +63,6 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     FavoritosModule,
     PagosModule,
     ReclamosModule,
-    ReembolsosAplicacionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

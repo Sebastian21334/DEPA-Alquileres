@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -37,7 +38,7 @@ function base() {
     };
     return builder;
   }};
-  return { db, service: new ReservaFinalizacionService(new ReservaRepository(repo)) };
+  return { db, service: new ReservaFinalizacionService(new ReservaRepository(repo), catalogosDePrueba()) };
 }
 
 test('cierra solo estadías vencidas con pago e ingreso verificados, y conserva la liquidación', async () => {
@@ -56,7 +57,7 @@ test('cierra solo estadías vencidas con pago e ingreso verificados, y conserva 
 });
 
 test('estado calculado respeta el último día, el ingreso y las fechas inválidas', () => {
-  const estadoService = new ReservaEstadoService();
+  const estadoService = new ReservaEstadoService(undefined, catalogosDePrueba());
   const reserva = Object.assign(new Reserva(), { estado_pago: 'APROBADO', cancelada: false,
     finalizada: false, fecha_inicio: '2030-01-01', fecha_fin: '2030-01-02', codigo_validado_en: new Date() });
   assert.equal(estadoService.calcularEstadoEstadia(reserva, new Date('2030-01-03T02:59:59Z')), 'EN_CURSO');
@@ -71,9 +72,9 @@ test('si falla una ejecución se vuelve a intentar en la siguiente', async () =>
   const { db, service } = base();
   const finalizar = service.reservas.finalizarEstadiasVencidas.bind(service.reservas);
   let primerIntento = true;
-  service.reservas.finalizarEstadiasVencidas = async (hoy) => {
+  service.reservas.finalizarEstadiasVencidas = async (hoy, estado) => {
     if (primerIntento) { primerIntento = false; throw new Error('base no disponible'); }
-    return finalizar(hoy);
+    return finalizar(hoy, estado);
   };
   service.logger.error = () => {};
   try {

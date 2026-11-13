@@ -23,6 +23,7 @@ import { SeguridadModule } from '../../../src/seguridad/seguridad.module';
 import { UbicacionService } from '../../../src/ubicacion/service/ubicacion.service';
 import { UsuariosController } from '../../../src/usuarios/controller/usuarios.controller';
 import { Usuario } from '../../../src/usuarios/entity/usuario.entity';
+import { BLOQUEO_ANUNCIANTE_REPOSITORY } from '../../../src/bloqueo-anunciante/repository/bloqueo-anunciante.repository.interface';
 import { USUARIOS_REPOSITORY } from '../../../src/usuarios/repository/usuarios.repository.interface';
 import { UsuariosConsultaService } from '../../../src/usuarios/service/usuarios-consulta.service';
 import { UsuariosCredencialesService } from '../../../src/usuarios/service/usuarios-credenciales.service';
@@ -217,6 +218,7 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
   class UsuariosConsultaEnMemoriaModule {}
 
   const catalogos = {
+    codigoEstado: (_ambito: string, codigo: string) => codigo,
     getRolPorNombre: async (nombre: string) => ROLES[nombre] ?? null,
     crearRol: async ({ nombre }: { nombre: string }) => ROLES[nombre],
   };
@@ -236,6 +238,7 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
       AnunciantesService,
       PublicacionesService,
       BloqueoAnuncianteService,
+      { provide: BLOQUEO_ANUNCIANTE_REPOSITORY, useValue: usuarios },
       usuariosRepository,
       { provide: PUBLICACIONES_REPOSITORY, useValue: publicaciones },
       {

@@ -1,3 +1,4 @@
+const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test, beforeEach } = require('node:test');
@@ -7,7 +8,7 @@ const { CrearCheckoutDto } = require('../dist/pagos/dto/crear-checkout.dto');
 const { PresupuestosService } = require('../dist/pagos/service/presupuestos.service');
 const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
-const { ReservaDecisionService } = require('../dist/reservas/service/reserva-decision.service');
+const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
@@ -49,7 +50,7 @@ function escenario(moneda = 'ARS') {
     buscarPorId: async () => ({ ...publicacion, tipoMoneda: { ...publicacion.tipoMoneda } }),
     buscarCondicionesDeReserva: async () => ({ ...publicacion, tipoMoneda: { ...publicacion.tipoMoneda } }),
     bloquearPorId: async () => { estado.alBloquear(); return true; },
-  }, new CatalogosService());
+  }, catalogosDePrueba());
   const repositorio = {
     conTransaccion: (operacion) => operacion(repositorio, {}),
     buscarPendientesVencidas: async () => [],
@@ -76,9 +77,10 @@ function escenario(moneda = 'ARS') {
     publicaciones,
     { enviarConfirmacion: async () => {} },
     { crearSolicitud: async () => ({}) },
-    new ReservaEstadoService(publicaciones),
-    new ReservaDecisionService(),
+    new ReservaEstadoService(publicaciones, catalogosDePrueba()),
+    decisionDePrueba(),
     { sincronizarDesdeReserva: async () => ({}) },
+    new ReservaCicloVidaService(decisionDePrueba(), catalogosDePrueba()), undefined, catalogosDePrueba(),
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },
@@ -106,7 +108,7 @@ function escenario(moneda = 'ARS') {
       },
       validarWebhook: () => {},
       consultarPago: async () => estado.pagoExterno,
-    },
+    }, catalogosDePrueba(),
   );
   pagos.logger = { warn: () => {} };
   return { publicacion, cotizacion, estado, presupuestos, reservas, pagos };

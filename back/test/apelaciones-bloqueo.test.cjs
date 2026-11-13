@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
@@ -6,6 +7,8 @@ const { test } = require('node:test');
 const bcrypt = require('bcrypt');
 const { JwtService } = require('@nestjs/jwt');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
+const { BloqueoAnuncianteService } = require('../dist/bloqueo-anunciante/service/bloqueo-anunciante.service');
+const { BloqueoAnuncianteRepository } = require('../dist/bloqueo-anunciante/repository/bloqueo-anunciante.repository');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
 const { UsuariosCredencialesService } = require('../dist/usuarios/service/usuarios-credenciales.service');
@@ -36,14 +39,16 @@ test('F-04 conserva bloqueos anteriores y permite apelar únicamente el bloqueo 
 
   const mail = { enviarCambioBloqueo: async () => {} };
   const credenciales = new UsuariosCredencialesService(repo, {});
-  const usuarios = new UsuariosService(repo, {}, credenciales, mail, {},
+  const usuarios = new UsuariosService(repo, catalogosDePrueba(), credenciales, mail, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {});
+  const bloqueo = new BloqueoAnuncianteService(new BloqueoAnuncianteRepository(source.getRepository(Usuario)), {},
+    { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, mail);
   const jwt = new JwtService({ secret: 'clave-jwt-solo-para-pruebas' });
   const auth = new AuthService(usuarios, credenciales, jwt, mail);
   const seguridad = new SeguridadService(repo);
   const login = { email: 'ana@example.invalid', contrasenia: 'clave-de-prueba' };
   const sesion = (await auth.login(login)).access_token;
-  await usuarios.cambiarBloqueo(1, true, 2, 'Motivo para Ana');
+  await bloqueo.cambiarBloqueo(1, true, 2, 'Motivo para Ana');
   await assert.rejects(auth.login({ ...login, contrasenia: 'incorrecta' }), { status: 401 });
   await assert.rejects(auth.consultarBloqueo(sesion), { status: 401 });
   await assert.rejects(seguridad.validarSesion(1), { status: 401 });
@@ -69,8 +74,8 @@ test('F-04 conserva bloqueos anteriores y permite apelar únicamente el bloqueo 
   await usuarios.responderApelacion(1, fila.detalle.id, 2, 'Apelación revisada');
   assert.equal((await auth.consultarBloqueo(token)).respuesta.texto, 'Apelación revisada');
   await assert.rejects(auth.login(login), { status: 403 });
-  await usuarios.cambiarBloqueo(1, false, 2);
+  await bloqueo.cambiarBloqueo(1, false, 2);
   assert.ok((await auth.login(login)).access_token);
-  await usuarios.cambiarBloqueo(1, true, 2, 'Otro bloqueo');
+  await bloqueo.cambiarBloqueo(1, true, 2, 'Otro bloqueo');
   await assert.rejects(auth.consultarBloqueo(token), { status: 403 });
 });

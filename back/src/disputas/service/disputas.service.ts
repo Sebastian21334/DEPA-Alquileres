@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
-import { AmbitoEstado, EstadoDisputa } from '../../catalogos/estados';
 import { PagosRegistroService } from '../../pagos/service/pagos-registro.service';
 import {
   OrigenReembolso,
@@ -35,7 +34,7 @@ export class DisputasService {
 
     const reserva = await this.reservasService.buscarParaContracargo(datos.idReserva);
     const pago = await this.pagos.buscarPorId(datos.idPago);
-    const estado = await this.catalogos.obtenerEstado(AmbitoEstado.DISPUTA, EstadoDisputa.ABIERTA);
+    const estado = await this.catalogos.obtenerEstado('DISPUTA', 'ABIERTA');
 
     const disputa = this.disputas.crear({
       reserva,
@@ -71,12 +70,12 @@ export class DisputasService {
   async resolver(id: number, dto: ResolverDisputaDto, idAdmin: number) {
     const disputa = await this.disputas.buscarPorId(id);
     if (!disputa) throw new NotFoundException('Disputa no encontrada');
-    if (disputa.estado.codigo === EstadoDisputa.GANADA || disputa.estado.codigo === EstadoDisputa.PERDIDA)
+    if (disputa.estado.codigo === this.catalogos.codigoEstado('DISPUTA', 'GANADA') || disputa.estado.codigo === this.catalogos.codigoEstado('DISPUTA', 'PERDIDA'))
       throw new ConflictException('La disputa ya fue resuelta');
 
-    const estado = await this.catalogos.obtenerEstado(AmbitoEstado.DISPUTA, dto.resultado);
+    const estado = await this.catalogos.obtenerEstado('DISPUTA', dto.resultado);
     const { reserva, pago } = disputa;
-    if (dto.resultado === EstadoDisputa.GANADA) {
+    if (dto.resultado === this.catalogos.codigoEstado('DISPUTA', 'GANADA')) {
       await this.pagos.restaurarPagoAprobado(pago);
       await this.reservasService.restaurarPorContracargoGanado(
         reserva,

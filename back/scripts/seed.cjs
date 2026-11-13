@@ -21,7 +21,7 @@ async function cargarEstados(cliente) {
   `, [JSON.stringify(ambitos.map(([codigo, { nombre }]) => ({ codigo, nombre })))]);
 
   const estados = ambitos.flatMap(([codigo_ambito, { estados }]) =>
-    Object.entries(estados).map(([codigo, nombre]) => ({ codigo_ambito, codigo, nombre })),
+    Object.entries(estados).map(([codigo, { nombre }]) => ({ codigo_ambito, codigo, nombre })),
   );
   const { rowCount: estado } = await cliente.query(`
     INSERT INTO public.estado (codigo_ambito, codigo, nombre)

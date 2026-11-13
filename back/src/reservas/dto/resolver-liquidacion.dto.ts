@@ -1,6 +1,4 @@
-import { EstadoLiquidacionReserva } from '../../catalogos/estados';
 import {
-  IsIn,
   IsNumber,
   IsOptional,
   IsPositive,
@@ -9,8 +7,9 @@ import {
 } from 'class-validator';
 
 export class ResolverLiquidacionDto {
-  @IsIn(Object.values(EstadoLiquidacionReserva))
-  estado: EstadoLiquidacionReserva;
+  @IsString()
+  @MaxLength(40)
+  estado: string;
 
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })

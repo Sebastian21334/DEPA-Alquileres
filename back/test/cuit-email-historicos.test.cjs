@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
@@ -109,7 +110,7 @@ function servicioUsuarios(db) {
     },
   };
   const repo = new UsuariosRepository({ manager: { transaction: (fn) => fn(manager) } });
-  return new UsuariosService(repo, {}, {}, {}, {},
+  return new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     new PublicacionesService(new PublicacionesRepository()),
     new AnunciantesService(new AnunciantesRepository()));
 }
@@ -126,7 +127,7 @@ test('la baja de la cuenta mueve el email al histórico y lo libera', async () =
     }),
     guardar: async (cuenta) => cuenta,
   };
-  const servicio = new UsuariosService(repo, {}, {}, {}, {},
+  const servicio = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => false, desactivarPorBajaDeCuenta: async () => {} },
     { archivarCuitPorBajaDeCuenta: async () => {} });
   await servicio.darDeBajaPropia(usuario.id);
@@ -243,7 +244,7 @@ test('si falla el borrador, revierte el alta del anunciante y permite reintentar
     const servicio = new VerificacionAnuncianteService(
       new AnunciantesService(new AnunciantesRepository(anunciantes)),
       new UsuariosService(new UsuariosRepository(usuarios)),
-      { getTipoAnunciantePorId: async () => ({ id }), esInmobiliaria: () => false },
+      catalogosDePrueba({ getTipoAnunciantePorId: async () => ({ id }), esInmobiliaria: () => false }),
       new VerificacionRepository(solicitudes, db.getRepository(RevisionVerificacion), db),
       { enviarSolicitudAnunciante: async () => { notificaciones++; } },
     );
@@ -300,7 +301,7 @@ test('el panel recibe el email y el CUIT/CUIL históricos de una cuenta dada de 
     listarAdministracion: async () => ({ datos: [usuario], pagina: 1, limite: 10, total: 1, totalPaginas: 1 }),
     contarUsuarios: async () => 1,
   };
-  const servicio = new UsuariosService(repo, {}, {}, {}, {}, {});
+  const servicio = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {}, {});
   const { datos: [fila] } = await servicio.listarAdministracion({ pagina: 1, limite: 10 });
   assert.equal(fila.email, null);
   assert.equal(fila.email_historico, 'ana@mail.com');

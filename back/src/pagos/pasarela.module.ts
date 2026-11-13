@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { MercadoPagoAdapter } from './repository/mercado-pago.adapter';
-import { PASARELA_PAGOS } from './repository/pasarela-pagos.interface';
-import { PASARELA_REEMBOLSOS } from '../reembolsos/ports/pasarela-reembolsos.interface';
+import { MercadoPagoAdapter } from './proveedor/mercado-pago.adapter';
+import { PASARELA_PAGOS } from './proveedor/pasarela-pagos.interface';
+import { PASARELA_REEMBOLSOS } from '../reembolsos/proveedor/pasarela-reembolsos.interface';
 
 /**
  * Adaptador externo compartido por pagos y reembolsos. No depende de los

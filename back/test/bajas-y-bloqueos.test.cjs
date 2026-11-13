@@ -1,8 +1,10 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { DatabaseSync } = require('node:sqlite');
 const { ConflictException, NotFoundException } = require('@nestjs/common');
+const { BloqueoAnuncianteService } = require('../dist/bloqueo-anunciante/service/bloqueo-anunciante.service');
 const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
@@ -125,7 +127,7 @@ function servicioUsuarios(db) {
       return fila && Object.assign(new Usuario(), { ...fila, activa: !!fila.activa, bloqueado: !!fila.bloqueado });
     },
   });
-  return new UsuariosService(repo, {}, {}, {}, {},
+  return new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     new PublicacionesService(new PublicacionesRepository()),
     { archivarCuitPorBajaDeCuenta: async () => {} });
 }
@@ -139,7 +141,16 @@ test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de
   db.exec('INSERT INTO publicacion VALUES (11, 2, 0)');
   const antes = db.prepare('SELECT * FROM reserva').all();
   const publicaciones = db.prepare('SELECT * FROM publicacion').all();
-  const servicio = servicioUsuarios(db);
+  const repo = {
+    conTransaccion: (operacion) => operacion({}),
+    buscarBloqueado: async (id) => {
+      const fila = db.prepare('SELECT * FROM usuario WHERE id = ?').get(id);
+      return { ...fila, activa: !!fila.activa, bloqueado: !!fila.bloqueado };
+    },
+    guardar: async (usuario) => db.prepare('UPDATE usuario SET bloqueado = ? WHERE id = ?')
+      .run(usuario.bloqueado ? 1 : 0, usuario.id),
+  };
+  const servicio = new BloqueoAnuncianteService(repo, {}, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {});
   await servicio.cambiarBloqueo(2, true, 99, 'Moderación');
   assert.equal(db.prepare('SELECT bloqueado FROM usuario WHERE id = 2').get().bloqueado, 1);
   assert.deepEqual(db.prepare('SELECT * FROM reserva').all(), antes);
@@ -247,9 +258,10 @@ test('informa por separado los pendientes como Anunciante y como Inquilino', asy
 test('no se puede bloquear ni habilitar una cuenta dada de baja', async () => {
   const usuario = Object.assign(new Usuario(), { id: 5, activa: false, bloqueado: false });
   let guardado = false, avisado = false;
-  const repo = { buscarPorId: async () => usuario, guardar: async () => { guardado = true; } };
+  const repo = { conTransaccion: (operacion) => operacion({}), buscarBloqueado: async () => usuario,
+    guardar: async () => { guardado = true; } };
   const mail = { enviarCambioBloqueo: async () => { avisado = true; } };
-  const servicio = new UsuariosService(repo, {}, {}, mail, {}, {}, {});
+  const servicio = new BloqueoAnuncianteService(repo, {}, {}, mail);
   await assert.rejects(servicio.cambiarBloqueo(5, true, 1, 'motivo'), ConflictException);
   assert.equal(guardado, false);
   assert.equal(avisado, false);

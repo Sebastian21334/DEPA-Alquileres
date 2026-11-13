@@ -1,6 +1,5 @@
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoReembolso } from '../../catalogos/estados';
 import {
   Check,
   Column,
@@ -31,7 +30,7 @@ export enum OrigenReembolso {
 
 /** Registro auditable de una devolución total o parcial. */
 @Entity('reembolso')
-@Check('ck_reembolso_estado_ambito', `"ambito_estado" = '${AmbitoEstado.REEMBOLSO}'`)
+@Check('ck_reembolso_estado_ambito', `"ambito_estado" = '${"REEMBOLSO"}'`)
 @ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_reembolso_estado',
   onDelete: 'RESTRICT',
@@ -66,8 +65,8 @@ export class Reembolso {
   @Column({ name: 'moneda', type: 'varchar', length: 3, default: 'ARS' })
   moneda: string;
 
-  @Column({ name: 'estado', type: 'varchar', length: 40, default: EstadoReembolso.PENDIENTE })
-  estado: EstadoReembolso;
+  @Column({ name: 'estado', type: 'varchar', length: 40, default: 'PENDIENTE' })
+  estado: string;
 
   @Column({
     name: 'ambito_estado',
@@ -77,7 +76,7 @@ export class Reembolso {
     insert: false,
     update: false,
   })
-  readonly ambitoEstado: typeof AmbitoEstado.REEMBOLSO;
+  readonly ambitoEstado: "REEMBOLSO";
 
   @Column({ name: 'motivo', type: 'varchar', length: 500 })
   motivo: string;

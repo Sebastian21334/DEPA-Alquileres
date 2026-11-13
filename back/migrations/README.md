@@ -59,6 +59,13 @@ existe, el runner aplica antes las migraciones de cancelaciones y de estados por
 `reserva.estado_liquidacion` se mantiene como caché de compatibilidad; la
 entidad `Liquidacion` es la fuente de auditoría.
 
+# Causa de cancelación de reservas por bloqueo
+
+Después de aplicar la migración de cancelaciones y devoluciones, ejecutar desde
+`back`, con el backend detenido, `npm run db:causa-cancelacion-reserva`. La
+migración agrega `reserva.causa_cancelacion` e identifica los bloqueos históricos
+por el actor y el prefijo del motivo. Se puede repetir.
+
 # Cancelaciones, devoluciones, reclamos y contracargos
 
 Para habilitar el circuito del ítem 14, con el backend detenido y sobre una

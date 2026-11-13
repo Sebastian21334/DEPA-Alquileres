@@ -1,15 +1,14 @@
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Inject, Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
-import { EstadoLiquidacionReserva } from '../../catalogos/estados';
 import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.error';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { Liquidacion } from '../entity/liquidacion.entity';
-import { Reserva } from '../entity/reserva.entity';
+import type { Reserva } from '../../reservas/entity/reserva.entity';
 import {
   type ILiquidacionRepository,
   LIQUIDACION_REPOSITORY,
 } from '../repository/liquidacion.repository.interface';
-import { esLiquidacionResuelta } from './reservas.utils';
 
 export type ResolucionLiquidacionDatos = {
   importe?: number | null;
@@ -29,7 +28,7 @@ export type DevolucionLiquidacionDatos = ResolucionLiquidacionDatos & {
  */
 @Injectable()
 export class LiquidacionesService {
-  constructor(@Inject(LIQUIDACION_REPOSITORY) private readonly liquidaciones: ILiquidacionRepository) {}
+  constructor(@Inject(LIQUIDACION_REPOSITORY) private readonly liquidaciones: ILiquidacionRepository, private readonly catalogos: CatalogosService) {}
 
   /** Crea la liquidación si falta, copiando la caché actual de la reserva. */
   async asegurarParaReserva(reserva: Reserva, transaccion?: EntityManager): Promise<Liquidacion> {
@@ -47,7 +46,7 @@ export class LiquidacionesService {
       admin_resolucion: null,
       fecha_resolucion: reserva.fecha_resolucion_liquidacion,
       fecha_pago_propietario:
-        reserva.estado_liquidacion === EstadoLiquidacionReserva.PAGADO_PROPIETARIO
+        reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO')
           ? reserva.fecha_resolucion_liquidacion
           : null,
     });
@@ -64,10 +63,9 @@ export class LiquidacionesService {
 
   /**
    * Copia a la liquidación los cambios que la reserva mantiene en su caché de
-   * compatibilidad. No pisa la resolución administrativa ni un importe ya
-   * registrado.
+   * compatibilidad y toma el importe confirmado cuando el flujo lo proporciona.
    */
-  async sincronizarDesdeReserva(reserva: Reserva, transaccion?: EntityManager): Promise<Liquidacion> {
+  async sincronizarDesdeReserva(reserva: Reserva, transaccion?: EntityManager, datos?: ResolucionLiquidacionDatos): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
     let cambios = false;
 
@@ -88,17 +86,18 @@ export class LiquidacionesService {
     }
     const fechaReserva = reserva.fecha_resolucion_liquidacion;
     if (
-      fechaReserva &&
-      liquidacion.fecha_resolucion?.getTime() !== fechaReserva.getTime()
+      liquidacion.fecha_resolucion?.getTime() !== fechaReserva?.getTime()
     ) {
       liquidacion.fecha_resolucion = fechaReserva;
       cambios = true;
     }
-    if (
-      esLiquidacionResuelta(reserva.estado_liquidacion) &&
-      liquidacion.importe == null
-    ) {
-      liquidacion.importe = Number(reserva.monto_pago);
+    const importe = datos?.importe ?? liquidacion.importe ?? this.importeInicial(reserva);
+    if (liquidacion.importe !== importe) {
+      liquidacion.importe = importe;
+      cambios = true;
+    }
+    if (datos?.moneda && liquidacion.moneda !== datos.moneda) {
+      liquidacion.moneda = datos.moneda;
       cambios = true;
     }
 
@@ -108,10 +107,10 @@ export class LiquidacionesService {
   }
 
   /** Registra la decisión administrativa en la entidad y en la caché de la reserva. */
-  async registrarResolucion(reserva: Reserva, estado: EstadoLiquidacionReserva, datos: ResolucionLiquidacionDatos, idAdmin: number, transaccion?: EntityManager): Promise<Liquidacion> {
+  async registrarResolucion(reserva: Reserva, estado: string, datos: ResolucionLiquidacionDatos, idAdmin: number, transaccion?: EntityManager): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
     const ahora = new Date();
-    const resuelta = esLiquidacionResuelta(estado);
+    const resuelta = this.esLiquidacionResuelta(estado);
     liquidacion.estado = estado;
     liquidacion.importe = datos.importe ?? null;
     liquidacion.moneda = datos.moneda ?? 'ARS';
@@ -123,7 +122,7 @@ export class LiquidacionesService {
     liquidacion.admin_resolucion = referenciaUsuario(idAdmin);
     liquidacion.fecha_resolucion = resuelta ? ahora : null;
     liquidacion.fecha_pago_propietario =
-      estado === EstadoLiquidacionReserva.PAGADO_PROPIETARIO ? ahora : null;
+      estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') ? ahora : null;
     this.sincronizarReserva(reserva, liquidacion);
     return this.liquidaciones.guardar(liquidacion, transaccion);
   }
@@ -131,19 +130,8 @@ export class LiquidacionesService {
   /** Deja la liquidación pendiente de revisión administrativa. */
   async registrarRevision(reserva: Reserva, motivo: string, transaccion?: EntityManager): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
-    liquidacion.estado = EstadoLiquidacionReserva.EN_REVISION;
+    liquidacion.estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
     liquidacion.observacion = motivo.trim() || liquidacion.observacion;
-    liquidacion.fecha_resolucion = null;
-    liquidacion.fecha_pago_propietario = null;
-    this.sincronizarReserva(reserva, liquidacion, false);
-    return this.liquidaciones.guardar(liquidacion, transaccion);
-  }
-
-  /** Mantiene retenido el dinero hasta que se valide el ingreso. */
-  async registrarRetencion(reserva: Reserva, observacion?: string | null, transaccion?: EntityManager): Promise<Liquidacion> {
-    const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
-    liquidacion.estado = EstadoLiquidacionReserva.RETENIDO;
-    if (observacion?.trim()) liquidacion.observacion = observacion.trim();
     liquidacion.fecha_resolucion = null;
     liquidacion.fecha_pago_propietario = null;
     this.sincronizarReserva(reserva, liquidacion, false);
@@ -153,7 +141,7 @@ export class LiquidacionesService {
   /** El código válido habilita el pago al propietario. */
   async registrarValidacionCodigo(reserva: Reserva, transaccion?: EntityManager): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
-    liquidacion.estado = EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO;
+    liquidacion.estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
     liquidacion.observacion = 'Código de alojamiento validado por el anunciante';
     liquidacion.fecha_resolucion = null;
     this.sincronizarReserva(reserva, liquidacion, false);
@@ -165,21 +153,25 @@ export class LiquidacionesService {
     return this.registrarResolucion(
       reserva,
       datos.parcial
-        ? EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO
-        : EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
+        ? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO')
+        : this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
       datos,
       idAdmin,
       transaccion,
     );
   }
 
-  /** Liquidaciones pendientes con la reserva, el pago y las devoluciones asociadas. */
-  listarAdministracion(): Promise<Liquidacion[]> {
-    return this.liquidaciones.buscarAdministracion();
+  esLiquidacionResuelta(estado: string): boolean {
+    return [
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
+    ].some((codigo) => codigo === estado);
   }
 
   private importeInicial(reserva: Reserva): number | null {
-    return esLiquidacionResuelta(reserva.estado_liquidacion)
+    return this.esLiquidacionResuelta(reserva.estado_liquidacion) &&
+      reserva.estado_liquidacion !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO')
       ? Number(reserva.monto_pago)
       : null;
   }
