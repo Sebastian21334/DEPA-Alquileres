@@ -5,6 +5,7 @@ export const REEMBOLSOS_REPOSITORY = 'REEMBOLSOS_REPOSITORY';
 
 export interface IReembolsosRepository {
   conTransaccion<T>(operacion: (repositorio: IReembolsosRepository, transaccion: EntityManager) => Promise<T>): Promise<T>;
+  enTransaccion(transaccion: EntityManager): IReembolsosRepository;
   crear(datos: Partial<Reembolso>): Reembolso;
   guardar(reembolso: Reembolso): Promise<Reembolso>;
   buscarPorId(id: number): Promise<Reembolso | null>;

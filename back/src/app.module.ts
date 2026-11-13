@@ -13,6 +13,7 @@ import { UbicacionModule } from './ubicacion/ubicacion.module';
 import { ImagenesModule } from './imagenes/imagenes.module';
 import { DisponibilidadModule } from './disponibilidad/disponibilidad.module';
 import { ReservasModule } from './reservas/reservas.module';
+import { CancelacionesModule } from './cancelaciones/cancelaciones.module';
 import { BloqueoAnuncianteModule } from './bloqueo-anunciante/bloqueo-anunciante.module';
 import { MensajesModule } from './mensajes/mensajes.module';
 import { CatalogosModule } from './catalogos/catalogos.module';
@@ -56,6 +57,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ImagenesModule,
     DisponibilidadModule,
     ReservasModule,
+    CancelacionesModule,
     BloqueoAnuncianteModule,
     MensajesModule,
     CatalogosModule,

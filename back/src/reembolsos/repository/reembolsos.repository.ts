@@ -10,8 +10,13 @@ export class ReembolsosRepository implements IReembolsosRepository {
 
   conTransaccion<T>(operacion: (repositorio: IReembolsosRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
     return this.repository.manager.transaction((transaccion) =>
-      operacion(new ReembolsosRepository(transaccion.getRepository(Reembolso)), transaccion),
+      operacion(this.enTransaccion(transaccion), transaccion),
     );
+  }
+
+  /** Permite participar de la transacción que abrió el servicio coordinador. */
+  enTransaccion(transaccion: EntityManager): IReembolsosRepository {
+    return new ReembolsosRepository(transaccion.getRepository(Reembolso));
   }
 
   crear(datos: Partial<Reembolso>): Reembolso {
