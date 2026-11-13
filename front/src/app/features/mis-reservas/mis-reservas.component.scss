@@ -141,6 +141,9 @@
 }
 
 .cancellation-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   box-sizing: border-box;
   width: min(38rem, calc(100% - 2rem));
   max-height: calc(100dvh - 2rem);
