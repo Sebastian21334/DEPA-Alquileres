@@ -225,8 +225,6 @@ export class ReclamosService {
         resultado.reclamo = await repositorio.guardar(expediente);
         return;
       }
-      if (!this.reembolsos.ejecucionAutomaticaHabilitada && !dto.referencia?.trim())
-        throw new BadRequestException('La referencia del comprobante de devolución es obligatoria');
       const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
       if (!pago)
         throw new ConflictException('La reserva no tiene un pago registrado');
@@ -257,11 +255,7 @@ export class ReclamosService {
     });
     if (!resultado.reembolso) return this.prepararRespuesta(resultado.reclamo);
     const reembolso = resultado.reembolso;
-    const ejecutado = await this.reembolsos.registrarOejecutar(
-      reembolso.id,
-      dto.referencia?.trim(),
-      idAdmin,
-    );
+    const ejecutado = await this.reembolsos.ejecutarYConfirmar(reembolso.id, idAdmin);
     const aplicado = await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
       this.aplicarResolucionReembolso(confirmado, transaccion),
     );

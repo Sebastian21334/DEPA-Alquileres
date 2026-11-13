@@ -144,7 +144,7 @@ export class Reserva {
   })
   readonly ambitoEstadoPago: "PAGO_RESERVA";
 
-  @Column({ name: 'pago_vencimiento', type: 'timestamp', nullable: true })
+  @Column({ name: 'pago_vencimiento', type: 'timestamptz', nullable: true })
   pago_vencimiento: Date | null;
 
   // El código se excluye de todas las consultas normales. Solo puede

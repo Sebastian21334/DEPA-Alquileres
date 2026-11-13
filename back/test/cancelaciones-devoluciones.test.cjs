@@ -35,7 +35,7 @@ let base, db, source;
 const migracion = nombre => readFileSync(path.join(__dirname, '../migrations', nombre), 'utf8');
 const sqlEstadosDisputa = migracion('20261110-estados-disputa.sql');
 const sqlEstadosPorAmbito = migracion('20261110-estados-por-ambito.sql');
-let reembolsos, reservas, cancelaciones, repositorioCancelaciones, operacionesReembolso, disponibilidad, reclamos, pasarela, automatico;
+let reembolsos, reservas, cancelaciones, repositorioCancelaciones, operacionesReembolso, disponibilidad, reclamos, pasarela;
 
 before(async () => {
   base = await crearPostgresPruebas();
@@ -54,12 +54,11 @@ before(async () => {
 
 beforeEach(async () => {
   await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
-  automatico = false;
   pasarela = { reembolsar: async () => ({ id: 'mp-refund-1', status: 'approved' }) };
   const estadoReserva = new ReservaEstadoService(new PublicacionesService({}, catalogosDePrueba()), catalogosDePrueba());
   reembolsos = new ReembolsosService(
     new ReembolsosRepository(source.getRepository(Reembolso)),
-    pasarela, { get: () => String(automatico) },
+    pasarela,
     new PagosService(new PagosRepository(source.getRepository(Pago))),
     estadoReserva, catalogosDePrueba(),
   );
@@ -199,7 +198,6 @@ test('el reembolso manual se confirma una sola vez usando el pago persistido', a
 test('el reembolso automático usa el identificador del pago relacionado', async () => {
   const { crearReembolso } = await escenario();
   const reembolso = await crearReembolso();
-  automatico = true;
   pasarela.reembolsar = async (id, importe) => {
     assert.equal(id, 'mp-1'); assert.equal(importe, 100);
     return { id: 'mp-refund-1', status: 'approved' };
@@ -210,7 +208,6 @@ test('el reembolso automático usa el identificador del pago relacionado', async
 test('un reembolso externo pendiente no se registra como dinero devuelto', async () => {
   const { pago, crearReembolso } = await escenario();
   const reembolso = await crearReembolso();
-  automatico = true;
   pasarela.reembolsar = async () => ({ id: 'mp-pendiente', status: 'pending' });
   await reembolsos.ejecutar(reembolso.id, 3);
   const actual = await reembolsos.buscar(reembolso.id);
@@ -222,7 +219,6 @@ test('un reembolso externo pendiente no se registra como dinero devuelto', async
 test('recupera el resultado perdido de Mercado Pago con la clave del primer intento', async () => {
   const { pago, crearReembolso } = await escenario();
   const reembolso = await crearReembolso();
-  automatico = true;
   const operaciones = new Map();
   let llamadas = 0;
   pasarela.reembolsar = async (id, importe, clave) => {
@@ -253,7 +249,6 @@ test('recupera el resultado perdido de Mercado Pago con la clave del primer inte
 test('una falla al guardar la aprobación se recupera consultando el identificador externo', async (t) => {
   const { crearReembolso } = await escenario();
   const reembolso = await crearReembolso();
-  automatico = true;
   const crear = t.mock.method(pasarela, 'reembolsar', async () => ({ id: 'mp-ya-confirmado', status: 'approved' }));
   const anterior = PagosRepository.prototype.guardar;
   const guardar = t.mock.method(PagosRepository.prototype, 'guardar', async function (pago, transaccion) {
@@ -292,10 +287,11 @@ test('la conciliación administrativa verifica el identificador, el pago y el im
 
 test('dos parciales distintos se aplican una vez y actualizan el importe acumulado', async () => {
   const { reserva, crearReembolso } = await escenario();
+  pasarela.reembolsar = async (_pago, importe) => ({ id: `mp-parcial-${importe}`, status: 'approved', amount: importe });
   const primero = await crearReembolso({ tipo: TipoReembolso.PARCIAL, importe: 30 });
-  await operacionesReembolso.registrarOejecutar(primero.id, 'comprobante-30', 3);
+  await operacionesReembolso.ejecutar(primero.id, 3);
   const segundo = await crearReembolso({ tipo: TipoReembolso.PARCIAL, importe: 20 });
-  await operacionesReembolso.registrarOejecutar(segundo.id, 'comprobante-20', 3);
+  await operacionesReembolso.ejecutar(segundo.id, 3);
   const resultado = await operacionesReembolso.aplicarReembolsoConfirmado(primero.id);
   assert.ok(resultado.reembolso.aplicado_en);
   assert.deepEqual(await reembolsos.listarPendientesAplicacion(), []);
@@ -313,9 +309,8 @@ test('no aplica a la reserva un reembolso que todavía no fue confirmado', async
 test('la operación administrativa no informa éxito con una devolución externa pendiente', async () => {
   const { crearReembolso } = await escenario();
   const reembolso = await crearReembolso();
-  automatico = true;
   pasarela.reembolsar = async () => ({ id: 'mp-pendiente', status: 'pending' });
-  await assert.rejects(reembolsos.registrarOejecutar(reembolso.id, undefined, 3), /no fue confirmado/i);
+  await assert.rejects(reembolsos.ejecutarYConfirmar(reembolso.id, 3), /no fue confirmado/i);
   assert.equal((await reembolsos.buscar(reembolso.id)).estado, 'EN_PROCESO');
 });
 
@@ -325,7 +320,7 @@ test('la cancelación aprobada conserva la reserva hasta confirmar la devolució
   const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   assert.equal(Number(resultado.reembolso.importe), 100);
   assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).cancelada, false);
-  await operacionesReembolso.registrarOejecutar(resultado.reembolso.id, 'comprobante-cancelacion', 3);
+  await operacionesReembolso.ejecutar(resultado.reembolso.id, 3);
   const actual = await reservas.obtenerReserva(reserva.id);
   assert.equal(actual.cancelada, true);
   assert.equal(actual.estado_pago, 'REEMBOLSADO');
@@ -528,25 +523,6 @@ test('las notas internas de reclamos solo se entregan al administrador', async (
   await assert.rejects(reclamos.obtener(reclamo.id, 4, false), /No formás parte/);
 });
 
-test('resolver un reclamo manual exige comprobante antes de crear el reembolso', async () => {
-  const { reserva } = await escenario('2026-01-01');
-  const reclamo = await source.getRepository(Reclamo).save({
-    reserva, inquilino: { id: 1 }, anunciante: { id: 2 }, categoria: 'OTRO', descripcion: 'Reclamo de prueba',
-  });
-  await assert.rejects(reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_TOTAL }, 3), /referencia|comprobante/i);
-  assert.equal(await source.getRepository(Reembolso).count(), 0);
-});
-
-test('resolver una liquidación manual exige comprobante antes de crear el reembolso', async () => {
-  const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
-  const { reserva } = await escenario();
-  const liquidaciones = new OperacionesLiquidacionService(
-    reembolsos, reservas, { proyectarEnReserva: async reserva => reserva }, catalogosDePrueba(),
-  );
-  await assert.rejects(liquidaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /referencia|comprobante/i);
-  assert.equal(await source.getRepository(Reembolso).count(), 0);
-});
-
 for (const [dias, porcentaje] of [[7, 100], [2, 50], [1, 0]]) {
   test(`cancelar con ${dias} días de anticipación aplica ${porcentaje}% de devolución`, async () => {
     const { fechaArgentina } = require('../dist/common/utils/fechas');
@@ -565,7 +541,7 @@ test('resolver un reclamo con devolución parcial conserva la estadía y registr
   const { reserva, pago } = await escenario('2026-01-01');
   const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1);
   const resultado = await reclamos.resolver(reclamo.id, {
-    resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 40, referencia: 'comprobante-reclamo',
+    resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 40,
   }, 3);
   assert.equal(resultado.estado, 'RESUELTO_INQUILINO');
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 40);
@@ -616,7 +592,6 @@ for (const resultado of ['GANADA', 'PERDIDA']) {
     const disputasRepo = new DisputasRepository(source.getRepository(Disputa));
     const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
     const disputas = new DisputasService(disputasRepo, pagos, reembolsos, reservas, catalogos);
-    automatico = true;
     let llamadasPasarela = 0;
     pasarela.reembolsar = async () => { llamadasPasarela++; throw new Error('El contracargo ya movió el dinero'); };
     const datos = { idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-prueba', importe: 100 };
@@ -691,7 +666,7 @@ test('el webhook de reembolso permite recuperar la aplicación tras un fallo sin
   assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'REEMBOLSADO');
 });
 
-test('la API integra pagos, firma del webhook, permisos, cancelación y devolución manual', async (t) => {
+test('la API integra pagos, firma del webhook, permisos, cancelación y devolución por Mercado Pago', async (t) => {
   const { Test } = require('@nestjs/testing');
   const { ConfigModule, ConfigService } = require('@nestjs/config');
   const { TypeOrmModule } = require('@nestjs/typeorm');
@@ -711,6 +686,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
   const firmaPruebas = 'secreto-webhook-exclusivo-pruebas';
   const cobro = { id: 123, status: 'approved', status_detail: 'accredited', transaction_amount: 100, currency_id: 'ARS' };
   const consultarPago = t.mock.method(MercadoPagoAdapter.prototype, 'consultarPago', async () => ({ ...cobro }));
+  const reembolsar = t.mock.method(MercadoPagoAdapter.prototype, 'reembolsar', async () => ({ id: 456, status: 'approved', amount: 100, payment_id: 123 }));
   const ajustes = { JWT_SECRET: 'secreto-exclusivo-pruebas-integracion', FRONTEND_URLS: 'http://localhost:4200', ACS_SENDER_ADDRESS: 'pruebas@example.invalid', MP_ACCESS_TOKEN: 'token-exclusivo-pruebas' };
   const config = { get: clave => ajustes[clave], getOrThrow: clave => {
     if (!ajustes[clave]) throw new Error(`Configuración de prueba ausente: ${clave}`);
@@ -866,12 +842,13 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
       .set('Authorization', admin).send({ decision: 'APROBADA' }).expect(409);
     assert.equal((await source.query('SELECT disponible FROM fecha WHERE id_reserva=$1', [reserva.id]))[0].disponible, false);
-    const rutaReembolso = `/reservas/reembolsos/${resultado.body.reembolso.id}/manual`;
-    await request(http).patch(rutaReembolso).send({ referencia: 'comprobante-api' }).expect(401);
-    await request(http).patch(rutaReembolso).set('Authorization', tenant).send({ referencia: 'comprobante-api' }).expect(403);
+    const rutaReembolso = `/reservas/reembolsos/${resultado.body.reembolso.id}/ejecutar`;
+    await request(http).patch(rutaReembolso).send({}).expect(401);
+    await request(http).patch(rutaReembolso).set('Authorization', tenant).send({}).expect(403);
     const aplicado = await request(http).patch(rutaReembolso)
-      .set('Authorization', admin).send({ referencia: 'comprobante-api' }).expect(200);
+      .set('Authorization', admin).send({}).expect(200);
     assert.ok(aplicado.body.reembolso.aplicado_en);
+    assert.equal(reembolsar.mock.callCount(), 1);
     assert.equal(aplicado.body.reembolso.referencia_interna, `can:${solicitud.body.id}`);
     const final = await request(http).get(`/reservas/${reserva.id}`).set('Authorization', tenant).expect(200);
     assert.equal(final.body.cancelada, true);

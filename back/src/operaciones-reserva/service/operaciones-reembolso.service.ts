@@ -14,8 +14,8 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
 
   constructor(private readonly reembolsos: ReembolsosService, private readonly reservas: ReservasService, private readonly reclamos: ReclamosService, private readonly disputas: DisputasService) {}
 
-  async registrarOejecutar(id: number, referencia: string | undefined, idAdmin: number) {
-    await this.reembolsos.registrarOejecutar(id, referencia, idAdmin);
+  async ejecutar(id: number, idAdmin: number) {
+    await this.reembolsos.ejecutarYConfirmar(id, idAdmin);
     return this.aplicarReembolsoConfirmado(id);
   }
 

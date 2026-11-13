@@ -815,7 +815,7 @@ CREATE TABLE public.reserva (
     cancelada boolean DEFAULT false NOT NULL,
     fecha_cancelacion timestamp without time zone,
     estado_pago character varying(40) DEFAULT 'APROBADO'::character varying NOT NULL,
-    pago_vencimiento timestamp without time zone,
+    pago_vencimiento timestamp with time zone,
     fecha_pago timestamp without time zone,
     email_confirmacion_inquilino_enviado boolean DEFAULT false NOT NULL,
     email_nueva_reserva_anunciante_enviado boolean DEFAULT false NOT NULL,

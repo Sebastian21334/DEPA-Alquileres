@@ -7,6 +7,7 @@ export interface IPagosRepository {
   crear(datos: DeepPartial<Pago>): Pago;
   guardar(pago: Pago, transaccion?: EntityManager): Promise<Pago>;
   actualizar(id: number, datos: Partial<Pago>, transaccion?: EntityManager): Promise<void>;
+  actualizarIntentoFallido(id: number, datos: Partial<Pago>): Promise<boolean>;
   buscarPorId(id: number): Promise<Pago | null>;
   buscarPorReferencia(referencia: string): Promise<Pago | null>;
   buscarPorReserva(idReserva: number, incluirReserva?: boolean, transaccion?: EntityManager): Promise<Pago | null>;

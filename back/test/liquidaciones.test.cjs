@@ -84,9 +84,8 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
   const reserva = crearReserva();
   const pago = { id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' };
   let solicitudCreada = null;
-  let referenciaEjecutada = null;
+  let adminEjecutor = null;
   const reembolsos = {
-    ejecucionAutomaticaHabilitada: true,
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => pago,
     listarPorReserva: async () => [],
@@ -95,8 +94,8 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
       solicitudCreada = datos;
       return { id: 1, estado: 'PENDIENTE', importe: datos.importe };
     },
-    registrarOejecutar: async (_id, referencia) => {
-      referenciaEjecutada = referencia;
+    ejecutarYConfirmar: async (_id, idAdmin) => {
+      adminEjecutor = idAdmin;
       return { id: 1, estado: 'APROBADO' };
     },
   };
@@ -111,7 +110,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
   assert.equal(solicitudCreada.importe, 100);
   assert.equal(solicitudCreada.tipo, 'TOTAL');
   assert.equal(solicitudCreada.idempotencyKey, 'liq:1:t:10000');
-  assert.equal(referenciaEjecutada, undefined);
+  assert.equal(adminEjecutor, 7);
 });
 
 test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
@@ -119,13 +118,12 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
   let guardados = 0;
   let ejecuciones = 0;
   const reembolsos = {
-    ejecucionAutomaticaHabilitada: true,
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
     crearSolicitud: async () => ({ id: 1, estado: 'PENDIENTE', importe: 30 }),
-    registrarOejecutar: async () => ({ id: 1, estado: 'EN_PROCESO' }),
+    ejecutarYConfirmar: async () => ({ id: 1, estado: 'EN_PROCESO' }),
   };
   const repo = repositorio(reserva, {
     guardar: async (actual) => { guardados += 1; return actual; },
@@ -149,21 +147,6 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
   assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
 });
 
-test('exige referencia cuando la devolución es manual', async () => {
-  const reserva = crearReserva();
-  const reembolsos = { ejecucionAutomaticaHabilitada: false };
-  const service = new OperacionesLiquidacionService(
-    reembolsos,
-    reservasService(reserva, repositorio(reserva)),
-    liquidacionesService(), catalogosDePrueba(),
-  );
-
-  await assert.rejects(
-    () => service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7),
-    { status: 400 },
-  );
-});
-
 test('permite resolver la devolución de un pago tardío con reserva cancelada en revisión', async () => {
   const reserva = crearReserva({
     cancelada: true,
@@ -171,13 +154,12 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
     estado_pago: 'APROBADO',
   });
   const reembolsos = {
-    ejecucionAutomaticaHabilitada: true,
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
     crearSolicitud: async (datos) => ({ id: 7, estado: 'PENDIENTE', importe: datos.importe }),
-    registrarOejecutar: async () => ({ id: 7, estado: 'APROBADO' }),
+    ejecutarYConfirmar: async () => ({ id: 7, estado: 'APROBADO' }),
   };
   const service = new OperacionesLiquidacionService(
     reembolsos,
@@ -196,7 +178,6 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
   let creados = 0;
   let ejecutado = null;
   const reembolsos = {
-    ejecucionAutomaticaHabilitada: true,
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
     listarPorReserva: async () => [
@@ -204,7 +185,7 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
     ],
     saldoReembolsable: () => 100,
     crearSolicitud: async () => { creados += 1; return { id: 9, estado: 'PENDIENTE' }; },
-    registrarOejecutar: async (id) => { ejecutado = id; return { id, estado: 'APROBADO' }; },
+    ejecutarYConfirmar: async (id) => { ejecutado = id; return { id, estado: 'APROBADO' }; },
   };
   const service = new OperacionesLiquidacionService(
     reembolsos,

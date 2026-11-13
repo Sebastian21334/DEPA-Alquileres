@@ -89,21 +89,6 @@
   letter-spacing: -.035em;
 }
 
-.dashboard-notice {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid #ffc568;
-  border-radius: 12px;
-  background: #fff2da;
-  color: #633600;
-}
-.dashboard-notice p { display: flex; align-items: center; gap: 10px; margin: 0; font-weight: 700; }
-.dashboard-notice svg { flex-shrink: 0; }
-.dashboard-notice .button { background: var(--color-accent); color: #392000; }
 .dashboard-button {
   border: 1px solid var(--color-secondary);
   background: #fff;

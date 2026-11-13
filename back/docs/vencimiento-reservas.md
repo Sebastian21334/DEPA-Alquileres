@@ -11,7 +11,7 @@ Este documento describe la política implementada para reservas temporales y el 
 
 ## Vencimiento de los 15 minutos
 
-- `pago_vencimiento` se persiste en la reserva. Cuando existe un presupuesto aceptado se usa su vencimiento; si no, 15 minutos desde la creación.
+- El presupuesto debe estar vigente al crear la reserva. El plazo de pago empieza al crearla y dura 15 minutos. `pago_vencimiento` se guarda como un instante con zona horaria para compartirlo entre instancias del backend.
 - `ReservasService.expirarPendientes()` busca reservas `PENDIENTE` con `pago_vencimiento < ahora`, las cierra con estado `CANCELADO` y libera sus fechas.
 - El proceso se ejecuta:
   1. al iniciar el backend;

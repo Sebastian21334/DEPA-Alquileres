@@ -43,6 +43,12 @@ export class PagosController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Post('reservas/:id/reintentar')
+  reintentarCheckout(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
+    return this.operaciones.reintentarCheckout(id, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get('reservas/:id/estado')
   consultarEstado(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.operaciones.consultarEstado(id, req.user.id);

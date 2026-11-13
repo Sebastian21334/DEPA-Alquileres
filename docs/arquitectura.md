@@ -75,7 +75,7 @@ Frontend:
 | Dinero | `pagos` | Registro y consulta de pagos, saldo reembolsable y cambios de estado del pago. | `PagosService` |
 | Dinero | `mercado-pago` | Preferencias, consultas, validación de firma y ejecución de reembolsos en Mercado Pago. | `MercadoPagoService` |
 | Dinero | `operaciones-reserva` | Coordina presupuestos, checkout, webhook, conciliación y aplicación de reembolsos. | - |
-| Dinero | `reembolsos` | Registro, saldo, ejecución manual/automática, webhook y compensación. | `ReembolsosService` |
+| Dinero | `reembolsos` | Registro, saldo, ejecución por Mercado Pago, webhook y compensación. | `ReembolsosService` |
 | Dinero | `disputas` | Contracargos y resolución administrativa. | `DisputasService` |
 | Dinero | `reclamos` | Reclamos posteriores al ingreso, evidencia y resolución. | `ReclamosService` |
 | Infraestructura | `mail` | Envío de correos por Azure Communication Services. | `MAIL_SERVICE` |
@@ -131,10 +131,9 @@ Idempotencia y compensación:
 
 En `OperacionesReservaModule`, `OperacionesReembolsoService` concilia al iniciar y cada 60 segundos. Lee los intentos vencidos y los aprobados que esperan aplicación. Coordina los efectos con Reservas, Reclamos y Disputas. El cambio local y `aplicado_en` comparten una transacción.
 
-Ejecución manual vs automática:
+Ejecución y conciliación:
 
-- `MP_REFUNDS_ENABLED=false` (por defecto): la devolución se registra manualmente con referencia o comprobante obligatorio.
-- `MP_REFUNDS_ENABLED=true`: se ejecuta por la API de Mercado Pago. La conciliación consulta por identificador o reusa la clave de idempotencia en los intentos recientes.
+- Las devoluciones se ejecutan por la API de Mercado Pago. La conciliación consulta por identificador o reusa la clave de idempotencia en los intentos recientes.
 - En ningún modo se marca `APROBADO` sin referencia o confirmación.
 
 ## 7. Liquidaciones

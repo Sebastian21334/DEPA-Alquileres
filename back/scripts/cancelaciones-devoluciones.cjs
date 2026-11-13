@@ -53,6 +53,7 @@ async function main() {
         '20261113-aplicacion-reembolsos.sql',
         '20261113-catalogos-de-expedientes.sql',
         '20261113-retirar-liquidacion-de-reserva.sql',
+        '20261113-vencimiento-pago-zona-horaria.sql',
       ]) {
         const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', archivo), 'utf8');
         await client.query(sql);

@@ -63,7 +63,11 @@ export class PagosService {
       payment_method_id: datos.payment_method_id ?? null,
       approved_at: datos.date_approved ? new Date(datos.date_approved) : null,
     };
-    await this.pagosRepo.actualizar(pago.id, cambios, transaccion);
+    if (cambios.status === 'rejected' || cambios.status === 'cancelled') {
+      if (!await this.pagosRepo.actualizarIntentoFallido(pago.id, cambios)) return;
+    } else {
+      await this.pagosRepo.actualizar(pago.id, cambios, transaccion);
+    }
     Object.assign(pago, cambios);
   }
 

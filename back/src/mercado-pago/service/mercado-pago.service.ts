@@ -30,6 +30,11 @@ export class MercadoPagoService {
     return this.proveedor.consultarPago(id);
   }
 
+  consultarCheckout(id: string): Promise<string> {
+    this.configRequerida('MP_ACCESS_TOKEN');
+    return this.proveedor.consultarCheckout(id);
+  }
+
   validarWebhook(entrada: FirmaWebhookPago): void {
     const secret = this.configRequerida('MP_WEBHOOK_SECRET');
     if (!this.proveedor.firmaWebhookValida(entrada, secret))

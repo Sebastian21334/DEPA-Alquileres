@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   MercadoPagoConfig,
@@ -11,6 +11,8 @@ import type { DatosCheckout, FirmaWebhookPago, IMercadoPago, PagoExterno, Result
 
 @Injectable()
 export class MercadoPagoAdapter implements IMercadoPago {
+  private readonly logger = new Logger(MercadoPagoAdapter.name);
+
   constructor(private readonly config: ConfigService) {}
 
   async crearCheckout(datos: DatosCheckout): Promise<{ id: string; url: string }> {
@@ -64,8 +66,17 @@ export class MercadoPagoAdapter implements IMercadoPago {
     return new Payment(this.crearCliente()).get({ id });
   }
 
+  async consultarCheckout(id: string): Promise<string> {
+    const preferencia = await new Preference(this.crearCliente()).get({ preferenceId: id });
+    if (!preferencia.init_point) throw new Error('Mercado Pago no devolvió la URL del checkout');
+    return preferencia.init_point;
+  }
+
   async reembolsar(paymentId: string, importe: number, idempotencyKey: string): Promise<ResultadoReembolsoExterno> {
     const client = this.crearCliente();
+    const prefijo = client.accessToken.startsWith('APP_USR-') ? 'APP_USR-'
+      : client.accessToken.startsWith('TEST-') ? 'TEST-' : 'desconocido';
+    this.logger.log(`POST de reembolso a Mercado Pago para el pago ${paymentId}. Prefijo de credencial: ${prefijo}`);
     return new PaymentRefund(client).create({
       payment_id: paymentId,
       body: { amount: importe },

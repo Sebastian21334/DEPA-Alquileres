@@ -73,7 +73,7 @@ function escenario(moneda = 'ARS') {
     config,
     repositorio,
     disponibilidad,
-    { buscarPorId: async () => ({ nombre: 'Prueba', apellido: 'Reserva' }) },
+    { buscarPorId: async (id) => ({ id, nombre: 'Prueba', apellido: 'Reserva' }) },
     publicaciones,
     { enviarConfirmacion: async () => {} },
     { crearSolicitud: async () => ({}) },
@@ -96,7 +96,14 @@ function escenario(moneda = 'ARS') {
         return pago;
       },
       actualizar: async (id, datos) => Object.assign(estado.pagos.find(pago => pago.id === id), datos),
+      actualizarIntentoFallido: async (id, datos) => {
+        const pago = estado.pagos.find(p => p.id === id);
+        if (pago.status === 'approved') return false;
+        Object.assign(pago, datos);
+        return true;
+      },
       buscarPorReferencia: async (referencia) => estado.pagos.find(p => p.external_reference === referencia),
+      buscarPorReserva: async (id) => estado.pagos.find(p => p.reserva.id === id),
     }),
     reservas,
     { registrarDesdeWebhook: async () => ({}), registrarManual: async () => ({}) },
@@ -110,6 +117,7 @@ function escenario(moneda = 'ARS') {
       },
       validarWebhook: () => {},
       consultarPago: async () => estado.pagoExterno,
+      consultarCheckout: async () => 'https://example.invalid/pago',
     }, catalogosDePrueba(),
   );
   pagos.logger = { warn: () => {} };
@@ -218,7 +226,7 @@ for (const moneda of ['ARS', 'USD']) {
     assert.equal(reserva.cotizacion_aceptada_en.getTime(), AHORA + 60000);
     assert.equal(reserva.presupuesto_emitido_en.toISOString(), presupuesto.emitida_en);
     assert.equal(reserva.presupuesto_vence_en.toISOString(), presupuesto.vence_en);
-    assert.equal(reserva.pago_vencimiento.toISOString(), presupuesto.vence_en);
+    assert.equal(reserva.pago_vencimiento.getTime(), AHORA + 60000 + 15 * 60_000);
     const historico = JSON.stringify([
       reserva.precio_unitario_contratado, reserva.moneda_origen, reserva.importe_origen,
       reserva.importe_contratado, reserva.moneda_contratada, reserva.cotizacion_dolar,
@@ -240,6 +248,24 @@ for (const moneda of ['ARS', 'USD']) {
     ]), historico);
   });
 }
+
+test('un intento rechazado permite reabrir el checkout hasta el vencimiento original', async (t) => {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  const checkout = await e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO);
+  const reserva = e.estado.reservas[0];
+  e.estado.pagoExterno = {
+    id: 123, external_reference: `reserva:${reserva.id}`, status: 'rejected',
+    transaction_amount: Number(presupuesto.total_cobro), currency_id: 'ARS',
+  };
+  await e.pagos.procesarWebhook({ dataId: '123' });
+  assert.equal(reserva.estado_pago, 'PENDIENTE');
+  assert.equal(reserva.cancelada, false);
+  assert.deepEqual(await e.pagos.reintentarCheckout(reserva.id, USUARIO), checkout);
+  assert.equal(e.estado.checkouts.length, 1);
+  t.mock.timers.setTime(reserva.pago_vencimiento.getTime() + 1);
+  await assert.rejects(e.pagos.reintentarCheckout(reserva.id, USUARIO), { status: 409 });
+});
 
 test('un pago aprobado después de bloquear al anunciante no confirma la reserva', async (t) => {
   const e = escenario('ARS');
