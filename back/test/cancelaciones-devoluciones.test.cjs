@@ -21,6 +21,9 @@ const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ci
 const { ReservaReembolsoAplicacionService } = require('../dist/reservas/service/reserva-reembolso-aplicacion.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
+const { SolicitudCancelacion } = require('../dist/cancelaciones/entity/solicitud-cancelacion.entity');
+const { CancelacionesService } = require('../dist/cancelaciones/service/cancelaciones.service');
+const { CancelacionesRepository } = require('../dist/cancelaciones/repository/cancelaciones.repository');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
 const { CatalogosService } = require('../dist/catalogos/service/catalogos.service');
 const { ReclamosService } = require('../dist/reclamos/service/reclamos.service');
@@ -33,7 +36,7 @@ let base, db, source;
 const migracion = nombre => readFileSync(path.join(__dirname, '../migrations', nombre), 'utf8');
 const sqlEstadosDisputa = migracion('20261110-estados-disputa.sql');
 const sqlEstadosPorAmbito = migracion('20261110-estados-por-ambito.sql');
-let reembolsos, reservas, reclamos, pasarela, automatico;
+let reembolsos, reservas, cancelaciones, repositorioCancelaciones, disponibilidad, reclamos, pasarela, automatico;
 
 before(async () => {
   base = await crearPostgresPruebas();
@@ -61,13 +64,15 @@ beforeEach(async () => {
     estadoReserva, catalogosDePrueba(),
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
-  const disponibilidad = { liberarReserva: async () => {} };
+  disponibilidad = { liberarReserva: async () => {} };
   const decision = decisionDePrueba();
   const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
   const aplicacion = new ReservaReembolsoAplicacionService(repositorio, disponibilidad, reembolsos, decision, ciclo, liquidaciones, catalogosDePrueba());
   reservas = new ReservasService({}, repositorio, disponibilidad, {}, {}, {}, reembolsos, estadoReserva,
     decision, liquidaciones, ciclo, aplicacion, catalogosDePrueba());
+  repositorioCancelaciones = new CancelacionesRepository(source.getRepository(SolicitudCancelacion));
+  cancelaciones = new CancelacionesService(repositorioCancelaciones, reservas, reembolsos, catalogosDePrueba());
   reclamos = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia),
       source.getRepository(ReclamoMensaje)),
@@ -201,14 +206,142 @@ test('la operación administrativa no informa éxito con una devolución externa
 
 test('la cancelación aprobada conserva la reserva hasta confirmar la devolución', async () => {
   const { reserva } = await escenario();
-  const solicitud = await reservas.solicitarCancelacion(reserva.id, { motivo: 'Cambio de planes' }, 1);
-  const resultado = await reservas.resolverSolicitudCancelacion(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   assert.equal(Number(resultado.reembolso.importe), 100);
   assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).cancelada, false);
   await reservas.registrarReembolsoManual(resultado.reembolso.id, 'comprobante-cancelacion', 3);
   const actual = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
   assert.equal(actual.cancelada, true);
   assert.equal(actual.estado_pago, 'REEMBOLSADO');
+});
+
+/** Repositorio real cuyas operaciones dentro de la transacción se pueden interceptar. */
+function repositorioInterceptado(interceptar) {
+  return Object.assign(Object.create(repositorioCancelaciones), {
+    conTransaccion: (operacion) => repositorioCancelaciones.conTransaccion((enTransaccion, transaccion) =>
+      operacion(Object.assign(Object.create(enTransaccion), interceptar(enTransaccion)), transaccion)),
+  });
+}
+
+const maniana = () => require('../dist/common/utils/fechas').fechaArgentina(new Date(Date.now() + 86400000));
+const solicitudActual = id => source.getRepository(SolicitudCancelacion).findOneByOrFail({ id });
+
+test('la devolución de una cancelación queda identificada por su solicitud', async () => {
+  const { reserva } = await escenario();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+  const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  const guardado = await source.getRepository(Reembolso).findOneByOrFail({ id: reembolso.id });
+  assert.equal(guardado.idempotency_key, `can:${solicitud.id}`);
+  assert.equal(guardado.origen, OrigenReembolso.CANCELACION);
+  assert.equal((await solicitudActual(solicitud.id)).estado, 'APROBADA');
+});
+
+test('resolver dos veces la misma solicitud deja una sola devolución', async () => {
+  const { reserva } = await escenario();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+  const primera = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  // La segunda resolución espera el bloqueo de la solicitud y la encuentra decidida.
+  await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), { status: 409 });
+  // Aunque una resolución trabajara con una lectura anterior a la decisión,
+  // la identidad de la solicitud devuelve el reembolso existente.
+  const lecturaObsoleta = new CancelacionesService(repositorioInterceptado((enTransaccion) => ({
+    buscarParaResolver: async (id, idReserva) =>
+      Object.assign(await enTransaccion.buscarParaResolver(id, idReserva), { estado: 'PENDIENTE' }),
+  })), reservas, reembolsos, catalogosDePrueba());
+  const repetida = await lecturaObsoleta.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(repetida.reembolso.id, primera.reembolso.id);
+  assert.equal(await source.getRepository(Reembolso).count(), 1);
+  assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).cancelada, false);
+});
+
+test('la resolución bloquea la solicitud antes de leer su estado y decide en la misma transacción', async () => {
+  const { reserva } = await escenario();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+  const consultas = [];
+  const original = db.query;
+  db.query = (sql, parametros) => { consultas.push(sql); return original.call(db, sql, parametros); };
+  try {
+    await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  } finally {
+    db.query = original;
+  }
+  const posicion = patron => consultas.findIndex(sql => patron.test(sql));
+  const inicio = posicion(/^START TRANSACTION/i);
+  const bloqueo = posicion(/FROM "solicitud_cancelacion"[\s\S]*FOR UPDATE/i);
+  const lectura = consultas.findIndex((sql, indice) => indice > bloqueo && /FROM "solicitud_cancelacion"/i.test(sql));
+  const devolucion = posicion(/INSERT INTO "reembolso"/i);
+  const decision = posicion(/UPDATE "solicitud_cancelacion"/i);
+  const confirmacion = posicion(/^COMMIT/i);
+  assert.ok(inicio >= 0 && inicio < bloqueo, 'la solicitud se bloquea dentro de la transacción');
+  assert.ok(bloqueo < lectura && lectura < devolucion, 'el estado se lee con la solicitud ya bloqueada');
+  assert.ok(devolucion < decision && decision < confirmacion, 'la devolución y la decisión se confirman juntas');
+  assert.equal(consultas.filter(sql => /^(START TRANSACTION|COMMIT)/i.test(sql)).length, 2);
+});
+
+test('si falla la liberación de fechas se revierte la aprobación y se puede reintentar', async () => {
+  const { reserva } = await escenario(maniana());
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+  disponibilidad.liberarReserva = async () => { throw new Error('fallo simulado del calendario'); };
+  await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /fallo simulado del calendario/);
+  const pendiente = await solicitudActual(solicitud.id);
+  assert.equal(pendiente.estado, 'PENDIENTE');
+  assert.equal(pendiente.decidida_en, null);
+  const sinCambios = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+  assert.equal(sinCambios.cancelada, false);
+  assert.equal(sinCambios.estado_liquidacion, reserva.estado_liquidacion);
+  assert.equal(await source.getRepository(Liquidacion).countBy({ reserva: { id: reserva.id } }), 0);
+
+  let liberadas = 0;
+  disponibilidad.liberarReserva = async (idReserva) => { assert.equal(idReserva, reserva.id); liberadas += 1; };
+  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(resultado.reembolso, null);
+  assert.equal(liberadas, 1);
+  assert.equal((await solicitudActual(solicitud.id)).estado, 'APROBADA');
+  const cancelada = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+  assert.equal(cancelada.cancelada, true);
+  assert.equal(cancelada.cancelada_por, 'INQUILINO');
+  assert.equal(cancelada.estado_liquidacion, 'EN_REVISION');
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(liquidacion.estado, 'EN_REVISION');
+});
+
+test('si falla la aprobación no queda una devolución sin decisión', async () => {
+  const { reserva } = await escenario();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+  let fallar = true;
+  const conFallo = new CancelacionesService(repositorioInterceptado((enTransaccion) => ({
+    guardar: async (actual) => {
+      if (fallar) { fallar = false; throw new Error('fallo simulado al aprobar'); }
+      return enTransaccion.guardar(actual);
+    },
+  })), reservas, reembolsos, catalogosDePrueba());
+  await assert.rejects(conFallo.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /fallo simulado al aprobar/);
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+  assert.equal((await solicitudActual(solicitud.id)).estado, 'PENDIENTE');
+  const resultado = await conFallo.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(Number(resultado.reembolso.importe), 100);
+  assert.equal(await source.getRepository(Reembolso).count(), 1);
+});
+
+test('rechazar o dejar vencer una solicitud no cancela la reserva ni crea devoluciones', async () => {
+  const { reserva } = await escenario();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+  assert.equal((await cancelaciones.solicitar(reserva.id, { motivo: 'Otro pedido igual' }, 1)).id, solicitud.id);
+  const rechazo = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'RECHAZADA', observacion: ' No corresponde ' }, 3);
+  assert.equal(rechazo.reembolso, null);
+  assert.equal(rechazo.solicitud.estado, 'RECHAZADA');
+  assert.equal(rechazo.solicitud.observacion, 'No corresponde');
+  await assert.rejects(cancelaciones.resolver(reserva.id + 1, solicitud.id, { decision: 'APROBADA' }, 3), { status: 404 });
+
+  const otra = await cancelaciones.solicitar(reserva.id, { motivo: 'Segundo pedido' }, 1);
+  assert.notEqual(otra.id, solicitud.id);
+  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: '2026-01-01' });
+  await assert.rejects(cancelaciones.resolver(reserva.id, otra.id, { decision: 'APROBADA' }, 3), /quedó vencida/);
+  // El vencimiento se confirma aunque la respuesta sea un conflicto.
+  assert.equal((await solicitudActual(otra.id)).estado, 'VENCIDA');
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+  assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).cancelada, false);
 });
 
 test('las notas internas de reclamos solo se entregan al administrador', async () => {
@@ -251,8 +384,8 @@ for (const [dias, porcentaje] of [[7, 100], [2, 50], [1, 0]]) {
   test(`cancelar con ${dias} días de anticipación aplica ${porcentaje}% de devolución`, async () => {
     const { fechaArgentina } = require('../dist/common/utils/fechas');
     const { reserva } = await escenario(fechaArgentina(new Date(Date.now() + dias * 86400000)));
-    const solicitud = await reservas.solicitarCancelacion(reserva.id, { motivo: 'Cambio de planes' }, 1);
-    const resultado = await reservas.resolverSolicitudCancelacion(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes' }, 1);
+    const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
     if (porcentaje > 0) assert.equal(Number(resultado.reembolso.importe), porcentaje);
     else {
       assert.equal(resultado.reembolso, null);
@@ -341,6 +474,7 @@ test('la API integra módulos, permisos, cancelación y devolución manual', asy
   const request = require('supertest');
   const { AuthModule } = require('../dist/auth/auth.module');
   const { PagosModule } = require('../dist/pagos/pagos.module');
+  const { CancelacionesModule } = require('../dist/cancelaciones/cancelaciones.module');
   const { ReclamosModule } = require('../dist/reclamos/reclamos.module');
   const { DisputasService } = require('../dist/disputas/service/disputas.service');
   const { Estado } = require('../dist/catalogos/entity/estado.entity');
@@ -353,7 +487,7 @@ test('la API integra módulos, permisos, cancelación y devolución manual', asy
   } };
   const modulo = await Test.createTestingModule({ imports: [
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
-    TypeOrmModule.forRoot(source.options), AuthModule, PagosModule, ReclamosModule,
+    TypeOrmModule.forRoot(source.options), AuthModule, PagosModule, CancelacionesModule, ReclamosModule,
   ] })
     .overrideProvider(DataSource).useValue(source)
     .overrideProvider(ConfigService).useValue(config)
@@ -374,7 +508,7 @@ test('la API integra módulos, permisos, cancelación y devolución manual', asy
     assert.equal(await estados.countBy({ codigoAmbito }), 5);
     const http = app.getHttpServer();
     const token = id => app.get(JwtService).sign({ sub: id });
-    const tenant = `Bearer ${token(1)}`, admin = `Bearer ${token(3)}`;
+    const tenant = `Bearer ${token(1)}`, admin = `Bearer ${token(3)}`, ajeno = `Bearer ${token(4)}`;
     const { reserva, pago } = await escenario();
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);
@@ -394,12 +528,39 @@ test('la API integra módulos, permisos, cancelación y devolución manual', asy
       .set('Authorization', admin).send({ estado: 'GANADA' }).expect(400);
     await request(http).get('/reservas/cancelaciones/administracion').expect(401);
     await request(http).get('/reservas/cancelaciones/administracion').set('Authorization', tenant).expect(403);
+    // Las rutas de solicitudes conservan su contrato al pasar al módulo de cancelaciones.
+    await request(http).post(`/reservas/${reserva.id}/cancelacion`).send({ motivo: 'Cambio de planes' }).expect(401);
+    await request(http).post(`/reservas/${reserva.id}/cancelacion`)
+      .set('Authorization', ajeno).send({ motivo: 'Cambio de planes' }).expect(403);
+    await request(http).post(`/reservas/${reserva.id}/cancelacion`)
+      .set('Authorization', tenant).send({ motivo: 'Corto' }).expect(400);
+    const sinSolicitud = await request(http).get(`/reservas/${reserva.id}/cancelacion`)
+      .set('Authorization', tenant).expect(200);
+    assert.equal(sinSolicitud.text, '');
     const solicitud = await request(http).post(`/reservas/${reserva.id}/cancelacion`)
       .set('Authorization', tenant).send({ motivo: 'Cambio de planes' }).expect(201);
     assert.equal(solicitud.body.estado, 'PENDIENTE');
     assert.equal(Object.hasOwn(solicitud.body, 'ambitoEstado'), false);
+    assert.equal(solicitud.body.reserva.id, reserva.id);
+    assert.equal(solicitud.body.reserva.estado_estadia, 'CONFIRMADA');
+    await request(http).get(`/reservas/${reserva.id}/cancelacion`).set('Authorization', ajeno).expect(403);
+    const activa = await request(http).get(`/reservas/${reserva.id}/cancelacion`)
+      .set('Authorization', tenant).expect(200);
+    assert.equal(activa.body.id, solicitud.body.id);
+    const pendientes = await request(http).get('/reservas/cancelaciones/administracion')
+      .set('Authorization', admin).expect(200);
+    assert.deepEqual(pendientes.body.map(({ id }) => id), [solicitud.body.id]);
+    assert.equal(pendientes.body[0].reserva.estado_estadia, 'CONFIRMADA');
+    await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
+      .set('Authorization', tenant).send({ decision: 'APROBADA' }).expect(403);
+    await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
+      .set('Authorization', admin).send({ decision: 'OTRA' }).expect(400);
     const resultado = await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
       .set('Authorization', admin).send({ decision: 'APROBADA' }).expect(200);
+    assert.equal(resultado.body.solicitud.estado, 'APROBADA');
+    assert.equal(Number(resultado.body.reembolso.importe), 100);
+    await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
+      .set('Authorization', admin).send({ decision: 'APROBADA' }).expect(409);
     assert.equal((await source.query('SELECT disponible FROM fecha WHERE id_reserva=$1', [reserva.id]))[0].disponible, false);
     await request(http).patch(`/reservas/reembolsos/${resultado.body.reembolso.id}/manual`)
       .set('Authorization', admin).send({ referencia: 'comprobante-api' }).expect(200);

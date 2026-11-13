@@ -21,6 +21,28 @@ Si la solicitud llega a la fecha de inicio sin resolución, queda `VENCIDA`.
 Después del inicio no se admite cancelación con devolución automática: el
 Inquilino debe abrir un reclamo.
 
+### Módulo de cancelaciones
+
+`CancelacionesModule` (`back/src/cancelaciones/`) es dueño de la solicitud, de la
+política de la tabla anterior y de la decisión administrativa. Conserva las
+rutas `/reservas/:id/cancelacion`, `/reservas/:id/cancelacion/:idSolicitud` y
+`/reservas/cancelaciones/administracion`.
+
+- Consulta la reserva y sus permisos mediante `ReservasService`. La cancelación
+  inmediata de una reserva pendiente de pago (`PATCH /reservas/:id/cancelar`)
+  sigue en Reservas.
+- Al resolver, bloquea la solicitud y decide dentro de una transacción. Una
+  segunda resolución de la misma solicitud responde 409.
+- Con devolución: crea el reembolso en esa misma transacción, con la clave de
+  idempotencia `can:<idSolicitud>`. La reserva se cancela cuando el reembolso
+  queda aprobado.
+- Sin devolución (0 %): pide a `ReservasService.cancelarConRetencionTotal` que
+  cancele la estadía, deje la liquidación en revisión y libere las fechas. Si
+  alguno de esos pasos falla, la aprobación se revierte y puede reintentarse.
+
+Las devoluciones de cancelaciones anteriores a este módulo conservan su clave
+aleatoria: se vinculan con su solicitud por la reserva, no por la clave.
+
 ## Reembolsos
 
 `ReembolsosModule` es independiente y reutilizable. Se usa desde cancelaciones,

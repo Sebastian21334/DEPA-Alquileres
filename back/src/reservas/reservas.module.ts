@@ -15,7 +15,6 @@ import { ReembolsosReconciliacionService } from './service/reembolsos-reconcilia
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Reserva } from './entity/reserva.entity';
 import { ReprogramacionReserva } from './entity/reprogramacion-reserva.entity';
-import { SolicitudCancelacion } from './entity/solicitud-cancelacion.entity';
 import { ReservasService } from './service/reservas.service';
 import { ReservasController } from './controller/reservas.controller';
 import { ReservaRepository } from './repository/reserva.repository';
@@ -37,7 +36,6 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
     TypeOrmModule.forFeature([
       Reserva,
       ReprogramacionReserva,
-      SolicitudCancelacion,
     ]),
     DisponibilidadModule,
     SeguridadModule,

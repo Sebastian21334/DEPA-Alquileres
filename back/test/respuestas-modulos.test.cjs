@@ -6,6 +6,7 @@ const { CatalogosService } = require('../dist/catalogos/service/catalogos.servic
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
+const { CancelacionesService } = require('../dist/cancelaciones/service/cancelaciones.service');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { ReclamosService } = require('../dist/reclamos/service/reclamos.service');
 const { VerificacionAnuncianteService } = require('../dist/verificacion-anunciante/service/verificacion-anunciante.service');
@@ -68,14 +69,14 @@ test('el historial de verificación omite secretos aunque el repositorio los hay
 
 test('consultar una solicitud activa conserva las relaciones que cargó el repositorio', async () => {
   const solicitud = { id: 5, estado: 'PENDIENTE', solicitante: { id: 7 } };
-  const repo = {
-    buscarPorId: async () => ({ ...reserva(), usuario: { id: 7 } }),
-    buscarSolicitudCancelacionActiva: async () => solicitud,
-  };
-  const servicio = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados,
+  const repo = { buscarPorId: async () => ({ ...reserva(), usuario: { id: 7 } }) };
+  const reservas = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados,
     decisionDePrueba(),
     { sincronizarDesdeReserva: async () => ({}) }, undefined, undefined, catalogosDePrueba());
-  const respuesta = await servicio.consultarSolicitudCancelacion(1, 7);
+  const servicio = new CancelacionesService({ buscarActiva: async () => solicitud }, reservas, {}, catalogosDePrueba());
+  const respuesta = await servicio.consultarActiva(1, 7);
   assert.deepEqual(respuesta, solicitud);
   assert.equal(Object.hasOwn(respuesta, 'reserva'), false);
+  // Quien no participa de la reserva no puede consultar su solicitud.
+  await assert.rejects(servicio.consultarActiva(1, 8), { status: 403 });
 });

@@ -10,7 +10,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Reserva } from './reserva.entity';
+import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
 /** Pedido de cancelación de una reserva pagada, con su decisión administrativa. */

@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
+import type { EntityManager } from 'typeorm';
 import type { Pago } from '../../pagos/entity/pago.entity';
 import { PagosRegistroService } from '../../pagos/service/pagos-registro.service';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
@@ -61,80 +62,93 @@ export class ReembolsosService {
     return this.config.get<string>('MP_REFUNDS_ENABLED') === 'true';
   }
 
-  async crearSolicitud(datos: CrearReembolsoDatos): Promise<Reembolso> {
-    const { reembolso } = await this.crearSolicitudConResultado(datos);
+  /**
+   * Con `transaccion`, el registro participa de la operación del servicio que
+   * coordina: si esa operación falla después, la solicitud también se revierte.
+   */
+  async crearSolicitud(datos: CrearReembolsoDatos, transaccion?: EntityManager): Promise<Reembolso> {
+    const { reembolso } = await this.crearSolicitudConResultado(datos, transaccion);
     return this.prepararRespuesta(reembolso);
   }
 
-  async crearSolicitudConResultado(datos: CrearReembolsoDatos): Promise<{ reembolso: Reembolso; creado: boolean }> {
+  async crearSolicitudConResultado(datos: CrearReembolsoDatos, transaccion?: EntityManager): Promise<{ reembolso: Reembolso; creado: boolean }> {
     const importe = Number(datos.importe);
     if (!Number.isFinite(importe) || importe <= 0)
       throw new BadRequestException('El importe del reembolso debe ser positivo');
 
     const clave = datos.idempotencyKey ?? randomUUID();
+    // En una transacción ajena no se recupera un duplicado: el error la revierte completa.
+    if (transaccion)
+      return this.registrarSolicitud(datos, importe, clave, this.reembolsos.enTransaccion(transaccion), transaccion);
+
     const existente = await this.reembolsos.buscarPorIdempotencyKey(clave);
     if (existente) return { reembolso: existente, creado: false };
 
     try {
-      return await this.reembolsos.conTransaccion(async (reembolsos, transaccion) => {
-        const pago = await this.pagos.buscarParaReembolso(datos.pago.id, transaccion);
-        if (!pago)
-          throw new NotFoundException('No se encontró el pago de la reserva');
-
-        const existenteEnTx = await reembolsos.buscarPorIdempotencyKey(clave);
-        if (existenteEnTx) return { reembolso: existenteEnTx, creado: false };
-
-        if (
-          datos.origen === OrigenReembolso.AJUSTE_ADMIN &&
-          !datos.permitirMultiplesAjustes
-        ) {
-          const deLaReserva = await reembolsos.buscarPorReserva(datos.reserva.id);
-          const activa = deLaReserva.find(
-            (actual) =>
-              actual.origen === OrigenReembolso.AJUSTE_ADMIN &&
-              this.estadosActivos.includes(actual.estado),
-          );
-          if (activa)
-            throw new ConflictException(
-              'Ya existe una devolución de liquidación en curso para la reserva',
-            );
-        }
-
-        const reservado = await reembolsos.sumarImportesReservados(pago.id, [this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'), this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'), this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')]);
-        const saldo = this.pagos.saldoReembolsable(pago) - reservado;
-        if (importe > saldo + TOLERANCIA_MONETARIA)
-          throw new ConflictException(
-            `El importe supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
-          );
-
-        const reembolso = reembolsos.crear({
-          reserva: datos.reserva,
-          pago,
-          tipo: datos.tipo,
-          origen: datos.origen,
-          importe,
-          moneda: pago.currency,
-          estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
-          motivo: datos.motivo.trim().slice(0, 500),
-          referencia_interna: null,
-          referencia_externa: null,
-          id_externo: null,
-          idempotency_key: clave,
-          solicitado_por:
-            datos.idSolicitadoPor != null
-              ? referenciaUsuario(datos.idSolicitadoPor)
-              : null,
-          resuelto_por: null,
-          resuelto_en: null,
-          error_detalle: null,
-        });
-        return { reembolso: await reembolsos.guardar(reembolso), creado: true };
-      });
+      return await this.reembolsos.conTransaccion((reembolsos, propia) =>
+        this.registrarSolicitud(datos, importe, clave, reembolsos, propia),
+      );
     } catch (error) {
       const ganador = await this.reembolsos.buscarPorIdempotencyKey(clave);
       if (ganador) return { reembolso: ganador, creado: false };
       throw error;
     }
+  }
+
+  /** Valida el saldo con el pago bloqueado y registra la solicitud; la clave la hace repetible. */
+  private async registrarSolicitud(datos: CrearReembolsoDatos, importe: number, clave: string, reembolsos: IReembolsosRepository, transaccion: EntityManager): Promise<{ reembolso: Reembolso; creado: boolean }> {
+    const pago = await this.pagos.buscarParaReembolso(datos.pago.id, transaccion);
+    if (!pago)
+      throw new NotFoundException('No se encontró el pago de la reserva');
+
+    const existente = await reembolsos.buscarPorIdempotencyKey(clave);
+    if (existente) return { reembolso: existente, creado: false };
+
+    if (
+      datos.origen === OrigenReembolso.AJUSTE_ADMIN &&
+      !datos.permitirMultiplesAjustes
+    ) {
+      const deLaReserva = await reembolsos.buscarPorReserva(datos.reserva.id);
+      const activa = deLaReserva.find(
+        (actual) =>
+          actual.origen === OrigenReembolso.AJUSTE_ADMIN &&
+          this.estadosActivos.includes(actual.estado),
+      );
+      if (activa)
+        throw new ConflictException(
+          'Ya existe una devolución de liquidación en curso para la reserva',
+        );
+    }
+
+    const reservado = await reembolsos.sumarImportesReservados(pago.id, [this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'), this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'), this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')]);
+    const saldo = this.pagos.saldoReembolsable(pago) - reservado;
+    if (importe > saldo + TOLERANCIA_MONETARIA)
+      throw new ConflictException(
+        `El importe supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
+      );
+
+    const reembolso = reembolsos.crear({
+      reserva: datos.reserva,
+      pago,
+      tipo: datos.tipo,
+      origen: datos.origen,
+      importe,
+      moneda: pago.currency,
+      estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
+      motivo: datos.motivo.trim().slice(0, 500),
+      referencia_interna: null,
+      referencia_externa: null,
+      id_externo: null,
+      idempotency_key: clave,
+      solicitado_por:
+        datos.idSolicitadoPor != null
+          ? referenciaUsuario(datos.idSolicitadoPor)
+          : null,
+      resuelto_por: null,
+      resuelto_en: null,
+      error_detalle: null,
+    });
+    return { reembolso: await reembolsos.guardar(reembolso), creado: true };
   }
 
   async registrarManual(id: number, referencia: string, idActor: number): Promise<Reembolso> {

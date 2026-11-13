@@ -5,7 +5,6 @@ import { In, LessThan, Repository, type EntityManager } from 'typeorm';
 import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
-import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 
 @Injectable()
 export class ReservaRepository implements IReservaRepository {
@@ -32,8 +31,13 @@ export class ReservaRepository implements IReservaRepository {
 
   conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
     return this.repository.manager.transaction('READ COMMITTED', (transaccion) =>
-      operacion(new ReservaRepository(transaccion.getRepository(Reserva)), transaccion),
+      operacion(this.enTransaccion(transaccion), transaccion),
     );
+  }
+
+  /** Permite participar de la transacción que abrió el servicio coordinador. */
+  enTransaccion(transaccion: EntityManager): IReservaRepository {
+    return new ReservaRepository(transaccion.getRepository(Reserva));
   }
 
   guardarReprogramacion(datos: Partial<ReprogramacionReserva>): Promise<ReprogramacionReserva> {
@@ -230,57 +234,6 @@ export class ReservaRepository implements IReservaRepository {
         },
       },
       order: { codigo_validado_en: 'ASC', id: 'DESC' },
-    });
-  }
-
-  private solicitudes() {
-    return this.repository.manager.getRepository(SolicitudCancelacion);
-  }
-
-  crearSolicitudCancelacion(datos: Partial<SolicitudCancelacion>): SolicitudCancelacion {
-    return this.solicitudes().create(datos);
-  }
-
-  guardarSolicitudCancelacion(solicitud: SolicitudCancelacion): Promise<SolicitudCancelacion> {
-    return this.solicitudes().save(solicitud);
-  }
-
-  buscarSolicitudCancelacion(id: number, idReserva: number): Promise<SolicitudCancelacion | null> {
-    return this.solicitudes().findOne({
-      where: { id, reserva: { id: idReserva } },
-      relations: {
-        solicitante: true,
-        decidida_por: true,
-        reserva: {
-          usuario: true,
-          publicacion: { anunciante: { usuario: true } },
-        },
-      },
-    });
-  }
-
-  buscarSolicitudCancelacionActiva(idReserva: number, estado: string): Promise<SolicitudCancelacion | null> {
-    return this.solicitudes().findOne({
-      where: {
-        reserva: { id: idReserva },
-        estado,
-      },
-      relations: { solicitante: true, decidida_por: true },
-      order: { id: 'DESC' },
-    });
-  }
-
-  listarSolicitudesCancelacionAdministracion(estado: string): Promise<SolicitudCancelacion[]> {
-    return this.solicitudes().find({
-      where: { estado },
-      relations: {
-        solicitante: true,
-        reserva: {
-          usuario: true,
-          publicacion: { anunciante: { usuario: true } },
-        },
-      },
-      order: { id: 'ASC' },
     });
   }
 }

@@ -66,7 +66,8 @@ Frontend:
 | Catálogo | `favoritos` | Favoritos del inquilino. | — |
 | Catálogo | `mensajes` | Mensajería asociada a publicaciones y reservas. | — |
 | Reservas | `disponibilidad` | Calendario, ocupación, liberación y reprogramación de fechas. | `DisponibilidadService` |
-| Reservas | `reservas` | Ciclo de vida, cancelaciones, código, coordinación de liquidaciones, bloqueo y reembolsos aplicados. | `ReservasService`, `ReservaCicloVidaService`, `ReservaDecisionService`, `ReservaBloqueoAnuncianteService`, `ReservaReembolsoAplicacionService` |
+| Reservas | `reservas` | Ciclo de vida, cancelación de la estadía, código, coordinación de liquidaciones, bloqueo y reembolsos aplicados. | `ReservasService`, `ReservaCicloVidaService`, `ReservaDecisionService`, `ReservaBloqueoAnuncianteService`, `ReservaReembolsoAplicacionService` |
+| Reservas | `cancelaciones` | Solicitud de cancelación de una reserva pagada, su política de devolución y su decisión administrativa. Pide los efectos a Reservas y Reembolsos. | — |
 | Liquidaciones | `liquidaciones` | Registro de liquidaciones y sus estados. | `LiquidacionesService` |
 | Reservas | `reservas-consulta` | Proyección compartida de reservas y cálculo de `estado_estadia`. | `ReservaEstadoService` |
 | Reservas | `bloqueo-anunciante` | Bloqueo administrativo de cuentas y resolución de reservas afectadas. | `IBloqueoAnuncianteRepository` |
@@ -104,6 +105,9 @@ Los repositorios que coordinan escrituras exponen `conTransaccion`:
 - `ReservaRepository.conTransaccion` abre `READ COMMITTED` y entrega un repositorio transaccional más el `EntityManager`.
 - `FechaRepository.conTransaccion` hace lo mismo y además ofrece `enTransaccion(manager)` para reutilizar el calendario dentro de una transacción ajena.
 - `ReembolsosRepository.conTransaccion` entrega el repositorio de reembolsos y el manager para pagos.
+- `CancelacionesRepository.conTransaccion` abre `READ COMMITTED` para resolver una solicitud y bloquea su fila antes de leer el estado.
+
+Cuando un servicio coordina una operación con otros módulos, abre la transacción con su repositorio y la comparte: `ReservaRepository` y `ReembolsosRepository` ofrecen `enTransaccion(manager)` para participar de ella. Así, `CancelacionesService.resolver` confirma en una sola transacción la decisión, el reembolso (`ReembolsosService.crearSolicitud`) o la cancelación de la estadía con su liberación de fechas (`ReservasService.cancelarConRetencionTotal`). La devolución de una solicitud usa la clave de idempotencia `can:<idSolicitud>`.
 
 El service nunca abre la transacción: decide el caso de uso y llama a `conTransaccion`. El repositorio es el único que conoce TypeORM. Las operaciones que cruzan módulos pasan el `EntityManager` por parámetro a services como `DisponibilidadService` o `PagosRegistroService`.
 
@@ -206,7 +210,7 @@ npm run test:jest          # requiere Node 24.9 o superior
 
 `package.json` define `test:bloqueo-anunciante` y `test:liquidaciones-entidad`, que compilan y luego ejecutan su archivo con `node --test`, igual que los demás scripts `test:*`.
 
-Resultado al 12/11/2026: 173/173 pruebas `node:test` y 34/34 pruebas Jest.
+Resultado al 12/11/2026, con el módulo de cancelaciones: 181/181 pruebas `node:test` y 34/34 pruebas Jest.
 
 Frontend, desde `Proyect/front`:
 
