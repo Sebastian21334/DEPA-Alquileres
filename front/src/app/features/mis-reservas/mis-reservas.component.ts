@@ -65,7 +65,7 @@ export class MisReservasComponent {
   private consultaCancelacion?: Subscription;
   private accionCancelacion?: HTMLButtonElement;
   protected readonly reservaACancelar = signal<Reserva | null>(null);
-  protected readonly estadoCancelacion = signal<'consultando' | 'formulario' | 'pendiente' | 'error'>('consultando');
+  protected readonly estadoCancelacion = signal<'consultando' | 'formulario' | 'pendiente' | 'aprobada' | 'error'>('consultando');
   protected readonly motivoCancelacion = signal('');
   protected readonly errorCancelacion = signal('');
   protected readonly enviandoCancelacion = signal(false);
@@ -212,7 +212,9 @@ export class MisReservasComponent {
     this.consultaCancelacion = this.reservasApi.cancellationRequest(reserva.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (pendiente) => this.estadoCancelacion.set(pendiente ? 'pendiente' : 'formulario'),
+        next: (solicitud) => this.estadoCancelacion.set(
+          solicitud?.estado === 'APROBADA' ? 'aprobada' : solicitud ? 'pendiente' : 'formulario',
+        ),
         error: (err: ApiError) => {
           this.estadoCancelacion.set('error');
           this.errorCancelacion.set(err.message);
@@ -233,9 +235,13 @@ export class MisReservasComponent {
         finalize(() => this.enviandoCancelacion.set(false)),
       )
       .subscribe({
-        next: () => {
-          this.estadoCancelacion.set('pendiente');
-          this.toast.mostrar('Solicitud de cancelación enviada. Está en revisión.', 'exito');
+        next: (solicitud) => {
+          if (solicitud.estado === 'APROBADA') {
+            this.estadoCancelacion.set('aprobada');
+          } else {
+            this.estadoCancelacion.set('pendiente');
+            this.toast.mostrar('La solicitud de cancelación está en revisión.', 'exito');
+          }
         },
         error: (err: ApiError) => this.errorCancelacion.set(err.message),
       });

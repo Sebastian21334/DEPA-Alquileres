@@ -15,7 +15,7 @@ export interface IReservaRepository {
   crear(datos: Partial<Reserva>): Reserva;
   guardar(reserva: Reserva): Promise<Reserva>;
   guardarVarias(reservas: Reserva[]): Promise<Reserva[]>;
-  buscarPorId(id: number): Promise<Reserva | null>;
+  buscarPorId(id: number, modoBloqueo?: 'pessimistic_write' | 'for_no_key_update'): Promise<Reserva | null>;
   buscarParaReclamo(id: number): Promise<Reserva | null>;
   buscarPorIdConCodigo(id: number): Promise<Reserva | null>;
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]>;

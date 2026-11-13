@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, type FindOptionsRelations } from 'typeorm';
+import { Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
 import { Disputa } from '../entity/disputa.entity';
 import type { IDisputasRepository } from './disputas.repository.interface';
 
@@ -16,6 +16,16 @@ const RELACIONES_DISPUTA: FindOptionsRelations<Disputa> = {
 @Injectable()
 export class DisputasRepository implements IDisputasRepository {
   constructor(@InjectRepository(Disputa) private readonly repo: Repository<Disputa>) {}
+
+  conTransaccion<T>(operacion: (disputas: IDisputasRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.repo.manager.transaction('READ COMMITTED', (transaccion) =>
+      operacion(this.enTransaccion(transaccion), transaccion),
+    );
+  }
+
+  enTransaccion(transaccion: EntityManager): IDisputasRepository {
+    return new DisputasRepository(transaccion.getRepository(Disputa));
+  }
 
   buscarPorContracargo(chargebackId: string): Promise<Disputa | null> {
     return this.repo.findOne({

@@ -129,6 +129,18 @@ export class Reembolso {
   @Column({ name: 'resuelto_en', type: 'timestamp', nullable: true })
   resuelto_en: Date | null;
 
+  @Column({ name: 'aplicado_en', type: 'timestamp', nullable: true })
+  aplicado_en: Date | null;
+
+  @Column({ name: 'revision_aplicacion', type: 'boolean', default: false })
+  revision_aplicacion: boolean;
+
+  @Column({ name: 'conciliar_en', type: 'timestamptz', nullable: true, select: false })
+  conciliar_en: Date | null;
+
+  @Column({ name: 'primer_intento_en', type: 'timestamptz', nullable: true, select: false })
+  primer_intento_en: Date | null;
+
   @Column({
     name: 'error_detalle',
     type: 'varchar',

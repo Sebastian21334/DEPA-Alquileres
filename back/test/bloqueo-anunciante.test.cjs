@@ -14,9 +14,7 @@ const MOTIVO_CANCELACION_BLOQUEO = 'Bloqueo de cuenta del anunciante';
 const {
   ReservaCicloVidaService,
 } = require('../dist/reservas/service/reserva-ciclo-vida.service');
-const {
-  ReservaBloqueoDevolucionService,
-} = require('../dist/reservas/service/reserva-bloqueo-devolucion.service');
+const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const {
   ReservaBloqueoAnuncianteService,
 } = require('../dist/reservas/service/reserva-bloqueo-anunciante.service');
@@ -209,7 +207,10 @@ function crearEscenario(reserva, reservas = [reserva]) {
 
   const decision = decisionDePrueba();
   const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
-  const devolucion = new ReservaBloqueoDevolucionService(reembolsosService, catalogosDePrueba());
+  const devolucion = new ReembolsosService(undefined, undefined, undefined, undefined, undefined, catalogosDePrueba());
+  for (const metodo of ['coberturaDevolucion', 'asegurarDevolucion', 'calcularCobertura']) reembolsosService[metodo] = devolucion[metodo];
+  reembolsosService.catalogos = catalogosDePrueba();
+  reembolsosService.aplicarConfirmado = aplicacion.aplicarReembolsoConfirmado;
   const servicio = new ReservaBloqueoAnuncianteService(
     reservaRepository,
     disponibilidadService,
@@ -217,8 +218,6 @@ function crearEscenario(reserva, reservas = [reserva]) {
     decision,
     ciclo,
     reservasService,
-    aplicacion,
-    devolucion,
     { sincronizarDesdeReserva: async () => ({}) }, catalogosDePrueba(),
   );
 

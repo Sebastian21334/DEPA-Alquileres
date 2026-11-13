@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, type EntityManager } from 'typeorm';
+import { LessThanOrEqual, Repository, type EntityManager } from 'typeorm';
+import { PoliticaCancelacion } from '../entity/politica-cancelacion.entity';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 import type { ICancelacionesRepository } from './cancelaciones.repository.interface';
 
@@ -55,6 +56,13 @@ export class CancelacionesRepository implements ICancelacionesRepository {
       },
       relations: { solicitante: true, decidida_por: true },
       order: { id: 'DESC' },
+    });
+  }
+
+  buscarPolitica(fechaPago: string | null): Promise<PoliticaCancelacion | null> {
+    return this.repository.manager.getRepository(PoliticaCancelacion).findOne({
+      where: fechaPago ? { vigenteDesde: LessThanOrEqual(fechaPago) } : {},
+      order: { vigenteDesde: fechaPago ? 'DESC' : 'ASC' },
     });
   }
 

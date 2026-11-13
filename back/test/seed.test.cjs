@@ -36,6 +36,7 @@ test('la seed completa una base parcial y se puede repetir sin duplicar datos', 
     await assert.rejects(servicio.onModuleInit(), /rol Inquilino.*DISPUTA\/GANADA.*db:seed/);
 
     const primera = await cargarSeed();
+    assert.equal(primera.politica_cancelacion, 1);
     assert.equal(primera.rol, 1);
     assert.equal(primera.ambito, 1);
     assert.equal(primera.estado, 1 + Object.keys(VERIFICACION_ANUNCIANTE.estados).length);

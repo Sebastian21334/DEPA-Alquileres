@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, type EntityManager } from 'typeorm';
+import { In, IsNull, MoreThan, Repository, type EntityManager } from 'typeorm';
 import { Reembolso } from '../entity/reembolso.entity';
 import type { IReembolsosRepository } from './reembolsos.repository.interface';
 
@@ -27,6 +27,10 @@ export class ReembolsosRepository implements IReembolsosRepository {
     return this.repository.save(reembolso);
   }
 
+  async actualizar(id: number, datos: Partial<Reembolso>): Promise<void> {
+    await this.repository.update(id, datos);
+  }
+
   buscarPorId(id: number): Promise<Reembolso | null> {
     return this.repository.findOne({
       where: { id },
@@ -50,18 +54,24 @@ export class ReembolsosRepository implements IReembolsosRepository {
   buscarPorPago(idPago: number): Promise<Reembolso[]> {
     return this.repository.find({
       where: { pago: { id: idPago } },
+      select: { id: true, importe: true, estado: true, id_externo: true, referencia_externa: true,
+        conciliar_en: true, aplicado_en: true, revision_aplicacion: true },
       order: { id: 'DESC' },
     });
   }
 
-  buscarRegistro(id: number, { bloquear, idPago }: { bloquear?: boolean; idPago?: boolean } = {}): Promise<Reembolso | null> {
-    return this.repository.findOne({
-      where: { id },
-      lock: bloquear ? { mode: 'pessimistic_write' } : undefined,
-      loadRelationIds: idPago
-        ? { relations: ['pago'], disableMixedMap: true }
-        : undefined,
-    });
+  buscarPorIdExterno(id_externo: string): Promise<Reembolso | null> {
+    return this.repository.findOneBy({ id_externo });
+  }
+
+  buscarRegistro(id: number, { bloquear, idsRelaciones }: { bloquear?: boolean; idsRelaciones?: boolean } = {}): Promise<Reembolso | null> {
+    const consulta = this.repository.createQueryBuilder('reembolso')
+      .addSelect('reembolso.conciliar_en')
+      .addSelect('reembolso.primer_intento_en')
+      .where('reembolso.id = :id', { id });
+    if (bloquear) consulta.setLock('pessimistic_write');
+    if (idsRelaciones) consulta.loadAllRelationIds({ relations: ['pago', 'resuelto_por'], disableMixedMap: true });
+    return consulta.getOne();
   }
 
   buscarPorReserva(idReserva: number): Promise<Reembolso[]> {
@@ -94,33 +104,39 @@ export class ReembolsosRepository implements IReembolsosRepository {
 
   actualizarEnTransaccion(id: number, operacion: (reembolso: Reembolso) => void | Promise<void>): Promise<Reembolso | null> {
     return this.repository.manager.transaction(async (manager) => {
-      const repo = manager.getRepository(Reembolso);
-      const reembolso = await repo.findOne({
-        where: { id },
-        lock: { mode: 'pessimistic_write' },
-      });
+      const repo = this.enTransaccion(manager);
+      const reembolso = await repo.buscarRegistro(id, { bloquear: true });
       if (!reembolso) return null;
       await operacion(reembolso);
-      return repo.save(reembolso);
+      return repo.guardar(reembolso);
     });
   }
 
-  buscarPendientesConciliacion(estados: string[]): Promise<Reembolso[]> {
+  buscarPendientesConciliacion(estados: string[], hasta: Date): Promise<Reembolso[]> {
+    return this.repository.createQueryBuilder('reembolso')
+      .innerJoinAndSelect('reembolso.pago', 'pago')
+      .addSelect('reembolso.conciliar_en')
+      .where('reembolso.estado IN (:...estados)', { estados })
+      .andWhere('reembolso.conciliar_en <= :hasta', { hasta })
+      .orderBy('reembolso.conciliar_en', 'ASC')
+      .addOrderBy('reembolso.id', 'ASC')
+      .limit(50)
+      .getMany();
+  }
+
+  buscarPendientesAplicacion(estado: string, desdeId: number): Promise<Reembolso[]> {
     return this.repository.find({
-      where: {
-        estado: In(estados),
-      },
-      relations: { pago: true, reserva: true },
+      where: { id: MoreThan(desdeId), estado, aplicado_en: IsNull(), revision_aplicacion: false },
+      select: { id: true },
       order: { id: 'ASC' },
       take: 50,
     });
   }
 
-  buscarAprobados(estado: string): Promise<Reembolso[]> {
-    return this.repository.find({
-      where: { estado },
-      relations: { pago: true, reserva: true },
-      order: { id: 'ASC' },
+  buscarPorOrigen(origen: Reembolso['origen'], referencia_interna: string): Promise<Reembolso | null> {
+    return this.repository.findOne({
+      where: { origen, referencia_interna },
+      order: { id: 'DESC' },
     });
   }
 

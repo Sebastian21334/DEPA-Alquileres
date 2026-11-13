@@ -21,8 +21,12 @@ function crearReserva(extra = {}) {
   };
 }
 
-function reservasService() {
+function reservasService(reserva) {
   return {
+    aplicarEfectoReembolso: async () => {
+      ciclo.resolverLiquidacion(reserva, 'DEVUELTO_INQUILINO');
+      return reserva;
+    },
     pagoAprobado: (r) => r.estado_pago === 'APROBADO',
     codigoValidado: (r) => !!r.codigo_validado_en,
     liquidacionEnRevision: (r) => r.estado_liquidacion === 'EN_REVISION',
@@ -80,6 +84,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
   let referenciaEjecutada = null;
   const reembolsos = {
     ejecucionAutomaticaHabilitada: true,
+    aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => pago,
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
@@ -94,9 +99,8 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
   };
   const service = new ReservaLiquidacionesService(
     repositorio(reserva),
-    { liberarReserva: async () => {} },
     reembolsos,
-    reservasService(),
+    reservasService(reserva),
     liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
@@ -114,6 +118,7 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
   let ejecuciones = 0;
   const reembolsos = {
     ejecucionAutomaticaHabilitada: true,
+    aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
@@ -129,9 +134,8 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
   });
   const service = new ReservaLiquidacionesService(
     repo,
-    { liberarReserva: async () => {} },
     reembolsos,
-    reservasService(),
+    reservasService(reserva),
     liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
@@ -149,9 +153,8 @@ test('exige referencia cuando la devolución es manual', async () => {
   const reembolsos = { ejecucionAutomaticaHabilitada: false };
   const service = new ReservaLiquidacionesService(
     repositorio(reserva),
-    { liberarReserva: async () => {} },
     reembolsos,
-    reservasService(),
+    reservasService(reserva),
     liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
@@ -169,6 +172,7 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
   });
   const reembolsos = {
     ejecucionAutomaticaHabilitada: true,
+    aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
@@ -177,9 +181,8 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
   };
   const service = new ReservaLiquidacionesService(
     repositorio(reserva),
-    { liberarReserva: async () => {} },
     reembolsos,
-    reservasService(),
+    reservasService(reserva),
     liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
@@ -195,6 +198,7 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
   let ejecutado = null;
   const reembolsos = {
     ejecucionAutomaticaHabilitada: true,
+    aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
     listarPorReserva: async () => [
       { id: 8, estado: 'FALLIDO', importe: 100, origen: 'AJUSTE_ADMIN', idempotency_key: 'liq:1:t:10000' },
@@ -205,9 +209,8 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
   };
   const service = new ReservaLiquidacionesService(
     repositorio(reserva),
-    { liberarReserva: async () => {} },
     reembolsos,
-    reservasService(),
+    reservasService(reserva),
     liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 

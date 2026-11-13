@@ -72,7 +72,7 @@ test('consultar una solicitud activa conserva las relaciones que cargó el repos
   const repo = { buscarPorId: async () => ({ ...reserva(), usuario: { id: 7 } }) };
   const reservas = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados,
     decisionDePrueba(),
-    { sincronizarDesdeReserva: async () => ({}) }, undefined, undefined, catalogosDePrueba());
+    { sincronizarDesdeReserva: async () => ({}) }, undefined, catalogosDePrueba());
   const servicio = new CancelacionesService({ buscarActiva: async () => solicitud }, reservas, {}, catalogosDePrueba());
   const respuesta = await servicio.consultarActiva(1, 7);
   assert.deepEqual(respuesta, solicitud);

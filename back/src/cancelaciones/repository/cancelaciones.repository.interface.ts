@@ -1,5 +1,6 @@
 import type { EntityManager } from 'typeorm';
 import type { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
+import type { PoliticaCancelacion } from '../entity/politica-cancelacion.entity';
 
 export const CANCELACIONES_REPOSITORY = 'CANCELACIONES_REPOSITORY';
 
@@ -9,5 +10,6 @@ export interface ICancelacionesRepository {
   guardar(solicitud: SolicitudCancelacion): Promise<SolicitudCancelacion>;
   buscarParaResolver(id: number, idReserva: number): Promise<SolicitudCancelacion | null>;
   buscarActiva(idReserva: number, estado: string): Promise<SolicitudCancelacion | null>;
+  buscarPolitica(fechaPago: string | null): Promise<PoliticaCancelacion | null>;
   listarPorEstado(estado: string): Promise<SolicitudCancelacion[]>;
 }

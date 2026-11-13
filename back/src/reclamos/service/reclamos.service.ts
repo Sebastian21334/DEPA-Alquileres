@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import type { EntityManager } from 'typeorm';
 import sharp from 'sharp';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
@@ -16,6 +17,7 @@ import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import {
   OrigenReembolso,
+  type Reembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import {
@@ -216,45 +218,64 @@ export class ReclamosService {
       if (!pago)
         throw new ConflictException('La reserva no tiene un pago registrado');
       const saldo = this.reembolsos.saldoReembolsable(pago);
-      const importe =
+      const referencia = `rec:${reclamo.id}`;
+      const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia);
+      const importe = previo ? Number(previo.importe) :
         dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
           ? saldo
           : Number(dto.importe ?? 0);
       if (!Number.isFinite(importe) || importe <= 0)
         throw new BadRequestException('Indicá el importe de la devolución parcial');
-      if (importe > saldo + 0.009)
+      if (!previo && importe > saldo + 0.009)
         throw new ConflictException('La devolución supera el saldo del pago');
-      const reembolso = await this.reembolsos.crearSolicitud({
+      const tipo = dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL;
+      if (previo && (previo.tipo !== tipo ||
+          (tipo === TipoReembolso.PARCIAL && importe !== Number(dto.importe))))
+        throw new ConflictException('El reclamo ya tiene una devolución por otro importe o tipo');
+      const reembolso = previo ?? await this.reembolsos.crearSolicitud({
         reserva,
         pago,
-        tipo:
-          dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
-            ? TipoReembolso.TOTAL
-            : TipoReembolso.PARCIAL,
+        tipo,
         origen: OrigenReembolso.RECLAMO,
         importe,
         motivo: `Reclamo #${reclamo.id}: ${dto.observacion ?? 'resolución favorable al inquilino'}`,
         idSolicitadoPor: idAdmin,
+        idempotencyKey: referencia,
+        referenciaInterna: referencia,
       });
       const ejecutado = await this.reembolsos.registrarOejecutar(
         reembolso.id,
         dto.referencia?.trim(),
         idAdmin,
       );
-      await this.reservas.resolverReclamoConDevolucion(
-        reserva.id,
-        ejecutado,
-        dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL,
-        dto.observacion,
+      const aplicado = await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
+        this.aplicarResolucionReembolso(confirmado, transaccion),
       );
-      reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
-      reclamo.resolucion = dto.resolucion;
-      reclamo.importe_reembolso = importe;
+      return this.prepararRespuesta(aplicado ?? await this.obtener(id, idAdmin, true));
     }
 
     reclamo.administrador_resolucion = referenciaUsuario(idAdmin);
     reclamo.resuelto_en = new Date();
     return this.prepararRespuesta(await this.reclamos.guardar(reclamo));
+  }
+
+  async aplicarResolucionReembolso(reembolso: Reembolso, transaccion: EntityManager): Promise<Reclamo> {
+    const id = Number(reembolso.referencia_interna?.split(':')[1]);
+    const reclamos = this.reclamos.enTransaccion(transaccion);
+    const reclamo = Number.isSafeInteger(id) ? await reclamos.buscarPorId(id) : null;
+    if (!reclamo || reclamo.reserva.id !== reembolso.reserva.id)
+      throw new ConflictException('El reembolso requiere identificar el reclamo de origen');
+    if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE'))
+      throw new ConflictException('El reclamo tiene una resolución incompatible con el reembolso');
+    reclamo.reserva = await this.reservas.aplicarEfectoReembolso(reembolso, transaccion,
+      reembolso.motivo.replace(/^Reclamo #\d+: /, ''));
+    reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
+    reclamo.resolucion = reembolso.tipo === TipoReembolso.TOTAL
+      ? ResolucionReclamo.DEVOLUCION_TOTAL : ResolucionReclamo.DEVOLUCION_PARCIAL;
+    reclamo.importe_reembolso = Number(reembolso.importe);
+    reclamo.administrador_resolucion = reembolso.resuelto_por ?? reembolso.solicitado_por;
+    reclamo.resuelto_en = new Date();
+    return reclamos.guardar(reclamo);
   }
 
   private verificarParticipante(reclamo: Reclamo, idUsuario: number): void {

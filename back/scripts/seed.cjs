@@ -126,9 +126,16 @@ async function cargarDatosBase(cliente) {
     `);
     const catalogosCargados = await cargarCatalogos(cliente);
     const estadosCargados = await cargarEstados(cliente);
+    const { rowCount: politica_cancelacion } = await cliente.query(`
+      INSERT INTO public.politica_cancelacion (
+        vigente_desde, dias_devolucion_total, dias_devolucion_parcial,
+        porcentaje_total, porcentaje_parcial, porcentaje_fuera_de_plazo, porcentaje_otros_actores
+      ) VALUES ('0001-01-01', 7, 2, 100, 50, 0, 100)
+      ON CONFLICT (vigente_desde) DO NOTHING
+    `);
     const ubicacionesCargadas = await cargarUbicaciones(cliente);
     await cliente.query('COMMIT');
-    return { ...catalogosCargados, ...estadosCargados, ...ubicacionesCargadas };
+    return { ...catalogosCargados, ...estadosCargados, politica_cancelacion, ...ubicacionesCargadas };
   } catch (error) {
     await cliente.query('ROLLBACK');
     throw error;
