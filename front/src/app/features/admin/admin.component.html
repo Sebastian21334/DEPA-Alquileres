@@ -1,14 +1,47 @@
-<section class="admin">
-  <header class="admin__header">
-    <div>
-      <p class="admin__eyebrow">Administración</p>
-      <h1>Panel de control</h1>
-      <p>Gestioná usuarios, publicaciones y solicitudes de anunciantes.</p>
+<section class="admin" aria-label="Panel administrativo">
+  <aside class="admin-sidebar">
+    <div class="admin-brand"><img src="/images/Logo.png" alt="DEPA" /><span>Alquileres</span></div>
+    <nav class="admin-nav" aria-label="Secciones del panel">
+      <button type="button" [attr.aria-current]="activeSection() === 'resumen' ? 'page' : null" (click)="openSection('resumen')">
+        <svg lucideHouse [size]="19" aria-hidden="true"></svg> Resumen
+      </button>
+      @for (group of navigation; track group.label) {
+        <div class="admin-nav-group">
+          <h2>{{ group.label }}</h2>
+          @for (item of group.items; track item.id) {
+            <button type="button" [attr.aria-current]="activeSection() === item.id ? 'page' : null" (click)="openSection(item.id)">
+              {{ item.label }}
+            </button>
+          }
+        </div>
+      }
+    </nav>
+    <label class="admin-section-picker">
+      Sección
+      <select [ngModel]="activeSection()" (ngModelChange)="openSection($event)">
+        <option value="resumen">Resumen</option>
+        @for (group of navigation; track group.label) {
+          <optgroup [label]="group.label">
+            @for (item of group.items; track item.id) {
+              <option [value]="item.id">{{ item.label }}</option>
+            }
+          </optgroup>
+        }
+      </select>
+    </label>
+  </aside>
+  <div class="admin-workspace">
+    <div class="admin-topbar">
+      <p>Panel admin / <strong>{{ sectionLabel() }}</strong></p>
+      <span><svg lucideUsers [size]="18" aria-hidden="true"></svg> Administrador</span>
     </div>
-    <button class="button button--light" type="button" (click)="reload()" [disabled]="loading()">
-      <svg lucideRefreshCw [size]="18"></svg> Actualizar
-    </button>
-  </header>
+    <div class="admin-content">
+      <header class="admin__header">
+        <h1 id="admin-section-title" tabindex="-1">{{ activeSection() === 'resumen' ? 'Panel de control' : sectionLabel() }}</h1>
+        <button class="button dashboard-button" type="button" (click)="reload()" [disabled]="loading()">
+          <svg lucideRefreshCw [size]="17" aria-hidden="true"></svg> Actualizar
+        </button>
+      </header>
 
   <dialog #bloqueoDialog class="block-dialog" aria-labelledby="block-dialog-title" (cancel)="cerrarBloqueo($event)">
       <form class="block-form" (ngSubmit)="confirmarBloqueo()">
@@ -27,32 +60,70 @@
       </form>
   </dialog>
 
-  <div class="stats">
-    <article>
-      <svg lucideUsers [size]="25"></svg>
-      <div>
-        <strong>{{ registeredUsers() }}</strong
-        ><span>Usuarios registrados</span>
+  @if (activeSection() === 'resumen') {
+    @if (summaryError()) {
+      <p class="alert alert--error" role="alert">No se pudieron actualizar todos los datos del resumen. Podés volver a intentar con Actualizar.</p>
+    }
+    @if (manualRefunds().length) {
+      <div class="dashboard-notice">
+        <p><svg lucideTriangleAlert [size]="23" aria-hidden="true"></svg> Hay reembolsos que requieren registro manual</p>
+        <button type="button" class="button" (click)="openSection('reembolsos')">Ver reembolsos</button>
       </div>
-    </article>
-    <article>
-      <svg lucideShieldCheck [size]="25"></svg>
-      <div>
-        <strong>{{ requests().length }}</strong
-        ><span>Solicitudes pendientes</span>
-      </div>
-    </article>
-    <article>
-      <svg lucideCheck [size]="25"></svg>
-      <div>
-        <strong>{{ settlements().length }}</strong><span>Liquidaciones por resolver</span>
-      </div>
-    </article>
-  </div>
+    }
+    <div class="dashboard-metrics" [attr.aria-busy]="otherLoading()">
+      <button type="button" class="dashboard-metric metric-cancellation" (click)="openSection('cancelaciones')">
+        <svg lucideCalendarX [size]="29" aria-hidden="true"></svg>
+        <span>Cancelaciones pendientes<strong>{{ otherLoading() ? '…' : cancellations().length }}</strong></span>
+      </button>
+      <button type="button" class="dashboard-metric" (click)="openSection('reclamos')">
+        <svg lucideMessageCircle [size]="29" aria-hidden="true"></svg>
+        <span>Reclamos abiertos<strong>{{ otherLoading() ? '…' : openClaims().length }}</strong></span>
+      </button>
+      <button type="button" class="dashboard-metric metric-refund" (click)="openSection('reembolsos')">
+        <svg lucideWallet [size]="29" aria-hidden="true"></svg>
+        <span>Reembolsos pendientes<strong>{{ otherLoading() ? '…' : pendingRefunds().length }}</strong></span>
+      </button>
+      <button type="button" class="dashboard-metric" (click)="openSection('verificaciones')">
+        <svg lucideShieldCheck [size]="29" aria-hidden="true"></svg>
+        <span>Verificaciones pendientes<strong>{{ otherLoading() ? '…' : requests().length }}</strong></span>
+      </button>
+    </div>
+    <div class="dashboard-columns">
+      <section class="dashboard-card">
+        <h2>Pendientes de atención</h2>
+        @if (otherLoading()) {
+          <p role="status">Cargando pendientes…</p>
+        } @else if (pendingCases().length) {
+          <div class="dashboard-table">
+            <table>
+              <thead><tr><th scope="col">Caso</th><th scope="col">Estado</th><th scope="col">Acción</th></tr></thead>
+              <tbody>
+                @for (item of pendingCases(); track item.section + '-' + item.id) {
+                  <tr>
+                    <td>{{ item.label }}</td>
+                    <td><span class="dashboard-status" [attr.data-tone]="item.tone">{{ item.status }}</span></td>
+                    <td><button type="button" class="button dashboard-button" [attr.aria-label]="item.action + ' ' + item.label" (click)="openSection(item.section, item.id)">{{ item.action }}</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else {
+          <p>{{ summaryError() ? 'No hay casos disponibles para mostrar.' : 'No hay pendientes de atención.' }}</p>
+        }
+      </section>
+      <section class="dashboard-card dashboard-shortcuts">
+        <h2>Accesos rápidos</h2>
+        <button type="button" (click)="openSection('publicaciones')">Gestionar publicaciones <svg lucideChevronRight [size]="18" aria-hidden="true"></svg></button>
+        <button type="button" (click)="openSection('bloqueos')">Revisar apelaciones <svg lucideChevronRight [size]="18" aria-hidden="true"></svg></button>
+        <button type="button" (click)="openSection('cotizaciones')">Actualizar cotización <svg lucideChevronRight [size]="18" aria-hidden="true"></svg></button>
+      </section>
+    </div>
+  }
 
-  <app-cotizaciones-admin />
+  <app-cotizaciones-admin [hidden]="activeSection() !== 'cotizaciones'" />
 
-  <section class="panel">
+  <section class="panel admin-module" [hidden]="activeSection() !== 'publicaciones'">
     <div class="panel__title panel__title--users">
       <div>
         <h2>Publicaciones</h2>
@@ -117,7 +188,7 @@
     </nav>
   </section>
 
-  <section class="panel">
+  <section class="panel admin-module" [hidden]="activeSection() !== 'liquidaciones'">
     <div class="panel__title">
       <div>
         <h2>Liquidación manual de reservas</h2>
@@ -164,7 +235,7 @@
     }
   </section>
 
-  <section class="panel">
+  <section class="panel admin-module" [hidden]="activeSection() !== 'cancelaciones'">
     <div class="panel__title">
       <div>
         <h2>Solicitudes de cancelación</h2>
@@ -177,7 +248,7 @@
     } @else {
       <div class="settlement-list">
         @for (solicitud of cancellations(); track solicitud.id) {
-          <article class="settlement-card">
+          <article class="settlement-card" [id]="'admin-cancelaciones-' + solicitud.id" tabindex="-1">
             <div>
               <span class="status status--blocked">Pendiente</span>
               <h3>Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '—' }}</h3>
@@ -188,7 +259,7 @@
               <p class="settlement-note">{{ solicitud.motivo }}</p>
             </div>
             <div class="actions">
-              <button type="button" class="button button--success" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="aprobarCancelacion(solicitud)">Aprobar</button>
+              <button type="button" class="button button--success" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="abrirAprobacionCancelacion(solicitud)">Aprobar</button>
               <button type="button" class="button button--danger-outline" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="rechazarCancelacion(solicitud)">Rechazar</button>
             </div>
           </article>
@@ -197,7 +268,7 @@
     }
   </section>
 
-  <section class="panel">
+  <section class="panel admin-module" [hidden]="activeSection() !== 'reembolsos'">
     <div class="panel__title">
       <div>
         <h2>Reembolsos pendientes</h2>
@@ -210,7 +281,7 @@
     } @else {
       <div class="settlement-list">
         @for (reembolso of refunds(); track reembolso.id) {
-          <article class="settlement-card">
+          <article class="settlement-card" [id]="'admin-reembolsos-' + reembolso.id" tabindex="-1">
             <div>
               <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ estadosReembolso[reembolso.estado] }}</span>
               <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
@@ -225,6 +296,29 @@
       </div>
     }
   </section>
+
+  <dialog #dialogoAprobacion class="block-dialog cancellation-approval-dialog" aria-labelledby="cancellation-approval-title"
+    (cancel)="cerrarAprobacionCancelacion($event)">
+    <form class="block-form" (ngSubmit)="confirmarAprobacionCancelacion()" [attr.aria-busy]="aprobandoCancelacion()">
+      <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideCheck [size]="26"></svg></div>
+      <h2 id="cancellation-approval-title">Aprobar cancelación</h2>
+      @if (solicitudPorAprobar(); as solicitud) {
+        <p class="refund-meta">Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '-' }}</p>
+      }
+      <label for="cancellation-approval-note">Observación de la aprobación <span class="muted">(opcional)</span></label>
+      <textarea id="cancellation-approval-note" name="observacionAprobacion" [(ngModel)]="observacionAprobacion"
+        rows="4" maxlength="500" placeholder="Agregá una observación si corresponde"
+        aria-describedby="cancellation-approval-note-help" [disabled]="aprobandoCancelacion()" autofocus></textarea>
+      <small id="cancellation-approval-note-help" class="muted">Hasta 500 caracteres.</small>
+      @if (errorAprobacion()) { <p class="refund-error" role="alert">{{ errorAprobacion() }}</p> }
+      <div class="block-actions">
+        <button type="button" class="button button--ghost" [disabled]="aprobandoCancelacion()" (click)="cerrarAprobacionCancelacion()">Volver</button>
+        <button type="submit" class="button button--success" [disabled]="aprobandoCancelacion()">
+          {{ aprobandoCancelacion() ? 'Aprobando…' : 'Confirmar aprobación' }}
+        </button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog #dialogoReembolso class="block-dialog refund-dialog" aria-labelledby="refund-title"
     (cancel)="cerrarReembolso($event)" (close)="reembolsoSeleccionado.set(null)">
@@ -286,7 +380,7 @@
     }
   </dialog>
 
-  <section class="panel" id="reclamos">
+  <section class="panel admin-module" id="reclamos" [hidden]="activeSection() !== 'reclamos'">
     <div class="panel__title">
       <div>
         <h2>Reclamos de reservas</h2>
@@ -302,7 +396,7 @@
     }
     <div class="settlement-list">
       @for (claim of claims(); track claim.id) {
-        <article class="settlement-card claim-card">
+        <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
           <app-claim-history [reclamo]="claim" [administracion]="true" (verArchivo)="verEvidencia(claim, $event)" />
           @if (claim.estado !== 'CERRADO') {
             <div class="actions">
@@ -359,7 +453,7 @@
     </div>
   </section>
 
-  <section class="panel">
+  <section class="panel admin-module" [hidden]="activeSection() !== 'verificaciones'">
     <div class="panel__title">
       <div>
         <h2>Solicitudes de verificación</h2>
@@ -374,7 +468,7 @@
     } @else {
       <div class="requests">
         @for (request of requests(); track request.id) {
-          <article class="request">
+          <article class="request" [id]="'admin-verificaciones-' + request.id" tabindex="-1">
             <div class="request__identity">
               <span class="avatar">{{
                 (request.anunciante.usuario?.nombre || 'A').charAt(0)
@@ -484,11 +578,14 @@
     }
   </section>
 
-  <section class="panel">
+  <section class="panel admin-module" [hidden]="activeSection() !== 'usuarios'">
     <div class="panel__title panel__title--users">
       <div>
         <h2>Usuarios</h2>
         <p>Administrá el acceso y los roles del sistema.</p>
+        @if (!usersLoading()) {
+          <p>{{ registeredUsers() }} usuarios registrados</p>
+        }
       </div>
       <label class="search"
         ><svg lucideSearch [size]="18"></svg
@@ -588,7 +685,7 @@
       </div>
     </nav>
   </section>
-  <section class="panel" aria-labelledby="blocked-users-title">
+  <section class="panel admin-module" aria-labelledby="blocked-users-title" [hidden]="activeSection() !== 'bloqueos'">
     <div class="panel__title">
       <div>
         <h2 id="blocked-users-title">Usuarios bloqueados</h2>
@@ -641,7 +738,7 @@
     }
   </section>
 
-  <section class="panel management">
+  <section class="panel management admin-module" [hidden]="activeSection() !== 'catalogos'">
     <div class="panel__title">
       <div>
         <h2>Catálogos</h2>
@@ -705,7 +802,7 @@
     </div>
   </section>
 
-  <section class="panel management">
+  <section class="panel management admin-module" [hidden]="activeSection() !== 'ubicaciones'">
     <div class="panel__title">
       <div>
         <h2>Ubicaciones</h2>
@@ -818,4 +915,6 @@
       </article>
     </div>
   </section>
+    </div>
+  </div>
 </section>
