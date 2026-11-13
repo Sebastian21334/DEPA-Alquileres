@@ -1,5 +1,5 @@
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
-import { Component, computed, DestroyRef, ElementRef, inject, PLATFORM_ID, signal, viewChild } from '@angular/core';
+import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, PLATFORM_ID, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { finalize, forkJoin, Subscription } from 'rxjs';
@@ -13,6 +13,12 @@ import {
   LucideSearch,
   LucideCheck,
   LucideX,
+  LucideCalendarX,
+  LucideMessageCircle,
+  LucideTriangleAlert,
+  LucideChevronRight,
+  LucideHouse,
+  LucideWallet,
 } from '@lucide/angular';
 import {
   AdminBloqueo,
@@ -36,6 +42,28 @@ interface CatalogSection {
   items: AdminCatalogItem[];
 }
 
+const ADMIN_NAVIGATION = [
+  { label: 'Operaciones', items: [
+    { id: 'cancelaciones', label: 'Cancelaciones' },
+    { id: 'reclamos', label: 'Reclamos' },
+    { id: 'reembolsos', label: 'Reembolsos' },
+    { id: 'liquidaciones', label: 'Liquidaciones' },
+  ] },
+  { label: 'Gestión', items: [
+    { id: 'verificaciones', label: 'Verificaciones' },
+    { id: 'publicaciones', label: 'Publicaciones' },
+    { id: 'usuarios', label: 'Usuarios' },
+    { id: 'bloqueos', label: 'Bloqueos y apelaciones' },
+  ] },
+  { label: 'Configuración', items: [
+    { id: 'catalogos', label: 'Catálogos' },
+    { id: 'ubicaciones', label: 'Ubicaciones' },
+    { id: 'cotizaciones', label: 'Cotizaciones' },
+  ] },
+] as const;
+
+type AdminSection = 'resumen' | typeof ADMIN_NAVIGATION[number]['items'][number]['id'];
+
 @Component({
   selector: 'app-admin',
   standalone: true,
@@ -51,11 +79,24 @@ interface CatalogSection {
     LucideSearch,
     LucideCheck,
     LucideX,
+    LucideCalendarX,
+    LucideMessageCircle,
+    LucideTriangleAlert,
+    LucideChevronRight,
+    LucideHouse,
+    LucideWallet,
   ],
   templateUrl: './admin.component.html',
-  styleUrl: './admin.component.scss',
+  styleUrls: ['./admin.component.scss', './admin-dashboard.scss'],
 })
 export class AdminComponent {
+  private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  protected readonly navigation = ADMIN_NAVIGATION;
+  protected readonly activeSection = signal<AdminSection>('resumen');
+  protected readonly sectionLabel = computed(() =>
+    this.navigation.flatMap(({ items }) => [...items]).find(({ id }) => id === this.activeSection())?.label ?? 'Resumen',
+  );
   private readonly api = inject(AdminService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
@@ -98,6 +139,11 @@ export class AdminComponent {
   protected referenciaReclamo = '';
   protected observacionReclamo = '';
   protected readonly cancellations = signal<AdminCancellationRequest[]>([]);
+  private readonly dialogoAprobacion = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoAprobacion');
+  protected readonly solicitudPorAprobar = signal<AdminCancellationRequest | null>(null);
+  protected readonly aprobandoCancelacion = signal(false);
+  protected readonly errorAprobacion = signal('');
+  protected observacionAprobacion = '';
   protected readonly refunds = signal<AdminReembolso[]>([]);
   private readonly dialogoReembolso = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoReembolso');
   protected readonly reembolsoSeleccionado = signal<AdminReembolso | null>(null);
@@ -113,6 +159,39 @@ export class AdminComponent {
     PAGO_TARDIO: 'Pago tardío', AJUSTE_ADMIN: 'Ajuste administrativo',
   };
   protected readonly otherLoading = signal(true);
+  protected readonly summaryError = signal(false);
+  protected readonly openClaims = computed(() =>
+    this.claims().filter(({ estado }) => estado === 'ABIERTO' || estado === 'EN_REVISION'),
+  );
+  protected readonly pendingRefunds = computed(() => this.refunds().filter(({ estado }) =>
+    estado === 'PENDIENTE' || estado === 'EN_PROCESO' || estado === 'FALLIDO',
+  ));
+  protected readonly manualRefunds = computed(() =>
+    this.pendingRefunds().filter((item) => !item.ejecucion_automatica && this.puedeRegistrarReembolso(item)),
+  );
+  protected readonly pendingCases = computed(() => [
+    ...this.cancellations().slice(0, 2).map((item) => ({
+      section: 'cancelaciones' as const, id: item.id,
+      label: item.reserva ? `Cancelación · Reserva #${item.reserva.id}` : `Cancelación #${item.id}`,
+      status: 'Pendiente', tone: 'pending', action: 'Revisar',
+    })),
+    ...this.openClaims().slice(0, 2).map((item) => ({
+      section: 'reclamos' as const, id: item.id,
+      label: item.reserva ? `Reclamo · Reserva #${item.reserva.id}` : `Reclamo #${item.id}`,
+      status: item.estado === 'EN_REVISION' ? 'En revisión' : 'Abierto', tone: 'review', action: 'Abrir',
+    })),
+    ...this.pendingRefunds().slice(0, 2).map((item) => ({
+      section: 'reembolsos' as const, id: item.id,
+      label: item.reserva ? `Reembolso · Reserva #${item.reserva.id}` : `Reembolso #${item.id}`,
+      status: this.manualRefunds().includes(item) ? 'Registro manual' : this.estadosReembolso[item.estado],
+      tone: 'refund', action: 'Ver detalle',
+    })),
+    ...this.requests().slice(0, 2).map((item) => ({
+      section: 'verificaciones' as const, id: item.id,
+      label: `Verificación · Solicitud #${item.id}`,
+      status: 'Pendiente', tone: 'pending', action: 'Revisar',
+    })),
+  ]);
   protected readonly loading = computed(() =>
     this.otherLoading() || this.publicationsLoading() || this.usersLoading(),
   );
@@ -148,6 +227,7 @@ export class AdminComponent {
   }
   protected reload(): void {
     this.otherLoading.set(true);
+    this.summaryError.set(false);
     this.loadPublications(this.publicationsPage());
     this.loadUsers(this.usersPage());
     this.cargarBloqueados();
@@ -161,6 +241,7 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
+        this.summaryError.set(true);
         this.toast.mostrar(e.message, 'error');
         done();
       },
@@ -182,6 +263,7 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
+        this.summaryError.set(true);
         this.errorReclamos.set(e.message);
         done();
       },
@@ -192,6 +274,7 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
+        this.summaryError.set(true);
         this.toast.mostrar(e.message, 'error');
         done();
       },
@@ -202,10 +285,28 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
+        this.summaryError.set(true);
         this.toast.mostrar(e.message, 'error');
         done();
       },
     });
+  }
+
+  protected openSection(section: AdminSection, caseId?: number): void {
+    this.activeSection.set(section);
+    afterNextRender(() => {
+      if (this.activeSection() !== section) return;
+      const heading = this.host.nativeElement.querySelector<HTMLElement>('#admin-section-title');
+      const target = caseId === undefined
+        ? heading
+        : this.host.nativeElement.querySelector<HTMLElement>(`#admin-${section}-${caseId}`) ?? heading;
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: 'start' });
+      if (section === 'reembolsos' && caseId !== undefined) {
+        const refund = this.refunds().find(({ id }) => id === caseId);
+        if (refund) this.abrirReembolso(refund);
+      }
+    }, { injector: this.injector });
   }
 
   protected searchPublications(value: string): void {
@@ -344,33 +445,43 @@ export class AdminComponent {
     });
   }
 
-  protected aprobarCancelacion(solicitud: AdminCancellationRequest): void {
-    const observacion = window.prompt('Observación de la aprobación (opcional):')?.trim();
-    this.run(
-      `cancellation-${solicitud.id}`,
-      () =>
-        this.api.resolverSolicitudCancelacion(
-          solicitud.reserva?.id ?? 0,
-          solicitud.id,
-          'APROBADA',
-          observacion,
-        ),
-      (value) => {
-        this.cancellations.update((items) =>
-          items.filter((item) => item.id !== solicitud.id),
-        );
-        const resultado = value as {
-          reembolso: { id: number; importe: number; moneda: string } | null;
-        };
-        if (!resultado.reembolso) {
-          this.toast.mostrar('Cancelación aprobada sin devolución.', 'exito');
-          return;
-        }
-        this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente de registrar.', 'exito');
-        this.reload();
-      },
-      null,
-    );
+  protected abrirAprobacionCancelacion(solicitud: AdminCancellationRequest): void {
+    this.solicitudPorAprobar.set(solicitud);
+    this.observacionAprobacion = '';
+    this.errorAprobacion.set('');
+    this.dialogoAprobacion().nativeElement.showModal();
+  }
+
+  protected cerrarAprobacionCancelacion(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.aprobandoCancelacion()) return;
+    this.dialogoAprobacion().nativeElement.close();
+    this.solicitudPorAprobar.set(null);
+  }
+
+  protected confirmarAprobacionCancelacion(): void {
+    const solicitud = this.solicitudPorAprobar();
+    const observacion = this.observacionAprobacion.trim();
+    if (!solicitud || this.aprobandoCancelacion() || observacion.length > 500) return;
+
+    this.errorAprobacion.set('');
+    this.aprobandoCancelacion.set(true);
+    this.api.resolverSolicitudCancelacion(solicitud.reserva?.id ?? 0, solicitud.id, 'APROBADA', observacion || undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.aprobandoCancelacion.set(false)))
+      .subscribe({
+        next: ({ reembolso }) => {
+          this.aprobandoCancelacion.set(false);
+          this.cerrarAprobacionCancelacion();
+          this.cancellations.update((items) => items.filter((item) => item.id !== solicitud.id));
+          if (!reembolso) {
+            this.toast.mostrar('Cancelación aprobada sin devolución.', 'exito');
+            return;
+          }
+          this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente de registrar.', 'exito');
+          this.reload();
+        },
+        error: (error: Error) => this.errorAprobacion.set(error.message),
+      });
   }
 
   protected abrirReembolso(reembolso: AdminReembolso): void {
