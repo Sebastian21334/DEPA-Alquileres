@@ -497,18 +497,30 @@ export class AdminComponent {
   }
 
   protected puedeRegistrarReembolso(reembolso: AdminReembolso): boolean {
-    return reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO' ||
-      (reembolso.estado === 'EN_PROCESO' && !reembolso.ejecucion_automatica);
+    return reembolso.estado === 'PENDIENTE' || this.puedeConciliarReembolso(reembolso);
+  }
+
+  protected puedeConciliarReembolso(reembolso: AdminReembolso): boolean {
+    return !!reembolso.pago?.payment_id && (reembolso.estado === 'FALLIDO' || reembolso.estado === 'EN_PROCESO');
+  }
+
+  protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
+    const referencia = this.referenciaReembolso.trim();
+    if (this.puedeConciliarReembolso(reembolso)) return /^\d{1,100}$/.test(referencia);
+    return reembolso.ejecucion_automatica || (referencia.length > 0 && referencia.length <= 150);
   }
 
   protected registrarReembolsoPendiente(reembolso: AdminReembolso): void {
     const referencia = this.referenciaReembolso.trim();
     if (this.guardandoReembolso() || !this.puedeRegistrarReembolso(reembolso) ||
-        (!reembolso.ejecucion_automatica && (!referencia || referencia.length > 150))) return;
+        !this.referenciaReembolsoValida(reembolso)) return;
 
     this.errorReembolso.set('');
     this.guardandoReembolso.set(true);
-    this.api.registrarReembolso(reembolso.id, reembolso.ejecucion_automatica ? undefined : referencia)
+    const operacion = this.puedeConciliarReembolso(reembolso)
+      ? this.api.conciliarReembolso(reembolso.id, referencia)
+      : this.api.registrarReembolso(reembolso.id, reembolso.ejecucion_automatica ? undefined : referencia);
+    operacion
       .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
       .subscribe({
         next: () => {

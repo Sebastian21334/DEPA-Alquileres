@@ -1,3 +1,4 @@
+import { codigosCatalogo } from '../../catalogos/codigos-catalogo';
 import type { Relation } from 'typeorm';
 import {
   Column,
@@ -10,10 +11,8 @@ import {
 import { Reclamo } from './reclamo.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
-export enum VisibilidadMensajeReclamo {
-  TODOS = 'TODOS',
-  ADMIN = 'ADMIN',
-}
+export const VisibilidadMensajeReclamo = codigosCatalogo('RECLAMO_VISIBILIDAD');
+export type VisibilidadMensajeReclamo = keyof typeof VisibilidadMensajeReclamo;
 
 @Entity('reclamo_mensaje')
 export class ReclamoMensaje {
@@ -39,9 +38,7 @@ export class ReclamoMensaje {
 
   @Column({
     name: 'visible_para',
-    type: 'enum',
-    enum: VisibilidadMensajeReclamo,
-    enumName: 'reclamo_mensaje_visibilidad_enum',
+    type: 'varchar', length: 40,
     default: VisibilidadMensajeReclamo.TODOS,
   })
   visible_para: VisibilidadMensajeReclamo;

@@ -41,6 +41,7 @@ export class CancelacionesRepository implements ICancelacionesRepository {
         solicitante: true,
         decidida_por: true,
         reserva: {
+          liquidacion: true,
           usuario: true,
           publicacion: { anunciante: { usuario: true } },
         },
@@ -72,6 +73,7 @@ export class CancelacionesRepository implements ICancelacionesRepository {
       relations: {
         solicitante: true,
         reserva: {
+          liquidacion: true,
           usuario: true,
           publicacion: { anunciante: { usuario: true } },
         },

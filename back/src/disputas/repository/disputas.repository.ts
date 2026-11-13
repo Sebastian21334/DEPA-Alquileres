@@ -7,6 +7,7 @@ import type { IDisputasRepository } from './disputas.repository.interface';
 const RELACIONES_DISPUTA: FindOptionsRelations<Disputa> = {
   estado: true,
   reserva: {
+    liquidacion: true,
     usuario: true,
     publicacion: { anunciante: { usuario: true } },
   },

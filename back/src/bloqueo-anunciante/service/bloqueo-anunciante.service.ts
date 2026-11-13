@@ -1,47 +1,23 @@
-import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { MAIL_SERVICE, type IMailService } from '../../mail/mail.interface';
-import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { ReservaBloqueoAnuncianteService } from '../../reservas/service/reserva-bloqueo-anunciante.service';
-import { BLOQUEO_ANUNCIANTE_REPOSITORY, type IBloqueoAnuncianteRepository } from '../repository/bloqueo-anunciante.repository.interface';
+import { UsuariosService } from '../../usuarios/service/usuarios.service';
 
 @Injectable()
 export class BloqueoAnuncianteService {
   private readonly logger = new Logger(BloqueoAnuncianteService.name);
 
-  constructor(@Inject(BLOQUEO_ANUNCIANTE_REPOSITORY) private readonly repositorio: IBloqueoAnuncianteRepository, private readonly bloqueo: ReservaBloqueoAnuncianteService, private readonly publicaciones: PublicacionesService, @Inject(MAIL_SERVICE) private readonly mail: IMailService) {}
+  constructor(private readonly usuarios: UsuariosService, private readonly bloqueo: ReservaBloqueoAnuncianteService, @Inject(MAIL_SERVICE) private readonly mail: IMailService) {}
 
   async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
-    if (idUsuario === idOperador)
-      throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');
-
     const motivoNormalizado = motivo?.trim();
-    const { usuario, cambio } = await this.repositorio.conTransaccion(async (transaccion) => {
-      const usuario = await this.repositorio.buscarBloqueado(idUsuario, transaccion);
-      if (!usuario) throw new NotFoundException('Usuario no encontrado');
-      if (!usuario.activa)
-        throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
-      if (usuario.bloqueado === bloqueado) return { usuario, cambio: false };
-
-      await this.publicaciones.bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
-      usuario.bloqueado = bloqueado;
-      if (bloqueado) {
-        usuario.bloqueoDetalle = {
-          id: randomUUID(),
-          motivo: motivoNormalizado || null,
-          administradorId: idOperador,
-          fecha: new Date().toISOString(),
-        };
-      }
-      await this.repositorio.guardar(usuario, transaccion);
-      return { usuario, cambio: true };
-    });
+    const { usuario, cambio } = await this.usuarios.cambiarBloqueoAdministrativo(idUsuario, bloqueado, idOperador, motivoNormalizado);
 
     if (cambio && usuario.email) {
       try {
         await this.mail.enviarCambioBloqueo(usuario.email, bloqueado, motivoNormalizado);
       } catch (error) {
-        this.logger.error(`No se pudo notificar el cambio de acceso a ${usuario.email}`, error as Error);
+        this.logger.error(`No se pudo notificar el cambio de acceso del usuario ${idUsuario}`, error as Error);
       }
     }
 
@@ -55,8 +31,8 @@ export class BloqueoAnuncianteService {
       const reservas =
         await this.bloqueo.cancelarReservasPorBloqueoAnunciante(
           idUsuario,
-          idOperador,
-          motivo,
+          usuario.bloqueoDetalle?.administradorId ?? idOperador,
+          usuario.bloqueoDetalle ? usuario.bloqueoDetalle.motivo ?? undefined : motivoNormalizado,
         );
       this.logger.log(
         `Bloqueo del anunciante ${idUsuario}: ${reservas.canceladasPendientes} pendientes, ` +

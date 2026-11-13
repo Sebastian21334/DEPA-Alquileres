@@ -17,6 +17,10 @@ import { OperacionesPagoService } from './service/operaciones-pago.service';
 import { OperacionesReembolsoService } from './service/operaciones-reembolso.service';
 import { PresupuestosService } from './service/presupuestos.service';
 
+import { LiquidacionesModule } from '../liquidaciones/liquidaciones.module';
+import { OperacionesLiquidacionService } from './service/operaciones-liquidacion.service';
+import { LiquidacionesReservaController } from './controller/liquidaciones-reserva.controller';
+
 @Module({
   imports: [
     ConfigModule,
@@ -30,9 +34,10 @@ import { PresupuestosService } from './service/presupuestos.service';
     ReembolsosModule,
     ReclamosModule,
     ReservasModule,
+    LiquidacionesModule,
     SeguridadModule,
   ],
-  controllers: [PagosController, ReembolsosReservaController],
-  providers: [OperacionesPagoService, OperacionesReembolsoService, PresupuestosService],
+  controllers: [LiquidacionesReservaController, PagosController, ReembolsosReservaController],
+  providers: [OperacionesLiquidacionService, OperacionesPagoService, OperacionesReembolsoService, PresupuestosService],
 })
 export class OperacionesReservaModule {}

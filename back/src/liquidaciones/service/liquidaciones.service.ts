@@ -30,6 +30,45 @@ export type DevolucionLiquidacionDatos = ResolucionLiquidacionDatos & {
 export class LiquidacionesService {
   constructor(@Inject(LIQUIDACION_REPOSITORY) private readonly liquidaciones: ILiquidacionRepository, private readonly catalogos: CatalogosService) {}
 
+  async listarParaAdministracion(): Promise<Reserva[]> {
+    const filas = await this.liquidaciones.listarPorEstados([
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
+    ]);
+    return filas.map(liquidacion => {
+      this.sincronizarReserva(liquidacion.reserva, liquidacion);
+      return liquidacion.reserva;
+    });
+  }
+
+  async proyectarListado(reservas: Reserva[]): Promise<Reserva[]> {
+    if (!reservas.length) return reservas;
+    const filas = await this.liquidaciones.buscarPorReservas(reservas.map(reserva => reserva.id));
+    const porReserva = new Map(filas.map(fila => [fila.reserva.id, fila]));
+    for (const reserva of reservas) {
+      const fila = porReserva.get(reserva.id);
+      this.proyectar(reserva, fila);
+    }
+    return reservas;
+  }
+
+  async proyectarEnReserva(reserva: Reserva, transaccion?: EntityManager): Promise<Reserva> {
+    const liquidacion = await this.liquidaciones.buscarPorReserva(reserva.id, transaccion);
+    this.proyectar(reserva, liquidacion);
+    return reserva;
+  }
+
+  private proyectar(reserva: Reserva, liquidacion?: Liquidacion | null): void {
+    if (liquidacion) {
+      this.sincronizarReserva(reserva, liquidacion);
+      return;
+    }
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA');
+    reserva.referencia_liquidacion = null;
+    reserva.observacion_liquidacion = null;
+    reserva.fecha_resolucion_liquidacion = null;
+  }
+
   /** Crea la liquidación si falta, copiando la caché actual de la reserva. */
   async asegurarParaReserva(reserva: Reserva, transaccion?: EntityManager): Promise<Liquidacion> {
     const existente = transaccion
@@ -38,7 +77,7 @@ export class LiquidacionesService {
     if (existente) return existente;
     const liquidacion = this.liquidaciones.crear({
       reserva,
-      estado: reserva.estado_liquidacion,
+      estado: reserva.estado_liquidacion ?? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA'),
       importe: this.importeInicial(reserva),
       moneda: 'ARS',
       referencia: reserva.referencia_liquidacion,
@@ -69,11 +108,11 @@ export class LiquidacionesService {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
     let cambios = false;
 
-    if (liquidacion.estado !== reserva.estado_liquidacion) {
+    if (reserva.estado_liquidacion !== undefined && liquidacion.estado !== reserva.estado_liquidacion) {
       liquidacion.estado = reserva.estado_liquidacion;
       cambios = true;
     }
-    if (liquidacion.observacion !== reserva.observacion_liquidacion) {
+    if (reserva.observacion_liquidacion !== undefined && liquidacion.observacion !== reserva.observacion_liquidacion) {
       liquidacion.observacion = reserva.observacion_liquidacion;
       cambios = true;
     }
@@ -84,7 +123,7 @@ export class LiquidacionesService {
       liquidacion.referencia = reserva.referencia_liquidacion;
       cambios = true;
     }
-    const fechaReserva = reserva.fecha_resolucion_liquidacion;
+    const fechaReserva = reserva.fecha_resolucion_liquidacion ?? null;
     if (
       liquidacion.fecha_resolucion?.getTime() !== fechaReserva?.getTime()
     ) {

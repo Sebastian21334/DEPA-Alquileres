@@ -99,9 +99,7 @@ export class PagosService {
     return this.pagosRepo.actualizar(idPago, { status: 'charged_back', chargeback_id: chargebackId }, transaccion);
   }
 
-  restaurarPagoAprobado(pago: Pago): Promise<Pago> {
-    pago.status = 'approved';
-    pago.chargeback_id = null;
-    return this.pagosRepo.guardar(pago);
+  restaurarPagoAprobado(idPago: number, transaccion: EntityManager): Promise<void> {
+    return this.pagosRepo.actualizar(idPago, { status: 'approved', chargeback_id: null }, transaccion);
   }
 }

@@ -35,7 +35,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
     return this.repository.findOne({
       where: { id },
       relations: {
-        reserva: { publicacion: { anunciante: { usuario: true } }, usuario: true },
+        reserva: { liquidacion: true, publicacion: { anunciante: { usuario: true } }, usuario: true },
         pago: true,
         solicitado_por: true,
         resuelto_por: true,
@@ -143,7 +143,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
   listarAdministracion(): Promise<Reembolso[]> {
     return this.repository.find({
       relations: {
-        reserva: { publicacion: { anunciante: { usuario: true } }, usuario: true },
+        reserva: { liquidacion: true, publicacion: { anunciante: { usuario: true } }, usuario: true },
         pago: true,
         solicitado_por: true,
         resuelto_por: true,

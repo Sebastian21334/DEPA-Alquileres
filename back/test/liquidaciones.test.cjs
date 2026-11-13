@@ -1,11 +1,8 @@
-const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
+const { catalogosDePrueba, reservasDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
-const decision = decisionDePrueba();
-const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
-const { ReservaLiquidacionesService } = require('../dist/reservas/service/reserva-liquidaciones.service');
+const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
 
 function crearReserva(extra = {}) {
   return {
@@ -21,12 +18,17 @@ function crearReserva(extra = {}) {
   };
 }
 
-function reservasService(reserva) {
+function reservasService(reserva, repo) {
   return {
     aplicarEfectoReembolso: async () => {
-      ciclo.resolverLiquidacion(reserva, 'DEVUELTO_INQUILINO');
+      reservasDePrueba().aplicarReembolsoTotal(reserva);
       return reserva;
     },
+    obtenerReserva: async () => reserva,
+    conReservaBloqueada: (_id, operar) => repo.conTransaccion(async (_repo, transaccion) => {
+      await operar(reserva, transaccion);
+      return repo.guardar(reserva);
+    }),
     pagoAprobado: (r) => r.estado_pago === 'APROBADO',
     codigoValidado: (r) => !!r.codigo_validado_en,
     liquidacionEnRevision: (r) => r.estado_liquidacion === 'EN_REVISION',
@@ -48,6 +50,7 @@ function repositorio(reserva, sobreescribir = {}) {
 
 function liquidacionesService() {
   return {
+    proyectarEnReserva: async reserva => reserva,
     asegurarParaReserva: async (reserva) => {
       reserva.liquidacion ??= { reserva };
       return reserva.liquidacion;
@@ -97,11 +100,10 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
       return { id: 1, estado: 'APROBADO' };
     },
   };
-  const service = new ReservaLiquidacionesService(
-    repositorio(reserva),
+  const service = new OperacionesLiquidacionService(
     reembolsos,
-    reservasService(reserva),
-    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
+    reservasService(reserva, repositorio(reserva)),
+    liquidacionesService(), catalogosDePrueba(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', importe: 1 }, 7);
@@ -132,11 +134,10 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
       return operacion(repo, {});
     },
   });
-  const service = new ReservaLiquidacionesService(
-    repo,
+  const service = new OperacionesLiquidacionService(
     reembolsos,
-    reservasService(reserva),
-    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
+    reservasService(reserva, repo),
+    liquidacionesService(), catalogosDePrueba(),
   );
 
   await assert.rejects(
@@ -151,11 +152,10 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
 test('exige referencia cuando la devolución es manual', async () => {
   const reserva = crearReserva();
   const reembolsos = { ejecucionAutomaticaHabilitada: false };
-  const service = new ReservaLiquidacionesService(
-    repositorio(reserva),
+  const service = new OperacionesLiquidacionService(
     reembolsos,
-    reservasService(reserva),
-    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
+    reservasService(reserva, repositorio(reserva)),
+    liquidacionesService(), catalogosDePrueba(),
   );
 
   await assert.rejects(
@@ -179,11 +179,10 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
     crearSolicitud: async (datos) => ({ id: 7, estado: 'PENDIENTE', importe: datos.importe }),
     registrarOejecutar: async () => ({ id: 7, estado: 'APROBADO' }),
   };
-  const service = new ReservaLiquidacionesService(
-    repositorio(reserva),
+  const service = new OperacionesLiquidacionService(
     reembolsos,
-    reservasService(reserva),
-    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
+    reservasService(reserva, repositorio(reserva)),
+    liquidacionesService(), catalogosDePrueba(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
@@ -207,11 +206,10 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
     crearSolicitud: async () => { creados += 1; return { id: 9, estado: 'PENDIENTE' }; },
     registrarOejecutar: async (id) => { ejecutado = id; return { id, estado: 'APROBADO' }; },
   };
-  const service = new ReservaLiquidacionesService(
-    repositorio(reserva),
+  const service = new OperacionesLiquidacionService(
     reembolsos,
-    reservasService(reserva),
-    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
+    reservasService(reserva, repositorio(reserva)),
+    liquidacionesService(), catalogosDePrueba(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);

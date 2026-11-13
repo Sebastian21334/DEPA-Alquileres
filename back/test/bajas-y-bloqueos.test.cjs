@@ -22,8 +22,8 @@ function base() {
     CREATE TABLE usuario (id INTEGER PRIMARY KEY, activa BOOLEAN, bloqueado BOOLEAN, fecha_baja TEXT);
     CREATE TABLE publicacion (id INTEGER PRIMARY KEY, id_anunciante INTEGER, activa BOOLEAN);
     CREATE TABLE reserva (id INTEGER PRIMARY KEY, id_usuario INTEGER, id_publicacion INTEGER,
-      estado_pago TEXT, cancelada BOOLEAN, finalizada BOOLEAN, fecha_inicio TEXT, fecha_fin TEXT,
-      estado_liquidacion TEXT);
+      estado_pago TEXT, cancelada BOOLEAN, finalizada BOOLEAN, fecha_inicio TEXT, fecha_fin TEXT);
+    CREATE TABLE liquidacion (id_reserva INTEGER PRIMARY KEY, estado TEXT);
     CREATE TABLE pago (id INTEGER PRIMARY KEY, id_reserva INTEGER, payment_id TEXT, status TEXT,
       created_at TEXT);
     INSERT INTO usuario VALUES (1, 1, 0, NULL), (2, 1, 0, NULL);
@@ -40,7 +40,8 @@ function reserva(db, datos) {
     estado_liquidacion: 'PAGADO_PROPIETARIO', ...datos,
   };
   db.prepare(`INSERT INTO reserva VALUES (:id, :id_usuario, :id_publicacion, :estado_pago,
-    :cancelada, :finalizada, :fecha_inicio, :fecha_fin, :estado_liquidacion)`).run(fila);
+    :cancelada, :finalizada, :fecha_inicio, :fecha_fin)`).run(Object.fromEntries(Object.entries(fila).filter(([clave]) => clave !== 'estado_liquidacion')));
+  db.prepare('INSERT INTO liquidacion VALUES (?, ?)').run(fila.id, fila.estado_liquidacion);
   return fila.id;
 }
 
@@ -75,6 +76,7 @@ function consulta(db, tabla, alias) {
     select() { return builder; },
     orderBy() { return builder; },
     setLock() { return builder; },
+    leftJoin() { joins.push('LEFT JOIN liquidacion liquidacion ON liquidacion.id_reserva = reserva.id'); return builder; },
     innerJoin(ruta) { joins.push(JOINS[ruta]); return builder; },
     where(condicion, valores = {}) { condiciones.push(condicion); Object.assign(params, valores); return builder; },
     andWhere(condicion, valores) { return builder.where(condicion, valores); },
@@ -150,7 +152,7 @@ test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de
     guardar: async (usuario) => db.prepare('UPDATE usuario SET bloqueado = ? WHERE id = ?')
       .run(usuario.bloqueado ? 1 : 0, usuario.id),
   };
-  const servicio = new BloqueoAnuncianteService(repo, {}, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {});
+  const servicio = new BloqueoAnuncianteService(new UsuariosService(repo, {}, {}, {}, {}, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {}), {}, {});
   await servicio.cambiarBloqueo(2, true, 99, 'Moderación');
   assert.equal(db.prepare('SELECT bloqueado FROM usuario WHERE id = 2').get().bloqueado, 1);
   assert.deepEqual(db.prepare('SELECT * FROM reserva').all(), antes);
@@ -261,7 +263,7 @@ test('no se puede bloquear ni habilitar una cuenta dada de baja', async () => {
   const repo = { conTransaccion: (operacion) => operacion({}), buscarBloqueado: async () => usuario,
     guardar: async () => { guardado = true; } };
   const mail = { enviarCambioBloqueo: async () => { avisado = true; } };
-  const servicio = new BloqueoAnuncianteService(repo, {}, {}, mail);
+  const servicio = new BloqueoAnuncianteService(new UsuariosService(repo, {}, {}, {}, {}, {}, {}), {}, mail);
   await assert.rejects(servicio.cambiarBloqueo(5, true, 1, 'motivo'), ConflictException);
   assert.equal(guardado, false);
   assert.equal(avisado, false);

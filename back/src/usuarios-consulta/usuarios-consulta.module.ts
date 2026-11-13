@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Rol } from '../catalogos/entity/rol.entity';
-import { Usuario } from './entity/usuario.entity';
-import { USUARIOS_REPOSITORY } from './repository/usuarios.repository.interface';
-import { UsuariosRepository } from './repository/usuarios.repository';
+import { Usuario } from '../usuarios/entity/usuario.entity';
+import { USUARIOS_REPOSITORY } from '../usuarios/repository/usuarios.repository.interface';
+import { UsuariosRepository } from '../usuarios/repository/usuarios.repository';
 import { UsuariosConsultaService } from './service/usuarios-consulta.service';
 
 @Module({

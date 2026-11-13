@@ -63,15 +63,15 @@ export class UsuariosRepository implements IUsuariosRepository {
       )`, { hoy })
       .getCount();
 
-    const liquidaciones = reservas();
+    const liquidaciones = reservas().leftJoin('reserva.liquidacion', 'liquidacion');
     if (esAnunciante) {
       liquidaciones
         .andWhere('reserva.estado_pago = :aprobado', { aprobado: estados.pagoAprobado })
-        .andWhere('reserva.estado_liquidacion NOT IN (:...resueltas)', {
+        .andWhere('(liquidacion.estado IS NULL OR liquidacion.estado NOT IN (:...resueltas))', {
           resueltas: estados.liquidacionesResueltas,
         });
     } else {
-      liquidaciones.andWhere('reserva.estado_liquidacion = :enRevision', {
+      liquidaciones.andWhere('liquidacion.estado = :enRevision', {
         enRevision: estados.enRevision,
       });
     }

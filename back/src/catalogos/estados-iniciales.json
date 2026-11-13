@@ -2,74 +2,237 @@
   "PAGO_RESERVA": {
     "nombre": "Pago de reserva",
     "estados": {
-      "PENDIENTE": { "nombre": "Pendiente" },
-      "APROBADO": { "nombre": "Aprobado" },
-      "RECHAZADO": { "nombre": "Rechazado" },
-      "CANCELADO": { "nombre": "Cancelado" },
-      "REEMBOLSADO": { "nombre": "Reembolsado" },
-      "CONTRACARGO": { "nombre": "Contracargo" }
+      "PENDIENTE": {
+        "nombre": "Pendiente"
+      },
+      "APROBADO": {
+        "nombre": "Aprobado"
+      },
+      "RECHAZADO": {
+        "nombre": "Rechazado"
+      },
+      "CANCELADO": {
+        "nombre": "Cancelado"
+      },
+      "REEMBOLSADO": {
+        "nombre": "Reembolsado"
+      },
+      "CONTRACARGO": {
+        "nombre": "Contracargo"
+      }
     }
   },
   "LIQUIDACION_RESERVA": {
     "nombre": "Liquidación de reserva",
     "estados": {
-      "NO_APLICA": { "nombre": "No aplica" },
-      "RETENIDO": { "nombre": "Retenido" },
-      "PENDIENTE_PAGO_PROPIETARIO": { "nombre": "Pendiente de pago al propietario" },
-      "EN_REVISION": { "nombre": "En revisión" },
-      "PAGADO_PROPIETARIO": { "nombre": "Pagado al propietario" },
-      "DEVUELTO_INQUILINO": { "nombre": "Devuelto al inquilino" },
-      "DEVUELTO_PARCIAL_INQUILINO": { "nombre": "Devuelto parcialmente al inquilino" }
+      "NO_APLICA": {
+        "nombre": "No aplica"
+      },
+      "RETENIDO": {
+        "nombre": "Retenido"
+      },
+      "PENDIENTE_PAGO_PROPIETARIO": {
+        "nombre": "Pendiente de pago al propietario"
+      },
+      "EN_REVISION": {
+        "nombre": "En revisión"
+      },
+      "PAGADO_PROPIETARIO": {
+        "nombre": "Pagado al propietario"
+      },
+      "DEVUELTO_INQUILINO": {
+        "nombre": "Devuelto al inquilino"
+      },
+      "DEVUELTO_PARCIAL_INQUILINO": {
+        "nombre": "Devuelto parcialmente al inquilino"
+      }
     }
   },
   "SOLICITUD_CANCELACION": {
     "nombre": "Solicitud de cancelación",
     "estados": {
-      "PENDIENTE": { "nombre": "Pendiente" },
-      "APROBADA": { "nombre": "Aprobada" },
-      "RECHAZADA": { "nombre": "Rechazada" },
-      "VENCIDA": { "nombre": "Vencida" }
+      "PENDIENTE": {
+        "nombre": "Pendiente"
+      },
+      "APROBADA": {
+        "nombre": "Aprobada"
+      },
+      "RECHAZADA": {
+        "nombre": "Rechazada"
+      },
+      "VENCIDA": {
+        "nombre": "Vencida"
+      }
     }
   },
   "REEMBOLSO": {
     "nombre": "Reembolso",
     "estados": {
-      "PENDIENTE": { "nombre": "Pendiente" },
-      "EN_PROCESO": { "nombre": "En proceso" },
-      "APROBADO": { "nombre": "Aprobado" },
-      "RECHAZADO": { "nombre": "Rechazado" },
-      "FALLIDO": { "nombre": "Fallido" },
-      "CANCELADO": { "nombre": "Cancelado" }
+      "PENDIENTE": {
+        "nombre": "Pendiente"
+      },
+      "EN_PROCESO": {
+        "nombre": "En proceso"
+      },
+      "APROBADO": {
+        "nombre": "Aprobado"
+      },
+      "RECHAZADO": {
+        "nombre": "Rechazado"
+      },
+      "FALLIDO": {
+        "nombre": "Fallido"
+      },
+      "CANCELADO": {
+        "nombre": "Cancelado"
+      }
     }
   },
   "RECLAMO": {
     "nombre": "Reclamo",
     "estados": {
-      "ABIERTO": { "nombre": "Abierto" },
-      "EN_REVISION": { "nombre": "En revisión" },
-      "RESUELTO_INQUILINO": { "nombre": "Resuelto a favor del inquilino" },
-      "RESUELTO_ANUNCIANTE": { "nombre": "Resuelto a favor del anunciante" },
-      "CERRADO": { "nombre": "Cerrado" }
+      "ABIERTO": {
+        "nombre": "Abierto"
+      },
+      "EN_REVISION": {
+        "nombre": "En revisión"
+      },
+      "RESUELTO_INQUILINO": {
+        "nombre": "Resuelto a favor del inquilino"
+      },
+      "RESUELTO_ANUNCIANTE": {
+        "nombre": "Resuelto a favor del anunciante"
+      },
+      "CERRADO": {
+        "nombre": "Cerrado"
+      }
     }
   },
   "VERIFICACION_ANUNCIANTE": {
     "nombre": "Verificación de anunciante",
     "estados": {
-      "borrador": { "nombre": "Borrador" },
-      "pendiente": { "nombre": "Pendiente" },
-      "aprobada": { "nombre": "Aprobada" },
-      "rechazada": { "nombre": "Rechazada" },
-      "reenviada": { "nombre": "Reenviada" }
+      "borrador": {
+        "nombre": "Borrador"
+      },
+      "pendiente": {
+        "nombre": "Pendiente"
+      },
+      "aprobada": {
+        "nombre": "Aprobada"
+      },
+      "rechazada": {
+        "nombre": "Rechazada"
+      },
+      "reenviada": {
+        "nombre": "Reenviada"
+      }
     }
   },
   "DISPUTA": {
     "nombre": "Disputa",
     "estados": {
-      "ABIERTA": { "nombre": "Abierta" },
-      "EN_REVISION": { "nombre": "En revisión" },
-      "GANADA": { "nombre": "Ganada" },
-      "PERDIDA": { "nombre": "Perdida" },
-      "CERRADA": { "nombre": "Cerrada" }
+      "ABIERTA": {
+        "nombre": "Abierta"
+      },
+      "EN_REVISION": {
+        "nombre": "En revisión"
+      },
+      "GANADA": {
+        "nombre": "Ganada"
+      },
+      "PERDIDA": {
+        "nombre": "Perdida"
+      },
+      "CERRADA": {
+        "nombre": "Cerrada"
+      }
+    }
+  },
+  "DISPUTA_ORIGEN": {
+    "nombre": "DISPUTA ORIGEN",
+    "estados": {
+      "CONTRACARGO": {
+        "nombre": "CONTRACARGO"
+      }
+    }
+  },
+  "RECLAMO_CATEGORIA": {
+    "nombre": "RECLAMO CATEGORIA",
+    "estados": {
+      "LIMPIEZA": {
+        "nombre": "LIMPIEZA"
+      },
+      "MANTENIMIENTO": {
+        "nombre": "MANTENIMIENTO"
+      },
+      "INGRESO": {
+        "nombre": "INGRESO"
+      },
+      "DESCRIPCION": {
+        "nombre": "DESCRIPCION"
+      },
+      "OTRO": {
+        "nombre": "OTRO"
+      }
+    }
+  },
+  "RECLAMO_RESOLUCION": {
+    "nombre": "RECLAMO RESOLUCION",
+    "estados": {
+      "SIN_DEVOLUCION": {
+        "nombre": "SIN DEVOLUCION"
+      },
+      "DEVOLUCION_TOTAL": {
+        "nombre": "DEVOLUCION TOTAL"
+      },
+      "DEVOLUCION_PARCIAL": {
+        "nombre": "DEVOLUCION PARCIAL"
+      }
+    }
+  },
+  "RECLAMO_VISIBILIDAD": {
+    "nombre": "RECLAMO VISIBILIDAD",
+    "estados": {
+      "TODOS": {
+        "nombre": "TODOS"
+      },
+      "ADMIN": {
+        "nombre": "ADMIN"
+      }
+    }
+  },
+  "REEMBOLSO_TIPO": {
+    "nombre": "REEMBOLSO TIPO",
+    "estados": {
+      "TOTAL": {
+        "nombre": "TOTAL"
+      },
+      "PARCIAL": {
+        "nombre": "PARCIAL"
+      },
+      "CONTRACARGO": {
+        "nombre": "CONTRACARGO"
+      }
+    }
+  },
+  "REEMBOLSO_ORIGEN": {
+    "nombre": "REEMBOLSO ORIGEN",
+    "estados": {
+      "CANCELACION": {
+        "nombre": "CANCELACION"
+      },
+      "RECLAMO": {
+        "nombre": "RECLAMO"
+      },
+      "CONTRACARGO": {
+        "nombre": "CONTRACARGO"
+      },
+      "PAGO_TARDIO": {
+        "nombre": "PAGO TARDIO"
+      },
+      "AJUSTE_ADMIN": {
+        "nombre": "AJUSTE ADMIN"
+      }
     }
   }
 }

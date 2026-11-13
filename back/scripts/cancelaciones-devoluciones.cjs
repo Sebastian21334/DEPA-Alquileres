@@ -49,7 +49,10 @@ async function main() {
         ...archivos,
         '20261113-politica-cancelacion.sql',
         '20261112-liquidaciones.sql',
+        '20261113-reconciliar-liquidaciones.sql',
         '20261113-aplicacion-reembolsos.sql',
+        '20261113-catalogos-de-expedientes.sql',
+        '20261113-retirar-liquidacion-de-reserva.sql',
       ]) {
         const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', archivo), 'utf8');
         await client.query(sql);

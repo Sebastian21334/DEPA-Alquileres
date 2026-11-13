@@ -1,4 +1,3 @@
-import { ReservaLiquidacionesService } from '../service/reserva-liquidaciones.service';
 import { ReservaReprogramacionService } from '../service/reserva-reprogramacion.service';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 // reservas/controlador/reservas.controller.ts
@@ -16,15 +15,12 @@ import {
 import { ReservasService } from '../service/reservas.service';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
-import { RolesGuard } from '../../seguridad/guards/roles.guard';
-import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ValidarCodigoAlojamientoDto } from '../dto/validar-codigo-alojamiento.dto';
 import { ReportarProblemaReservaDto } from '../dto/reportar-problema-reserva.dto';
-import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 
 @Controller('reservas')
 export class ReservasController {
-  constructor(private readonly reservasService: ReservasService, private readonly liquidacionesService: ReservaLiquidacionesService, private readonly reprogramacionService: ReservaReprogramacionService) {}
+  constructor(private readonly reservasService: ReservasService, private readonly reprogramacionService: ReservaReprogramacionService) {}
 
   @UseGuards(JwtAuthGuard)
   @Get('mis-reservas')
@@ -39,12 +35,6 @@ export class ReservasController {
     return this.reservasService.listarRecibidasPorAnunciante(req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  @Get('liquidaciones/administracion')
-  listarLiquidacionesAdministracion() {
-    return this.liquidacionesService.listarLiquidacionesAdministracion();
-  }
 
   @UseGuards(JwtAuthGuard)
   @Get('publicacion/:id')
@@ -61,7 +51,7 @@ export class ReservasController {
   @UseGuards(JwtAuthGuard)
   @Get(':id/codigo-alojamiento')
   consultarCodigo(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
-    return this.liquidacionesService.consultarCodigoAlojamiento(
+    return this.reservasService.consultarCodigoAlojamiento(
       id,
       req.user.id,
     );
@@ -70,7 +60,7 @@ export class ReservasController {
   @UseGuards(JwtAuthGuard)
   @Patch(':id/validar-codigo')
   validarCodigo(@Param('id', ParseIntPipe) id: number, @Body() dto: ValidarCodigoAlojamientoDto, @Req() req: AuthenticatedRequest) {
-    return this.liquidacionesService.validarCodigoAlojamiento(
+    return this.reservasService.validarCodigoAlojamiento(
       id,
       dto.codigo,
       req.user.id,
@@ -80,19 +70,13 @@ export class ReservasController {
   @UseGuards(JwtAuthGuard)
   @Patch(':id/reportar-problema')
   reportarProblema(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportarProblemaReservaDto, @Req() req: AuthenticatedRequest) {
-    return this.liquidacionesService.reportarProblema(
+    return this.reservasService.reportarProblema(
       id,
       dto.motivo,
       req.user.id,
     );
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  @Patch(':id/liquidacion')
-  resolverLiquidacion(@Param('id', ParseIntPipe) id: number, @Body() dto: ResolverLiquidacionDto, @Req() req: AuthenticatedRequest) {
-    return this.liquidacionesService.resolverLiquidacion(id, dto, req.user.id);
-  }
 
   @UseGuards(JwtAuthGuard)
   @Patch(':id/cancelar')

@@ -627,8 +627,9 @@ export class ReembolsosService {
     return this.prepararRespuesta(reembolso);
   }
 
-  async listarPorReserva(idReserva: number): Promise<Reembolso[]> {
-    const reembolsos = await this.reembolsos.buscarPorReserva(idReserva);
+  async listarPorReserva(idReserva: number, transaccion?: EntityManager): Promise<Reembolso[]> {
+    const repositorio = transaccion ? this.reembolsos.enTransaccion(transaccion) : this.reembolsos;
+    const reembolsos = await repositorio.buscarPorReserva(idReserva);
     return reembolsos.map((reembolso) => this.prepararRespuesta(reembolso));
   }
 
@@ -657,8 +658,9 @@ export class ReembolsosService {
     return this.reembolsos.buscarPendientesAplicacion(this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'), desdeId);
   }
 
-  buscarPorOrigen(origen: OrigenReembolso, referencia: string): Promise<Reembolso | null> {
-    return this.reembolsos.buscarPorOrigen(origen, referencia);
+  buscarPorOrigen(origen: OrigenReembolso, referencia: string, transaccion?: EntityManager): Promise<Reembolso | null> {
+    const repositorio = transaccion ? this.reembolsos.enTransaccion(transaccion) : this.reembolsos;
+    return repositorio.buscarPorOrigen(origen, referencia);
   }
 
   async listarActivosPorReservas(idsReserva: number[]): Promise<Reembolso[]> {

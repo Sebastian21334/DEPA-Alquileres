@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { UsuariosConsultaService } from '../../usuarios/service/usuarios-consulta.service';
+import { UsuariosConsultaService } from '../../usuarios-consulta/service/usuarios-consulta.service';
 
 @Injectable()
 export class SeguridadService {

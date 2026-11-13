@@ -1,9 +1,6 @@
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { LiquidacionesModule } from '../liquidaciones/liquidaciones.module';
-import { ReservaCicloVidaService } from './service/reserva-ciclo-vida.service';
-import { ReservaDecisionService } from './service/reserva-decision.service';
 import { ReservaFinalizacionService } from './service/reserva-finalizacion.service';
-import { ReservaLiquidacionesService } from './service/reserva-liquidaciones.service';
 import { ReservaNotificacionesService } from './service/reserva-notificaciones.service';
 import { ReservaReprogramacionService } from './service/reserva-reprogramacion.service';
 import { ReservaBloqueoAnuncianteService } from './service/reserva-bloqueo-anunciante.service';
@@ -45,10 +42,7 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
   ],
   controllers: [ReservasController],
   providers: [
-    ReservaCicloVidaService,
-    ReservaDecisionService,
     ReservaFinalizacionService,
-    ReservaLiquidacionesService,
     ReservaNotificacionesService,
     ReservaReprogramacionService,
     ReservaBloqueoAnuncianteService,
@@ -62,8 +56,6 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
   ],
   exports: [
     ReservasService,
-    ReservaCicloVidaService,
-    ReservaDecisionService,
     ReservaBloqueoAnuncianteService,
   ],
 })

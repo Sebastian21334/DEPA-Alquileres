@@ -1,7 +1,7 @@
 require('reflect-metadata');
 const { CatalogosService } = require('../../dist/catalogos/service/catalogos.service');
 const { LiquidacionesService } = require('../../dist/liquidaciones/service/liquidaciones.service');
-const { ReservaDecisionService } = require('../../dist/reservas/service/reserva-decision.service');
+const { ReservasService } = require('../../dist/reservas/service/reservas.service');
 const datos = require('../../src/catalogos/estados-iniciales.json');
 
 function catalogosDePrueba(implementacion = {}) {
@@ -15,9 +15,9 @@ function catalogosDePrueba(implementacion = {}) {
   return Object.assign(catalogos, implementacion);
 }
 
-function decisionDePrueba() {
+function reservasDePrueba() {
   const catalogos = catalogosDePrueba();
-  return new ReservaDecisionService(catalogos, new LiquidacionesService(undefined, catalogos));
+  return new ReservasService(undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, new LiquidacionesService(undefined, catalogos), catalogos);
 }
 
-module.exports = { catalogosDePrueba, decisionDePrueba };
+module.exports = { catalogosDePrueba, reservasDePrueba };

@@ -14,6 +14,14 @@ export class ReservaEstadoService {
     if (reserva.publicacion) {
       reserva.publicacion = this.publicaciones.prepararRespuesta(reserva.publicacion);
     }
+    const { liquidacion } = reserva;
+    if (reserva.estado_liquidacion == null) {
+      reserva.estado_liquidacion = liquidacion?.estado ?? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA');
+      reserva.referencia_liquidacion = liquidacion?.referencia ?? null;
+      reserva.observacion_liquidacion = liquidacion?.observacion ?? null;
+      reserva.fecha_resolucion_liquidacion = liquidacion?.fecha_resolucion ?? null;
+    }
+    delete reserva.liquidacion;
     return Object.assign(reserva, { estado_estadia: this.calcularEstadoEstadia(reserva) });
   }
 

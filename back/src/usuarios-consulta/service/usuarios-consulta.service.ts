@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Usuario } from '../entity/usuario.entity';
+import type { Usuario } from '../../usuarios/entity/usuario.entity';
 import {
   USUARIOS_REPOSITORY,
   type IUsuariosRepository,
-} from '../repository/usuarios.repository.interface';
+} from '../../usuarios/repository/usuarios.repository.interface';
 
 @Injectable()
 export class UsuariosConsultaService {
