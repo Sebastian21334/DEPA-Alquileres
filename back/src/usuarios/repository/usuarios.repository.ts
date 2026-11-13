@@ -1,4 +1,3 @@
-import { EstadoLiquidacionReserva, EstadoPagoReserva } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { paginar } from '../../common/persistence/paginacion';
@@ -40,7 +39,7 @@ export class UsuariosRepository implements IUsuariosRepository {
     return consulta.getOne();
   }
 
-  async contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager): Promise<OperacionesPendientesCuenta> {
+  async contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager, estados: { pagoPendiente: string; pagoAprobado: string; liquidacionesResueltas: string[]; enRevision: string }): Promise<OperacionesPendientesCuenta> {
     const esAnunciante = participacion === 'Anunciante';
     const reservas = () => {
       const consulta = transaccion.getRepository(Reserva).createQueryBuilder('reserva');
@@ -51,10 +50,10 @@ export class UsuariosRepository implements IUsuariosRepository {
     };
 
     const reservasPendientes = await reservas()
-      .andWhere('reserva.estado_pago = :pendiente', { pendiente: EstadoPagoReserva.PENDIENTE })
+      .andWhere('reserva.estado_pago = :pendiente', { pendiente: estados.pagoPendiente })
       .getCount();
     const estadiasVigentes = await reservas()
-      .andWhere('reserva.estado_pago = :aprobado', { aprobado: EstadoPagoReserva.APROBADO })
+      .andWhere('reserva.estado_pago = :aprobado', { aprobado: estados.pagoAprobado })
       .andWhere('reserva.cancelada = false')
       .andWhere('reserva.finalizada = false')
       .andWhere(`(
@@ -67,17 +66,13 @@ export class UsuariosRepository implements IUsuariosRepository {
     const liquidaciones = reservas();
     if (esAnunciante) {
       liquidaciones
-        .andWhere('reserva.estado_pago = :aprobado', { aprobado: EstadoPagoReserva.APROBADO })
+        .andWhere('reserva.estado_pago = :aprobado', { aprobado: estados.pagoAprobado })
         .andWhere('reserva.estado_liquidacion NOT IN (:...resueltas)', {
-          resueltas: [
-            EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
-            EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
-            EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
-          ],
+          resueltas: estados.liquidacionesResueltas,
         });
     } else {
       liquidaciones.andWhere('reserva.estado_liquidacion = :enRevision', {
-        enRevision: EstadoLiquidacionReserva.EN_REVISION,
+        enRevision: estados.enRevision,
       });
     }
     const liquidacionesPendientes = await liquidaciones.getCount();

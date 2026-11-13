@@ -1,20 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, type EntityManager } from 'typeorm';
-import { EstadoLiquidacionReserva } from '../../catalogos/estados';
+import { Repository, type EntityManager } from 'typeorm';
 import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
 import { Liquidacion } from '../entity/liquidacion.entity';
 import { ILiquidacionRepository } from './liquidacion.repository.interface';
-
-const RELACIONES_AUDITORIA = {
-  reserva: {
-    usuario: true,
-    pago: true,
-    reembolsos: true,
-    publicacion: { anunciante: { usuario: true } },
-  },
-  admin_resolucion: true,
-} as const;
 
 @Injectable()
 export class LiquidacionRepository implements ILiquidacionRepository {
@@ -28,12 +17,6 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     return guardarSinDuplicados(
       () => this.repositorio(transaccion).save(liquidacion),
       ['uq_liquidacion_reserva'],
-    );
-  }
-
-  conTransaccion<T>(operacion: (liquidaciones: ILiquidacionRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
-    return this.repository.manager.transaction('READ COMMITTED', (transaccion) =>
-      operacion(new LiquidacionRepository(transaccion.getRepository(Liquidacion)), transaccion),
     );
   }
 
@@ -52,26 +35,6 @@ export class LiquidacionRepository implements ILiquidacionRepository {
       .where('liquidacion.id_reserva = :idReserva', { idReserva })
       .setLock('pessimistic_write')
       .getOne();
-  }
-
-  buscarAdministracion(): Promise<Liquidacion[]> {
-    return this.repository.find({
-      where: {
-        estado: In([
-          EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
-          EstadoLiquidacionReserva.EN_REVISION,
-        ]),
-      },
-      relations: RELACIONES_AUDITORIA,
-      order: { reserva: { codigo_validado_en: 'ASC' }, id: 'DESC' },
-    });
-  }
-
-  buscarPorId(id: number, transaccion?: EntityManager): Promise<Liquidacion | null> {
-    return this.repositorio(transaccion).findOne({
-      where: { id },
-      relations: RELACIONES_AUDITORIA,
-    });
   }
 
   private repositorio(transaccion?: EntityManager): Repository<Liquidacion> {

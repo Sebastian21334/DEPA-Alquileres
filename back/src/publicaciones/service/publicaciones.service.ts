@@ -24,7 +24,6 @@ import { Publicacion } from '../entity/publicacion.entity';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import type { IMailService } from '../../mail/mail.interface';
 import type { EntityManager } from 'typeorm';
-import { EstadoPagoReserva } from '../../catalogos/estados';
 import { fechaArgentina } from '../../common/utils/fechas';
 
 @Injectable()
@@ -101,8 +100,8 @@ export class PublicacionesService {
       idPublicacion, idUsuario, fechaFinDesde: fechaArgentina(ahora),
       cancelada: false, finalizada: false,
       pagos: [
-        { estado: EstadoPagoReserva.APROBADO },
-        { estado: EstadoPagoReserva.PENDIENTE, venceDespues: ahora },
+        { estado: this.catalogosService.codigoEstado('PAGO_RESERVA', 'APROBADO') },
+        { estado: this.catalogosService.codigoEstado('PAGO_RESERVA', 'PENDIENTE'), venceDespues: ahora },
       ],
     });
   }

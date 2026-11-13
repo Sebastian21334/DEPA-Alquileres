@@ -1,12 +1,8 @@
+const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 
-const {
-  EstadoPagoReserva,
-  EstadoLiquidacionReserva,
-  EstadoReembolso,
-} = require('../dist/catalogos/estados');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 const {
   OrigenReembolso,
@@ -14,12 +10,7 @@ const {
   TipoReembolso,
 } = require('../dist/reembolsos/entity/reembolso.entity');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
-const {
-  MOTIVO_CANCELACION_BLOQUEO,
-} = require('../dist/reservas/reserva.constants');
-const {
-  ReservaDecisionService,
-} = require('../dist/reservas/service/reserva-decision.service');
+const MOTIVO_CANCELACION_BLOQUEO = 'Bloqueo de cuenta del anunciante';
 const {
   ReservaCicloVidaService,
 } = require('../dist/reservas/service/reserva-ciclo-vida.service');
@@ -49,8 +40,8 @@ function crearReserva(datos = {}) {
     fecha_cancelacion: null,
     motivo_cancelacion: null,
     cancelada_por: null,
-    estado_pago: EstadoPagoReserva.APROBADO,
-    estado_liquidacion: EstadoLiquidacionReserva.RETENIDO,
+    estado_pago: 'APROBADO',
+    estado_liquidacion: 'RETENIDO',
     codigo_validado_en: null,
     intentos_codigo: 0,
     observacion_liquidacion: null,
@@ -128,7 +119,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
         .filter(
           (reembolso) =>
             reembolso.pago === pagoConsultado &&
-            reembolso.estado === EstadoReembolso.APROBADO,
+            reembolso.estado === 'APROBADO',
         )
         .reduce((total, reembolso) => total + Number(reembolso.importe), 0);
       return Number(pagoConsultado.amount) - aprobado;
@@ -142,7 +133,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
         origen: datos.origen,
         importe: datos.importe,
         moneda: datos.pago.currency,
-        estado: EstadoReembolso.PENDIENTE,
+        estado: 'PENDIENTE',
         motivo: datos.motivo,
         referencia_interna: null,
         referencia_externa: null,
@@ -158,7 +149,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
       const reembolso = estado.reembolsos.find(
         (actual) => actual.id === id,
       );
-      reembolso.estado = EstadoReembolso.APROBADO;
+      reembolso.estado = 'APROBADO';
       reembolso.resuelto_en = new Date();
       return reembolso;
     },
@@ -168,16 +159,16 @@ function crearEscenario(reserva, reservas = [reserva]) {
       );
       if (!reembolso) return false;
       if (
-        reembolso.estado === EstadoReembolso.RECHAZADO ||
-        reembolso.estado === EstadoReembolso.CANCELADO
+        reembolso.estado === 'RECHAZADO' ||
+        reembolso.estado === 'CANCELADO'
       )
         return true;
       if (
-        reembolso.estado !== EstadoReembolso.PENDIENTE &&
-        reembolso.estado !== EstadoReembolso.FALLIDO
+        reembolso.estado !== 'PENDIENTE' &&
+        reembolso.estado !== 'FALLIDO'
       )
         return false;
-      reembolso.estado = EstadoReembolso.CANCELADO;
+      reembolso.estado = 'CANCELADO';
       estado.compensados.push(id);
       return true;
     },
@@ -196,14 +187,15 @@ function crearEscenario(reserva, reservas = [reserva]) {
   };
 
   const reservasService = {
-    rechazarPago: async (id, estadoPago, actor, motivo) => {
+    rechazarPago: async (id, estadoPago, actor, motivo, causa) => {
       const actual = reservas.find((reservaActual) => reservaActual.id === id);
       actual.estado_pago = estadoPago;
-      actual.estado_liquidacion = EstadoLiquidacionReserva.NO_APLICA;
+      actual.estado_liquidacion = 'NO_APLICA';
       actual.cancelada = true;
       actual.fecha_cancelacion = new Date();
       actual.cancelada_por = actor;
       actual.motivo_cancelacion = motivo;
+      actual.causa_cancelacion = causa;
       estado.rechazadas.push({ id, estadoPago, actor, motivo });
       return actual;
     },
@@ -215,9 +207,9 @@ function crearEscenario(reserva, reservas = [reserva]) {
     },
   };
 
-  const decision = new ReservaDecisionService();
-  const ciclo = new ReservaCicloVidaService(decision);
-  const devolucion = new ReservaBloqueoDevolucionService(reembolsosService);
+  const decision = decisionDePrueba();
+  const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
+  const devolucion = new ReservaBloqueoDevolucionService(reembolsosService, catalogosDePrueba());
   const servicio = new ReservaBloqueoAnuncianteService(
     reservaRepository,
     disponibilidadService,
@@ -227,7 +219,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
     reservasService,
     aplicacion,
     devolucion,
-    { sincronizarDesdeReserva: async () => ({}) },
+    { sincronizarDesdeReserva: async () => ({}) }, catalogosDePrueba(),
   );
 
   return { estado, pago, servicio };
@@ -235,8 +227,8 @@ function crearEscenario(reserva, reservas = [reserva]) {
 
 test('reserva PENDIENTE sin código: se cancela y suma canceladasPendientes', async () => {
   const reserva = crearReserva({
-    estado_pago: EstadoPagoReserva.PENDIENTE,
-    estado_liquidacion: EstadoLiquidacionReserva.NO_APLICA,
+    estado_pago: 'PENDIENTE',
+    estado_liquidacion: 'NO_APLICA',
   });
   const { estado, servicio } = crearEscenario(reserva);
 
@@ -248,13 +240,14 @@ test('reserva PENDIENTE sin código: se cancela y suma canceladasPendientes', as
 
   assert.deepEqual(resumen, resumenEsperado({ canceladasPendientes: 1 }));
   assert.equal(reserva.cancelada, true);
-  assert.equal(reserva.estado_pago, EstadoPagoReserva.CANCELADO);
+  assert.equal(reserva.estado_pago, 'CANCELADO');
   assert.equal(reserva.cancelada_por, 'ADMINISTRADOR');
+  assert.equal(reserva.causa_cancelacion, 'BLOQUEO_ANUNCIANTE');
   assert.ok(
     reserva.motivo_cancelacion.startsWith(MOTIVO_CANCELACION_BLOQUEO),
   );
   assert.equal(estado.rechazadas.length, 1);
-  assert.equal(estado.rechazadas[0].estadoPago, EstadoPagoReserva.CANCELADO);
+  assert.equal(estado.rechazadas[0].estadoPago, 'CANCELADO');
   assert.equal(estado.rechazadas[0].actor, 'ADMINISTRADOR');
   assert.equal(estado.reembolsos.length, 0);
   assert.deepEqual(estado.liberadas, []);
@@ -276,6 +269,7 @@ test('reserva APROBADA sin código y fechas futuras: devuelve, cancela, libera y
   );
   assert.equal(reserva.cancelada, true);
   assert.equal(reserva.cancelada_por, 'ADMINISTRADOR');
+  assert.equal(reserva.causa_cancelacion, 'BLOQUEO_ANUNCIANTE');
   assert.ok(
     reserva.motivo_cancelacion.startsWith(MOTIVO_CANCELACION_BLOQUEO),
   );
@@ -283,7 +277,7 @@ test('reserva APROBADA sin código y fechas futuras: devuelve, cancela, libera y
   assert.equal(estado.reembolsos.length, 1);
 
   const devolucion = estado.reembolsos[0];
-  assert.equal(devolucion.estado, EstadoReembolso.APROBADO);
+  assert.equal(devolucion.estado, 'APROBADO');
   assert.equal(devolucion.origen, OrigenReembolso.CANCELACION);
   assert.equal(devolucion.tipo, TipoReembolso.TOTAL);
   assert.equal(Number(devolucion.importe), IMPORTE);
@@ -306,7 +300,7 @@ test('reserva APROBADA con código validado: pasa a EN_REVISION sin cancelar ni 
 
   assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
   assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_liquidacion, EstadoLiquidacionReserva.EN_REVISION);
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
   assert.ok(
     reserva.observacion_liquidacion.startsWith(
       MOTIVO_CANCELACION_BLOQUEO,
@@ -320,7 +314,7 @@ test('reserva APROBADA con código validado: pasa a EN_REVISION sin cancelar ni 
 
 test('reserva con liquidación EN_REVISION: pasa a EN_REVISION y no se cancela', async () => {
   const reserva = crearReserva({
-    estado_liquidacion: EstadoLiquidacionReserva.EN_REVISION,
+    estado_liquidacion: 'EN_REVISION',
   });
   const { estado, servicio } = crearEscenario(reserva);
 
@@ -332,7 +326,7 @@ test('reserva con liquidación EN_REVISION: pasa a EN_REVISION y no se cancela',
 
   assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
   assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_liquidacion, EstadoLiquidacionReserva.EN_REVISION);
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
   assert.ok(
     reserva.observacion_liquidacion.startsWith(
       MOTIVO_CANCELACION_BLOQUEO,
@@ -345,7 +339,7 @@ test('reserva con liquidación EN_REVISION: pasa a EN_REVISION y no se cancela',
 
 test('reserva con pago en CONTRACARGO: pasa a EN_REVISION y conserva el estado de pago', async () => {
   const reserva = crearReserva({
-    estado_pago: EstadoPagoReserva.CONTRACARGO,
+    estado_pago: 'CONTRACARGO',
   });
   const { estado, servicio } = crearEscenario(reserva);
 
@@ -357,8 +351,8 @@ test('reserva con pago en CONTRACARGO: pasa a EN_REVISION y conserva el estado d
 
   assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
   assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_pago, EstadoPagoReserva.CONTRACARGO);
-  assert.equal(reserva.estado_liquidacion, EstadoLiquidacionReserva.EN_REVISION);
+  assert.equal(reserva.estado_pago, 'CONTRACARGO');
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
   assert.equal(estado.rechazadas.length, 0);
   assert.equal(estado.reembolsos.length, 0);
 });
@@ -375,7 +369,7 @@ test('reserva finalizada con liquidación pendiente: pasa a EN_REVISION y no dev
 
   assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
   assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_liquidacion, EstadoLiquidacionReserva.EN_REVISION);
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
   assert.equal(estado.rechazadas.length, 0);
   assert.equal(estado.reembolsos.length, 0);
   assert.deepEqual(estado.liberadas, []);
@@ -384,7 +378,7 @@ test('reserva finalizada con liquidación pendiente: pasa a EN_REVISION y no dev
 test('reserva finalizada con liquidación resuelta: no se toca y suma sinAccion', async () => {
   const reserva = crearReserva({
     finalizada: true,
-    estado_liquidacion: EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+    estado_liquidacion: 'PAGADO_PROPIETARIO',
   });
   const { estado, servicio } = crearEscenario(reserva);
 
@@ -398,7 +392,7 @@ test('reserva finalizada con liquidación resuelta: no se toca y suma sinAccion'
   assert.equal(reserva.cancelada, false);
   assert.equal(
     reserva.estado_liquidacion,
-    EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
+    'PAGADO_PROPIETARIO',
   );
   assert.deepEqual(estado.guardadas, []);
   assert.equal(estado.reembolsos.length, 0);
@@ -409,20 +403,16 @@ function crearEscenarioBloqueo({ bloqueado, rol = 'Anunciante' }) {
   const usuario = Object.assign(new Usuario(), {
     id: 3,
     activa: true,
-    bloqueado: false,
+    bloqueado: !bloqueado,
     rol: { nombre: rol },
   });
   const llamadas = { cambiarBloqueo: [], cancelarReservas: [] };
-  const mensaje = bloqueado
-    ? 'Usuario bloqueado correctamente'
-    : 'Usuario habilitado correctamente';
-
-  const usuariosService = {
-    buscarPorId: async (id) => (id === usuario.id ? usuario : null),
-    cambiarBloqueo: async (...argumentos) => {
-      llamadas.cambiarBloqueo.push(argumentos);
-      return { mensaje };
-    },
+  const repo = {
+    conTransaccion: (operacion) => operacion({}),
+    buscarBloqueado: async (id) => (id === usuario.id ? usuario : null),
+    guardar: async (actual) => llamadas.cambiarBloqueo.push([
+      actual.id, actual.bloqueado, actual.bloqueoDetalle?.administradorId, actual.bloqueoDetalle?.motivo,
+    ]),
   };
   const bloqueo = {
     cancelarReservasPorBloqueoAnunciante: async (...argumentos) => {
@@ -433,7 +423,7 @@ function crearEscenarioBloqueo({ bloqueado, rol = 'Anunciante' }) {
 
   return {
     llamadas,
-    servicio: new BloqueoAnuncianteService(usuariosService, bloqueo),
+    servicio: new BloqueoAnuncianteService(repo, bloqueo, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {}),
   };
 }
 
@@ -456,7 +446,7 @@ test('desbloqueo de un Anunciante: cambia el bloqueo y no toca reservas', async 
 
   const resultado = await servicio.cambiarBloqueo(3, false, ADMIN, MOTIVO);
 
-  assert.deepEqual(llamadas.cambiarBloqueo, [[3, false, ADMIN, MOTIVO]]);
+  assert.deepEqual(llamadas.cambiarBloqueo, [[3, false, undefined, undefined]]);
   assert.deepEqual(llamadas.cancelarReservas, []);
   assert.deepEqual(resultado, {
     mensaje: 'Usuario habilitado correctamente',

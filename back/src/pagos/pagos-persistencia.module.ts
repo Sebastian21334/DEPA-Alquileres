@@ -12,6 +12,6 @@ import { PagosRegistroService } from './service/pagos-registro.service';
     { provide: PAGOS_REPOSITORY, useExisting: PagosRepository },
     PagosRegistroService,
   ],
-  exports: [PAGOS_REPOSITORY, PagosRegistroService],
+  exports: [PagosRegistroService],
 })
 export class PagosPersistenciaModule {}

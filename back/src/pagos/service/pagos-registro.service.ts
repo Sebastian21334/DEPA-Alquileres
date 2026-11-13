@@ -16,8 +16,20 @@ export class PagosRegistroService {
     return pago;
   }
 
-  buscarPorReserva(idReserva: number): Promise<Pago | null> {
-    return this.pagosRepo.buscarPorReserva(idReserva, true);
+  crear(datos: Partial<Pago>): Pago {
+    return this.pagosRepo.crear(datos);
+  }
+
+  guardar(pago: Pago): Promise<Pago> {
+    return this.pagosRepo.guardar(pago);
+  }
+
+  buscarPorReferencia(referencia: string): Promise<Pago | null> {
+    return this.pagosRepo.buscarPorReferencia(referencia);
+  }
+
+  buscarPorReserva(idReserva: number, incluirReserva = true): Promise<Pago | null> {
+    return this.pagosRepo.buscarPorReserva(idReserva, incluirReserva);
   }
 
   buscarParaReembolso(idPago: number, transaccion: EntityManager): Promise<Pago | null> {

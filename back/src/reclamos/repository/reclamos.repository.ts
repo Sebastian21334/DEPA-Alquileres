@@ -1,4 +1,3 @@
-import { EstadoReclamo } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
@@ -28,10 +27,10 @@ export class ReclamosRepository implements IReclamosRepository {
     );
   }
 
-  existeAbierto(idReserva: number): Promise<boolean> {
+  existeAbierto(idReserva: number, estados: string[]): Promise<boolean> {
     return this.reclamos.existsBy({
       reserva: { id: idReserva },
-      estado: In([EstadoReclamo.ABIERTO, EstadoReclamo.EN_REVISION]),
+      estado: In(estados),
     });
   }
 

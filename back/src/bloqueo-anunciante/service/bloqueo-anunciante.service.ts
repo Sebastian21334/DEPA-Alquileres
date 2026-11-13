@@ -1,35 +1,53 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { MAIL_SERVICE, type IMailService } from '../../mail/mail.interface';
+import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { ReservaBloqueoAnuncianteService } from '../../reservas/service/reserva-bloqueo-anunciante.service';
-import { UsuariosService } from '../../usuarios/service/usuarios.service';
+import { BLOQUEO_ANUNCIANTE_REPOSITORY, type IBloqueoAnuncianteRepository } from '../repository/bloqueo-anunciante.repository.interface';
 
-/**
- * Caso de uso de bloqueo de un Anunciante. Vive en un módulo de composición
- * porque Usuarios y Reservas se necesitan mutuamente y ARQ-10 prohíbe ciclos.
- */
 @Injectable()
 export class BloqueoAnuncianteService {
   private readonly logger = new Logger(BloqueoAnuncianteService.name);
 
-  constructor(
-    private readonly usuariosService: UsuariosService,
-    private readonly bloqueo: ReservaBloqueoAnuncianteService,
-  ) {}
+  constructor(@Inject(BLOQUEO_ANUNCIANTE_REPOSITORY) private readonly repositorio: IBloqueoAnuncianteRepository, private readonly bloqueo: ReservaBloqueoAnuncianteService, private readonly publicaciones: PublicacionesService, @Inject(MAIL_SERVICE) private readonly mail: IMailService) {}
 
-  async cambiarBloqueo(
-    idUsuario: number,
-    bloqueado: boolean,
-    idOperador: number,
-    motivo?: string,
-  ) {
-    const usuario = await this.usuariosService.buscarPorId(idUsuario);
-    if (!usuario) throw new NotFoundException('Usuario no encontrado');
+  async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
+    if (idUsuario === idOperador)
+      throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');
 
-    const resultado = await this.usuariosService.cambiarBloqueo(
-      idUsuario,
-      bloqueado,
-      idOperador,
-      motivo,
-    );
+    const motivoNormalizado = motivo?.trim();
+    const { usuario, cambio } = await this.repositorio.conTransaccion(async (transaccion) => {
+      const usuario = await this.repositorio.buscarBloqueado(idUsuario, transaccion);
+      if (!usuario) throw new NotFoundException('Usuario no encontrado');
+      if (!usuario.activa)
+        throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
+      if (usuario.bloqueado === bloqueado) return { usuario, cambio: false };
+
+      await this.publicaciones.bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
+      usuario.bloqueado = bloqueado;
+      if (bloqueado) {
+        usuario.bloqueoDetalle = {
+          id: randomUUID(),
+          motivo: motivoNormalizado || null,
+          administradorId: idOperador,
+          fecha: new Date().toISOString(),
+        };
+      }
+      await this.repositorio.guardar(usuario, transaccion);
+      return { usuario, cambio: true };
+    });
+
+    if (cambio && usuario.email) {
+      try {
+        await this.mail.enviarCambioBloqueo(usuario.email, bloqueado, motivoNormalizado);
+      } catch (error) {
+        this.logger.error(`No se pudo notificar el cambio de acceso a ${usuario.email}`, error as Error);
+      }
+    }
+
+    const resultado = {
+      mensaje: bloqueado ? 'Usuario bloqueado correctamente' : 'Usuario habilitado correctamente',
+    };
 
     if (!bloqueado || usuario.rol?.nombre !== 'Anunciante') return resultado;
 

@@ -1,12 +1,12 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { ReservaReembolsoAplicacionService } from '../../reservas/service/reserva-reembolso-aplicacion.service';
-import { EstadoReembolso } from '../../catalogos/estados';
-import { ReembolsosService } from './reembolsos.service';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
+import { Injectable, Logger, OnModuleDestroy, OnApplicationBootstrap } from '@nestjs/common';
+import { ReservaReembolsoAplicacionService } from './reserva-reembolso-aplicacion.service';
+import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 
 /** Reintenta reembolsos que quedaron en proceso o fallaron. */
 @Injectable()
 export class ReembolsosReconciliacionService
-  implements OnModuleInit, OnModuleDestroy
+  implements OnApplicationBootstrap, OnModuleDestroy
 {
   private readonly logger = new Logger(ReembolsosReconciliacionService.name);
   private temporizador?: ReturnType<typeof setInterval>;
@@ -14,10 +14,10 @@ export class ReembolsosReconciliacionService
 
   constructor(
     private readonly reembolsos: ReembolsosService,
-    private readonly aplicacion: ReservaReembolsoAplicacionService,
+    private readonly aplicacion: ReservaReembolsoAplicacionService, private readonly catalogos: CatalogosService,
   ) {}
 
-  onModuleInit(): void {
+  onApplicationBootstrap(): void {
     void this.ejecutar();
     this.temporizador = setInterval(() => void this.ejecutar(), 60_000);
   }
@@ -35,7 +35,7 @@ export class ReembolsosReconciliacionService
       const aprobadosPersistidos = await this.reembolsos.listarAprobados();
       for (const reembolso of aprobadosPersistidos) {
         if (
-          reembolso.estado === EstadoReembolso.APROBADO &&
+          reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO') &&
           !yaAplicados.has(reembolso.id)
         )
           aprobados.push(reembolso.id);

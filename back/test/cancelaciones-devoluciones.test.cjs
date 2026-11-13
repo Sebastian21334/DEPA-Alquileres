@@ -1,3 +1,4 @@
+const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test, before, beforeEach, after } = require('node:test');
@@ -6,7 +7,9 @@ const path = require('node:path');
 const { DataSource } = require('typeorm');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
-const { EstadoPagoReserva, EstadoReembolso } = require('../dist/catalogos/estados');
+const { Liquidacion } = require('../dist/liquidaciones/entity/liquidacion.entity');
+const { LiquidacionRepository } = require('../dist/liquidaciones/repository/liquidacion.repository');
+const { LiquidacionesService } = require('../dist/liquidaciones/service/liquidaciones.service');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 const { PagosRegistroService } = require('../dist/pagos/service/pagos-registro.service');
 const { PagosRepository } = require('../dist/pagos/repository/pagos.repository');
@@ -14,7 +17,8 @@ const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolso
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
-const { ReservaDecisionService } = require('../dist/reservas/service/reserva-decision.service');
+const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
+const { ReservaReembolsoAplicacionService } = require('../dist/reservas/service/reserva-reembolso-aplicacion.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
@@ -49,22 +53,25 @@ beforeEach(async () => {
   await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
   automatico = false;
   pasarela = { reembolsar: async () => ({ id: 'mp-refund-1', status: 'approved' }) };
-  const estadoReserva = new ReservaEstadoService(new PublicacionesService({}, new CatalogosService()));
+  const estadoReserva = new ReservaEstadoService(new PublicacionesService({}, catalogosDePrueba()), catalogosDePrueba());
   reembolsos = new ReembolsosService(
     new ReembolsosRepository(source.getRepository(Reembolso)),
     pasarela, { get: () => String(automatico) },
     new PagosRegistroService(new PagosRepository(source.getRepository(Pago))),
-    estadoReserva,
+    estadoReserva, catalogosDePrueba(),
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
-  reservas = new ReservasService({}, repositorio,
-    { liberarReserva: async () => {} }, {}, {}, {}, reembolsos, estadoReserva,
-    new ReservaDecisionService(),
-    { sincronizarDesdeReserva: async () => ({}) });
+  const disponibilidad = { liberarReserva: async () => {} };
+  const decision = decisionDePrueba();
+  const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const aplicacion = new ReservaReembolsoAplicacionService(repositorio, disponibilidad, reembolsos, decision, ciclo, liquidaciones, catalogosDePrueba());
+  reservas = new ReservasService({}, repositorio, disponibilidad, {}, {}, {}, reembolsos, estadoReserva,
+    decision, liquidaciones, ciclo, aplicacion, catalogosDePrueba());
   reclamos = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia),
       source.getRepository(ReclamoMensaje)),
-    reservas, reembolsos, {},
+    reservas, reembolsos, {}, catalogosDePrueba(),
   );
 });
 
@@ -74,7 +81,7 @@ after(async () => {
 
 async function escenario(fechaInicio = '2099-01-10') {
   const reserva = await source.getRepository(Reserva).save({
-    monto_pago: 100, estado_pago: EstadoPagoReserva.APROBADO,
+    monto_pago: 100, estado_pago: 'APROBADO',
     usuario: { id: 1 }, publicacion: { id: 1 }, fecha_inicio: fechaInicio, fecha_fin: '2099-01-20',
   });
   const pago = await source.getRepository(Pago).save({
@@ -93,6 +100,23 @@ test('la migración de estados por ámbito es repetible y conserva reservas y pa
   await db.exec(sqlEstadosPorAmbito);
   assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).estado_pago, 'APROBADO');
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount), 100);
+});
+
+test('la migración distingue las cancelaciones históricas por bloqueo del resto', async () => {
+  await db.exec(`
+    ALTER TABLE reserva DROP COLUMN causa_cancelacion;
+    INSERT INTO reserva (monto_pago, cancelada, cancelada_por, motivo_cancelacion) VALUES
+      (100, true, 'ADMINISTRADOR', 'Bloqueo de cuenta del anunciante: prueba'),
+      (100, true, 'ADMINISTRADOR', 'Cancelación administrativa'),
+      (100, true, 'INQUILINO', 'Bloqueo de cuenta del anunciante: prueba');
+  `);
+  const sql = migracion('20261112-causa-cancelacion-reserva.sql');
+  await db.exec(sql);
+  await db.exec(sql);
+  const { rows } = await db.query('SELECT causa_cancelacion FROM reserva ORDER BY id_reserva');
+  assert.deepEqual(rows.map(({ causa_cancelacion }) => causa_cancelacion), [
+    'BLOQUEO_ANUNCIANTE', null, null,
+  ]);
 });
 
 test('la migración conserva los estados de las disputas existentes y su valor por defecto', async () => {
@@ -129,7 +153,7 @@ test('la migración conserva los estados de las disputas existentes y su valor p
 test('el reembolso manual se confirma una sola vez usando el pago persistido', async () => {
   const { pago, crearReembolso } = await escenario();
   const reembolso = await crearReembolso();
-  assert.equal((await reembolsos.registrarManual(reembolso.id, 'comprobante-1', 3)).estado, EstadoReembolso.APROBADO);
+  assert.equal((await reembolsos.registrarManual(reembolso.id, 'comprobante-1', 3)).estado, 'APROBADO');
   await reembolsos.registrarManual(reembolso.id, 'comprobante-1', 3);
   const actual = await source.getRepository(Pago).findOneByOrFail({ id: pago.id });
   assert.equal(Number(actual.amount_refunded), 100);
@@ -144,7 +168,7 @@ test('el reembolso automático usa el identificador del pago relacionado', async
     assert.equal(id, 'mp-1'); assert.equal(importe, 100);
     return { id: 'mp-refund-1', status: 'approved' };
   };
-  assert.equal((await reembolsos.ejecutar(reembolso.id, 3)).estado, EstadoReembolso.APROBADO);
+  assert.equal((await reembolsos.ejecutar(reembolso.id, 3)).estado, 'APROBADO');
 });
 
 test('un reembolso externo pendiente no se registra como dinero devuelto', async () => {
@@ -154,7 +178,7 @@ test('un reembolso externo pendiente no se registra como dinero devuelto', async
   pasarela.reembolsar = async () => ({ id: 'mp-pendiente', status: 'pending' });
   await reembolsos.ejecutar(reembolso.id, 3);
   const actual = await reembolsos.buscar(reembolso.id);
-  assert.equal(actual.estado, EstadoReembolso.EN_PROCESO);
+  assert.equal(actual.estado, 'EN_PROCESO');
   assert.equal(actual.id_externo, 'mp-pendiente');
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
 });
@@ -172,7 +196,7 @@ test('la operación administrativa no informa éxito con una devolución externa
   automatico = true;
   pasarela.reembolsar = async () => ({ id: 'mp-pendiente', status: 'pending' });
   await assert.rejects(reembolsos.registrarOejecutar(reembolso.id, undefined, 3), /no fue confirmado/i);
-  assert.equal((await reembolsos.buscar(reembolso.id)).estado, EstadoReembolso.EN_PROCESO);
+  assert.equal((await reembolsos.buscar(reembolso.id)).estado, 'EN_PROCESO');
 });
 
 test('la cancelación aprobada conserva la reserva hasta confirmar la devolución', async () => {
@@ -217,7 +241,7 @@ test('resolver una liquidación manual exige comprobante antes de crear el reemb
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   const liquidaciones = new ReservaLiquidacionesService(
     repositorio, {}, reembolsos, reservas,
-    { registrarResolucion: async () => {}, registrarRevision: async () => {} },
+    { registrarResolucion: async () => {}, registrarRevision: async () => {} }, undefined, undefined, catalogosDePrueba(),
   );
   await assert.rejects(liquidaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /referencia|comprobante/i);
   assert.equal(await source.getRepository(Reembolso).count(), 0);
@@ -249,6 +273,29 @@ test('resolver un reclamo con devolución parcial conserva la estadía y registr
   assert.equal(actual.estado_pago, 'APROBADO');
   assert.equal(actual.cancelada, false);
   assert.equal(actual.estado_liquidacion, 'DEVUELTO_PARCIAL_INQUILINO');
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(liquidacion.estado, actual.estado_liquidacion);
+  assert.equal(Number(liquidacion.importe), 40);
+  assert.equal(liquidacion.moneda, 'ARS');
+});
+
+test('si falla la escritura de la liquidación se revierte la reserva y se puede reintentar', async () => {
+  const { reserva, crearReembolso } = await escenario();
+  const reembolso = await crearReembolso({ importe: 40, tipo: TipoReembolso.PARCIAL });
+  await reembolsos.registrarManual(reembolso.id, 'comprobante-prueba', 3);
+  await db.exec("ALTER TABLE liquidacion ADD CONSTRAINT prueba_fallo_liquidacion CHECK (estado <> 'DEVUELTO_PARCIAL_INQUILINO')");
+  try {
+    await assert.rejects(reservas.aplicarReembolsoConfirmado(reembolso.id), /prueba_fallo_liquidacion/);
+    const actual = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+    assert.equal(actual.estado_liquidacion, reserva.estado_liquidacion);
+    assert.equal(actual.cancelada, false);
+  } finally {
+    await db.exec('ALTER TABLE liquidacion DROP CONSTRAINT prueba_fallo_liquidacion');
+  }
+  await reservas.aplicarReembolsoConfirmado(reembolso.id);
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(Number(liquidacion.importe), 40);
+  assert.equal(liquidacion.estado, 'DEVUELTO_PARCIAL_INQUILINO');
 });
 
 for (const resultado of ['GANADA', 'PERDIDA']) {
@@ -262,8 +309,10 @@ for (const resultado of ['GANADA', 'PERDIDA']) {
     const { reserva, pago } = await escenario();
     const estados = source.getRepository(Estado);
     const catalogos = new CatalogosService({
-      buscarEstadoPorCodigo: (codigoAmbito, codigo) => estados.findOneBy({ codigoAmbito, codigo }),
+      buscarTodosRoles: async () => [{ nombre: 'Administrador' }, { nombre: 'Inquilino' }],
+      listarEstados: () => estados.find({ relations: { ambito: true } }),
     });
+    await catalogos.onModuleInit();
     const disputasRepo = new DisputasRepository(source.getRepository(Disputa));
     const pagos = new PagosRegistroService(new PagosRepository(source.getRepository(Pago)));
     const disputas = new DisputasService(disputasRepo, pagos, reembolsos, reservas, catalogos);

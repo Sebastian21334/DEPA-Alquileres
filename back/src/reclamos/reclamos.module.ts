@@ -1,3 +1,4 @@
+import { CatalogosModule } from '../catalogos/catalogos.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
@@ -14,6 +15,7 @@ import { RECLAMOS_REPOSITORY } from './repository/reclamos.repository.interface'
 
 @Module({
   imports: [
+    CatalogosModule,
     TypeOrmModule.forFeature([Reclamo, ReclamoEvidencia, ReclamoMensaje]),
     ReservasModule,
     ReembolsosModule,

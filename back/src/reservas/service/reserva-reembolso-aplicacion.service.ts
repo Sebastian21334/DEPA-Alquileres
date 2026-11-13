@@ -1,3 +1,4 @@
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   ConflictException,
   Inject,
@@ -6,10 +7,6 @@ import {
 } from '@nestjs/common';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
-import {
-  EstadoLiquidacionReserva,
-  EstadoReembolso,
-} from '../../catalogos/estados';
 import {
   OrigenReembolso,
   Reembolso,
@@ -22,7 +19,7 @@ import {
 } from '../repository/reserva.repository.interface';
 import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservaDecisionService } from './reserva-decision.service';
-import { LiquidacionesService } from './liquidaciones.service';
+import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 /**
@@ -38,14 +35,14 @@ export class ReservaReembolsoAplicacionService {
     private readonly reembolsosService: ReembolsosService,
     private readonly decision: ReservaDecisionService,
     private readonly ciclo: ReservaCicloVidaService,
-    private readonly liquidaciones: LiquidacionesService,
+    private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService,
   ) {}
 
   async aplicarReembolsoConfirmado(
     idReembolso: number,
   ): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
     const reembolso = await this.reembolsosService.buscar(idReembolso);
-    if (reembolso.estado !== EstadoReembolso.APROBADO)
+    if (reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
       throw new ConflictException(
         'Solo se puede aplicar un reembolso aprobado',
       );
@@ -72,7 +69,7 @@ export class ReservaReembolsoAplicacionService {
             TOLERANCIA_MONETARIA;
         if (
           reserva.estado_liquidacion ===
-            EstadoLiquidacionReserva.PAGADO_PROPIETARIO &&
+            this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') &&
           reembolso.origen !== OrigenReembolso.RECLAMO &&
           reembolso.origen !== OrigenReembolso.CONTRACARGO
         )
@@ -81,12 +78,12 @@ export class ReservaReembolsoAplicacionService {
           );
         if (
           reserva.estado_liquidacion ===
-          EstadoLiquidacionReserva.DEVUELTO_INQUILINO
+          this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO')
         )
           return { reembolso, reserva };
         if (
           reserva.estado_liquidacion ===
-            EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO &&
+            this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO') &&
           !esTotal
         )
           return { reembolso, reserva };
@@ -110,7 +107,10 @@ export class ReservaReembolsoAplicacionService {
         }
 
         const guardada = await reservaRepository.guardar(reserva);
-        await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
+        await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion, {
+          importe: Number(reembolso.importe),
+          moneda: reembolso.moneda,
+        });
         if (cancelaReserva && puedeLiberarFechas) {
           await this.disponibilidadService.liberarReserva(
             reserva.id,

@@ -1,6 +1,5 @@
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoLiquidacionReserva } from '../../catalogos/estados';
 import {
   Check,
   Column,
@@ -13,7 +12,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { Reserva } from './reserva.entity';
+import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
 /**
@@ -21,7 +20,7 @@ import { Usuario } from '../../usuarios/entity/usuario.entity';
  * `reserva.estado_liquidacion` se conserva como caché de compatibilidad.
  */
 @Entity('liquidacion')
-@Check('ck_liquidacion_estado_ambito', `"ambito_estado" = '${AmbitoEstado.LIQUIDACION_RESERVA}'`)
+@Check('ck_liquidacion_estado_ambito', `"ambito_estado" = '${"LIQUIDACION_RESERVA"}'`)
 @ForeignKey(() => Estado, ['ambito_estado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_liquidacion_estado',
   onDelete: 'RESTRICT',
@@ -41,9 +40,9 @@ export class Liquidacion {
     name: 'estado',
     type: 'varchar',
     length: 40,
-    default: EstadoLiquidacionReserva.NO_APLICA,
+    default: 'NO_APLICA',
   })
-  estado: EstadoLiquidacionReserva;
+  estado: string;
 
   @Column({
     name: 'ambito_estado',
@@ -53,7 +52,7 @@ export class Liquidacion {
     insert: false,
     update: false,
   })
-  readonly ambito_estado: typeof AmbitoEstado.LIQUIDACION_RESERVA;
+  readonly ambito_estado: "LIQUIDACION_RESERVA";
 
   @Column({
     name: 'importe',

@@ -1,6 +1,6 @@
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Injectable } from '@nestjs/common';
 import type { Pago } from '../../pagos/entity/pago.entity';
-import { EstadoReembolso } from '../../catalogos/estados';
 import {
   OrigenReembolso,
   Reembolso,
@@ -8,13 +8,12 @@ import {
 } from '../../reembolsos/entity/reembolso.entity';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { Reserva } from '../entity/reserva.entity';
-import { MOTIVO_CANCELACION_BLOQUEO } from '../reserva.constants';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 /** Calcula y asegura la devolución del bloqueo sin cancelar la reserva. */
 @Injectable()
 export class ReservaBloqueoDevolucionService {
-  constructor(private readonly reembolsosService: ReembolsosService) {}
+  constructor(private readonly reembolsosService: ReembolsosService, private readonly catalogos: CatalogosService) {}
 
   async coberturaDevolucion(
     idReserva: number,
@@ -30,8 +29,8 @@ export class ReservaBloqueoDevolucionService {
     const existentes = await this.reembolsosService.listarPorReserva(idReserva);
     const pendientes = existentes.filter(
       (reembolso) =>
-        reembolso.estado === EstadoReembolso.PENDIENTE ||
-        reembolso.estado === EstadoReembolso.EN_PROCESO,
+        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') ||
+        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'),
     );
     const pendienteTotal = pendientes.reduce(
       (total, reembolso) => total + Number(reembolso.importe),
@@ -41,7 +40,7 @@ export class ReservaBloqueoDevolucionService {
       pendientes,
       aprobado:
         existentes.find(
-          (reembolso) => reembolso.estado === EstadoReembolso.APROBADO,
+          (reembolso) => reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
         ) ?? null,
       faltante:
         this.reembolsosService.saldoReembolsable(pagoActual) - pendienteTotal,
@@ -65,8 +64,8 @@ export class ReservaBloqueoDevolucionService {
     const saldo = this.reembolsosService.saldoReembolsable(pago);
     const pendientes = existentes.filter(
       (reembolso) =>
-        reembolso.estado === EstadoReembolso.PENDIENTE ||
-        reembolso.estado === EstadoReembolso.EN_PROCESO,
+        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') ||
+        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'),
     );
     const pendienteTotal = pendientes.reduce(
       (total, reembolso) => total + Number(reembolso.importe),
@@ -75,13 +74,13 @@ export class ReservaBloqueoDevolucionService {
     const faltante = saldo - pendienteTotal;
     if (
       existentes.some(
-        (reembolso) => reembolso.estado === EstadoReembolso.FALLIDO,
+        (reembolso) => reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
       )
     )
       return { reembolso: null, pendientes: [], cubre: false, creado: false };
     const aprobado =
       existentes.find(
-        (reembolso) => reembolso.estado === EstadoReembolso.APROBADO,
+        (reembolso) => reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
       ) ?? null;
 
     if (faltante <= TOLERANCIA_MONETARIA) {
@@ -113,21 +112,21 @@ export class ReservaBloqueoDevolucionService {
               : TipoReembolso.PARCIAL,
           origen: OrigenReembolso.CANCELACION,
           importe: faltante,
-          motivo: `${MOTIVO_CANCELACION_BLOQUEO}: ${motivo}`,
+          motivo,
           idSolicitadoPor: idAdmin,
           idempotencyKey: clave,
         });
 
       if (
-        reembolso.estado !== EstadoReembolso.PENDIENTE &&
-        reembolso.estado !== EstadoReembolso.EN_PROCESO &&
-        reembolso.estado !== EstadoReembolso.APROBADO
+        reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') &&
+        reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') &&
+        reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')
       )
         continue;
 
       // Un aprobado devuelto por la clave ya está incluido en el saldo:
       // no cubre el faltante, hay que crear el complemento.
-      if (reembolso.estado === EstadoReembolso.APROBADO) continue;
+      if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) continue;
       if (Number(reembolso.importe) < faltante - TOLERANCIA_MONETARIA) continue;
 
       return {

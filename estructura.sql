@@ -851,6 +851,7 @@ CREATE TABLE public.reserva (
     presupuesto_emitido_en timestamp with time zone,
     presupuesto_vence_en timestamp with time zone,
     motivo_cancelacion character varying(500),
+    causa_cancelacion character varying(40),
     cancelada_por character varying(20),
     ambito_estado_pago character varying(40) DEFAULT 'PAGO_RESERVA'::character varying NOT NULL,
     ambito_estado_liquidacion character varying(40) DEFAULT 'LIQUIDACION_RESERVA'::character varying NOT NULL,

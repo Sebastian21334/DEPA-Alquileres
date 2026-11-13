@@ -1,4 +1,4 @@
-import { EstadoPagoReserva, EstadoReclamo } from '../../catalogos/estados';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   BadRequestException,
   ConflictException,
@@ -39,7 +39,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 @Injectable()
 export class ReclamosService {
-  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService) {}
+  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService) {}
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
     const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
@@ -48,7 +48,7 @@ export class ReclamosService {
         throw new ForbiddenException(
           'Solo el Inquilino de la reserva puede iniciar un reclamo',
         );
-      if (reserva.estado_pago !== EstadoPagoReserva.APROBADO)
+      if (reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))
         throw new ConflictException('La reserva no tiene un pago aprobado');
       if (reserva.cancelada)
         throw new ConflictException('La reserva está cancelada');
@@ -72,7 +72,7 @@ export class ReclamosService {
           `El plazo para reclamar vence a los ${DIAS_RECLAMO} días corridos del fin de la estadía`,
         );
 
-      if (await reclamos.existeAbierto(reserva.id))
+      if (await reclamos.existeAbierto(reserva.id, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]))
         throw new ConflictException('La reserva ya tiene un reclamo abierto');
 
       return reclamos.guardar({
@@ -81,7 +81,7 @@ export class ReclamosService {
         anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
         categoria: dto.categoria,
         descripcion: dto.descripcion.trim(),
-        estado: EstadoReclamo.ABIERTO,
+        estado: this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
         resolucion: null,
         importe_reembolso: null,
         administrador_resolucion: null,
@@ -113,7 +113,7 @@ export class ReclamosService {
     const reclamo = await this.obtener(id, idUsuario, esAdmin);
     if (!archivos?.length)
       throw new BadRequestException('No se recibieron imágenes');
-    if (reclamo.estado === EstadoReclamo.CERRADO)
+    if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'CERRADO'))
       throw new ConflictException('El reclamo está cerrado');
     const existentes = await this.reclamos.contarEvidencias(id);
     if (existentes + archivos.length > MAX_EVIDENCIAS)
@@ -166,12 +166,12 @@ export class ReclamosService {
 
   async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean): Promise<ReclamoMensaje> {
     const reclamo = await this.obtener(id, idUsuario, esAdmin);
-    if (reclamo.estado === EstadoReclamo.CERRADO)
+    if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'CERRADO'))
       throw new ConflictException('El reclamo está cerrado');
     if (dto.visible_para === VisibilidadMensajeReclamo.ADMIN && !esAdmin)
       throw new ForbiddenException('Solo el Administrador puede dejar notas internas');
-    if (esAdmin && reclamo.estado === EstadoReclamo.ABIERTO) {
-      reclamo.estado = EstadoReclamo.EN_REVISION;
+    if (esAdmin && reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
+      reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION');
       await this.reclamos.guardar(reclamo);
     }
     const mensaje = await this.reclamos.guardarMensaje({
@@ -196,10 +196,10 @@ export class ReclamosService {
 
   async resolver(id: number, dto: ResolverReclamoDto, idAdmin: number): Promise<Reclamo> {
     const reclamo = await this.obtener(id, idAdmin, true);
-    const estadosCerrados: EstadoReclamo[] = [
-      EstadoReclamo.RESUELTO_INQUILINO,
-      EstadoReclamo.RESUELTO_ANUNCIANTE,
-      EstadoReclamo.CERRADO,
+    const estadosCerrados: string[] = [
+      this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO'),
+      this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE'),
+      this.catalogos.codigoEstado('RECLAMO', 'CERRADO'),
     ];
     if (estadosCerrados.includes(reclamo.estado))
       throw new ConflictException('El reclamo ya fue resuelto');
@@ -207,7 +207,7 @@ export class ReclamosService {
 
     if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
       await this.reservas.resolverReclamoSinDevolucion(reserva, dto.observacion);
-      reclamo.estado = EstadoReclamo.RESUELTO_ANUNCIANTE;
+      reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE');
       reclamo.resolucion = ResolucionReclamo.SIN_DEVOLUCION;
     } else {
       if (!this.reembolsos.ejecucionAutomaticaHabilitada && !dto.referencia?.trim())
@@ -236,17 +236,18 @@ export class ReclamosService {
         motivo: `Reclamo #${reclamo.id}: ${dto.observacion ?? 'resolución favorable al inquilino'}`,
         idSolicitadoPor: idAdmin,
       });
-      await this.reembolsos.registrarOejecutar(
+      const ejecutado = await this.reembolsos.registrarOejecutar(
         reembolso.id,
         dto.referencia?.trim(),
         idAdmin,
       );
       await this.reservas.resolverReclamoConDevolucion(
-        reserva,
+        reserva.id,
+        ejecutado,
         dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL,
         dto.observacion,
       );
-      reclamo.estado = EstadoReclamo.RESUELTO_INQUILINO;
+      reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
       reclamo.resolucion = dto.resolucion;
       reclamo.importe_reembolso = importe;
     }

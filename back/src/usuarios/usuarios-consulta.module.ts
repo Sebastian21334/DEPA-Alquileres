@@ -13,6 +13,6 @@ import { UsuariosConsultaService } from './service/usuarios-consulta.service';
     { provide: USUARIOS_REPOSITORY, useExisting: UsuariosRepository },
     UsuariosConsultaService,
   ],
-  exports: [UsuariosConsultaService, USUARIOS_REPOSITORY],
+  exports: [UsuariosConsultaService],
 })
 export class UsuariosConsultaModule {}

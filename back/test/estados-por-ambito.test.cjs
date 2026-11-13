@@ -5,7 +5,7 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 const { Estado } = require('../dist/catalogos/entity/estado.entity');
-const { ESTADOS_INICIALES } = require('../dist/catalogos/estados');
+const ESTADOS_INICIALES = require('../src/catalogos/estados-iniciales.json');
 
 const migracion = readFileSync(join(__dirname, '../migrations/20261110-estados-por-ambito.sql'), 'utf8');
 

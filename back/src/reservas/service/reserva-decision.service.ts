@@ -1,16 +1,10 @@
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
+import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { Injectable } from '@nestjs/common';
 import {
   esFechaCalendarioValida,
   fechaArgentina,
 } from '../../common/utils/fechas';
-import {
-  EstadoLiquidacionReserva,
-  EstadoPagoReserva,
-} from '../../catalogos/estados';
-import {
-  MAX_INTENTOS_CODIGO,
-  MOTIVO_CANCELACION_BLOQUEO,
-} from '../reserva.constants';
 import { Reserva } from '../entity/reserva.entity';
 
 /**
@@ -19,8 +13,12 @@ import { Reserva } from '../entity/reserva.entity';
  */
 @Injectable()
 export class ReservaDecisionService {
+  private readonly maxIntentosCodigo = 5;
+
+  constructor(private readonly catalogos: CatalogosService, private readonly liquidaciones: LiquidacionesService) {}
+
   pagoAprobado(reserva: Reserva): boolean {
-    return reserva.estado_pago === EstadoPagoReserva.APROBADO;
+    return reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
   }
 
   /**
@@ -74,24 +72,19 @@ export class ReservaDecisionService {
   }
 
   codigoBloqueado(reserva: Reserva): boolean {
-    return reserva.intentos_codigo >= MAX_INTENTOS_CODIGO;
+    return reserva.intentos_codigo >= this.maxIntentosCodigo;
   }
 
   intentosCodigoRestantes(reserva: Reserva): number {
-    return Math.max(0, MAX_INTENTOS_CODIGO - reserva.intentos_codigo);
+    return Math.max(0, this.maxIntentosCodigo - reserva.intentos_codigo);
   }
 
   liquidacionEnRevision(reserva: Reserva): boolean {
-    return reserva.estado_liquidacion === EstadoLiquidacionReserva.EN_REVISION;
+    return reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
   }
 
   liquidacionResuelta(reserva: Reserva): boolean {
-    const estadosResueltos: EstadoLiquidacionReserva[] = [
-      EstadoLiquidacionReserva.PAGADO_PROPIETARIO,
-      EstadoLiquidacionReserva.DEVUELTO_INQUILINO,
-      EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO,
-    ];
-    return estadosResueltos.includes(reserva.estado_liquidacion);
+    return this.liquidaciones.esLiquidacionResuelta(reserva.estado_liquidacion);
   }
 
   /** Cancelación administrativa originada por el bloqueo del Anunciante. */
@@ -99,7 +92,7 @@ export class ReservaDecisionService {
     return (
       reserva.cancelada &&
       reserva.cancelada_por === 'ADMINISTRADOR' &&
-      !!reserva.motivo_cancelacion?.startsWith(MOTIVO_CANCELACION_BLOQUEO)
+      reserva.causa_cancelacion === 'BLOQUEO_ANUNCIANTE'
     );
   }
 

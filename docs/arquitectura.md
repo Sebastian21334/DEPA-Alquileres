@@ -37,7 +37,7 @@ Reglas aplicadas:
 - **Entidad anémica:** solo decoradores, columnas y relaciones. Los estados derivados se calculan en services de consulta, no en la entidad.
 - **DTOs:** todo body/query usa un DTO en `dto/` con `class-validator`. El `ValidationPipe` global de `main.ts` aplica `whitelist` y `forbidNonWhitelisted`.
 - **Integraciones:** los proveedores nuevos viven en `<módulo>/proveedor/` con interface + token. Almacenamiento, mail y pasarela conservan sus carpetas de puerto/adaptador.
-- **Módulos:** sin ciclos ni `forwardRef`. Si dos dominios se necesitan mutuamente, se crea un módulo de composición (por ejemplo, `bloqueo-anunciante` o `reembolsos-aplicacion`).
+- **Módulos:** sin ciclos ni `forwardRef`. Los módulos publican servicios. Los repositorios quedan dentro del módulo que los utiliza.
 - **Errores:** el repositorio propaga o traduce errores de integridad; el service decide la excepción de aplicación; el controller no hace `try/catch` de dominio.
 
 Frontend:
@@ -66,9 +66,10 @@ Frontend:
 | Catálogo | `favoritos` | Favoritos del inquilino. | — |
 | Catálogo | `mensajes` | Mensajería asociada a publicaciones y reservas. | — |
 | Reservas | `disponibilidad` | Calendario, ocupación, liberación y reprogramación de fechas. | `DisponibilidadService` |
-| Reservas | `reservas` | Ciclo de vida, cancelaciones, código, liquidaciones, bloqueo y reembolsos aplicados. | `ReservasService`, `ReservaCicloVidaService`, `ReservaDecisionService`, `ReservaBloqueoAnuncianteService`, `ReservaReembolsoAplicacionService` |
+| Reservas | `reservas` | Ciclo de vida, cancelaciones, código, coordinación de liquidaciones, bloqueo y reembolsos aplicados. | `ReservasService`, `ReservaCicloVidaService`, `ReservaDecisionService`, `ReservaBloqueoAnuncianteService`, `ReservaReembolsoAplicacionService` |
+| Liquidaciones | `liquidaciones` | Registro de liquidaciones y sus estados. | `LiquidacionesService` |
 | Reservas | `reservas-consulta` | Proyección compartida de reservas y cálculo de `estado_estadia`. | `ReservaEstadoService` |
-| Reservas | `bloqueo-anunciante` | Composición administrativa para bloquear una cuenta y resolver sus reservas. | — |
+| Reservas | `bloqueo-anunciante` | Bloqueo administrativo de cuentas y resolución de reservas afectadas. | `IBloqueoAnuncianteRepository` |
 | Dinero | `cotizaciones` | Cotización blue, historial y consultas. | `CotizacionesService` |
 | Dinero | `pagos` | Checkout, webhook, conciliación y presupuestos. | — |
 | Dinero | `pagos-persistencia` / `pagos-registro` | Persistencia de pagos y registro de reembolsos/contracargos. | `PAGOS_REPOSITORY`, `PagosRegistroService` |
@@ -85,7 +86,7 @@ Frontend:
 
 `catalogos` contiene las entidades `Ambito` y `Estado`. La clave primaria del ámbito es `codigo`; `Estado` tiene `codigo_ambito`, `codigo` y `nombre`, con unicidad `(codigo_ambito, codigo)`. Las tablas que usan estados declaran una FK compuesta al par ámbito/código y un `CHECK` que fija el ámbito permitido.
 
-Ámbitos del catálogo: `PAGO_RESERVA`, `LIQUIDACION_RESERVA`, `SOLICITUD_CANCELACION`, `REEMBOLSO`, `RECLAMO`, `VERIFICACION_ANUNCIANTE` y `DISPUTA`. Los códigos TypeScript se exportan desde `catalogos/estados.ts`; el `codigo` es el contrato de la API y se devuelve como texto. No se expone el `id` interno.
+El catálogo abarca `PAGO_RESERVA`, `LIQUIDACION_RESERVA`, `SOLICITUD_CANCELACION`, `REEMBOLSO`, `RECLAMO`, `VERIFICACION_ANUNCIANTE` y `DISPUTA`. `npm run db:seed` carga el catálogo inicial en las tablas de ámbitos y estados. Al iniciar, `CatalogosService` carga las entidades persistidas y las pone a disposición de los demás servicios. Las columnas existentes y la API usan el código de cada estado como texto.
 
 `estado_estadia` no es una columna: se calcula en `reservas-consulta/service/reserva-estado.service.ts` al preparar cada respuesta. Sus valores incluyen `CONFIRMADA`, `PENDIENTE_INGRESO`, `EN_CURSO`, `FINALIZADA`, `INGRESO_NO_VERIFICADO`, `FECHAS_A_REVISAR`, `EN_DISPUTA`, `CANCELADA`, `REEMBOLSADA`, `PAGO_RECHAZADO` y `PENDIENTE_PAGO`.
 
@@ -124,7 +125,7 @@ Idempotencia y compensación:
 - Si la reserva no se cancela después de crear el reembolso, se llama a `ReembolsosService.compensar`. Solo se compensan `PENDIENTE` o `FALLIDO`; un `FALLIDO` se consulta en Mercado Pago antes de rechazarlo. Nunca se toca un `APROBADO`.
 - La reserva se cancela y libera en una transacción propia. Los avisos y la ejecución de la pasarela quedan fuera de esa transacción.
 
-`ReembolsosAplicacionModule` es un módulo de composición que importa `ReembolsosModule` y `ReservasModule`. `ReembolsosReconciliacionService` corre al iniciar y cada 60 segundos: concilia pendientes con Mercado Pago, lista los aprobados y aplica cada uno a su reserva. Los errores se registran por reembolso y no cortan el lote. Así se evita el ciclo `Reservas → Reembolsos → Reservas`.
+En `ReservasModule`, `ReembolsosReconciliacionService` consulta a `ReembolsosService` al iniciar y cada 60 segundos. Concilia pendientes con Mercado Pago y delega la aplicación de los aprobados al servicio de reservas correspondiente. Los errores se registran por reembolso y el lote continúa.
 
 Ejecución manual vs automática:
 
@@ -154,11 +155,11 @@ Guards de resolución:
 
 ### Registro auditable
 
-`back/src/reservas/entity/liquidacion.entity.ts` define `Liquidacion` (tabla `public.liquidacion`), el registro completo y auditable de la liquidación de una reserva. Tiene una fila por reserva (`uq_liquidacion_reserva`) y estos campos: `id_liquidacion` (PK), `id_reserva` (FK `ON DELETE CASCADE`), `estado` (varchar 40, por defecto `NO_APLICA`), `ambito_estado` fijo en `LIQUIDACION_RESERVA` y validado por FK compuesta a `estado` más `CHECK`, `importe` (`numeric(10,2)`), `moneda`, `referencia`, `observacion`, `id_admin_resolucion` (FK a `usuario`, `ON DELETE SET NULL`), `fecha_resolucion`, `fecha_pago_propietario` y `creado_en`/`actualizado_en`. El índice `IX_liquidacion_estado` cubre las consultas administrativas por estado.
+`back/src/liquidaciones/entity/liquidacion.entity.ts` define `Liquidacion` (tabla `public.liquidacion`), el registro completo y auditable de la liquidación de una reserva. Tiene una fila por reserva (`uq_liquidacion_reserva`) y estos campos: `id_liquidacion` (PK), `id_reserva` (FK `ON DELETE CASCADE`), `estado` (varchar 40, por defecto `NO_APLICA`), `ambito_estado` fijo en `LIQUIDACION_RESERVA` y validado por FK compuesta a `estado` más `CHECK`, `importe` (`numeric(10,2)`), `moneda`, `referencia`, `observacion`, `id_admin_resolucion` (FK a `usuario`, `ON DELETE SET NULL`), `fecha_resolucion`, `fecha_pago_propietario` y `creado_en`/`actualizado_en`. El índice `IX_liquidacion_estado` cubre las consultas administrativas por estado.
 
 La migración `back/migrations/20261112-liquidaciones.sql` crea el ámbito `LIQUIDACION_RESERVA`, sus siete estados y la tabla con las restricciones anteriores. El backfill inserta una fila por reserva copiando `estado_liquidacion`, `referencia_liquidacion`, `observacion_liquidacion` y `fecha_resolucion_liquidacion`; copia el importe solo si la liquidación ya está resuelta y `fecha_pago_propietario` solo para `PAGADO_PROPIETARIO`. Usa `ON CONFLICT (id_reserva) DO NOTHING`, por lo que es repetible y no modifica ni elimina columnas de `reserva`. El runner `back/scripts/liquidaciones.cjs` (`npm run db:liquidaciones`) informa el estado sin `--aplicar`; con `--aplicar` abre una transacción con `lock_timeout` de 10 s y un advisory lock `depa:liquidaciones`, y aplica antes las migraciones de catálogo si faltan.
 
-`reserva.estado_liquidacion` —junto con `referencia_liquidacion`, `observacion_liquidacion` y `fecha_resolucion_liquidacion`— sigue como caché de compatibilidad para los circuitos y la API existentes; la fuente de auditoría es `Liquidacion`. `LiquidacionesService.sincronizarDesdeReserva` mantiene la caché alineada: copia estado, observación, referencia y fecha de resolución, completa el importe de una liquidación resuelta si faltaba y no pisa la resolución administrativa ni un importe ya registrado. `asegurarParaReserva` crea la fila si falta y resuelve la carrera contra `uq_liquidacion_reserva`; `registrarRetencion`, `registrarValidacionCodigo`, `registrarRevision`, `registrarResolucion` y `registrarDevolucion` escriben la entidad y la caché en la misma transacción.
+Las columnas de liquidación en la reserva conservan el contrato de la API. ReservaDecisionService concentra las consultas de negocio y ReservaCicloVidaService concentra las transiciones de la reserva. ReservaReembolsoAplicacionService aplica los reembolsos confirmados y comparte la transacción con la reserva, su liquidación y la liberación de fechas cuando corresponde. LiquidacionesService registra el resultado en la entidad Liquidacion mediante ILiquidacionRepository. La consulta administrativa conserva la proyección de reservas que consume la API.
 
 Verificación específica: `npm run test:liquidaciones` (5/5) y `npm run test:liquidaciones-entidad` (9/9). Al cierre de la fase 2, el 12/11/2026, pasan las suites completas: 173/173 pruebas `node:test` y 34/34 Jest (este último requiere Node 24.9 o superior).
 
@@ -183,7 +184,7 @@ La arquitectura real conserva estas desviaciones; no se presentan como patrón r
 
 - **Acceso cruzado desde `UsuariosRepository`:** consulta `Reserva` y `Pago` para calcular operaciones pendientes de una cuenta. Es una lectura de tablas de otros módulos desde un repositorio.
 - **Acceso cruzado desde `PublicacionesRepository`:** importa `Reserva` y la registra en `TypeOrmModule.forFeature` para calcular `cantidad_reservas`. La relación no está declarada en la entidad `Publicacion`.
-- **Composición de pagos y reembolsos:** `PagosModule` importa `PagosPersistenciaModule`, `PasarelaModule`, `ReembolsosModule` y `DisputasModule`; `ReembolsosModule` importa `PagosPersistenciaModule`, `PasarelaModule` y `ReservasConsultaModule`. No hay ciclo, pero la composición concentra dependencias y `PagosPersistenciaModule` exporta `PAGOS_REPOSITORY`.
+- **Composición de pagos y reembolsos:** `PagosModule` importa `PagosPersistenciaModule`, `PasarelaModule`, `ReembolsosModule` y `DisputasModule`; `ReembolsosModule` importa `PagosPersistenciaModule`, `PasarelaModule` y `ReservasConsultaModule`. `PagosPersistenciaModule` exporta `PagosRegistroService` y conserva el repositorio como proveedor privado.
 - **`UsuariosConsultaModule` exporta `USUARIOS_REPOSITORY`,** aunque sus consumidores actuales usan `UsuariosConsultaService` o el token dentro del mismo dominio. Es una API más amplia que la necesaria.
 - **`EntityManager` en services:** `anunciantes`, `pagos`, `usuarios`, `disponibilidad` y `publicaciones` importan el tipo de TypeORM. El diseño buscaba un tipo opaco `Transaccion`, que todavía no existe.
 - **Excepciones HTTP en adaptadores:** Mercado Pago y Face API lanzan excepciones de Nest desde la capa de integración, en lugar de errores de infraestructura traducidos por el service.

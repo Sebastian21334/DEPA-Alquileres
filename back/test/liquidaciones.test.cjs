@@ -1,6 +1,10 @@
+const { catalogosDePrueba, decisionDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const { ReservaCicloVidaService } = require('../dist/reservas/service/reserva-ciclo-vida.service');
+const decision = decisionDePrueba();
+const ciclo = new ReservaCicloVidaService(decision, catalogosDePrueba());
 const { ReservaLiquidacionesService } = require('../dist/reservas/service/reserva-liquidaciones.service');
 
 function crearReserva(extra = {}) {
@@ -93,7 +97,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
-    liquidacionesService(),
+    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', importe: 1 }, 7);
@@ -128,7 +132,7 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
-    liquidacionesService(),
+    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
   await assert.rejects(
@@ -148,7 +152,7 @@ test('exige referencia cuando la devolución es manual', async () => {
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
-    liquidacionesService(),
+    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
   await assert.rejects(
@@ -176,7 +180,7 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
-    liquidacionesService(),
+    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
@@ -204,7 +208,7 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
     { liberarReserva: async () => {} },
     reembolsos,
     reservasService(),
-    liquidacionesService(),
+    liquidacionesService(), ciclo, decision, catalogosDePrueba(),
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);

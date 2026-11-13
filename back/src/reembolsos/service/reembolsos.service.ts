@@ -1,4 +1,4 @@
-import { EstadoReembolso } from '../../catalogos/estados';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   BadRequestException,
   ConflictException,
@@ -23,7 +23,7 @@ import {
 import {
   PASARELA_REEMBOLSOS,
   type IPasarelaReembolsos,
-} from '../ports/pasarela-reembolsos.interface';
+} from '../proveedor/pasarela-reembolsos.interface';
 import {
   REEMBOLSOS_REPOSITORY,
   type IReembolsosRepository,
@@ -42,18 +42,20 @@ export type CrearReembolsoDatos = {
   permitirMultiplesAjustes?: boolean;
 };
 
-const ESTADOS_REEMBOLSO_ACTIVO: EstadoReembolso[] = [
-  EstadoReembolso.PENDIENTE,
-  EstadoReembolso.EN_PROCESO,
-  EstadoReembolso.FALLIDO,
-  EstadoReembolso.APROBADO,
-];
-
 @Injectable()
 export class ReembolsosService {
+  private get estadosActivos(): string[] {
+    return [
+      this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
+      this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'),
+      this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
+      this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
+    ];
+  }
+
   private readonly logger = new Logger(ReembolsosService.name);
 
-  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, @Inject(PASARELA_REEMBOLSOS) private readonly pasarela: IPasarelaReembolsos, private readonly config: ConfigService, private readonly pagos: PagosRegistroService, private readonly estadoService: ReservaEstadoService) {}
+  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, @Inject(PASARELA_REEMBOLSOS) private readonly pasarela: IPasarelaReembolsos, private readonly config: ConfigService, private readonly pagos: PagosRegistroService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService) {}
 
   get ejecucionAutomaticaHabilitada(): boolean {
     return this.config.get<string>('MP_REFUNDS_ENABLED') === 'true';
@@ -90,7 +92,7 @@ export class ReembolsosService {
           const activa = deLaReserva.find(
             (actual) =>
               actual.origen === OrigenReembolso.AJUSTE_ADMIN &&
-              ESTADOS_REEMBOLSO_ACTIVO.includes(actual.estado),
+              this.estadosActivos.includes(actual.estado),
           );
           if (activa)
             throw new ConflictException(
@@ -98,7 +100,7 @@ export class ReembolsosService {
             );
         }
 
-        const reservado = await reembolsos.sumarImportesReservados(pago.id);
+        const reservado = await reembolsos.sumarImportesReservados(pago.id, [this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'), this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'), this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')]);
         const saldo = this.pagos.saldoReembolsable(pago) - reservado;
         if (importe > saldo + TOLERANCIA_MONETARIA)
           throw new ConflictException(
@@ -112,7 +114,7 @@ export class ReembolsosService {
           origen: datos.origen,
           importe,
           moneda: pago.currency,
-          estado: EstadoReembolso.PENDIENTE,
+          estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
           motivo: datos.motivo.trim().slice(0, 500),
           referencia_interna: null,
           referencia_externa: null,
@@ -149,7 +151,7 @@ export class ReembolsosService {
   async registrarOejecutar(id: number, referencia: string | null | undefined, idActor: number): Promise<Reembolso> {
     if (this.ejecucionAutomaticaHabilitada) {
       const reembolso = await this.ejecutar(id, idActor);
-      if (reembolso.estado !== EstadoReembolso.APROBADO)
+      if (reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
         throw new ConflictException('El reembolso todavía no fue confirmado por Mercado Pago');
       return reembolso;
     }
@@ -164,20 +166,20 @@ export class ReembolsosService {
       );
     if (!reembolso.pago.payment_id)
       throw new ConflictException('El pago no tiene identificador de Mercado Pago');
-    if (reembolso.estado === EstadoReembolso.APROBADO) return reembolso;
+    if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return reembolso;
 
     const enProceso = await this.reembolsos.conTransaccion(async (repo) => {
       const actual = await repo.buscarRegistro(id, { bloquear: true });
       if (!actual) throw new NotFoundException('Reembolso no encontrado');
-      if (actual.estado === EstadoReembolso.APROBADO) return actual;
-      if (actual.estado !== EstadoReembolso.PENDIENTE && actual.estado !== EstadoReembolso.FALLIDO)
+      if (actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return actual;
+      if (actual.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') && actual.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'))
         throw new ConflictException('El reembolso no está disponible para ejecutar');
-      actual.estado = EstadoReembolso.EN_PROCESO;
+      actual.estado = this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO');
       actual.resuelto_por = referenciaUsuario(idActor);
       return repo.guardar(actual);
     });
 
-    if (enProceso.estado === EstadoReembolso.APROBADO) return enProceso;
+    if (enProceso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return enProceso;
 
     try {
       const resultado = await this.pasarela.reembolsar(
@@ -209,14 +211,14 @@ export class ReembolsosService {
     const guardado = await this.reembolsos.conTransaccion(async (repo, transaccion) => {
       const reembolso = await repo.buscarRegistro(id, { bloquear: true, idPago: true });
       if (!reembolso) throw new NotFoundException('Reembolso no encontrado');
-      if (reembolso.estado === EstadoReembolso.APROBADO) return reembolso;
+      if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return reembolso;
 
       const pago = await this.pagos.buscarParaReembolso(reembolso.pago.id, transaccion);
       if (!pago) throw new NotFoundException('Pago no encontrado');
       if (Number(reembolso.importe) > this.saldoReembolsable(pago) + 0.009)
         throw new ConflictException('El reembolso supera el saldo del pago');
 
-      reembolso.estado = EstadoReembolso.APROBADO;
+      reembolso.estado = this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO');
       reembolso.referencia_externa = datos.referencia || null;
       reembolso.id_externo = datos.idExterno;
       reembolso.resuelto_en = new Date();
@@ -240,9 +242,9 @@ export class ReembolsosService {
     const guardado = await this.reembolsos.conTransaccion(async (repo) => {
       const reembolso = await repo.buscarRegistro(id, { bloquear: true });
       if (!reembolso) throw new NotFoundException('Reembolso no encontrado');
-      if (reembolso.estado === EstadoReembolso.APROBADO)
+      if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
         throw new ConflictException('Un reembolso aprobado no puede rechazarse');
-      reembolso.estado = EstadoReembolso.RECHAZADO;
+      reembolso.estado = this.catalogos.codigoEstado('REEMBOLSO', 'RECHAZADO');
       reembolso.error_detalle = motivo.trim();
       reembolso.resuelto_en = new Date();
       reembolso.resuelto_por =
@@ -257,16 +259,16 @@ export class ReembolsosService {
     try {
       const reembolso = await this.buscar(id);
       if (
-        reembolso.estado === EstadoReembolso.RECHAZADO ||
-        reembolso.estado === EstadoReembolso.CANCELADO
+        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'RECHAZADO') ||
+        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'CANCELADO')
       )
         return true;
       if (
-        reembolso.estado !== EstadoReembolso.PENDIENTE &&
-        reembolso.estado !== EstadoReembolso.FALLIDO
+        reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') &&
+        reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')
       )
         return false;
-      if (reembolso.estado === EstadoReembolso.FALLIDO) {
+      if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')) {
         // Un FALLIDO puede haber salido igual: sin respuesta definitiva de MP
         // se mantiene reservado para no habilitar un segundo reembolso.
         const idExterno = reembolso.id_externo ?? reembolso.referencia_externa;
@@ -301,15 +303,15 @@ export class ReembolsosService {
     const cancelado = await this.reembolsos.actualizarEnTransaccion(
       id,
       (reembolso) => {
-        if (reembolso.estado === EstadoReembolso.CANCELADO) return;
+        if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'CANCELADO')) return;
         if (
-          reembolso.estado !== EstadoReembolso.PENDIENTE &&
-          reembolso.estado !== EstadoReembolso.FALLIDO
+          reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') &&
+          reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')
         )
           throw new ConflictException(
             'Solo puede cancelarse un reembolso pendiente o fallido',
           );
-        reembolso.estado = EstadoReembolso.CANCELADO;
+        reembolso.estado = this.catalogos.codigoEstado('REEMBOLSO', 'CANCELADO');
         reembolso.error_detalle = motivo.trim().slice(0, 500);
         reembolso.resuelto_en = new Date();
         reembolso.resuelto_por =
@@ -325,7 +327,7 @@ export class ReembolsosService {
     await this.reembolsos.conTransaccion(async (repo) => {
       const reembolso = await repo.buscarRegistro(id);
       if (!reembolso) return;
-      reembolso.estado = EstadoReembolso.FALLIDO;
+      reembolso.estado = this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO');
       reembolso.error_detalle = mensaje.slice(0, 500);
       await repo.guardar(reembolso);
     });
@@ -341,7 +343,7 @@ export class ReembolsosService {
       datos.referenciaExterna,
     );
     if (existente) {
-      if (existente.estado !== EstadoReembolso.APROBADO)
+      if (existente.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
         return this.confirmar(existente.id, {
           referencia: datos.referenciaExterna,
           idActor: null,
@@ -402,7 +404,7 @@ export class ReembolsosService {
     const reembolsos = await this.reembolsos.buscarPorReserva(idReserva);
     return reembolsos.some(
       (reembolso) =>
-        reembolso.estado === EstadoReembolso.APROBADO &&
+        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO') &&
         this.esTotal(reembolso),
     );
   }
@@ -413,11 +415,11 @@ export class ReembolsosService {
   }
 
   async listarAprobados(): Promise<Reembolso[]> {
-    return this.reembolsos.buscarAprobados();
+    return this.reembolsos.buscarAprobados(this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'));
   }
 
   async listarActivosPorReservas(idsReserva: number[]): Promise<Reembolso[]> {
-    return this.reembolsos.buscarPorReservasConEstados(idsReserva, ESTADOS_REEMBOLSO_ACTIVO);
+    return this.reembolsos.buscarPorReservasConEstados(idsReserva, this.estadosActivos);
   }
 
   private prepararRespuesta(reembolso: Reembolso): Reembolso {
@@ -433,7 +435,7 @@ export class ReembolsosService {
   async reconciliarPendientes(): Promise<number[]> {
     if (!this.ejecucionAutomaticaHabilitada) return [];
     const aplicados: number[] = [];
-    const pendientes = await this.reembolsos.buscarPendientesConciliacion();
+    const pendientes = await this.reembolsos.buscarPendientesConciliacion([this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'), this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')]);
     for (const reembolso of pendientes) {
       if (!reembolso.pago?.payment_id) continue;
       try {

@@ -1,6 +1,5 @@
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoSolicitudCancelacion } from '../../catalogos/estados';
 import {
   Check,
   Column,
@@ -16,7 +15,7 @@ import { Usuario } from '../../usuarios/entity/usuario.entity';
 
 /** Pedido de cancelación de una reserva pagada, con su decisión administrativa. */
 @Entity('solicitud_cancelacion')
-@Check('ck_solicitud_cancelacion_estado_ambito', `"ambito_estado" = '${AmbitoEstado.SOLICITUD_CANCELACION}'`)
+@Check('ck_solicitud_cancelacion_estado_ambito', `"ambito_estado" = '${"SOLICITUD_CANCELACION"}'`)
 @ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_solicitud_cancelacion_estado',
   onDelete: 'RESTRICT',
@@ -42,8 +41,8 @@ export class SolicitudCancelacion {
   @Column({ name: 'motivo', type: 'varchar', length: 500 })
   motivo: string;
 
-  @Column({ name: 'estado', type: 'varchar', length: 40, default: EstadoSolicitudCancelacion.PENDIENTE })
-  estado: EstadoSolicitudCancelacion;
+  @Column({ name: 'estado', type: 'varchar', length: 40, default: 'PENDIENTE' })
+  estado: string;
 
   @Column({
     name: 'ambito_estado',
@@ -53,7 +52,7 @@ export class SolicitudCancelacion {
     insert: false,
     update: false,
   })
-  readonly ambitoEstado: typeof AmbitoEstado.SOLICITUD_CANCELACION;
+  readonly ambitoEstado: "SOLICITUD_CANCELACION";
 
   @ManyToOne(() => Usuario, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_decidida_por' })

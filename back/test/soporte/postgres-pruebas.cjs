@@ -51,6 +51,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     // El comando de migración aplica el circuito y el catálogo en una misma transacción.
     const migraciones = [
       '20261104-cancelaciones-devoluciones.sql',
+      '20261112-causa-cancelacion-reserva.sql',
       ...(estadosDisputa ? ['20261110-estados-disputa.sql'] : []),
       ...(estadosPorAmbito ? ['20261110-estados-por-ambito.sql'] : []),
     ].map(leerMigracion);

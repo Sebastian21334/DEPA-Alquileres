@@ -1,9 +1,4 @@
 // reservas/repositorio/reserva.repository.ts
-import {
-  EstadoLiquidacionReserva,
-  EstadoPagoReserva,
-  EstadoSolicitudCancelacion,
-} from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Repository, type EntityManager } from 'typeorm';
@@ -20,14 +15,14 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.create(datos);
   }
 
-  async finalizarEstadiasVencidas(hoy: string): Promise<void> {
+  async finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<void> {
     // PostgreSQL vuelve a comprobar las condiciones tras adquirir el bloqueo.
     await this.repository.createQueryBuilder()
       .update(Reserva)
       .set({ finalizada: true })
       .where('finalizada = false')
       .andWhere('cancelada = false')
-      .andWhere('estado_pago = :aprobado', { aprobado: EstadoPagoReserva.APROBADO })
+      .andWhere('estado_pago = :aprobado', { aprobado })
       .andWhere('codigo_validado_en IS NOT NULL')
       .andWhere('fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL')
       .andWhere('fecha_inicio <= fecha_fin')
@@ -178,11 +173,11 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, aprobado: string): Promise<Reserva[]> {
     return this.repository.find({
       where: {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
-        estado_pago: EstadoPagoReserva.APROBADO,
+        estado_pago: aprobado,
         cancelada: false,
       },
       relations: {
@@ -200,34 +195,31 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarPendientesVencidas(fecha: Date): Promise<Reserva[]> {
+  buscarPendientesVencidas(fecha: Date, pendiente: string): Promise<Reserva[]> {
     return this.repository.find({
       where: {
-        estado_pago: EstadoPagoReserva.PENDIENTE,
+        estado_pago: pendiente,
         cancelada: false,
         pago_vencimiento: LessThan(fecha),
       },
     });
   }
 
-  existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
+  existeAprobada(idPublicacion: number, idUsuarioInquilino: number, aprobado: string): Promise<boolean> {
     return this.repository.exists({
       where: {
         publicacion: { id: idPublicacion },
         usuario: { id: idUsuarioInquilino },
-        estado_pago: EstadoPagoReserva.APROBADO,
+        estado_pago: aprobado,
         cancelada: false,
       },
     });
   }
 
-  buscarLiquidacionesAdministracion(): Promise<Reserva[]> {
+  buscarLiquidacionesAdministracion(estados: string[]): Promise<Reserva[]> {
     return this.repository.find({
       where: {
-        estado_liquidacion: In([
-          EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
-          EstadoLiquidacionReserva.EN_REVISION,
-        ]),
+        estado_liquidacion: In(estados),
       },
       relations: {
         usuario: true,
@@ -267,20 +259,20 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarSolicitudCancelacionActiva(idReserva: number): Promise<SolicitudCancelacion | null> {
+  buscarSolicitudCancelacionActiva(idReserva: number, estado: string): Promise<SolicitudCancelacion | null> {
     return this.solicitudes().findOne({
       where: {
         reserva: { id: idReserva },
-        estado: EstadoSolicitudCancelacion.PENDIENTE,
+        estado,
       },
       relations: { solicitante: true, decidida_por: true },
       order: { id: 'DESC' },
     });
   }
 
-  listarSolicitudesCancelacionAdministracion(): Promise<SolicitudCancelacion[]> {
+  listarSolicitudesCancelacionAdministracion(estado: string): Promise<SolicitudCancelacion[]> {
     return this.solicitudes().find({
-      where: { estado: EstadoSolicitudCancelacion.PENDIENTE },
+      where: { estado },
       relations: {
         solicitante: true,
         reserva: {
