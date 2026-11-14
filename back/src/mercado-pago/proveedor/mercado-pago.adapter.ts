@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   MercadoPagoConfig,
@@ -11,8 +11,6 @@ import type { DatosCheckout, FirmaWebhookPago, IMercadoPago, PagoExterno, Result
 
 @Injectable()
 export class MercadoPagoAdapter implements IMercadoPago {
-  private readonly logger = new Logger(MercadoPagoAdapter.name);
-
   constructor(private readonly config: ConfigService) {}
 
   async crearCheckout(datos: DatosCheckout): Promise<{ id: string; url: string }> {
@@ -72,16 +70,12 @@ export class MercadoPagoAdapter implements IMercadoPago {
     return preferencia.init_point;
   }
 
-  async reembolsar(paymentId: string, importe: number, idempotencyKey: string): Promise<ResultadoReembolsoExterno> {
-    const client = this.crearCliente();
-    const prefijo = client.accessToken.startsWith('APP_USR-') ? 'APP_USR-'
-      : client.accessToken.startsWith('TEST-') ? 'TEST-' : 'desconocido';
-    this.logger.log(`POST de reembolso a Mercado Pago para el pago ${paymentId}. Prefijo de credencial: ${prefijo}`);
-    return new PaymentRefund(client).create({
-      payment_id: paymentId,
-      body: { amount: importe },
-      requestOptions: { idempotencyKey },
-    });
+  async reembolsar(paymentId: string, importe: number, idempotencyKey: string, total = false): Promise<ResultadoReembolsoExterno> {
+    const reembolsos = new PaymentRefund(this.crearCliente());
+    const solicitud = { payment_id: paymentId, requestOptions: { idempotencyKey } };
+    return total
+      ? reembolsos.total(solicitud)
+      : reembolsos.create({ ...solicitud, body: { amount: importe } });
   }
 
   consultarReembolso(paymentId: string, refundId: string): Promise<ResultadoReembolsoExterno> {

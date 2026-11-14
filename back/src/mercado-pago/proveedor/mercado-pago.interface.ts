@@ -47,7 +47,7 @@ export interface IMercadoPago {
   consultarCheckout(id: string): Promise<string>;
   consultarPago(id: string): Promise<PagoExterno>;
   firmaWebhookValida(entrada: FirmaWebhookPago, secret: string): boolean;
-  reembolsar(paymentId: string, importe: number, idempotencyKey: string): Promise<ResultadoReembolsoExterno>;
+  reembolsar(paymentId: string, importe: number, idempotencyKey: string, total?: boolean): Promise<ResultadoReembolsoExterno>;
   consultarReembolso(paymentId: string, refundId: string): Promise<ResultadoReembolsoExterno>;
   listarReembolsos(paymentId: string): Promise<ResultadoReembolsoExterno[]>;
 }

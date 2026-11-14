@@ -229,13 +229,15 @@ export class ReembolsosService {
 
     if (!intento) return this.buscar(reembolso.id);
     try {
+      const importe = Number(intento.importe);
+      const total = Number(reembolso.pago.amount_refunded) === 0 && importe === Number(reembolso.pago.amount);
       const resultado = intento.id_externo
         ? await this.pasarela.consultarReembolso(paymentId, intento.id_externo)
-        : await this.pasarela.reembolsar(paymentId, Number(intento.importe), intento.idempotency_key);
+        : await this.pasarela.reembolsar(paymentId, importe, intento.idempotency_key, total);
       const idExterno = resultado.id == null ? intento.id_externo : String(resultado.id);
       if (!idExterno || (intento.id_externo && intento.id_externo !== idExterno))
         throw new ConflictException('La pasarela no confirmó el identificador del reembolso');
-      if ((resultado.amount != null && !(Math.abs(Number(resultado.amount) - Number(intento.importe)) <= TOLERANCIA_MONETARIA)) ||
+      if (((total || resultado.amount != null) && !(Math.abs(Number(resultado.amount) - importe) <= TOLERANCIA_MONETARIA)) ||
           (resultado.payment_id != null && String(resultado.payment_id) !== paymentId))
         throw new ConflictException('La devolución informada no coincide con la solicitud');
       const vigente = await this.reembolsos.conTransaccion(async (repo) => {
