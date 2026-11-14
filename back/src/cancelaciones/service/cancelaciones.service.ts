@@ -51,7 +51,10 @@ export class CancelacionesService {
       const activa = await this.buscarEnCurso(cancelaciones, reserva, transaccion);
       if (activa) return this.prepararRespuesta(activa);
 
-      this.validarReserva(reserva, fechaArgentina());
+      const hoy = fechaArgentina();
+      this.validarReserva(reserva, hoy);
+      const { motivoBloqueo } = await this.condiciones(cancelaciones, reserva, hoy, transaccion);
+      if (motivoBloqueo) throw new BadRequestException(motivoBloqueo);
       await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
       const solicitud = cancelaciones.crear({
         reserva,
@@ -92,6 +95,31 @@ export class CancelacionesService {
   async consultarActiva(idReserva: number, idUsuario: number): Promise<SolicitudCancelacion | null> {
     const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
     return this.buscarEnCurso(this.cancelaciones, reserva);
+  }
+
+  async consultarCondiciones(idReserva: number, idUsuario: number) {
+    const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
+    const solicitud = await this.buscarEnCurso(this.cancelaciones, reserva);
+    return { solicitud, ...await this.condiciones(this.cancelaciones, reserva, fechaArgentina()) };
+  }
+
+  private async condiciones(cancelaciones: ICancelacionesRepository, reserva: Reserva, hoy: string, transaccion?: EntityManager) {
+    const politica = await this.politicaAplicable(cancelaciones, reserva);
+    const diasMinimos = politica.diasDevolucionParcial;
+    const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
+    const motivos: string[] = [];
+    if (this.diasHastaIngreso(reserva, hoy) < diasMinimos)
+      motivos.push(`El plazo venció. Tenés que solicitar la cancelación al menos ${diasMinimos} días antes del ingreso.`);
+    if (pago?.payment_method_id !== 'account_money')
+      motivos.push('Solo se pueden cancelar reservas pagadas con dinero en cuenta de Mercado Pago.');
+
+    return { politica, motivoBloqueo: motivos.join(' ') || null };
+  }
+
+  private async politicaAplicable(cancelaciones: ICancelacionesRepository, reserva: Reserva): Promise<PoliticaCancelacion> {
+    const politica = await cancelaciones.buscarPolitica(reserva.fecha_pago ? fechaArgentina(reserva.fecha_pago) : null);
+    if (!politica) throw new InternalServerErrorException('Falta la política de cancelación aplicable a la reserva');
+    return politica;
   }
 
   private async buscarEnCurso(cancelaciones: ICancelacionesRepository, reserva: Reserva, transaccion?: EntityManager): Promise<SolicitudCancelacion | null> {
@@ -154,8 +182,7 @@ export class CancelacionesService {
 
       this.validarReserva(reserva, hoy);
       await this.asegurarSinDevolucionActiva(idReserva, transaccion);
-      const politica = await cancelaciones.buscarPolitica(reserva.fecha_pago ? fechaArgentina(reserva.fecha_pago) : null);
-      if (!politica) throw new InternalServerErrorException('Falta la política de cancelación aplicable a la reserva');
+      const politica = await this.politicaAplicable(cancelaciones, reserva);
 
       const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
       const porcentaje = this.porcentajeDevolucion(reserva, actor, hoy, politica);
@@ -221,12 +248,17 @@ export class CancelacionesService {
 
   private porcentajeDevolucion(reserva: Reserva, actor: ActorCancelacion, hoy: string, politica: PoliticaCancelacion): number {
     if (actor !== 'INQUILINO') return politica.porcentajeOtrosActores;
-    const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
-    const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
-    const dias = Math.ceil((inicio - ahora) / 86_400_000);
+    const dias = this.diasHastaIngreso(reserva, hoy);
     if (dias >= politica.diasDevolucionTotal) return politica.porcentajeTotal;
     if (dias >= politica.diasDevolucionParcial) return politica.porcentajeParcial;
     return politica.porcentajeFueraDePlazo;
+  }
+
+  private diasHastaIngreso(reserva: Reserva, hoy: string): number {
+    if (!reserva.fecha_inicio) return 0;
+    const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
+    const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
+    return (inicio - ahora) / 86_400_000;
   }
 
   private redondear(valor: number): number {

@@ -28,6 +28,22 @@ export const etiquetasEstadia: Record<EstadoEstadia, string> = {
   FECHAS_A_REVISAR: 'Fechas pendientes de revisión',
 };
 
+export function devolucionRegistrada(reserva: Reserva) {
+  if (reserva.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO') {
+    return {
+      etiqueta: 'Reembolsada parcialmente',
+      mensaje: 'Devolución parcial al inquilino registrada',
+    };
+  }
+  if (reserva.estado_liquidacion === 'DEVUELTO_INQUILINO' || reserva.estado_estadia === 'REEMBOLSADA') {
+    return {
+      etiqueta: etiquetasEstadia.REEMBOLSADA,
+      mensaje: 'Devolución total al inquilino registrada',
+    };
+  }
+  return null;
+}
+
 export function estadiaActiva(reserva: Reserva): boolean {
   return (
     reserva.estado_pago === 'APROBADO' &&
