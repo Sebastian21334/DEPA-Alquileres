@@ -147,6 +147,12 @@ export class AdminComponent {
   protected readonly guardandoReembolso = signal(false);
   protected readonly errorReembolso = signal('');
   protected referenciaReembolso = '';
+  private readonly dialogoPagoAnunciante = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoPagoAnunciante');
+  protected readonly pagoAnuncianteSeleccionado = signal<AdminSettlement | null>(null);
+  protected readonly registrandoPagoAnunciante = signal(false);
+  protected readonly errorPagoAnunciante = signal('');
+  protected referenciaPagoAnunciante = '';
+  protected observacionPagoAnunciante = '';
   protected readonly estadosReembolso = {
     PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', APROBADO: 'Aprobado',
     RECHAZADO: 'Rechazado', FALLIDO: 'Fallido', CANCELADO: 'Cancelado',
@@ -394,17 +400,47 @@ export class AdminComponent {
     );
   }
 
-  protected registrarPago(settlement: AdminSettlement): void {
-    const referencia = window
-      .prompt('Referencia o comprobante de la transferencia manual:')
-      ?.trim();
-    if (referencia === undefined) return;
-    this.resolverSettlement(
-      settlement,
+  protected abrirPagoAnunciante(settlement: AdminSettlement): void {
+    this.pagoAnuncianteSeleccionado.set(settlement);
+    this.referenciaPagoAnunciante = '';
+    this.observacionPagoAnunciante = '';
+    this.errorPagoAnunciante.set('');
+    this.dialogoPagoAnunciante().nativeElement.showModal();
+  }
+
+  protected cerrarPagoAnunciante(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.registrandoPagoAnunciante()) return;
+    this.dialogoPagoAnunciante().nativeElement.close();
+    this.pagoAnuncianteSeleccionado.set(null);
+  }
+
+  protected confirmarPagoAnunciante(): void {
+    const settlement = this.pagoAnuncianteSeleccionado();
+    const referencia = this.referenciaPagoAnunciante.trim();
+    const observacion = this.observacionPagoAnunciante.trim();
+    if (!settlement?.codigo_validado_en || settlement.estado_liquidacion === 'EN_REVISION' ||
+        this.registrandoPagoAnunciante() || referencia.length > 150 || observacion.length > 500) return;
+
+    this.errorPagoAnunciante.set('');
+    this.registrandoPagoAnunciante.set(true);
+    this.api.resolverLiquidacion(
+      settlement.id,
       'PAGADO_PROPIETARIO',
       referencia,
-      'Transferencia manual al propietario registrada',
-    );
+      observacion || 'Transferencia manual al propietario registrada',
+    ).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.registrandoPagoAnunciante.set(false)),
+    ).subscribe({
+      next: () => {
+        this.registrandoPagoAnunciante.set(false);
+        this.cerrarPagoAnunciante();
+        this.settlements.update((items) => items.filter((item) => item.id !== settlement.id));
+        this.toast.mostrar('Pago manual registrado.', 'exito');
+      },
+      error: (error: Error) => this.errorPagoAnunciante.set(error.message),
+    });
   }
 
   protected solicitarDevolucionLiquidacion(settlement: AdminSettlement): void {
