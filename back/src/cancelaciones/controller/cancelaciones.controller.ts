@@ -39,6 +39,12 @@ export class CancelacionesController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get(':id/cancelacion/condiciones')
+  consultarCondiciones(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
+    return this.cancelacionesService.consultarCondiciones(id, req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Get(':id/cancelacion')
   consultarActiva(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.cancelacionesService.consultarActiva(id, req.user.id);

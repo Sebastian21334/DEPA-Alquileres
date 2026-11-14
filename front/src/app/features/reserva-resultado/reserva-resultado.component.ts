@@ -3,7 +3,7 @@ import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
+import { devolucionRegistrada, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LucideCalendar, LucideCheck, LucideCopy, LucideKeyRound } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
@@ -275,6 +275,8 @@ export class ReservaResultadoComponent {
   }
 
   protected tituloEstado(reserva: Reserva): string {
+    const devolucion = devolucionRegistrada(reserva);
+    if (reserva.cancelada && devolucion) return devolucion.etiqueta;
     if (reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion === 'EN_REVISION')
       return 'Pago acreditado, reserva en revisión';
     if (reserva.estado_estadia === 'CONFIRMADA') return 'Reserva confirmada';
@@ -282,6 +284,8 @@ export class ReservaResultadoComponent {
   }
 
   protected descripcionEstado(reserva: Reserva): string {
+    const devolucion = devolucionRegistrada(reserva);
+    if (devolucion) return devolucion.mensaje;
     if (reserva.estado_pago === 'PENDIENTE' && this.resumen()?.puede_reintentar)
       return this.pago()?.status === 'rejected' || this.pago()?.status === 'cancelled'
         ? 'El intento de pago no se completó. Podés volver a Mercado Pago mientras las fechas sigan reservadas.'
@@ -295,7 +299,6 @@ export class ReservaResultadoComponent {
       INGRESO_NO_VERIFICADO: 'El período de la estadía terminó sin un código de ingreso validado. Podés reportar un problema si necesitás revisión.',
       FECHAS_A_REVISAR: 'Esta reserva no tiene un período válido registrado. Contactá a soporte para revisarla.',
       CANCELADA: 'La reserva fue cancelada.',
-      REEMBOLSADA: 'La reserva fue reembolsada. Consultá el detalle de la devolución.',
       EN_DISPUTA: 'Mercado Pago abrió un contracargo. La liquidación queda congelada hasta que se resuelva.',
     };
     const descripcion = descripciones[reserva.estado_estadia];
@@ -309,8 +312,10 @@ export class ReservaResultadoComponent {
     return 'Las fechas no quedaron confirmadas. Revisá el estado del pago antes de volver a intentarlo.';
   }
 
-  protected estadoPagoMercado(): string {
+  protected estadoPagoMercado(reserva: Reserva): string {
     const status = this.pago()?.status;
+    if (status === 'approved' && reserva.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO')
+      return 'Reembolsado parcialmente';
     const labels: Record<string, string> = {
       approved: 'Acreditado',
       pending: 'Pendiente',

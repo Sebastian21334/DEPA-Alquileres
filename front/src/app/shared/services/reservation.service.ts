@@ -132,6 +132,19 @@ export interface ResumenReserva {
   puede_reintentar: boolean;
 }
 
+export interface CondicionesCancelacion {
+  solicitud: SolicitudCancelacion | null;
+  motivoBloqueo: string | null;
+  politica: {
+    diasDevolucionTotal: number;
+    diasDevolucionParcial: number;
+    porcentajeTotal: number;
+    porcentajeParcial: number;
+    porcentajeFueraDePlazo: number;
+    porcentajeOtrosActores: number;
+  };
+}
+
 export interface SolicitudCancelacion {
   id: number;
   motivo: string;
@@ -257,12 +270,12 @@ export class ReservationService {
     return this.http.patch<Reserva>(`${this.baseUrl}/${id}/reportar-problema`, { motivo });
   }
 
-  requestCancellation(id: number, motivo: string): Observable<SolicitudCancelacion> {
-    return this.http.post<SolicitudCancelacion>(`${this.baseUrl}/${id}/cancelacion`, { motivo });
+  requestCancellation(id: number, motivo: string, aceptaTerminos: boolean): Observable<SolicitudCancelacion> {
+    return this.http.post<SolicitudCancelacion>(`${this.baseUrl}/${id}/cancelacion`, { motivo, aceptaTerminos });
   }
 
-  cancellationRequest(id: number): Observable<SolicitudCancelacion | null> {
-    return this.http.get<SolicitudCancelacion | null>(`${this.baseUrl}/${id}/cancelacion`);
+  cancellationConditions(id: number): Observable<CondicionesCancelacion> {
+    return this.http.get<CondicionesCancelacion>(`${this.baseUrl}/${id}/cancelacion/condiciones`);
   }
 
   refunds(id: number): Observable<Reembolso[]> {

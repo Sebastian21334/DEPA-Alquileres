@@ -175,6 +175,12 @@
 .cancellation-info { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem; margin-top: 1rem; border-radius: 10px; background: #e1efff; color: #123664; }
 .cancellation-info svg { flex: none; }
 .cancellation-info p { margin: 0; }
+.cancellation-terms { margin: 1rem 0; }
+.cancellation-terms summary { color: #123664; cursor: pointer; font-weight: 700; text-decoration: underline; }
+.cancellation-terms ul { list-style: disc; padding-inline-start: 1.5rem; margin-top: .6rem; }
+.cancellation-terms li + li { margin-top: .4rem; }
+.cancellation-dialog .cancellation-accept { display: flex; align-items: baseline; gap: .55rem; }
+.cancellation-accept input { appearance: auto; }
 .cancellation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; margin-top: 1.3rem; }
 .cancellation-back { background: white; color: #a52e17; border: 1px solid #b83d22; }
 .cancellation-submit { background: #ae3619; color: white; border: 1px solid #ae3619; }

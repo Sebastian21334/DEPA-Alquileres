@@ -33,17 +33,21 @@
           </div>
         </div>
         <form (ngSubmit)="enviarCancelacion()" [attr.aria-busy]="enviandoCancelacion()">
+          @let bloqueo = condicionesCancelacion()?.motivoBloqueo;
           @if (estadoCancelacion() === 'formulario') {
+            @if (bloqueo) {
+              <p class="cancellation-error" role="status">{{ bloqueo }}</p>
+            }
             <label for="motivo-cancelacion">Motivo de la cancelación <span aria-hidden="true">*</span></label>
             <textarea id="motivo-cancelacion" name="motivoCancelacion" rows="4" required minlength="10" maxlength="500"
               aria-describedby="motivo-cancelacion-ayuda"
               placeholder="Contanos por qué necesitás cancelar."
               [ngModel]="motivoCancelacion()" (ngModelChange)="motivoCancelacion.set($event)"
-              [disabled]="enviandoCancelacion()"></textarea>
+              [disabled]="enviandoCancelacion() || !!bloqueo"></textarea>
             <small id="motivo-cancelacion-ayuda">Entre 10 y 500 caracteres.</small>
             <div class="cancellation-info">
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
-              <p>Un administrador revisará tu solicitud. La reserva seguirá activa hasta que se resuelva.</p>
+              <p>Un administrador revisará tu solicitud. Si corresponde una devolución, la reserva se cancela cuando se confirma el reembolso.</p>
             </div>
           } @else if (estadoCancelacion() === 'pendiente') {
             <div class="cancellation-info" role="status">
@@ -58,11 +62,31 @@
           } @else if (estadoCancelacion() === 'consultando') {
             <p role="status">Consultando el estado de la solicitud…</p>
           }
+          @if (condicionesCancelacion()?.politica; as politica) {
+            <details class="cancellation-terms">
+              <summary>Términos y condiciones de cancelación</summary>
+              <ul>
+                <li>Podés solicitar la cancelación hasta {{ politica.diasDevolucionParcial }} días antes del ingreso, inclusive. Se cuentan días calendario de Argentina.</li>
+                <li>Solo se admiten pagos con dinero en cuenta de Mercado Pago. Los pagos con tarjeta de débito o crédito están excluidos.</li>
+                <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al momento de la aprobación.</li>
+                <li>Si al aprobar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
+                <li>Si la cancelación la solicita el anunciante o el administrador, la política prevé una devolución del {{ politica.porcentajeOtrosActores }} % si se aprueba antes del ingreso.</li>
+              </ul>
+            </details>
+            @if (estadoCancelacion() === 'formulario') {
+              <label class="cancellation-accept">
+                <input type="checkbox" name="aceptaTerminosCancelacion" required
+                  [ngModel]="aceptaTerminosCancelacion()" (ngModelChange)="aceptaTerminosCancelacion.set($event)"
+                  [disabled]="enviandoCancelacion() || !!bloqueo" />
+                Acepto los términos y condiciones de cancelación
+              </label>
+            }
+          }
           @if (errorCancelacion()) { <p class="cancellation-error" role="alert">{{ errorCancelacion() }}</p> }
           <div class="cancellation-actions">
             <button type="button" class="acct-btn cancellation-back" [disabled]="enviandoCancelacion()" (click)="cerrarCancelacion()">Volver</button>
             @if (estadoCancelacion() === 'formulario') {
-              <button type="submit" class="acct-btn cancellation-submit" [disabled]="enviandoCancelacion() || motivoCancelacion().trim().length < 10">
+              <button type="submit" class="acct-btn cancellation-submit" [disabled]="enviandoCancelacion() || !!bloqueo || !aceptaTerminosCancelacion() || motivoCancelacion().trim().length < 10">
                 {{ enviandoCancelacion() ? 'Enviando…' : 'Enviar solicitud' }}
               </button>
             } @else if (estadoCancelacion() === 'error') {
@@ -243,7 +267,9 @@
           <div><dt>Ingreso</dt><dd>{{ fechaTarjeta(reserva.fecha_inicio) }}</dd></div>
           <div><dt>Salida</dt><dd>{{ fechaTarjeta(reserva.fecha_fin) }}</dd></div>
         </dl>
-        @if (reserva.estado_pago === 'APROBADO') {
+        @if (devolucionRegistrada(reserva); as devolucion) {
+          <p class="booking-card__settlement">{{ devolucion.mensaje }}</p>
+        } @else if (reserva.estado_pago === 'APROBADO') {
           <p class="booking-card__settlement">
             @if (reserva.estado_liquidacion === 'RETENIDO') { <svg lucideLockKeyhole [size]="15" aria-hidden="true"></svg> }
             {{ estadoLiquidacion(reserva) }}

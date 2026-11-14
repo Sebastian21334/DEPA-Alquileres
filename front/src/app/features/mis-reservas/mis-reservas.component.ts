@@ -6,6 +6,7 @@ import { catchError, finalize, forkJoin, of, Subscription, switchMap } from 'rxj
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
+  CondicionesCancelacion,
   Reserva,
   ReprogramacionReserva,
   Reclamo,
@@ -14,7 +15,7 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
+import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
@@ -67,6 +68,8 @@ export class MisReservasComponent {
   protected readonly reservaACancelar = signal<Reserva | null>(null);
   protected readonly estadoCancelacion = signal<'consultando' | 'formulario' | 'pendiente' | 'aprobada' | 'error'>('consultando');
   protected readonly motivoCancelacion = signal('');
+  protected readonly condicionesCancelacion = signal<CondicionesCancelacion | null>(null);
+  protected readonly aceptaTerminosCancelacion = signal(false);
   protected readonly errorCancelacion = signal('');
   protected readonly enviandoCancelacion = signal(false);
 
@@ -183,7 +186,7 @@ export class MisReservasComponent {
       reserva.estado_pago === 'APROBADO' &&
       !reserva.cancelada &&
       !reserva.finalizada &&
-      reserva.estado_estadia === 'CONFIRMADA' &&
+      ['CONFIRMADA', 'PENDIENTE_INGRESO'].includes(reserva.estado_estadia) &&
       !reserva.codigo_validado_en &&
       reserva.estado_liquidacion !== 'EN_REVISION' &&
       reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' &&
@@ -197,6 +200,7 @@ export class MisReservasComponent {
     this.accionCancelacion = accion;
     this.reservaACancelar.set(reserva);
     this.motivoCancelacion.set('');
+    this.aceptaTerminosCancelacion.set(false);
     this.estadoCancelacion.set('consultando');
     this.errorCancelacion.set('');
     this.dialogoCancelacion().nativeElement.showModal();
@@ -209,12 +213,17 @@ export class MisReservasComponent {
     this.estadoCancelacion.set('consultando');
     this.errorCancelacion.set('');
     this.consultaCancelacion?.unsubscribe();
-    this.consultaCancelacion = this.reservasApi.cancellationRequest(reserva.id)
+    this.condicionesCancelacion.set(null);
+    this.consultaCancelacion = this.reservasApi.cancellationConditions(reserva.id)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (solicitud) => this.estadoCancelacion.set(
-          solicitud?.estado === 'APROBADA' ? 'aprobada' : solicitud ? 'pendiente' : 'formulario',
-        ),
+        next: (condiciones) => {
+          this.condicionesCancelacion.set(condiciones);
+          const { solicitud } = condiciones;
+          this.estadoCancelacion.set(
+            solicitud?.estado === 'APROBADA' ? 'aprobada' : solicitud ? 'pendiente' : 'formulario',
+          );
+        },
         error: (err: ApiError) => {
           this.estadoCancelacion.set('error');
           this.errorCancelacion.set(err.message);
@@ -225,11 +234,13 @@ export class MisReservasComponent {
   protected enviarCancelacion(): void {
     const reserva = this.reservaACancelar();
     const motivo = this.motivoCancelacion().trim();
+    const condiciones = this.condicionesCancelacion();
     if (!reserva || this.estadoCancelacion() !== 'formulario' || this.enviandoCancelacion() ||
+        !condiciones || condiciones.motivoBloqueo || !this.aceptaTerminosCancelacion() ||
         motivo.length < 10 || motivo.length > 500) return;
     this.errorCancelacion.set('');
     this.enviandoCancelacion.set(true);
-    this.reservasApi.requestCancellation(reserva.id, motivo)
+    this.reservasApi.requestCancellation(reserva.id, motivo, this.aceptaTerminosCancelacion())
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.enviandoCancelacion.set(false)),
@@ -461,19 +472,22 @@ export class MisReservasComponent {
     this.cargarReservas(true);
   }
 
+  protected readonly devolucionRegistrada = devolucionRegistrada;
+
   protected estado(reserva: Reserva): string {
-    return etiquetasEstadia[reserva.estado_estadia];
+    const devolucion = devolucionRegistrada(reserva);
+    return reserva.cancelada && devolucion
+      ? devolucion.etiqueta
+      : etiquetasEstadia[reserva.estado_estadia];
   }
 
   protected estadoLiquidacion(reserva: Reserva): string {
-    const etiquetas: Record<Reserva['estado_liquidacion'], string> = {
+    const etiquetas: Partial<Record<Reserva['estado_liquidacion'], string>> = {
       NO_APLICA: 'Sin liquidación',
       RETENIDO: 'Dinero retenido hasta el ingreso',
       PENDIENTE_PAGO_PROPIETARIO: 'Ingreso confirmado · pago administrativo pendiente',
       EN_REVISION: 'En revisión administrativa',
       PAGADO_PROPIETARIO: 'Pago al propietario registrado',
-      DEVUELTO_INQUILINO: 'Devolución al inquilino registrada',
-      DEVUELTO_PARCIAL_INQUILINO: 'Devolución parcial al inquilino registrada',
     };
     return etiquetas[reserva.estado_liquidacion] ?? 'Estado no disponible';
   }
