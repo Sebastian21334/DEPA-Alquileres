@@ -2,7 +2,10 @@ import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
 import { Module } from '@nestjs/common';
 import { UsuariosService } from './service/usuarios.service';
 import { UsuariosCredencialesService } from './service/usuarios-credenciales.service';
-import { UsuariosConsultaModule } from './usuarios-consulta.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { Usuario } from './entity/usuario.entity';
+import { USUARIOS_REPOSITORY } from './repository/usuarios.repository.interface';
+import { UsuariosRepository } from './repository/usuarios.repository';
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { UsuariosController } from './controller/usuarios.controller';
 import { SeguridadModule } from '../seguridad/seguridad.module';
@@ -13,11 +16,16 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 @Module({
   // El controller expone únicamente operaciones administrativas de usuarios.
   controllers: [UsuariosController],
-  providers: [UsuariosService, UsuariosCredencialesService],
+  providers: [
+    UsuariosService,
+    UsuariosCredencialesService,
+    UsuariosRepository,
+    { provide: USUARIOS_REPOSITORY, useExisting: UsuariosRepository },
+  ],
   exports: [UsuariosService, UsuariosCredencialesService],
   imports: [
     AlmacenamientoModule,
-    UsuariosConsultaModule,
+    TypeOrmModule.forFeature([Usuario]),
     CatalogosModule,
     SeguridadModule,
     MailModule,

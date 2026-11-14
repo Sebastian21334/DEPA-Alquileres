@@ -1,35 +1,31 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { MAIL_SERVICE, type IMailService } from '../../mail/mail.interface';
 import { ReservaBloqueoAnuncianteService } from '../../reservas/service/reserva-bloqueo-anunciante.service';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 
-/**
- * Caso de uso de bloqueo de un Anunciante. Vive en un módulo de composición
- * porque Usuarios y Reservas se necesitan mutuamente y ARQ-10 prohíbe ciclos.
- */
 @Injectable()
 export class BloqueoAnuncianteService {
   private readonly logger = new Logger(BloqueoAnuncianteService.name);
-
   constructor(
-    private readonly usuariosService: UsuariosService,
-    private readonly bloqueo: ReservaBloqueoAnuncianteService,
-  ) {}
+    private readonly usuarios: UsuariosService, 
+    private readonly bloqueo: ReservaBloqueoAnuncianteService, 
+    @Inject(MAIL_SERVICE) private readonly mail: IMailService) {}
 
-  async cambiarBloqueo(
-    idUsuario: number,
-    bloqueado: boolean,
-    idOperador: number,
-    motivo?: string,
-  ) {
-    const usuario = await this.usuariosService.buscarPorId(idUsuario);
-    if (!usuario) throw new NotFoundException('Usuario no encontrado');
+  async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
+    const motivoNormalizado = motivo?.trim();
+    const { usuario, cambio } = await this.usuarios.cambiarBloqueoAdministrativo(idUsuario, bloqueado, idOperador, motivoNormalizado);
 
-    const resultado = await this.usuariosService.cambiarBloqueo(
-      idUsuario,
-      bloqueado,
-      idOperador,
-      motivo,
-    );
+    if (cambio && usuario.email) {
+      try {
+        await this.mail.enviarCambioBloqueo(usuario.email, bloqueado, motivoNormalizado);
+      } catch (error) {
+        this.logger.error(`No se pudo notificar el cambio de acceso del usuario ${idUsuario}`, error as Error);
+      }
+    }
+
+    const resultado = {
+      mensaje: bloqueado ? 'Usuario bloqueado correctamente' : 'Usuario habilitado correctamente',
+    };
 
     if (!bloqueado || usuario.rol?.nombre !== 'Anunciante') return resultado;
 
@@ -37,8 +33,8 @@ export class BloqueoAnuncianteService {
       const reservas =
         await this.bloqueo.cancelarReservasPorBloqueoAnunciante(
           idUsuario,
-          idOperador,
-          motivo,
+          usuario.bloqueoDetalle?.administradorId ?? idOperador,
+          usuario.bloqueoDetalle ? usuario.bloqueoDetalle.motivo ?? undefined : motivoNormalizado,
         );
       this.logger.log(
         `Bloqueo del anunciante ${idUsuario}: ${reservas.canceladasPendientes} pendientes, ` +

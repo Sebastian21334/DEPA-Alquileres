@@ -1,7 +1,8 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { LiquidacionesService } = require('../dist/reservas/service/liquidaciones.service');
+const { LiquidacionesService } = require('../dist/liquidaciones/service/liquidaciones.service');
 
 function crearReserva(extra = {}) {
   return {
@@ -20,7 +21,6 @@ function crearRepositorio() {
   let ultimoId = 0;
   const repositorio = {
     filas,
-    conTransaccion: async (operacion) => operacion(repositorio, {}),
     crear: (datos) => ({ ...datos }),
     guardar: async (liquidacion) => {
       liquidacion.id ??= ++ultimoId;
@@ -29,9 +29,6 @@ function crearRepositorio() {
     },
     buscarPorReserva: async (idReserva) => filas.get(idReserva) ?? null,
     buscarPorReservaConBloqueo: async (idReserva) => filas.get(idReserva) ?? null,
-    buscarAdministracion: async () => [...filas.values()],
-    buscarPorId: async (id) =>
-      [...filas.values()].find((liquidacion) => liquidacion.id === id) ?? null,
   };
   return repositorio;
 }
@@ -45,7 +42,7 @@ test('asegurarParaReserva copia la caché de la reserva y solo crea una fila', a
     fecha_resolucion_liquidacion: fecha,
   });
   const repositorio = crearRepositorio();
-  const service = new LiquidacionesService(repositorio);
+  const service = new LiquidacionesService(repositorio, catalogosDePrueba());
 
   const primera = await service.asegurarParaReserva(reserva);
   const segunda = await service.asegurarParaReserva(reserva);
@@ -63,7 +60,7 @@ test('asegurarParaReserva copia la caché de la reserva y solo crea una fila', a
 
 test('asegurarParaReserva no inventa un importe si la liquidación sigue pendiente', async () => {
   const reserva = crearReserva();
-  const service = new LiquidacionesService(crearRepositorio());
+  const service = new LiquidacionesService(crearRepositorio(), catalogosDePrueba());
 
   const liquidacion = await service.asegurarParaReserva(reserva);
 
@@ -75,7 +72,7 @@ test('asegurarParaReserva no inventa un importe si la liquidación sigue pendien
 test('registrarResolucion actualiza importe, moneda, referencia, administrador y fecha', async () => {
   const reserva = crearReserva();
   const repositorio = crearRepositorio();
-  const service = new LiquidacionesService(repositorio);
+  const service = new LiquidacionesService(repositorio, catalogosDePrueba());
   const desde = Date.now();
 
   const liquidacion = await service.registrarResolucion(
@@ -109,7 +106,7 @@ test('registrarResolucion actualiza importe, moneda, referencia, administrador y
 test('registrarResolucion es idempotente sobre la misma fila y registra el pago al propietario', async () => {
   const reserva = crearReserva();
   const repositorio = crearRepositorio();
-  const service = new LiquidacionesService(repositorio);
+  const service = new LiquidacionesService(repositorio, catalogosDePrueba());
 
   await service.registrarResolucion(
     reserva,
@@ -140,7 +137,7 @@ test('registrarRevision deja la liquidación en revisión y limpia la fecha de r
     estado_liquidacion: 'PAGADO_PROPIETARIO',
     fecha_resolucion_liquidacion: new Date('2026-01-02T03:04:05.000Z'),
   });
-  const service = new LiquidacionesService(crearRepositorio());
+  const service = new LiquidacionesService(crearRepositorio(), catalogosDePrueba());
 
   const liquidacion = await service.registrarRevision(
     reserva,
@@ -178,7 +175,7 @@ test('sincronizarDesdeReserva copia la caché sin pisar la resolución administr
     fecha_resolucion: null,
     fecha_pago_propietario: fechaPago,
   });
-  const service = new LiquidacionesService(repositorio);
+  const service = new LiquidacionesService(repositorio, catalogosDePrueba());
 
   const liquidacion = await service.sincronizarDesdeReserva(reserva);
 
@@ -210,7 +207,7 @@ test('sincronizarDesdeReserva completa el importe de una liquidación resuelta s
     fecha_resolucion: null,
     fecha_pago_propietario: null,
   });
-  const service = new LiquidacionesService(repositorio);
+  const service = new LiquidacionesService(repositorio, catalogosDePrueba());
 
   const liquidacion = await service.sincronizarDesdeReserva(reserva);
 
@@ -227,7 +224,7 @@ test('sincronizarDesdeReserva no guarda si la reserva no cambió', async () => {
     guardados += 1;
     return guardar(liquidacion);
   };
-  const service = new LiquidacionesService(repositorio);
+  const service = new LiquidacionesService(repositorio, catalogosDePrueba());
 
   await service.asegurarParaReserva(reserva);
   const liquidacion = await service.sincronizarDesdeReserva(reserva);
@@ -237,7 +234,7 @@ test('sincronizarDesdeReserva no guarda si la reserva no cambió', async () => {
 });
 
 test('registrarDevolucion distingue el reembolso total del parcial', async () => {
-  const service = new LiquidacionesService(crearRepositorio());
+  const service = new LiquidacionesService(crearRepositorio(), catalogosDePrueba());
 
   const parcial = await service.registrarDevolucion(
     crearReserva({ id: 1 }),

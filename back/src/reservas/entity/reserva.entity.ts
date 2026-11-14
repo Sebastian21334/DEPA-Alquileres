@@ -1,6 +1,5 @@
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoPagoReserva, EstadoLiquidacionReserva } from '../../catalogos/estados';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -14,22 +13,16 @@ import {
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Publicacion } from '../../publicaciones/entity/publicacion.entity';
-import { Pago } from '../../pagos/entity/pago.entity';
-import { Reembolso } from '../../reembolsos/entity/reembolso.entity';
 import { ReprogramacionReserva } from './reprogramacion-reserva.entity';
-import { Liquidacion } from './liquidacion.entity';
+import { Liquidacion } from '../../liquidaciones/entity/liquidacion.entity';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
-import type { ActorCancelacion } from '../actor-cancelacion';
+export type ActorCancelacion = 'INQUILINO' | 'ANUNCIANTE' | 'ADMINISTRADOR' | 'SISTEMA';
+export type CausaCancelacion = 'BLOQUEO_ANUNCIANTE';
 
 @Entity('reserva')
-@Check('ck_reserva_estado_pago_ambito', `"ambito_estado_pago" = '${AmbitoEstado.PAGO_RESERVA}'`)
+@Check('ck_reserva_estado_pago_ambito', `"ambito_estado_pago" = '${"PAGO_RESERVA"}'`)
 @ForeignKey(() => Estado, ['ambitoEstadoPago', 'estado_pago'], ['codigoAmbito', 'codigo'], {
   name: 'fk_reserva_estado_pago',
-  onDelete: 'RESTRICT',
-})
-@Check('ck_reserva_estado_liquidacion_ambito', `"ambito_estado_liquidacion" = '${AmbitoEstado.LIQUIDACION_RESERVA}'`)
-@ForeignKey(() => Estado, ['ambitoEstadoLiquidacion', 'estado_liquidacion'], ['codigoAmbito', 'codigo'], {
-  name: 'fk_reserva_estado_liquidacion',
   onDelete: 'RESTRICT',
 })
 export class Reserva {
@@ -54,6 +47,9 @@ export class Reserva {
     nullable: true,
   })
   motivo_cancelacion: string | null;
+
+  @Column({ name: 'causa_cancelacion', type: 'varchar', length: 40, nullable: true })
+  causa_cancelacion: CausaCancelacion | null;
 
   @Column({
     name: 'cancelada_por',
@@ -135,8 +131,8 @@ export class Reserva {
   @Column({ name: 'fecha_pago', type: 'timestamp', nullable: true })
   fecha_pago: Date | null;
 
-  @Column({ name: 'estado_pago', type: 'varchar', length: 40, default: EstadoPagoReserva.APROBADO })
-  estado_pago: EstadoPagoReserva;
+  @Column({ name: 'estado_pago', type: 'varchar', length: 40, default: 'APROBADO' })
+  estado_pago: string;
 
   @Column({
     name: 'ambito_estado_pago',
@@ -146,9 +142,9 @@ export class Reserva {
     insert: false,
     update: false,
   })
-  readonly ambitoEstadoPago: typeof AmbitoEstado.PAGO_RESERVA;
+  readonly ambitoEstadoPago: "PAGO_RESERVA";
 
-  @Column({ name: 'pago_vencimiento', type: 'timestamp', nullable: true })
+  @Column({ name: 'pago_vencimiento', type: 'timestamptz', nullable: true })
   pago_vencimiento: Date | null;
 
   // El código se excluye de todas las consultas normales. Solo puede
@@ -171,40 +167,9 @@ export class Reserva {
   @Column({ name: 'intentos_codigo', type: 'int', default: 0 })
   intentos_codigo: number;
 
-  @Column({ name: 'estado_liquidacion', type: 'varchar', length: 40, default: EstadoLiquidacionReserva.NO_APLICA })
-  estado_liquidacion: EstadoLiquidacionReserva;
-
-  @Column({
-    name: 'ambito_estado_liquidacion',
-    type: 'varchar',
-    length: 40,
-    select: false,
-    insert: false,
-    update: false,
-  })
-  readonly ambitoEstadoLiquidacion: typeof AmbitoEstado.LIQUIDACION_RESERVA;
-
-  @Column({
-    name: 'fecha_resolucion_liquidacion',
-    type: 'timestamp',
-    nullable: true,
-  })
+  estado_liquidacion: string;
   fecha_resolucion_liquidacion: Date | null;
-
-  @Column({
-    name: 'referencia_liquidacion',
-    type: 'varchar',
-    length: 150,
-    nullable: true,
-  })
   referencia_liquidacion: string | null;
-
-  @Column({
-    name: 'observacion_liquidacion',
-    type: 'varchar',
-    length: 500,
-    nullable: true,
-  })
   observacion_liquidacion: string | null;
 
   // Se conserva una copia del periodo para mantener el historial aunque
@@ -276,12 +241,6 @@ export class Reserva {
 
   // Registro auditable de la liquidación; la reserva conserva la caché del estado.
   @OneToOne(() => Liquidacion, (liquidacion) => liquidacion.reserva)
-  liquidacion: Relation<Liquidacion | null>;
+  liquidacion?: Relation<Liquidacion | null>;
 
-  // Relaciones de lectura para la auditoría de la liquidación.
-  @OneToOne(() => Pago, (pago) => pago.reserva)
-  pago: Relation<Pago | null>;
-
-  @OneToMany(() => Reembolso, (reembolso) => reembolso.reserva)
-  reembolsos: Relation<Reembolso[]>;
 }

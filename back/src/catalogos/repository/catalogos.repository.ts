@@ -14,12 +14,8 @@ import { ICatalogosRepository } from './catalogos.repository.interface';
 export class CatalogosRepository implements ICatalogosRepository {
   constructor(@InjectRepository(Rol) private readonly rolRepo: Repository<Rol>, @InjectRepository(TipoAnunciante) private readonly tipoAnuncianteRepo: Repository<TipoAnunciante>, @InjectRepository(TipoPropiedad) private readonly tipoPropiedadRepo: Repository<TipoPropiedad>, @InjectRepository(Modalidad) private readonly modalidadRepo: Repository<Modalidad>, @InjectRepository(TipoMoneda) private readonly tipoMonedaRepo: Repository<TipoMoneda>, @InjectRepository(Estado) private readonly estadosRepo: Repository<Estado>) {}
 
-  listarClavesEstado(): Promise<Pick<Estado, 'codigoAmbito' | 'codigo'>[]> {
-    return this.estadosRepo.find({ select: { codigoAmbito: true, codigo: true } });
-  }
-
-  buscarEstadoPorCodigo(codigoAmbito: string, codigo: string): Promise<Estado | null> {
-    return this.estadosRepo.findOneBy({ codigoAmbito, codigo });
+  listarEstados(): Promise<Estado[]> {
+    return this.estadosRepo.find({ relations: { ambito: true } });
   }
 
   // --- ROLES ---

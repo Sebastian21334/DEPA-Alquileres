@@ -59,6 +59,13 @@ existe, el runner aplica antes las migraciones de cancelaciones y de estados por
 `reserva.estado_liquidacion` se mantiene como caché de compatibilidad; la
 entidad `Liquidacion` es la fuente de auditoría.
 
+# Causa de cancelación de reservas por bloqueo
+
+Después de aplicar la migración de cancelaciones y devoluciones, ejecutar desde
+`back`, con el backend detenido, `npm run db:causa-cancelacion-reserva`. La
+migración agrega `reserva.causa_cancelacion` e identifica los bloqueos históricos
+por el actor y el prefijo del motivo. Se puede repetir.
+
 # Cancelaciones, devoluciones, reclamos y contracargos
 
 Para habilitar el circuito del ítem 14, con el backend detenido y sobre una
@@ -73,10 +80,7 @@ Acepta bases con el enum de disputas y bases con el catálogo histórico
 `estado_disputa`. El comando es repetible, conserva los códigos existentes y
 mantiene el índice de una sola solicitud de cancelación pendiente por reserva.
 
-La ejecución automática de devoluciones por Mercado Pago queda apagada por
-defecto con `MP_REFUNDS_ENABLED=false`. En ese modo el Administrador registra
-la devolución manualmente con una referencia. Para el contenedor privado de
-evidencias configurar `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
+Para el contenedor privado de evidencias configurar `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
 
 # Inicializar una base nueva desde back/.env
 

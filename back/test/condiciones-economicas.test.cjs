@@ -1,13 +1,14 @@
+const { catalogosDePrueba, reservasDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test, beforeEach } = require('node:test');
 const { ValidationPipe } = require('@nestjs/common');
 const { JwtService } = require('@nestjs/jwt');
-const { CrearCheckoutDto } = require('../dist/pagos/dto/crear-checkout.dto');
-const { PresupuestosService } = require('../dist/pagos/service/presupuestos.service');
+const { CrearCheckoutDto } = require('../dist/operaciones-reserva/dto/crear-checkout.dto');
+const { PresupuestosService } = require('../dist/operaciones-reserva/service/presupuestos.service');
+const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
 const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
-const { ReservaDecisionService } = require('../dist/reservas/service/reserva-decision.service');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
@@ -49,7 +50,7 @@ function escenario(moneda = 'ARS') {
     buscarPorId: async () => ({ ...publicacion, tipoMoneda: { ...publicacion.tipoMoneda } }),
     buscarCondicionesDeReserva: async () => ({ ...publicacion, tipoMoneda: { ...publicacion.tipoMoneda } }),
     bloquearPorId: async () => { estado.alBloquear(); return true; },
-  }, new CatalogosService());
+  }, catalogosDePrueba());
   const repositorio = {
     conTransaccion: (operacion) => operacion(repositorio, {}),
     buscarPendientesVencidas: async () => [],
@@ -72,41 +73,52 @@ function escenario(moneda = 'ARS') {
     config,
     repositorio,
     disponibilidad,
-    { buscarPorId: async () => ({ nombre: 'Prueba', apellido: 'Reserva' }) },
+    { buscarPorId: async (id) => ({ id, nombre: 'Prueba', apellido: 'Reserva' }) },
     publicaciones,
     { enviarConfirmacion: async () => {} },
     { crearSolicitud: async () => ({}) },
-    new ReservaEstadoService(publicaciones),
-    new ReservaDecisionService(),
-    { sincronizarDesdeReserva: async () => ({}) },
+    new ReservaEstadoService(publicaciones, catalogosDePrueba()),
+    { proyectarEnReserva: async reserva => reserva, proyectarListado: async reservas => reservas, sincronizarDesdeReserva: async () => ({}), esLiquidacionResuelta: estado => reservasDePrueba().liquidacionResuelta({ estado_liquidacion: estado }) },
+    catalogosDePrueba(),
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },
     publicaciones, disponibilidad, new JwtService(), config,
   );
-  const pagos = new PagosService(
+  const pagos = new OperacionesPagoService(
     presupuestos,
-    {
+    new PagosService({
       crear: (datos) => Object.assign(new Pago(), datos),
       guardar: async (pago) => {
-        if (!estado.pagos.includes(pago)) estado.pagos.push(pago);
+        pago.id = estado.pagos.length + 1;
+        pago.reserva = estado.reservas.find(reserva => reserva.id === pago.reserva.id);
+        estado.pagos.push(pago);
         return pago;
       },
+      actualizar: async (id, datos) => Object.assign(estado.pagos.find(pago => pago.id === id), datos),
+      actualizarIntentoFallido: async (id, datos) => {
+        const pago = estado.pagos.find(p => p.id === id);
+        if (pago.status === 'approved') return false;
+        Object.assign(pago, datos);
+        return true;
+      },
       buscarPorReferencia: async (referencia) => estado.pagos.find(p => p.external_reference === referencia),
-    },
+      buscarPorReserva: async (id) => estado.pagos.find(p => p.reserva.id === id),
+    }),
     reservas,
     { registrarDesdeWebhook: async () => ({}), registrarManual: async () => ({}) },
     { registrarContracargo: async () => ({}) },
     config,
     {
       validarConfiguracionCheckout: () => {},
-      crearCheckout: async (reserva, referencia, clave, currency) => {
-        estado.checkouts.push({ amount: reserva.monto_pago, currency });
+      crearCheckout: async ({ importe, moneda: currency }) => {
+        estado.checkouts.push({ amount: importe, currency });
         return { id: 'preferencia-prueba', url: 'https://example.invalid/pago' };
       },
       validarWebhook: () => {},
       consultarPago: async () => estado.pagoExterno,
-    },
+      consultarCheckout: async () => 'https://example.invalid/pago',
+    }, catalogosDePrueba(),
   );
   pagos.logger = { warn: () => {} };
   return { publicacion, cotizacion, estado, presupuestos, reservas, pagos };
@@ -214,7 +226,7 @@ for (const moneda of ['ARS', 'USD']) {
     assert.equal(reserva.cotizacion_aceptada_en.getTime(), AHORA + 60000);
     assert.equal(reserva.presupuesto_emitido_en.toISOString(), presupuesto.emitida_en);
     assert.equal(reserva.presupuesto_vence_en.toISOString(), presupuesto.vence_en);
-    assert.equal(reserva.pago_vencimiento.toISOString(), presupuesto.vence_en);
+    assert.equal(reserva.pago_vencimiento.getTime(), AHORA + 60000 + 15 * 60_000);
     const historico = JSON.stringify([
       reserva.precio_unitario_contratado, reserva.moneda_origen, reserva.importe_origen,
       reserva.importe_contratado, reserva.moneda_contratada, reserva.cotizacion_dolar,
@@ -236,6 +248,24 @@ for (const moneda of ['ARS', 'USD']) {
     ]), historico);
   });
 }
+
+test('un intento rechazado permite reabrir el checkout hasta el vencimiento original', async (t) => {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  const checkout = await e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO);
+  const reserva = e.estado.reservas[0];
+  e.estado.pagoExterno = {
+    id: 123, external_reference: `reserva:${reserva.id}`, status: 'rejected',
+    transaction_amount: Number(presupuesto.total_cobro), currency_id: 'ARS',
+  };
+  await e.pagos.procesarWebhook({ dataId: '123' });
+  assert.equal(reserva.estado_pago, 'PENDIENTE');
+  assert.equal(reserva.cancelada, false);
+  assert.deepEqual(await e.pagos.reintentarCheckout(reserva.id, USUARIO), checkout);
+  assert.equal(e.estado.checkouts.length, 1);
+  t.mock.timers.setTime(reserva.pago_vencimiento.getTime() + 1);
+  await assert.rejects(e.pagos.reintentarCheckout(reserva.id, USUARIO), { status: 409 });
+});
 
 test('un pago aprobado después de bloquear al anunciante no confirma la reserva', async (t) => {
   const e = escenario('ARS');

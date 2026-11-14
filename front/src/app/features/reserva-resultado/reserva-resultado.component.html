@@ -47,19 +47,27 @@
       } @else {
       <header
         class="receipt-hero"
-        [class.is-approved]="item.estado_pago === 'APROBADO'"
-        [class.is-pending]="item.estado_pago === 'PENDIENTE'"
+        [class.is-approved]="item.estado_pago === 'APROBADO' && !item.cancelada"
+        [class.is-pending]="item.estado_pago === 'PENDIENTE' || (item.cancelada && item.estado_pago === 'APROBADO' && item.estado_liquidacion === 'EN_REVISION')"
       >
         <div class="status-icon">
-          {{ item.estado_pago === 'APROBADO' ? '✓' : item.estado_pago === 'PENDIENTE' ? '…' : '!' }}
+          {{ item.estado_pago === 'APROBADO' && !item.cancelada ? '✓' : item.estado_pago === 'PENDIENTE' ? '…' : '!' }}
         </div>
         <div>
           <span class="eyebrow">Reserva #{{ item.id }}</span>
           <h1>{{ tituloEstado(item) }}</h1>
           <p>{{ descripcionEstado(item) }}</p>
+          @if (resumen()?.puede_reintentar) {
+            <button type="button" class="acct-btn acct-btn--primary" [disabled]="reintentandoPago()" (click)="reintentarPago(item.id)">
+              {{ reintentandoPago() ? 'Abriendo Mercado Pago…' : 'Volver a Mercado Pago' }}
+            </button>
+          }
         </div>
         <a class="acct-btn acct-btn--ghost" routerLink="/mis-reservas">Ver todas mis reservas</a>
       </header>
+      }
+      @if (errorVerificacion() && item.estado_pago !== 'APROBADO') {
+        <p class="receipt-card reservation-notice" role="alert">{{ errorVerificacion() }}</p>
       }
       @if (avisoReprogramacion()) {
         <p class="receipt-card reservation-notice" role="status">{{ avisoReprogramacion() }}</p>

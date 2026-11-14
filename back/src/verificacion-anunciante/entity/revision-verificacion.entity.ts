@@ -10,12 +10,11 @@ import {
 } from 'typeorm';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoVerificacion } from '../../catalogos/estados';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
 // Guarda cada decisión administrativa para no perder el historial de revisiones.
 @Entity('revision_verificacion')
-@Check('ck_revision_verificacion_estado_ambito', `"ambito_estado" = '${AmbitoEstado.VERIFICACION_ANUNCIANTE}'`)
+@Check('ck_revision_verificacion_estado_ambito', `"ambito_estado" = '${"VERIFICACION_ANUNCIANTE"}'`)
 @ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_revision_verificacion_estado',
   onDelete: 'RESTRICT',
@@ -34,7 +33,7 @@ export class RevisionVerificacion {
   numero_revision: number;
 
   @Column({ name: 'estado', type: 'varchar', length: 40 })
-  estado: EstadoVerificacion;
+  estado: string;
 
   @Column({
     name: 'ambito_estado',
@@ -44,7 +43,7 @@ export class RevisionVerificacion {
     insert: false,
     update: false,
   })
-  readonly ambitoEstado: typeof AmbitoEstado.VERIFICACION_ANUNCIANTE;
+  readonly ambitoEstado: "VERIFICACION_ANUNCIANTE";
 
   @Column({ name: 'motivo', type: 'varchar', length: 500, nullable: true })
   motivo: string | null;

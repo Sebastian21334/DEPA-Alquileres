@@ -7,7 +7,7 @@ const { cargarDatosBase } = require('../../scripts/seed.cjs');
 const tiposPg = require('pg').types;
 
 // Mantiene el SQL y la hidratación de TypeORM/pg, sin conexiones ni datos reales.
-async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito = true } = {}) {
+async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito = true, aplicacionReembolsos = true } = {}) {
   const db = new PGlite({ parsers: {
     1082: tiposPg.getTypeParser(1082),
     1114: tiposPg.getTypeParser(1114),
@@ -51,12 +51,22 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     // El comando de migración aplica el circuito y el catálogo en una misma transacción.
     const migraciones = [
       '20261104-cancelaciones-devoluciones.sql',
+      '20261112-causa-cancelacion-reserva.sql',
+      '20261113-politica-cancelacion.sql',
       ...(estadosDisputa ? ['20261110-estados-disputa.sql'] : []),
       ...(estadosPorAmbito ? ['20261110-estados-por-ambito.sql'] : []),
     ].map(leerMigracion);
     await db.exec(`BEGIN;\n${migraciones.join('\n')}\nCOMMIT;`);
-    if (estadosPorAmbito) await db.exec(leerMigracion('20261112-liquidaciones.sql'));
+    if (estadosPorAmbito) {
+      await db.exec(leerMigracion('20261112-liquidaciones.sql'));
+      await db.exec(leerMigracion('20261113-reconciliar-liquidaciones.sql'));
+    }
+    if (estadosPorAmbito && aplicacionReembolsos)
+      await db.exec(leerMigracion('20261113-aplicacion-reembolsos.sql'));
     await db.exec('SET search_path TO public');
+    if (estadosPorAmbito) await db.exec(leerMigracion('20261113-catalogos-de-expedientes.sql'));
+    if (estadosPorAmbito) await db.exec('BEGIN;\n' + leerMigracion('20261113-retirar-liquidacion-de-reserva.sql') + '\nCOMMIT;');
+    await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };
   } catch (error) {

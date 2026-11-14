@@ -129,6 +129,7 @@ export interface PagoResumen {
 export interface ResumenReserva {
   reserva: Reserva;
   pago: PagoResumen | null;
+  puede_reintentar: boolean;
 }
 
 export interface SolicitudCancelacion {
@@ -207,6 +208,10 @@ export class ReservationService {
 
   reconcilePayment(paymentId: string): Observable<EstadoPago> {
     return this.http.post<EstadoPago>(`${this.paymentUrl}/reconciliar`, { payment_id: paymentId });
+  }
+
+  retryCheckout(idReserva: number): Observable<CheckoutCreado> {
+    return this.http.post<CheckoutCreado>(`${this.paymentUrl}/reservas/${idReserva}/reintentar`, {});
   }
 
   summary(idReserva: number): Observable<ResumenReserva> {

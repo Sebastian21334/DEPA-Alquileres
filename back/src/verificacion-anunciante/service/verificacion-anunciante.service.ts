@@ -1,4 +1,3 @@
-import { EstadoVerificacion } from '../../catalogos/estados';
 import { type IMailService, MAIL_SERVICE } from '../../mail/mail.interface';
 import {
   type IVerificacionRepository,
@@ -69,7 +68,7 @@ export class VerificacionAnuncianteService {
         }, transaccion);
         const solicitud = this.verificacionRepo.crearSolicitud({
           anunciante: nuevo,
-          estado: EstadoVerificacion.BORRADOR,
+          estado: this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'borrador'),
           numero_revision: 1,
           ...datosEmpresa,
         });
@@ -127,7 +126,7 @@ export class VerificacionAnuncianteService {
             'No hay una solicitud de inmobiliaria para esta cuenta',
           );
         }
-        if (!this.pruebaVidaService.puedeRecibirDocumentos(solicitud, solicitud.estado === EstadoVerificacion.RECHAZADA)) {
+        if (!this.pruebaVidaService.puedeRecibirDocumentos(solicitud, solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada'))) {
           throw new ConflictException(
             'Solo podés corregir datos antes de enviarlos o después de un rechazo',
           );
@@ -143,7 +142,7 @@ export class VerificacionAnuncianteService {
   async subirDocumentos(idUsuario: number, archivos: { dni_frente?: Express.Multer.File[]; dni_dorso?: Express.Multer.File[]; rostro?: Express.Multer.File[]; matricula?: Express.Multer.File[]; constancia_cuit?: Express.Multer.File[]; }, verificationToken: string, reenvio = false) {
     // Se recupera la solicitud vigente y se impide modificar una ya aprobada.
     const solicitud = await this.obtenerSolicitud(idUsuario);
-    if (solicitud.estado === EstadoVerificacion.APROBADA) {
+    if (solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada')) {
       throw new ConflictException('La identidad ya fue aprobada');
     }
     if (!this.pruebaVidaService.puedeRecibirDocumentos(solicitud, reenvio)) {
@@ -319,7 +318,7 @@ export class VerificacionAnuncianteService {
       idAnunciante,
       idAdministrador,
       dto.numero_revision,
-      EstadoVerificacion.APROBADA,
+      this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada'),
     );
     await this.eliminacionDocumentos.ejecutar();
     await this.notificarResolucion(solicitud, true);
@@ -337,7 +336,7 @@ export class VerificacionAnuncianteService {
       idAnunciante,
       idAdministrador,
       dto.numero_revision,
-      EstadoVerificacion.RECHAZADA,
+      this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada'),
       motivo,
     );
     await this.eliminacionDocumentos.ejecutar();
@@ -345,7 +344,7 @@ export class VerificacionAnuncianteService {
     return { mensaje: 'Solicitud de verificación rechazada' };
   }
 
-  private resolverRevision(idAnunciante: number, idAdministrador: number, numeroRevision: number, estado: typeof EstadoVerificacion.APROBADA | typeof EstadoVerificacion.RECHAZADA, motivo: string | null = null): Promise<SolicitudVerificacion> {
+  private resolverRevision(idAnunciante: number, idAdministrador: number, numeroRevision: number, estado: 'aprobada' | 'rechazada', motivo: string | null = null): Promise<SolicitudVerificacion> {
     return this.verificacionRepo.conSolicitudBloqueada(
       idAnunciante,
       async (solicitud, persistencia, transaccion) => {
@@ -363,7 +362,7 @@ export class VerificacionAnuncianteService {
             'La documentación cambió. Actualizá la solicitud antes de resolverla',
           );
         }
-        if (estado === EstadoVerificacion.APROBADA) {
+        if (estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada')) {
           if (
             !this.tieneDocumentacionCompleta(solicitud) ||
             !this.pruebaVidaService.tienePruebaVidaPresentada(solicitud)
@@ -425,8 +424,8 @@ export class VerificacionAnuncianteService {
   }
 
   private estaPendienteDeRevision(solicitud: SolicitudVerificacion): boolean {
-    return solicitud.estado === EstadoVerificacion.PENDIENTE ||
-      solicitud.estado === EstadoVerificacion.REENVIADA;
+    return solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'pendiente') ||
+      solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'reenviada');
   }
 
   private tieneDocumentacionCompleta(solicitud: SolicitudVerificacion): boolean {
@@ -460,20 +459,20 @@ export class VerificacionAnuncianteService {
     solicitud.rostro_url = urls.rostro;
     if (reenvio) solicitud.numero_revision += 1;
     solicitud.estado = reenvio
-      ? EstadoVerificacion.REENVIADA
-      : EstadoVerificacion.PENDIENTE;
+      ? this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'reenviada')
+      : this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'pendiente');
     solicitud.motivo_rechazo = null;
     solicitud.actualizada_en = new Date();
   }
 
   private marcarAprobada(solicitud: SolicitudVerificacion): void {
-    solicitud.estado = EstadoVerificacion.APROBADA;
+    solicitud.estado = this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada');
     solicitud.motivo_rechazo = null;
     solicitud.actualizada_en = new Date();
   }
 
   private marcarRechazada(solicitud: SolicitudVerificacion, motivo: string): void {
-    solicitud.estado = EstadoVerificacion.RECHAZADA;
+    solicitud.estado = this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada');
     solicitud.motivo_rechazo = motivo.trim();
     solicitud.actualizada_en = new Date();
   }
@@ -508,7 +507,7 @@ export class VerificacionAnuncianteService {
 
   /** Devuelve las solicitudes que todavia requieren una decision administrativa. */
   async getPendientes() {
-    const solicitudes = await this.verificacionRepo.buscarPendientes();
+    const solicitudes = await this.verificacionRepo.buscarPendientes([this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'pendiente'), this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'reenviada')]);
     // El contenedor de documentos es privado: la URL guardada no se puede abrir
     // directamente, así que al administrador se le entregan URLs firmadas temporales.
     return Promise.all(

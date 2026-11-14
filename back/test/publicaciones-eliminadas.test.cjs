@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
@@ -35,7 +36,7 @@ function escenario() {
   repository.existeReserva = async ({ idPublicacion, idUsuario }) => reservas.some(
     r => r.publicacion.id === idPublicacion && r.usuario.id === idUsuario && r.pendiente,
   );
-  const servicio = new PublicacionesService(repository, {}, {}, {});
+  const servicio = new PublicacionesService(repository, catalogosDePrueba(), {}, {});
   return { publicacion, reservas, servicio };
 }
 
@@ -136,7 +137,7 @@ test('la consulta real de reservas respeta usuario, publicación, fechas, pago y
     db.exec('DELETE FROM reserva');
     db.prepare(`INSERT INTO reserva VALUES (1, :id_publicacion, :id_usuario, :cancelada,
       :finalizada, :fecha_fin, :estado_pago, :pago_vencimiento)`).run(fila);
-    const servicio = new PublicacionesService(repository);
+    const servicio = new PublicacionesService(repository, catalogosDePrueba());
     repository.buscarPorId = async () => ({ id: 10, eliminada: true });
     if (esperado) assert.equal((await servicio.buscarPublicaPorId(10, 1)).id, 10);
     else await assert.rejects(servicio.buscarPublicaPorId(10, 1), { status: 404 }, JSON.stringify(cambio));
@@ -195,7 +196,7 @@ test('HTTP: elimina con permiso y conserva el detalle solo para la sesión del i
   const { DisponibilidadService } = require('../dist/disponibilidad/service/disponibilidad.service');
   const { JwtStrategy } = require('../dist/seguridad/strategy/jwt.strategy');
   const { SeguridadService } = require('../dist/seguridad/service/seguridad.service');
-  const { UsuariosConsultaService } = require('../dist/usuarios/service/usuarios-consulta.service');
+  const { UsuariosConsultaService } = require('../dist/usuarios-consulta/service/usuarios-consulta.service');
   const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
   const e = escenario();
   const bloqueados = new Set();

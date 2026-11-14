@@ -1,6 +1,5 @@
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoVerificacion } from '../../catalogos/estados';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -14,7 +13,7 @@ import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 
 // Representa la solicitud vigente de identidad de un anunciante.
 @Entity('solicitud_verificacion')
-@Check('ck_solicitud_verificacion_estado_ambito', `"ambito_estado" = '${AmbitoEstado.VERIFICACION_ANUNCIANTE}'`)
+@Check('ck_solicitud_verificacion_estado_ambito', `"ambito_estado" = '${"VERIFICACION_ANUNCIANTE"}'`)
 @ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_solicitud_verificacion_estado',
   onDelete: 'RESTRICT',
@@ -30,8 +29,8 @@ export class SolicitudVerificacion {
   // Aumenta cada vez que el anunciante vuelve a enviar documentos.
   // Fechas de auditoría para ordenar solicitudes y conocer su última modificación.
   // Si se elimina el anunciante, su solicitud deja de tener sentido y se elimina en cascada.
-  @Column({ name: 'estado', type: 'varchar', length: 40, default: EstadoVerificacion.BORRADOR })
-  estado: EstadoVerificacion;
+  @Column({ name: 'estado', type: 'varchar', length: 40, default: 'borrador' })
+  estado: string;
 
   @Column({
     name: 'ambito_estado',
@@ -41,7 +40,7 @@ export class SolicitudVerificacion {
     insert: false,
     update: false,
   })
-  readonly ambitoEstado: typeof AmbitoEstado.VERIFICACION_ANUNCIANTE;
+  readonly ambitoEstado: "VERIFICACION_ANUNCIANTE";
 
   @Column({
     name: 'dni_frente_url',

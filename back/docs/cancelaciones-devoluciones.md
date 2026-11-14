@@ -21,6 +21,28 @@ Si la solicitud llega a la fecha de inicio sin resolución, queda `VENCIDA`.
 Después del inicio no se admite cancelación con devolución automática: el
 Inquilino debe abrir un reclamo.
 
+### Módulo de cancelaciones
+
+`CancelacionesModule` (`back/src/cancelaciones/`) es dueño de la solicitud, de la
+política de la tabla anterior y de la decisión administrativa. Conserva las
+rutas `/reservas/:id/cancelacion`, `/reservas/:id/cancelacion/:idSolicitud` y
+`/reservas/cancelaciones/administracion`.
+
+- Consulta la reserva y sus permisos mediante `ReservasService`. La cancelación
+  inmediata de una reserva pendiente de pago (`PATCH /reservas/:id/cancelar`)
+  sigue en Reservas.
+- Al resolver, bloquea la solicitud y decide dentro de una transacción. Una
+  segunda resolución de la misma solicitud responde 409.
+- Con devolución: crea el reembolso en esa misma transacción, con la clave de
+  idempotencia `can:<idSolicitud>`. La reserva se cancela cuando el reembolso
+  queda aprobado.
+- Sin devolución (0 %): pide a `ReservasService.cancelarConRetencionTotal` que
+  cancele la estadía, deje la liquidación en revisión y libere las fechas. Si
+  alguno de esos pasos falla, la aprobación se revierte y puede reintentarse.
+
+Las devoluciones de cancelaciones anteriores a este módulo conservan su clave
+aleatoria: se vinculan con su solicitud por la reserva, no por la clave.
+
 ## Reembolsos
 
 `ReembolsosModule` es independiente y reutilizable. Se usa desde cancelaciones,
@@ -30,22 +52,37 @@ Responsabilidades:
 
 - crear el registro `reembolso`;
 - validar importe, moneda y saldo;
-- ejecutar por Mercado Pago o registrar manualmente;
+- ejecutar por Mercado Pago y registrar devoluciones externas verificadas;
 - actualizar `pago.amount_refunded`, `pago.refunded_at` y `pago.status`;
 - conciliar webhooks y reintentos;
 - garantizar idempotencia.
 
 El módulo no decide la política, no cancela reservas y no libera fechas.
 
-### Modos de ejecución
+### Ejecución
 
-- `MP_REFUNDS_ENABLED=false` (por defecto): el Administrador registra la
-  devolución manualmente con una referencia o comprobante.
-- `MP_REFUNDS_ENABLED=true`: se usa la API de reembolsos de Mercado Pago. Si
-  falla, el registro queda `FALLIDO` y puede reintentarse o registrarse manualmente.
-- En ningún modo se marca `APROBADO` sin una referencia o confirmación.
+- El administrador solicita la devolución con `PATCH /reservas/reembolsos/:id/ejecutar`.
+  Se reembolsa el pago original por Mercado Pago con la clave de idempotencia
+  persistida. Si ya hay un identificador externo, la conciliación consulta el
+  movimiento. Ante un resultado incierto sin identificador, reutiliza la clave
+  durante los 15 minutos siguientes al primer intento.
+- Para recuperar una operación incierta con el identificador obtenido de
+  Mercado Pago, un administrador puede llamar a
+  `PATCH /reservas/reembolsos/:id/conciliar` con `{ "referencia": "<id de reembolso>" }`.
+  El backend verifica el pago y el importe en la pasarela antes de confirmarla.
 
 ### Estados
+
+`OperacionesReembolsoService` aplica los reembolsos aprobados que tienen
+`aplicado_en` vacío. Actualiza la reserva, la liquidación y el expediente
+asociado, cuando corresponde, en la misma transacción que la marca de
+aplicación. `referencia_interna` identifica la operación que originó el
+reembolso y las claves de idempotencia previas se conservan.
+
+La migración vincula orígenes históricos identificables y marca como
+aplicados los reembolsos con evidencia concordante en la liquidación. El
+listado administrativo expone `revision_aplicacion=true` para los aprobados
+históricos ambiguos. Quedan fuera del proceso automático hasta su revisión.
 
 `Reembolso`: `PENDIENTE`, `EN_PROCESO`, `APROBADO`, `RECHAZADO`, `FALLIDO`,
 `CANCELADO`.
@@ -98,13 +135,18 @@ Con el backend detenido, sobre una copia o base descartable:
 ```sh
 node scripts/cancelaciones-devoluciones.cjs
 npm run db:cancelaciones-devoluciones
+npm run db:seed
 ```
 
 Variables:
 
-- `MP_REFUNDS_ENABLED` (`false` por defecto).
 - `AZURE_RECLAMOS_CONTAINER` (por defecto `reclamos`).
 
 El comando aplica la migración de cancelaciones si todavía corresponde y luego
 `20261110-estados-por-ambito.sql`. Esta conserva los códigos de estado y pasa
 las disputas del enum original o del catálogo histórico al catálogo compartido.
+También crea `politica_cancelacion`, que la seed carga con los plazos y porcentajes
+vigentes hasta este cambio. Cancelaciones elige la versión por la fecha del pago
+en Argentina. Las reservas sin fecha de pago usan la política inicial.
+Para modificar la política, agregar una versión con una fecha de vigencia nueva
+y conservar las versiones anteriores para las reservas ya pagadas.

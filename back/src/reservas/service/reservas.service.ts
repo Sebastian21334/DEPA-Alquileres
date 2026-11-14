@@ -1,10 +1,5 @@
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import type { EntityManager } from 'typeorm';
-import {
-  EstadoLiquidacionReserva,
-  EstadoPagoReserva,
-  EstadoReembolso,
-  EstadoSolicitudCancelacion,
-} from '../../catalogos/estados';
 import {
   type IReservaRepository,
   RESERVA_REPOSITORY,
@@ -17,12 +12,12 @@ import {
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
-import { ReservaDecisionService } from './reserva-decision.service';
-import { LiquidacionesService } from './liquidaciones.service';
-import { generarCodigoAlojamiento, esLiquidacionResuelta } from './reservas.utils';
+import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
+import { generarCodigoAlojamiento } from './reservas.utils';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
-import { fechaArgentina } from '../../common/utils/fechas';
+import { timingSafeEqual } from 'node:crypto';
+import { esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
 import {
   Inject,
   Injectable,
@@ -34,22 +29,14 @@ import {
   OnApplicationBootstrap,
   OnModuleDestroy,
 } from '@nestjs/common';
-import { ActorCancelacion } from '../actor-cancelacion';
-import { Reserva } from '../entity/reserva.entity';
-import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
+import { Reserva, type ActorCancelacion, type CausaCancelacion } from '../entity/reserva.entity';
 import { CrearReservaDto } from '../dto/crear-reserva.dto';
-import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
-import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
-import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
-import {
-  OrigenReembolso,
-  Reembolso,
-  TipoReembolso,
-} from '../../reembolsos/entity/reembolso.entity';
+import { OrigenReembolso, Reembolso } from '../../reembolsos/entity/reembolso.entity';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 export type CondicionesCobro = {
   precio_unitario_origen: string;
@@ -69,7 +56,7 @@ export class ReservasService
   private timer?: ReturnType<typeof setInterval>;
   private expiracion?: Promise<number>;
 
-  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService, private readonly decision: ReservaDecisionService, private readonly liquidaciones: LiquidacionesService) {}
+  constructor(private readonly config: ConfigService, @Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, private readonly disponibilidadService: DisponibilidadService, private readonly usuariosService: UsuariosService, private readonly publicacionesService: PublicacionesService, private readonly notificacionesService: ReservaNotificacionesService, private readonly reembolsosService: ReembolsosService, private readonly estadoService: ReservaEstadoService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService) {}
 
   /**
    * Libera las reservas vencidas al iniciar y cada minuto. El estado se
@@ -116,7 +103,7 @@ export class ReservasService
     let vencidas: Reserva[];
     try {
       vencidas = await this.reservaRepository.buscarPendientesVencidas(
-        new Date(),
+        new Date(), this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'),
       );
     } catch (error) {
       this.logger.error(
@@ -129,8 +116,19 @@ export class ReservasService
     let cerradas = 0;
     for (const reserva of vencidas) {
       try {
-        await this.rechazarPago(reserva.id, EstadoPagoReserva.CANCELADO);
-        cerradas += 1;
+        const cerrada = await this.reservaRepository.conTransaccion(async (repositorio, transaccion) => {
+          const actual = await repositorio.buscarPorId(reserva.id);
+          if (!actual || actual.cancelada ||
+            actual.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE') ||
+            !actual.pago_vencimiento || new Date(actual.pago_vencimiento).getTime() > Date.now()) return false;
+
+          this.cerrarSinPago(actual, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), undefined, 'Venció el plazo de pago');
+          const guardada = await repositorio.guardar(actual);
+          await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
+          await this.disponibilidadService.liberarReserva(actual.id, transaccion);
+          return true;
+        });
+        if (cerrada) cerradas += 1;
       } catch (error) {
         this.logger.error(
           `No se pudo liberar la reserva vencida ${reserva.id}`,
@@ -278,6 +276,7 @@ export class ReservasService
         }
 
         // Las relaciones se crean con solo el ID: TypeORM puede resolver las FK sin cargar entidades completas.
+        const ahora = new Date();
         const reserva = reservaRepository.crear({
           finalizada: false,
           cancelada: false,
@@ -293,12 +292,12 @@ export class ReservasService
                 id: condiciones.cotizacion_id,
               })
             : null,
-          cotizacion_aceptada_en: new Date(),
+          cotizacion_aceptada_en: ahora,
           presupuesto_emitido_en: new Date(condiciones.emitida_en),
           presupuesto_vence_en: new Date(condiciones.vence_en),
           fecha_pago: null,
-          estado_pago: EstadoPagoReserva.PENDIENTE,
-          estado_liquidacion: EstadoLiquidacionReserva.NO_APLICA,
+          estado_pago: this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'),
+          estado_liquidacion: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA'),
           codigo_alojamiento: null,
           codigo_generado_en: null,
           codigo_validado_en: null,
@@ -306,7 +305,7 @@ export class ReservasService
           fecha_resolucion_liquidacion: null,
           referencia_liquidacion: null,
           observacion_liquidacion: null,
-          pago_vencimiento: new Date(condiciones.vence_en),
+          pago_vencimiento: new Date(ahora.getTime() + 15 * 60_000),
           fecha_inicio: inicio.toISOString().slice(0, 10),
           fecha_fin: fin.toISOString().slice(0, 10),
           usuario_nombre: usuario.nombre,
@@ -346,6 +345,7 @@ export class ReservasService
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
+        await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
 
         // Mercado Pago puede notificar el mismo pago más de una vez.
         if (this.pagoAprobado(reserva)) return reserva;
@@ -356,7 +356,7 @@ export class ReservasService
           reserva.publicacion &&
           !this.publicacionesService.cuentaAnuncianteHabilitada(reserva.publicacion)
         ) {
-          this.cerrarSinPago(reserva, EstadoPagoReserva.CANCELADO);
+          this.cerrarSinPago(reserva, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'));
           this.registrarPagoParaRevision(
             reserva,
             fechaPago,
@@ -375,7 +375,7 @@ export class ReservasService
         }
 
         // Una reserva cancelada por bloqueo no se reactiva con un pago tardío.
-        if (this.decision.fueCanceladaPorBloqueo(reserva)) {
+        if (this.fueCanceladaPorBloqueo(reserva)) {
           this.registrarPagoParaRevision(
             reserva,
             fechaPago,
@@ -397,7 +397,7 @@ export class ReservasService
           const inicio = reserva.fecha_inicio;
           const fin = reserva.fecha_fin;
           const puedeReactivar =
-            reserva.estado_pago === EstadoPagoReserva.CANCELADO &&
+            reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO') &&
             this.pagoDentroDelPlazo(reserva, fechaPago) &&
             publicacion != null &&
             inicio != null &&
@@ -435,12 +435,12 @@ export class ReservasService
 
           let motivo: string;
           if (
-            reserva.estado_pago === EstadoPagoReserva.CANCELADO &&
+            reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO') &&
             this.pagoDentroDelPlazo(reserva, fechaPago)
           ) {
             motivo =
               'Pago aprobado dentro del plazo, pero las fechas ya fueron reasignadas; requiere devolución';
-          } else if (reserva.estado_pago === EstadoPagoReserva.CANCELADO) {
+          } else if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO')) {
             motivo =
               'Pago aprobado fuera del plazo de 15 minutos; requiere devolución';
           } else {
@@ -459,7 +459,7 @@ export class ReservasService
           return enRevision;
         }
 
-        this.registrarPagoAprobado(reserva, fechaPago, generarCodigoAlojamiento());
+        this.registrarConfirmacionPago(reserva, fechaPago, generarCodigoAlojamiento());
         const aprobada = await reservaRepository.guardar(reserva);
         await this.liquidaciones.sincronizarDesdeReserva(aprobada, transaccion);
         return aprobada;
@@ -475,16 +475,17 @@ export class ReservasService
   }
 
   /** Cierra una reserva cuyo pago falló o cuya preferencia no pudo crearse. */
-  async rechazarPago(id: number, estado: EstadoPagoReserva = EstadoPagoReserva.RECHAZADO, actor?: ActorCancelacion, motivo?: string): Promise<Reserva> {
+  async rechazarPago(id: number, estado: string = this.catalogos.codigoEstado('PAGO_RESERVA', 'RECHAZADO'), actor?: ActorCancelacion, motivo?: string, causa?: CausaCancelacion): Promise<Reserva> {
     const guardada = await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
+        await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
         if (this.pagoAprobado(reserva)) return reserva;
         if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
 
-        this.cerrarSinPago(reserva, estado, actor, motivo);
+        this.cerrarSinPago(reserva, estado, actor, motivo, causa);
         const guardada = await reservaRepository.guardar(reserva);
         await this.liquidaciones.sincronizarDesdeReserva(
           guardada,
@@ -502,7 +503,7 @@ export class ReservasService
    */
   async listarPorUsuario(idUsuario: number): Promise<Reserva[]> {
     const reservas = await this.reservaRepository.buscarPorUsuario(idUsuario);
-    return reservas.map((reserva) => this.prepararRespuesta(reserva));
+    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva));
   }
 
   /**
@@ -516,21 +517,21 @@ export class ReservasService
       'No tenés permiso para consultar las reservas de esta publicación',
     );
     const reservas = await this.reservaRepository.buscarPorPublicacion(idPublicacion);
-    return reservas.map((reserva) => this.prepararRespuesta(reserva));
+    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva));
   }
 
   /** Todas las reservas recibidas por publicaciones del anunciante autenticado. */
   async listarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
     const reservas = await this.reservaRepository.buscarRecibidasPorAnunciante(
-      idUsuarioAnunciante,
+      idUsuarioAnunciante, this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
     );
-    return reservas.map((reserva) => this.prepararRespuesta(reserva));
+    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva));
   }
 
   async existeReservaAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
     return this.reservaRepository.existeAprobada(
       idPublicacion,
-      idUsuarioInquilino,
+      idUsuarioInquilino, this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
     );
   }
 
@@ -538,12 +539,19 @@ export class ReservasService
    * El detalle de una reserva solo corresponde al inquilino que la realizó o
    * al anunciante dueño de la publicación. Así no basta un JWT y un ID válido.
    */
-  async buscarPorId(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
+  async buscarPorId(id: number, idUsuarioQueOpera: number, transaccion?: EntityManager): Promise<Reserva> {
+    const reserva = await this.obtenerReserva(id, transaccion);
     this.verificarParticipanteOPropietario(reserva, idUsuarioQueOpera);
     return this.prepararRespuesta(reserva);
+  }
+
+  async obtenerReserva(id: number, transaccion?: EntityManager): Promise<Reserva> {
+    const reservas = transaccion ? this.reservaRepository.enTransaccion(transaccion) : this.reservaRepository;
+    // Serializa cambios de la reserva y permite las lecturas de clave foránea.
+    const reserva = await reservas.buscarPorId(id, transaccion ? 'for_no_key_update' : undefined);
+    if (!reserva)
+      throw new NotFoundException(`No se encontró la reserva ${id}`);
+    return this.liquidaciones.proyectarEnReserva(reserva, transaccion);
   }
 
   conReservaParaReclamo<T>(id: number, crearReclamo: (reserva: Reserva, transaccion: EntityManager) => Promise<T>): Promise<T> {
@@ -551,7 +559,7 @@ export class ReservasService
       const reserva = await reservas.buscarParaReclamo(id);
       if (!reserva) throw new NotFoundException('No se encontró la reserva');
       const reclamo = await crearReclamo(reserva, transaccion);
-      reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+      reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
       reserva.observacion_liquidacion = 'Reclamo del inquilino en revisión';
       reserva.fecha_resolucion_liquidacion = null;
       await reservas.guardar(reserva);
@@ -568,13 +576,6 @@ export class ReservasService
     return this.estadoService.calcularEstadoEstadia(reserva, ahora);
   }
 
-  private respuestaSolicitudCancelacion(solicitud: SolicitudCancelacion): SolicitudCancelacion {
-    if (solicitud.reserva?.estado_pago) {
-      solicitud.reserva = this.prepararRespuesta(solicitud.reserva);
-    }
-    return solicitud;
-  }
-
   esDelInquilino(reserva: Reserva, idUsuario: number): boolean {
     return reserva.usuario?.id === idUsuario;
   }
@@ -583,158 +584,40 @@ export class ReservasService
     return this.publicacionesService.perteneceA(reserva.publicacion, idUsuario);
   }
 
-  pagoAprobado(reserva: Reserva): boolean {
-    return reserva.estado_pago === EstadoPagoReserva.APROBADO;
-  }
 
   /** Pagada y vigente: habilita el código de alojamiento, los reclamos y la liquidación. */
-  estaConfirmada(reserva: Reserva): boolean {
-    return this.pagoAprobado(reserva) && !reserva.cancelada;
-  }
 
-  liquidacionEnRevision(reserva: Reserva): boolean {
-    return reserva.estado_liquidacion === EstadoLiquidacionReserva.EN_REVISION;
-  }
 
   /** El dinero ya se pagó al propietario o se devolvió al inquilino. */
-  liquidacionResuelta(reserva: Reserva): boolean {
-    return esLiquidacionResuelta(reserva.estado_liquidacion);
-  }
 
-  codigoValidado(reserva: Reserva): boolean {
-    return !!reserva.codigo_validado_en;
-  }
 
-  /** Aprueba el pago, emite el código de alojamiento y retiene el dinero hasta la estadía. */
-  private registrarPagoAprobado(reserva: Reserva, fechaPago: Date, codigoAlojamiento: string): void {
-    reserva.estado_pago = EstadoPagoReserva.APROBADO;
-    reserva.fecha_pago = fechaPago;
-    reserva.pago_vencimiento = null;
-    reserva.codigo_alojamiento = codigoAlojamiento;
-    reserva.codigo_generado_en = new Date();
-    reserva.codigo_validado_en = null;
-    reserva.intentos_codigo = 0;
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.RETENIDO;
-  }
 
-  /** Cierra la reserva cuyo pago falló, venció o fue devuelto. */
-  private cerrarSinPago(reserva: Reserva, estado: EstadoPagoReserva, actor?: ActorCancelacion, motivo?: string): void {
-    reserva.estado_pago = estado;
-    reserva.estado_liquidacion =
-      estado === EstadoPagoReserva.REEMBOLSADO
-        ? EstadoLiquidacionReserva.DEVUELTO_INQUILINO
-        : EstadoLiquidacionReserva.NO_APLICA;
-    this.marcarCancelada(reserva, actor, motivo);
-    // Se conserva el vencimiento original para poder conciliar un pago
-    // aprobado que llegue después del cierre.
-  }
-
-  /** Indica si el pago fue aprobado antes de que venciera la reserva. */
-  private pagoDentroDelPlazo(reserva: Reserva, fechaPago: Date): boolean {
-    if (!reserva.pago_vencimiento) return false;
-    return (
-      new Date(fechaPago).getTime() <= new Date(reserva.pago_vencimiento).getTime()
-    );
-  }
-
-  /** Reactiva una reserva vencida y la confirma conservando sus condiciones. */
-  private reactivarPago(reserva: Reserva, fechaPago: Date, codigoAlojamiento: string): void {
-    reserva.cancelada = false;
-    reserva.fecha_cancelacion = null;
-    this.registrarPagoAprobado(reserva, fechaPago, codigoAlojamiento);
-  }
-
-  /**
-   * Registra un pago aprobado que no puede confirmarse porque la reserva ya
-   * fue cerrada o las fechas fueron reasignadas. Queda para revisión y devolución.
-   */
-  private registrarPagoParaRevision(reserva: Reserva, fechaPago: Date, motivo: string): void {
-    reserva.estado_pago = EstadoPagoReserva.APROBADO;
-    reserva.fecha_pago = fechaPago;
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    reserva.observacion_liquidacion = motivo.trim();
-    reserva.fecha_resolucion_liquidacion = null;
-    reserva.codigo_alojamiento = null;
-    reserva.codigo_generado_en = null;
-    reserva.codigo_validado_en = null;
-    reserva.intentos_codigo = 0;
-  }
-
-  marcarCancelada(reserva: Reserva, actor?: ActorCancelacion, motivo?: string): void {
-    reserva.cancelada = true;
-    reserva.fecha_cancelacion = new Date();
-    if (actor) reserva.cancelada_por = actor;
-    if (motivo?.trim()) reserva.motivo_cancelacion = motivo.trim();
-  }
-
-  /** Aplica un reembolso total confirmado. */
-  private aplicarReembolsoTotal(reserva: Reserva): void {
-    reserva.estado_pago = EstadoPagoReserva.REEMBOLSADO;
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.DEVUELTO_INQUILINO;
-    reserva.fecha_resolucion_liquidacion = new Date();
-  }
-
-  /** Registra el resultado de un reembolso parcial sin alterar el pago aprobado. */
-  private aplicarReembolsoParcial(reserva: Reserva): void {
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.DEVUELTO_PARCIAL_INQUILINO;
-    reserva.fecha_resolucion_liquidacion = new Date();
-  }
-
-  async resolverReclamoSinDevolucion(reserva: Reserva, observacion?: string): Promise<Reserva> {
+  async resolverReclamoSinDevolucion(reserva: Reserva, observacion: string | undefined, transaccion: EntityManager): Promise<Reserva> {
+    if (this.liquidacionResuelta(reserva))
+      throw new ConflictException('La liquidación de la reserva ya fue resuelta');
     reserva.estado_liquidacion = this.codigoValidado(reserva)
-      ? EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO
-      : EstadoLiquidacionReserva.RETENIDO;
+      ? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO')
+      : this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO');
     reserva.observacion_liquidacion =
       observacion?.trim() || 'Reclamo resuelto a favor del Anunciante';
-    const guardada = await this.reservaRepository.guardar(reserva);
-    await this.liquidaciones.sincronizarDesdeReserva(guardada);
-    return this.prepararRespuesta(guardada);
+    await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
+    return reserva;
   }
 
-  async resolverReclamoConDevolucion(reserva: Reserva, total: boolean, observacion?: string): Promise<Reserva> {
-    if (total) this.aplicarReembolsoTotal(reserva);
-    else this.aplicarReembolsoParcial(reserva);
-    reserva.observacion_liquidacion =
-      observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
-    const guardada = await this.reservaRepository.guardar(reserva);
-    await this.liquidaciones.sincronizarDesdeReserva(guardada);
-    return this.prepararRespuesta(guardada);
+  async congelarPorContracargo(reserva: Reserva, transaccion: EntityManager): Promise<void> {
+    reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO');
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+    reserva.observacion_liquidacion = 'Contracargo abierto: liquidación congelada hasta su resolución';
+    const guardada = await this.reservaRepository.enTransaccion(transaccion).guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
   }
 
-  async buscarParaContracargo(id: number): Promise<Reserva> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva) {
-      throw new NotFoundException('No se encontró la reserva del contracargo');
-    }
-    return this.prepararRespuesta(reserva);
-  }
-
-  async congelarPorContracargo(reserva: Reserva): Promise<Reserva> {
-    reserva.estado_pago = EstadoPagoReserva.CONTRACARGO;
-    reserva.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-    reserva.observacion_liquidacion =
-      'Contracargo abierto: liquidación congelada hasta su resolución';
-    const guardada = await this.reservaRepository.guardar(reserva);
-    await this.liquidaciones.sincronizarDesdeReserva(guardada);
-    return this.prepararRespuesta(guardada);
-  }
-
-  async restaurarPorContracargoGanado(reserva: Reserva, estadoLiquidacionPrevio: string | null): Promise<Reserva> {
+  async restaurarPorContracargoGanado(reserva: Reserva, estadoPrevio: string | null, transaccion: EntityManager): Promise<Reserva> {
     this.restaurarPagoAprobado(reserva);
-    reserva.estado_liquidacion =
-      (estadoLiquidacionPrevio as EstadoLiquidacionReserva) ??
-      EstadoLiquidacionReserva.RETENIDO;
-    reserva.observacion_liquidacion =
-      'Contracargo resuelto a favor del Anunciante';
-    const guardada = await this.reservaRepository.guardar(reserva);
-    await this.liquidaciones.sincronizarDesdeReserva(guardada);
-    return this.prepararRespuesta(guardada);
-  }
-
-  private restaurarPagoAprobado(reserva: Reserva): void {
-    if (reserva.estado_pago === EstadoPagoReserva.CONTRACARGO) {
-      reserva.estado_pago = EstadoPagoReserva.APROBADO;
-    }
+    reserva.estado_liquidacion = estadoPrevio ?? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO');
+    reserva.observacion_liquidacion = 'Contracargo resuelto a favor del Anunciante';
+    await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
+    return this.prepararRespuesta(await this.reservaRepository.enTransaccion(transaccion).guardar(reserva));
   }
 
   /** El inquilino participante o el anunciante dueño pueden cancelar. */
@@ -744,6 +627,7 @@ export class ReservasService
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
+        await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
         this.verificarParticipanteOPropietario(reserva, idUsuarioQueOpera);
         if (reserva.finalizada)
           throw new BadRequestException(
@@ -758,8 +642,8 @@ export class ReservasService
 
         this.marcarCancelada(reserva,
           this.esDelInquilino(reserva, idUsuarioQueOpera)
-            ? ActorCancelacion.INQUILINO
-            : ActorCancelacion.ANUNCIANTE,
+            ? 'INQUILINO'
+            : 'ANUNCIANTE',
           'Cancelación de reserva pendiente de pago',
         );
         const guardada = await reservaRepository.guardar(reserva);
@@ -778,224 +662,73 @@ export class ReservasService
   }
 
   /**
-   * Crea el pedido de cancelación de una reserva pagada. La reserva no se
-   * cancela hasta que el Administrador resuelva y, si corresponde, se registre
-   * el reembolso.
+   * Cancela una estadía pagada sin devolución: conserva el pago, deja la
+   * liquidación en revisión y libera el calendario. Participa de la transacción
+   * de quien coordina la decisión, para que un fallo revierta todo el conjunto.
    */
-  async solicitarCancelacion(id: number, dto: SolicitarCancelacionDto, idUsuario: number): Promise<SolicitudCancelacion> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
-    this.verificarParticipanteOPropietario(reserva, idUsuario);
-    if (!this.pagoAprobado(reserva))
-      throw new BadRequestException(
-        'La reserva no está pagada. Usá la cancelación inmediata de la reserva pendiente.',
-      );
-    if (reserva.cancelada)
-      throw new ConflictException('La reserva ya está cancelada');
-    if (reserva.finalizada)
-      throw new BadRequestException(
-        'La reserva ya finalizó. Solo podés abrir un reclamo.',
-      );
-    const hoy = fechaArgentina();
-    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
-      throw new BadRequestException(
-        'La estadía ya comenzó. Para una devolución después del inicio, abrí un reclamo.',
-      );
-    if (this.codigoValidado(reserva))
-      throw new BadRequestException(
-        'No se puede cancelar una reserva con ingreso ya validado',
-      );
-
-    const activa =
-      await this.reservaRepository.buscarSolicitudCancelacionActiva(id);
-    if (activa) return this.respuestaSolicitudCancelacion(activa);
-
-    const solicitud = this.reservaRepository.crearSolicitudCancelacion({
-      reserva,
-      solicitante: referenciaUsuario(idUsuario),
-      motivo: dto.motivo.trim(),
-      estado: EstadoSolicitudCancelacion.PENDIENTE,
-      decidida_por: null,
-      decidida_en: null,
-      observacion: null,
-    });
-    return this.respuestaSolicitudCancelacion(await this.reservaRepository.guardarSolicitudCancelacion(solicitud));
+  async cancelarConRetencionTotal(idReserva: number, actor: ActorCancelacion, motivo: string, transaccion: EntityManager): Promise<Reserva> {
+    const reservas = this.reservaRepository.enTransaccion(transaccion);
+    const reserva = await this.obtenerReserva(idReserva, transaccion);
+    this.marcarCancelada(reserva, actor, motivo);
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+    reserva.observacion_liquidacion =
+      'Cancelación con retención total; liquidación pendiente de revisión';
+    const guardada = await reservas.guardar(reserva);
+    await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
+    await this.disponibilidadService.liberarReserva(idReserva, transaccion);
+    return guardada;
   }
 
-  async consultarSolicitudCancelacion(id: number, idUsuario: number): Promise<SolicitudCancelacion | null> {
-    const reserva = await this.reservaRepository.buscarPorId(id);
-    if (!reserva)
-      throw new NotFoundException(`No se encontró la reserva ${id}`);
-    this.verificarParticipanteOPropietario(reserva, idUsuario);
-    const solicitud = await this.reservaRepository.buscarSolicitudCancelacionActiva(id);
-    return solicitud ? this.respuestaSolicitudCancelacion(solicitud) : null;
-  }
+  async aplicarEfectoReembolso(reembolso: Reembolso, transaccion: EntityManager, observacion?: string): Promise<Reserva> {
+    const reserva = await this.obtenerReserva(reembolso.reserva.id, transaccion);
+    const esReclamo = reembolso.origen === OrigenReembolso.RECLAMO;
+    const esContracargo = reembolso.origen === OrigenReembolso.CONTRACARGO;
+    if (reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') &&
+        !esReclamo && !esContracargo)
+      throw new ConflictException('La reserva ya fue pagada al propietario; requiere revisar la devolución');
 
-  async listarSolicitudesCancelacion(): Promise<SolicitudCancelacion[]> {
-    const solicitudes = await this.reservaRepository.listarSolicitudesCancelacionAdministracion();
-    return solicitudes.map((solicitud) => this.respuestaSolicitudCancelacion(solicitud));
-  }
-
-  /**
-   * Resuelve el pedido. Si se aprueba, calcula la devolución con la política
-   * vigente y crea el reembolso. Las fechas se liberan recién cuando el
-   * reembolso queda aprobado (o de inmediato si el porcentaje es 0).
-   */
-  async resolverSolicitudCancelacion(idReserva: number, idSolicitud: number, dto: ResolverSolicitudCancelacionDto, idAdmin: number): Promise<{ solicitud: SolicitudCancelacion; reembolso: Reembolso | null; }> {
-    const solicitud =
-      await this.reservaRepository.buscarSolicitudCancelacion(
-        idSolicitud,
-        idReserva,
-      );
-    if (!solicitud)
-      throw new NotFoundException('No se encontró la solicitud de cancelación');
-    if (solicitud.estado !== EstadoSolicitudCancelacion.PENDIENTE)
-      throw new ConflictException('La solicitud ya fue resuelta');
-
-    const reserva = solicitud.reserva;
-    const hoy = fechaArgentina();
-    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy) {
-      solicitud.estado = EstadoSolicitudCancelacion.VENCIDA;
-      solicitud.decidida_por = referenciaUsuario(idAdmin);
-      solicitud.decidida_en = new Date();
-      solicitud.observacion =
-        'La estadía comenzó antes de resolver la solicitud';
-      await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
-      throw new ConflictException(
-        'La estadía ya comenzó; la solicitud quedó vencida',
-      );
-    }
-
-    solicitud.decidida_por = referenciaUsuario(idAdmin);
-    solicitud.decidida_en = new Date();
-    solicitud.observacion = dto.observacion?.trim() || null;
-
-    if (dto.decision === 'RECHAZADA') {
-      solicitud.estado = EstadoSolicitudCancelacion.RECHAZADA;
-      const guardada = await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
-      return {
-        solicitud: this.respuestaSolicitudCancelacion(guardada),
-        reembolso: null,
-      };
-    }
-
-    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
-    const porcentaje = this.porcentajeCancelacion(reserva, actor, hoy);
-    const importe = this.redondear(
-      (Number(reserva.monto_pago) * porcentaje) / 100,
-    );
-
-    if (importe > 0) {
-      // Se crea primero el reembolso para no aprobar una solicitud sin
-      // registro económico si falla la creación.
-      const pago = await this.reembolsosService.buscarPagoPorReserva(idReserva);
-      if (!pago)
-        throw new ConflictException('La reserva no tiene un pago registrado');
-      const reembolso = await this.reembolsosService.crearSolicitud({
-        reserva,
-        pago,
-        tipo:
-          porcentaje >= 100 ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL,
-        origen: OrigenReembolso.CANCELACION,
-        importe,
-        motivo: `Cancelación de reserva: ${solicitud.motivo}`,
-        idSolicitadoPor: idAdmin,
-      });
-      solicitud.estado = EstadoSolicitudCancelacion.APROBADA;
-      const solicitudGuardada =
-        await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
-      return { solicitud: this.respuestaSolicitudCancelacion(solicitudGuardada), reembolso };
-    }
-
-    // Sin devolución: la reserva se cancela y las fechas se liberan.
-    solicitud.estado = EstadoSolicitudCancelacion.APROBADA;
-    const solicitudGuardada =
-      await this.reservaRepository.guardarSolicitudCancelacion(solicitud);
-    await this.reservaRepository.conTransaccion(
-      async (reservaRepository, transaccion) => {
-        const actual = await reservaRepository.buscarPorId(idReserva);
-        if (!actual) return;
-        this.marcarCancelada(actual, actor, solicitud.motivo);
-        actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
-        actual.observacion_liquidacion =
-          'Cancelación con retención total; liquidación pendiente de revisión';
-        await reservaRepository.guardar(actual);
-        await this.liquidaciones.sincronizarDesdeReserva(
-          actual,
-          transaccion,
-        );
-        await this.disponibilidadService.liberarReserva(
-          idReserva,
-          transaccion,
-        );
-      },
-    );
-    return { solicitud: this.respuestaSolicitudCancelacion(solicitudGuardada), reembolso: null };
-  }
-
-  /** Registra manualmente la devolución y aplica el resultado a la reserva. */
-  async registrarReembolsoManual(idReembolso: number, referencia: string | undefined, idAdmin: number): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
-    await this.reembolsosService.registrarOejecutar(
-      idReembolso,
-      referencia,
-      idAdmin,
-    );
-    return this.aplicarReembolsoConfirmado(idReembolso);
-  }
-
-  /** Aplica a la reserva un reembolso ya aprobado por el módulo de reembolsos. */
-  async aplicarReembolsoConfirmado(idReembolso: number): Promise<{ reembolso: Reembolso; reserva: Reserva }> {
-    const reembolso = await this.reembolsosService.buscar(idReembolso);
-    if (reembolso.estado !== EstadoReembolso.APROBADO)
-      throw new ConflictException('El reembolso todavía no fue confirmado');
-    const reserva = await this.reservaRepository.buscarPorId(
-      reembolso.reserva.id,
-    );
-    if (!reserva)
-      throw new NotFoundException('No se encontró la reserva del reembolso');
-
-    const hoy = fechaArgentina();
-    const puedeLiberarFechas =
-      !!reserva.fecha_inicio &&
-      reserva.fecha_inicio > hoy &&
+    const pago = await this.reembolsosService.buscarPagoPorReserva(reserva.id, transaccion);
+    if (!pago) throw new NotFoundException('La reserva no tiene un pago registrado');
+    const importeDevuelto = Number(pago.amount_refunded);
+    const esTotal = Number(pago.amount) - importeDevuelto <= TOLERANCIA_MONETARIA;
+    const puedeLiberarFechas = !!reserva.fecha_inicio && reserva.fecha_inicio > fechaArgentina() &&
       !this.codigoValidado(reserva);
-
-    const esTotal = this.reembolsosService.esTotal(reembolso);
-    const cancelaReserva =
+    const ajusteAdmin = reembolso.origen === OrigenReembolso.AJUSTE_ADMIN;
+    const resolucionAdmin = ajusteAdmin && reembolso.referencia_interna === `liq:${reserva.id}`;
+    const reversionSinPago = esTotal && !this.pagoAprobado(reserva) &&
+      reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO') &&
+      reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO');
+    const cancelaReserva = !reserva.cancelada && (
+      reversionSinPago ||
       reembolso.origen === OrigenReembolso.CANCELACION ||
-      ((reembolso.origen === OrigenReembolso.CONTRACARGO ||
-        reembolso.origen === OrigenReembolso.AJUSTE_ADMIN) &&
-        esTotal &&
-        puedeLiberarFechas);
+      (esTotal && resolucionAdmin) ||
+      (esTotal && puedeLiberarFechas && (esContracargo || ajusteAdmin))
+    );
 
-    if (esTotal) {
-      this.aplicarReembolsoTotal(reserva);
-      if (cancelaReserva) {
-        this.marcarCancelada(reserva, ActorCancelacion.ADMINISTRADOR, reembolso.motivo);
-      }
-    } else {
-      if (reembolso.origen === OrigenReembolso.CONTRACARGO)
-        this.restaurarPagoAprobado(reserva);
+    if (esTotal) this.aplicarReembolsoTotal(reserva);
+    else {
+      if (esContracargo) this.restaurarPagoAprobado(reserva);
       this.aplicarReembolsoParcial(reserva);
-      if (cancelaReserva) {
-        this.marcarCancelada(reserva, ActorCancelacion.ADMINISTRADOR, reembolso.motivo);
-      }
     }
-
-    const guardada = await this.reservaRepository.guardar(reserva);
-    await this.liquidaciones.sincronizarDesdeReserva(guardada);
-    if (cancelaReserva && puedeLiberarFechas) {
-      await this.reservaRepository.conTransaccion(
-        async (_reservas, transaccion) => {
-          await this.disponibilidadService.liberarReserva(
-            reserva.id,
-            transaccion,
-          );
-        },
-      );
+    if (cancelaReserva) this.marcarCancelada(reserva, 'ADMINISTRADOR', reembolso.motivo);
+    if (esReclamo) reserva.observacion_liquidacion = observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
+    const datos = {
+      importe: importeDevuelto,
+      moneda: reembolso.moneda,
+      referencia: reembolso.referencia_externa,
+      observacion: observacion?.trim() || reembolso.motivo,
+    };
+    const administrador = reembolso.resuelto_por?.id ?? reembolso.solicitado_por?.id;
+    if (resolucionAdmin && administrador != null) {
+      await this.liquidaciones.registrarResolucion(reserva, reserva.estado_liquidacion, datos, administrador, transaccion);
+    } else {
+      await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion, datos);
     }
-    return { reembolso, reserva: this.prepararRespuesta(guardada) };
+    const guardada = await this.reservaRepository.enTransaccion(transaccion).guardar(reserva);
+    if ((cancelaReserva && puedeLiberarFechas) || reversionSinPago) {
+      await this.disponibilidadService.liberarReserva(reserva.id, transaccion);
+    }
+    return this.prepararRespuesta(guardada);
   }
 
   async listarReembolsosReserva(idReserva: number, idUsuario: number): Promise<Reembolso[]> {
@@ -1006,35 +739,324 @@ export class ReservasService
     return this.reembolsosService.listarPorReserva(idReserva);
   }
 
-  /** Política: el Anunciante/Administrador solo devuelve antes del inicio. */
-  private actorDeCancelacion(reserva: Reserva, idSolicitante?: number): ActorCancelacion {
-    if (idSolicitante && this.esDelInquilino(reserva, idSolicitante))
-      return ActorCancelacion.INQUILINO;
-    if (idSolicitante && this.esDelAnunciante(reserva, idSolicitante))
-      return ActorCancelacion.ANUNCIANTE;
-    return ActorCancelacion.ADMINISTRADOR;
-  }
-
-  private porcentajeCancelacion(reserva: Reserva, actor: ActorCancelacion, hoy: string): number {
-    if (actor !== ActorCancelacion.INQUILINO) return 100;
-    if (!reserva.fecha_inicio) return 0;
-    const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
-    const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
-    const dias = Math.ceil((inicio - ahora) / 86_400_000);
-    if (dias >= 7) return 100;
-    if (dias >= 2) return 50;
-    return 0;
-  }
-
-  private redondear(valor: number): number {
-    return Math.round((valor + Number.EPSILON) * 100) / 100;
-  }
-
   private verificarParticipanteOPropietario(reserva: Reserva, idUsuarioQueOpera: number): void {
     if (!this.esDelInquilino(reserva, idUsuarioQueOpera) && !this.esDelAnunciante(reserva, idUsuarioQueOpera)) {
       throw new ForbiddenException(
         'No tenés permiso para consultar esta reserva',
       );
     }
+  }
+  async conReservaBloqueada(id: number, operar: (reserva: Reserva, transaccion: EntityManager) => Promise<void>): Promise<Reserva> {
+    const guardada = await this.reservaRepository.conTransaccion(async (reservas, transaccion) => {
+      const reserva = await this.obtenerReserva(id, transaccion);
+      await operar(reserva, transaccion);
+      return reservas.guardar(reserva);
+    });
+    return this.prepararRespuesta(guardada);
+  }
+
+  /** Devuelve el código únicamente al inquilino que realizó la reserva. */
+  async consultarCodigoAlojamiento(id: number, idUsuario: number) {
+    return this.reservaRepository.conTransaccion(
+      async (reservaRepository, transaccion) => {
+        const reserva = await reservaRepository.buscarPorIdConCodigo(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
+        if (!this.esDelInquilino(reserva, idUsuario)) {
+          throw new ForbiddenException(
+            'Solo el inquilino puede consultar el código de alojamiento',
+          );
+        }
+        if (!this.estaConfirmada(reserva)) {
+          throw new ConflictException(
+            'El código estará disponible cuando el pago se encuentre aprobado',
+          );
+        }
+        if (
+          !['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(
+            this.calcularEstadoEstadia(reserva),
+          )
+        ) {
+          throw new ConflictException(
+            'El código no está disponible para una estadía cerrada o sin fechas verificables',
+          );
+        }
+        // Compatibilidad con reservas aprobadas antes de incorporar RF21.
+        const emitido = this.asegurarCodigoAlojamiento(
+          reserva,
+          generarCodigoAlojamiento(),
+        );
+        if (emitido) {
+          await reservaRepository.guardar(reserva);
+          await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
+        }
+        return {
+          reserva_id: reserva.id,
+          codigo: reserva.codigo_alojamiento,
+          generado_en: reserva.codigo_generado_en,
+          validado_en: reserva.codigo_validado_en,
+          estado_liquidacion: reserva.estado_liquidacion,
+        };
+      },
+    );
+  }
+
+  /** El anunciante presenta el código entregado físicamente por el huésped. */
+  async validarCodigoAlojamiento(id: number, codigo: string, idUsuarioAnunciante: number): Promise<Reserva> {
+    const resultado = await this.reservaRepository.conTransaccion(
+      async (reservaRepository, transaccion) => {
+        const reserva = await reservaRepository.buscarPorIdConCodigo(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
+        if (!this.esDelAnunciante(reserva, idUsuarioAnunciante)) {
+          throw new ForbiddenException(
+            'Solo el anunciante de la publicación puede validar el código',
+          );
+        }
+        if (!this.estaConfirmada(reserva)) {
+          throw new ConflictException('La reserva no se encuentra confirmada');
+        }
+        if (this.codigoValidado(reserva)) {
+          throw new ConflictException(
+            'El código de esta reserva ya fue utilizado',
+          );
+        }
+        if (this.calcularEstadoEstadia(reserva) !== 'PENDIENTE_INGRESO') {
+          throw new ConflictException(
+            'El código solo puede validarse durante las fechas de la estadía',
+          );
+        }
+        if (this.codigoBloqueado(reserva)) {
+          throw new ConflictException(
+            'Se alcanzó el límite de intentos. Contactá a un administrador',
+          );
+        }
+        if (this.liquidacionEnRevision(reserva))
+          throw new ConflictException('La reserva tiene un reclamo abierto y debe revisarla un administrador');
+
+        const coincide = this.registrarIntentoCodigo(reserva, codigo);
+        if (!coincide && this.codigoBloqueado(reserva))
+          await this.liquidaciones.registrarRevision(
+            reserva,
+            reserva.observacion_liquidacion ??
+              'Código bloqueado después de cinco intentos incorrectos',
+            transaccion,
+          );
+        if (coincide)
+          await this.liquidaciones.registrarValidacionCodigo(reserva, transaccion);
+        await reservaRepository.guardar(reserva);
+        if (!coincide) {
+          return new BadRequestException(
+            `Código incorrecto. Quedan ${this.intentosCodigoRestantes(reserva)} intentos`,
+          );
+        }
+        const actualizada = await reservaRepository.buscarPorId(id);
+        if (!actualizada)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        return this.liquidaciones.proyectarEnReserva(actualizada, transaccion);
+      },
+    );
+    // El intento incorrecto debe persistir aunque la respuesta sea un error.
+    if (resultado instanceof BadRequestException) throw resultado;
+    return this.prepararRespuesta(resultado);
+  }
+
+  /** El reclamo del inquilino congela cualquier liquidación manual pendiente. */
+  async reportarProblema(id: number, motivo: string, idUsuario: number): Promise<Reserva> {
+    return this.reservaRepository.conTransaccion(
+      async (reservaRepository, transaccion) => {
+        const reserva = await reservaRepository.buscarPorId(id);
+        if (!reserva)
+          throw new NotFoundException(`No se encontró la reserva ${id}`);
+        await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
+        if (!this.esDelInquilino(reserva, idUsuario)) {
+          throw new ForbiddenException(
+            'Solo el inquilino de la reserva puede reportar un problema',
+          );
+        }
+        if (!this.estaConfirmada(reserva)) {
+          throw new ConflictException(
+            'Solo se pueden reportar problemas sobre reservas confirmadas',
+          );
+        }
+        if (this.liquidacionResuelta(reserva)) {
+          throw new ConflictException(
+            'La liquidación de esta reserva ya fue resuelta',
+          );
+        }
+        await this.liquidaciones.registrarRevision(
+          reserva,
+          Array.from(`Reclamo del inquilino: ${motivo.trim()}`).slice(0, 500).join(''),
+          transaccion,
+        );
+        return this.prepararRespuesta(await reservaRepository.guardar(reserva));
+      },
+    );
+  }
+
+  private readonly maxIntentosCodigo = 5;
+
+  pagoAprobado(reserva: Reserva): boolean {
+    return reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
+  }
+
+  estaConfirmada(reserva: Reserva): boolean {
+    return this.pagoAprobado(reserva) && !reserva.cancelada;
+  }
+
+  liquidacionEnRevision(reserva: Reserva): boolean {
+    return reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+  }
+
+  liquidacionResuelta(reserva: Reserva): boolean {
+    return this.liquidaciones.esLiquidacionResuelta(reserva.estado_liquidacion);
+  }
+
+  codigoValidado(reserva: Reserva): boolean {
+    return !!reserva.codigo_validado_en;
+  }
+
+  esEstadiaEnCurso(reserva: Reserva, ahora = new Date()): boolean {
+    if (reserva.cancelada || reserva.finalizada) return false;
+    if (!this.pagoAprobado(reserva) || !this.codigoValidado(reserva))
+      return false;
+    if (
+      !esFechaCalendarioValida(reserva.fecha_inicio) ||
+      !esFechaCalendarioValida(reserva.fecha_fin) ||
+      reserva.fecha_inicio > reserva.fecha_fin
+    )
+      return false;
+    const hoy = fechaArgentina(ahora);
+    return hoy >= reserva.fecha_inicio && hoy <= reserva.fecha_fin;
+  }
+
+  esEstadiaFinalizada(reserva: Reserva, ahora = new Date()): boolean {
+    if (reserva.finalizada) return true;
+    if (!esFechaCalendarioValida(reserva.fecha_fin)) return false;
+    return fechaArgentina(ahora) > reserva.fecha_fin;
+  }
+
+  fueCanceladaPorBloqueo(reserva: Reserva): boolean {
+    return (
+      reserva.cancelada &&
+      reserva.cancelada_por === 'ADMINISTRADOR' &&
+      reserva.causa_cancelacion === 'BLOQUEO_ANUNCIANTE'
+    );
+  }
+
+  pagoDentroDelPlazo(reserva: Reserva, fechaPago: Date): boolean {
+    if (!reserva.pago_vencimiento) return false;
+    return (
+      new Date(fechaPago).getTime() <=
+      new Date(reserva.pago_vencimiento).getTime()
+    );
+  }
+
+  codigoBloqueado(reserva: Reserva): boolean {
+    return reserva.intentos_codigo >= this.maxIntentosCodigo;
+  }
+
+  intentosCodigoRestantes(reserva: Reserva): number {
+    return Math.max(0, this.maxIntentosCodigo - reserva.intentos_codigo);
+  }
+
+  registrarConfirmacionPago(reserva: Reserva, fechaPago: Date, codigoAlojamiento: string): void {
+    reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
+    reserva.fecha_pago = fechaPago;
+    reserva.pago_vencimiento = null;
+    reserva.codigo_alojamiento = codigoAlojamiento;
+    reserva.codigo_generado_en = new Date();
+    reserva.codigo_validado_en = null;
+    reserva.intentos_codigo = 0;
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO');
+  }
+
+  marcarCancelada(reserva: Reserva, actor?: ActorCancelacion, motivo?: string, causa?: CausaCancelacion): void {
+    reserva.cancelada = true;
+    reserva.fecha_cancelacion = new Date();
+    if (actor) reserva.cancelada_por = actor;
+    if (causa) reserva.causa_cancelacion = causa;
+    if (motivo?.trim()) reserva.motivo_cancelacion = motivo.trim();
+  }
+
+  cerrarSinPago(reserva: Reserva, estado: string, actor?: ActorCancelacion, motivo?: string, causa?: CausaCancelacion): void {
+    reserva.estado_pago = estado;
+    reserva.estado_liquidacion =
+      estado === this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO')
+        ? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO')
+        : this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA');
+    this.marcarCancelada(reserva, actor, motivo, causa);
+  }
+
+  reactivarPago(reserva: Reserva, fechaPago: Date, codigoAlojamiento: string): void {
+    reserva.cancelada = false;
+    reserva.fecha_cancelacion = null;
+    reserva.motivo_cancelacion = null;
+    reserva.causa_cancelacion = null;
+    this.registrarConfirmacionPago(reserva, fechaPago, codigoAlojamiento);
+  }
+
+  registrarPagoParaRevision(reserva: Reserva, fechaPago: Date, motivo: string): void {
+    reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
+    reserva.fecha_pago = fechaPago;
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+    reserva.observacion_liquidacion = motivo.trim();
+    reserva.fecha_resolucion_liquidacion = null;
+    reserva.codigo_alojamiento = null;
+    reserva.codigo_generado_en = null;
+    reserva.codigo_validado_en = null;
+    reserva.intentos_codigo = 0;
+  }
+
+  asegurarCodigoAlojamiento(reserva: Reserva, codigo: string): boolean {
+    if (reserva.codigo_alojamiento) return false;
+    reserva.codigo_alojamiento = codigo;
+    reserva.codigo_generado_en = new Date();
+    if (reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA'))
+      reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO');
+    return true;
+  }
+
+  registrarIntentoCodigo(reserva: Reserva, codigo: string): boolean {
+    const recibido = Buffer.from(codigo.trim().toUpperCase());
+    const esperado = Buffer.from(reserva.codigo_alojamiento ?? '');
+    const coincide =
+      esperado.length > 0 &&
+      recibido.length === esperado.length &&
+      timingSafeEqual(recibido, esperado);
+    if (!coincide) {
+      reserva.intentos_codigo += 1;
+      if (this.codigoBloqueado(reserva)) {
+        reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+        reserva.observacion_liquidacion =
+          'Código bloqueado después de cinco intentos incorrectos';
+      }
+      return false;
+    }
+    reserva.codigo_validado_en = new Date();
+    reserva.estado_liquidacion =
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
+    reserva.observacion_liquidacion =
+      'Código de alojamiento validado por el anunciante';
+    return true;
+  }
+
+  restaurarPagoAprobado(reserva: Reserva): void {
+    if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO'))
+      reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
+  }
+
+  aplicarReembolsoTotal(reserva: Reserva): void {
+    reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO');
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO');
+    reserva.fecha_resolucion_liquidacion = new Date();
+  }
+
+  aplicarReembolsoParcial(reserva: Reserva): void {
+    reserva.estado_liquidacion =
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO');
+    reserva.fecha_resolucion_liquidacion = new Date();
   }
 }

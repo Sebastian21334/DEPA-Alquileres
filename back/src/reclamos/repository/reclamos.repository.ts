@@ -1,4 +1,3 @@
-import { EstadoReclamo } from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
@@ -9,7 +8,7 @@ import { ReclamoMensaje } from '../entity/reclamo-mensaje.entity';
 import type { IReclamosRepository } from './reclamos.repository.interface';
 
 const RELACIONES_RECLAMO: FindOptionsRelations<Reclamo> = {
-  reserva: { publicacion: { anunciante: { usuario: true } }, usuario: true },
+  reserva: { liquidacion: true, publicacion: { anunciante: { usuario: true } }, usuario: true },
   inquilino: true,
   anunciante: true,
   evidencias: true,
@@ -28,10 +27,10 @@ export class ReclamosRepository implements IReclamosRepository {
     );
   }
 
-  existeAbierto(idReserva: number): Promise<boolean> {
+  existeAbierto(idReserva: number, estados: string[]): Promise<boolean> {
     return this.reclamos.existsBy({
       reserva: { id: idReserva },
-      estado: In([EstadoReclamo.ABIERTO, EstadoReclamo.EN_REVISION]),
+      estado: In(estados),
     });
   }
 
@@ -51,7 +50,7 @@ export class ReclamosRepository implements IReclamosRepository {
     const reclamos = await this.reclamos.find({
       relations: {
         ...RELACIONES_RECLAMO,
-        reserva: { publicacion: { imagenes: true, anunciante: { usuario: true } }, usuario: true },
+        reserva: { liquidacion: true, publicacion: { imagenes: true, anunciante: { usuario: true } }, usuario: true },
       },
       order: { id: 'DESC' },
       take: 200,
