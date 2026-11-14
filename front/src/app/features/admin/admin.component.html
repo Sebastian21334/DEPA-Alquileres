@@ -220,7 +220,7 @@
               }
               <button type="button" class="button button--danger-outline" [disabled]="busy() === 'settlement-' + settlement.id" (click)="solicitarDevolucionLiquidacion(settlement)">Solicitar devolución</button>
               @if (settlement.codigo_validado_en) {
-                <button type="button" class="button button--success" [disabled]="busy() === 'settlement-' + settlement.id || settlement.estado_liquidacion === 'EN_REVISION'" (click)="registrarPago(settlement)">Registrar pago al propietario</button>
+                <button type="button" class="button button--success" [disabled]="busy() === 'settlement-' + settlement.id || settlement.estado_liquidacion === 'EN_REVISION'" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
               }
             </div>
           </article>
@@ -290,6 +290,33 @@
       </div>
     }
   </section>
+
+  <dialog #dialogoPagoAnunciante class="block-dialog refund-dialog cancellation-approval-dialog" aria-labelledby="advertiser-payment-title"
+    (cancel)="cerrarPagoAnunciante($event)">
+    <form class="block-form" (ngSubmit)="confirmarPagoAnunciante()" [attr.aria-busy]="registrandoPagoAnunciante()">
+      <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideWallet [size]="26"></svg></div>
+      <h2 id="advertiser-payment-title">Registrar pago al anunciante</h2>
+      @if (pagoAnuncianteSeleccionado(); as item) {
+        <p class="refund-meta">Reserva #{{ item.id }} · {{ item.publicacion?.titulo ?? 'Publicación eliminada' }}</p>
+        <p>{{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
+      }
+      <p class="refund-help" id="advertiser-payment-help">Registrá acá una transferencia que ya realizaste al anunciante.</p>
+      <label for="advertiser-payment-reference">Referencia o número de comprobante <span class="muted">(opcional)</span></label>
+      <input id="advertiser-payment-reference" name="referenciaPagoAnunciante" [(ngModel)]="referenciaPagoAnunciante"
+        maxlength="150" placeholder="Número de operación o referencia" aria-describedby="advertiser-payment-help"
+        [disabled]="registrandoPagoAnunciante()" autofocus />
+      <label for="advertiser-payment-note">Observación <span class="muted">(opcional)</span></label>
+      <textarea id="advertiser-payment-note" name="observacionPagoAnunciante" [(ngModel)]="observacionPagoAnunciante"
+        rows="3" maxlength="500" [disabled]="registrandoPagoAnunciante()"></textarea>
+      @if (errorPagoAnunciante()) { <p class="refund-error" role="alert">{{ errorPagoAnunciante() }}</p> }
+      <div class="block-actions">
+        <button type="button" class="button button--ghost" [disabled]="registrandoPagoAnunciante()" (click)="cerrarPagoAnunciante()">Volver</button>
+        <button type="submit" class="button button--success" [disabled]="registrandoPagoAnunciante()">
+          {{ registrandoPagoAnunciante() ? 'Registrando…' : 'Confirmar registro' }}
+        </button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog #dialogoAprobacion class="block-dialog cancellation-approval-dialog" aria-labelledby="cancellation-approval-title"
     (cancel)="cerrarAprobacionCancelacion($event)">
