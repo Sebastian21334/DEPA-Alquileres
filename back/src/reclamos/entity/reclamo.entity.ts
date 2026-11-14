@@ -1,6 +1,6 @@
+import { codigosCatalogo } from '../../catalogos/codigos-catalogo';
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoReclamo } from '../../catalogos/estados';
 import {
   Check,
   Column,
@@ -17,22 +17,14 @@ import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { ReclamoEvidencia } from './reclamo-evidencia.entity';
 import { ReclamoMensaje } from './reclamo-mensaje.entity';
 
-export enum CategoriaReclamo {
-  LIMPIEZA = 'LIMPIEZA',
-  MANTENIMIENTO = 'MANTENIMIENTO',
-  INGRESO = 'INGRESO',
-  DESCRIPCION = 'DESCRIPCION',
-  OTRO = 'OTRO',
-}
+export const CategoriaReclamo = codigosCatalogo('RECLAMO_CATEGORIA');
+export type CategoriaReclamo = keyof typeof CategoriaReclamo;
 
-export enum ResolucionReclamo {
-  SIN_DEVOLUCION = 'SIN_DEVOLUCION',
-  DEVOLUCION_TOTAL = 'DEVOLUCION_TOTAL',
-  DEVOLUCION_PARCIAL = 'DEVOLUCION_PARCIAL',
-}
+export const ResolucionReclamo = codigosCatalogo('RECLAMO_RESOLUCION');
+export type ResolucionReclamo = keyof typeof ResolucionReclamo;
 
 @Entity('reclamo_reserva')
-@Check('ck_reclamo_reserva_estado_ambito', `"ambito_estado" = '${AmbitoEstado.RECLAMO}'`)
+@Check('ck_reclamo_reserva_estado_ambito', `"ambito_estado" = '${"RECLAMO"}'`)
 @ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_reclamo_reserva_estado',
   onDelete: 'RESTRICT',
@@ -58,17 +50,15 @@ export class Reclamo {
 
   @Column({
     name: 'categoria',
-    type: 'enum',
-    enum: CategoriaReclamo,
-    enumName: 'reclamo_categoria_enum',
+    type: 'varchar', length: 40,
   })
   categoria: CategoriaReclamo;
 
   @Column({ name: 'descripcion', type: 'varchar', length: 1000 })
   descripcion: string;
 
-  @Column({ name: 'estado', type: 'varchar', length: 40, default: EstadoReclamo.ABIERTO })
-  estado: EstadoReclamo;
+  @Column({ name: 'estado', type: 'varchar', length: 40, default: 'ABIERTO' })
+  estado: string;
 
   @Column({
     name: 'ambito_estado',
@@ -78,13 +68,11 @@ export class Reclamo {
     insert: false,
     update: false,
   })
-  readonly ambitoEstado: typeof AmbitoEstado.RECLAMO;
+  readonly ambitoEstado: "RECLAMO";
 
   @Column({
     name: 'resolucion',
-    type: 'enum',
-    enum: ResolucionReclamo,
-    enumName: 'reclamo_resolucion_enum',
+    type: 'varchar', length: 40,
     nullable: true,
   })
   resolucion: ResolucionReclamo | null;

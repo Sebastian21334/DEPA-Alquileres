@@ -6,6 +6,8 @@ const { CatalogosService } = require('../dist/catalogos/service/catalogos.servic
 const { CatalogosRepository } = require('../dist/catalogos/repository/catalogos.repository');
 const { Rol } = require('../dist/catalogos/entity/rol.entity');
 const { Estado } = require('../dist/catalogos/entity/estado.entity');
+const { Ambito } = require('../dist/catalogos/entity/ambito.entity');
+const { VERIFICACION_ANUNCIANTE } = require('../src/catalogos/estados-iniciales.json');
 const { provincias } = require('../scripts/datos-iniciales/ubicaciones.json');
 
 test('la seed completa una base parcial y se puede repetir sin duplicar datos', async () => {
@@ -27,13 +29,17 @@ test('la seed completa una base parcial y se puede repetir sin duplicar datos', 
       INSERT INTO rol (nombre, descripcion) VALUES ('Administrador', 'Descripción propia');
       INSERT INTO tipo_moneda (nombre) VALUES ('Dólar estadounidense');
       DELETE FROM estado WHERE codigo_ambito = 'DISPUTA' AND codigo = 'GANADA';
+      DELETE FROM estado WHERE codigo_ambito = 'VERIFICACION_ANUNCIANTE';
+      DELETE FROM ambito WHERE codigo = 'VERIFICACION_ANUNCIANTE';
       UPDATE estado SET nombre = 'Etiqueta del panel' WHERE codigo_ambito = 'DISPUTA' AND codigo = 'ABIERTA';
     `);
     await assert.rejects(servicio.onModuleInit(), /rol Inquilino.*DISPUTA\/GANADA.*db:seed/);
 
     const primera = await cargarSeed();
+    assert.equal(primera.politica_cancelacion, 1);
     assert.equal(primera.rol, 1);
-    assert.equal(primera.estado, 1);
+    assert.equal(primera.ambito, 1);
+    assert.equal(primera.estado, 1 + Object.keys(VERIFICACION_ANUNCIANTE.estados).length);
     assert.equal(primera.tipo_moneda, 1);
     assert.equal(primera.modalidad, 2);
     assert.equal(primera.tipo_anunciante, 2);
@@ -45,7 +51,12 @@ test('la seed completa una base parcial y se puede repetir sin duplicar datos', 
     const segunda = await cargarSeed();
     assert.ok(Object.values(segunda).every((cantidad) => cantidad === 0));
     assert.equal((await repositorio.buscarRolPorNombre('Administrador')).descripcion, 'Descripción propia');
-    assert.equal((await repositorio.buscarEstadoPorCodigo('DISPUTA', 'ABIERTA')).nombre, 'Etiqueta del panel');
+    const reenviada = servicio.obtenerEstado('VERIFICACION_ANUNCIANTE', 'reenviada');
+    assert.ok(reenviada instanceof Estado);
+    assert.ok(reenviada.ambito instanceof Ambito);
+    assert.equal(reenviada.ambito.codigo, 'VERIFICACION_ANUNCIANTE');
+    assert.equal(reenviada.codigo, 'reenviada');
+    assert.equal(servicio.obtenerEstado('DISPUTA', 'ABIERTA').nombre, 'Etiqueta del panel');
     const inquilino = await repositorio.buscarRolPorNombre('Inquilino');
     await assert.rejects(servicio.actualizarRol(inquilino.id, { nombre: 'Otro nombre' }), /debe conservar su nombre/);
     await assert.rejects(servicio.eliminarRol(inquilino.id), /necesario para el sistema/);

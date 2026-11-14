@@ -24,10 +24,10 @@ import { UbicacionService } from '../../../src/ubicacion/service/ubicacion.servi
 import { UsuariosController } from '../../../src/usuarios/controller/usuarios.controller';
 import { Usuario } from '../../../src/usuarios/entity/usuario.entity';
 import { USUARIOS_REPOSITORY } from '../../../src/usuarios/repository/usuarios.repository.interface';
-import { UsuariosConsultaService } from '../../../src/usuarios/service/usuarios-consulta.service';
+import { UsuariosConsultaService } from '../../../src/usuarios-consulta/service/usuarios-consulta.service';
 import { UsuariosCredencialesService } from '../../../src/usuarios/service/usuarios-credenciales.service';
 import { UsuariosService } from '../../../src/usuarios/service/usuarios.service';
-import { UsuariosConsultaModule } from '../../../src/usuarios/usuarios-consulta.module';
+import { UsuariosConsultaModule } from '../../../src/usuarios-consulta/usuarios-consulta.module';
 import type { EntityManager } from 'typeorm';
 
 /**
@@ -217,6 +217,7 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
   class UsuariosConsultaEnMemoriaModule {}
 
   const catalogos = {
+    codigoEstado: (_ambito: string, codigo: string) => codigo,
     getRolPorNombre: async (nombre: string) => ROLES[nombre] ?? null,
     crearRol: async ({ nombre }: { nombre: string }) => ROLES[nombre],
   };

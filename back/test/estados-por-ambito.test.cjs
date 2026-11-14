@@ -5,7 +5,7 @@ const { readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 const { Estado } = require('../dist/catalogos/entity/estado.entity');
-const { ESTADOS_INICIALES } = require('../dist/catalogos/estados');
+const ESTADOS_INICIALES = require('../src/catalogos/estados-iniciales.json');
 
 const migracion = readFileSync(join(__dirname, '../migrations/20261110-estados-por-ambito.sql'), 'utf8');
 
@@ -39,6 +39,12 @@ test('migra estados históricos, conserva los nombres de Disputas y protege cada
     `);
 
     await db.exec(migracion);
+    const expedientes = readFileSync(join(__dirname, '../migrations/20261113-catalogos-de-expedientes.sql'), 'utf8');
+    await db.exec(expedientes);
+    await db.exec(expedientes);
+    const { rows: [movimiento] } = await db.query('SELECT tipo, origen FROM reembolso');
+    assert.deepEqual(movimiento, { tipo: 'PARCIAL', origen: 'RECLAMO' });
+    await assert.rejects(db.exec("UPDATE reembolso SET origen = 'OTRO'"), /foreign key/);
     await db.exec(migracion);
 
     const { rows: [estados] } = await db.query(`
@@ -100,6 +106,20 @@ test('migra estados históricos, conserva los nombres de Disputas y protege cada
         VALUES (1, 1, 'CONTRACARGO', 100) RETURNING estado
     `);
     assert.equal(disputa.rows[0].estado, 'ABIERTA');
+    const leer = nombre => readFileSync(join(__dirname, '../migrations', nombre), 'utf8');
+    const crearLiquidaciones = leer('20261112-liquidaciones.sql');
+    const reconciliar = leer('20261113-reconciliar-liquidaciones.sql');
+    const retirar = leer('20261113-retirar-liquidacion-de-reserva.sql');
+    await db.exec(crearLiquidaciones);
+    await db.exec("UPDATE reserva SET referencia_liquidacion = 'historica', fecha_resolucion_liquidacion = '2090-01-01' WHERE id_reserva = 1");
+    await assert.rejects(db.exec('BEGIN;\n' + retirar + '\nCOMMIT;'), /sin reconciliar/);
+    await db.exec('ROLLBACK');
+    for (let pasada = 0; pasada < 2; pasada++) {
+      await db.exec('BEGIN;\n' + migracion + crearLiquidaciones + reconciliar + retirar + '\nCOMMIT;');
+    }
+    const { rows: [liquidacion] } = await db.query('SELECT estado, referencia FROM liquidacion WHERE id_reserva = 1');
+    assert.deepEqual(liquidacion, { estado: 'DEVUELTO_PARCIAL_INQUILINO', referencia: 'historica' });
+    await assert.rejects(db.query('SELECT estado_liquidacion FROM reserva'), { code: '42703' });
   } finally {
     await cerrar();
   }

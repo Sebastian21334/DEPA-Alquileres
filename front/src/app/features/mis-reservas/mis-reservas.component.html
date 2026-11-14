@@ -50,6 +50,11 @@
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
               <p>Ya enviaste una solicitud de cancelación para esta reserva. Está en revisión.</p>
             </div>
+          } @else if (estadoCancelacion() === 'aprobada') {
+            <div class="cancellation-info" role="status">
+              <svg lucideInfo [size]="22" aria-hidden="true"></svg>
+              <p>Tu solicitud de cancelación fue aprobada. La devolución todavía está en gestión.</p>
+            </div>
           } @else if (estadoCancelacion() === 'consultando') {
             <p role="status">Consultando el estado de la solicitud…</p>
           }

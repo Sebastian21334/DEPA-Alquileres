@@ -35,6 +35,8 @@ export class ReservaResultadoComponent {
 
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
+  protected readonly errorVerificacion = signal('');
+  protected readonly reintentandoPago = signal(false);
   protected readonly resumen = signal<ResumenReserva | null>(null);
   protected readonly confirmarSalida = signal(false);
   protected readonly codigo = signal<CodigoAlojamiento | null>(null);
@@ -133,15 +135,32 @@ export class ReservaResultadoComponent {
       this.route.snapshot.queryParamMap.get('payment_id') ??
       this.route.snapshot.queryParamMap.get('collection_id');
 
-    if (paymentResult === 'success' && paymentId) {
-      this.reservasApi.reconcilePayment(paymentId).subscribe({
+    if (paymentResult && paymentId && /^\d+$/.test(paymentId)) {
+      this.reservasApi.reconcilePayment(paymentId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => this.cargarResumen(idReserva),
-        error: () => this.cargarResumen(idReserva),
+        error: () => {
+          this.errorVerificacion.set('No pudimos verificar el pago al volver de Mercado Pago. Volvé a cargar esta página para reintentar la verificación.');
+          this.cargarResumen(idReserva);
+        },
       });
       return;
     }
 
     this.cargarResumen(idReserva);
+  }
+
+  protected reintentarPago(idReserva: number): void {
+    if (this.reintentandoPago()) return;
+    this.reintentandoPago.set(true);
+    this.errorVerificacion.set('');
+    this.reservasApi.retryCheckout(idReserva).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: ({ checkout_url }) => window.location.assign(checkout_url),
+      error: () => {
+        this.reintentandoPago.set(false);
+        this.errorVerificacion.set('No pudimos volver a abrir el pago. Revisá el estado de la reserva e intentá nuevamente si sigue disponible.');
+        this.cargarResumen(idReserva, true);
+      },
+    });
   }
 
   protected abrirReprogramacion(): void {
@@ -256,11 +275,19 @@ export class ReservaResultadoComponent {
   }
 
   protected tituloEstado(reserva: Reserva): string {
+    if (reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion === 'EN_REVISION')
+      return 'Pago acreditado, reserva en revisión';
     if (reserva.estado_estadia === 'CONFIRMADA') return 'Reserva confirmada';
     return etiquetasEstadia[reserva.estado_estadia];
   }
 
   protected descripcionEstado(reserva: Reserva): string {
+    if (reserva.estado_pago === 'PENDIENTE' && this.resumen()?.puede_reintentar)
+      return this.pago()?.status === 'rejected' || this.pago()?.status === 'cancelled'
+        ? 'El intento de pago no se completó. Podés volver a Mercado Pago mientras las fechas sigan reservadas.'
+        : 'Podés completar el pago en Mercado Pago mientras las fechas sigan reservadas.';
+    if (reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion === 'EN_REVISION')
+      return 'Recibimos el pago. La estadía no quedó confirmada y el equipo debe revisar la operación.';
     const descripciones: Partial<Record<Reserva['estado_estadia'], string>> = {
       PENDIENTE_INGRESO: 'La estadía comenzó. El propietario todavía no validó el código de alojamiento.',
       EN_CURSO: 'El ingreso fue validado y la estadía está en curso.',

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CatalogosModule } from '../catalogos/catalogos.module';
-import { PagosPersistenciaModule } from '../pagos/pagos-persistencia.module';
+import { PagosModule } from '../pagos/pagos.module';
 import { ReembolsosModule } from '../reembolsos/reembolsos.module';
 import { ReservasModule } from '../reservas/reservas.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
@@ -15,7 +15,7 @@ import { DISPUTAS_REPOSITORY } from './repository/disputas.repository.interface'
   imports: [
     TypeOrmModule.forFeature([Disputa]),
     CatalogosModule,
-    PagosPersistenciaModule,
+    PagosModule,
     ReembolsosModule,
     ReservasModule,
     SeguridadModule,

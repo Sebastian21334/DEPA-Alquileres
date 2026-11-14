@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -18,7 +19,7 @@ function escenario() {
     buscarPorId: async () => publicacion,
     buscarPorAnunciante: async () => [publicacion],
     incrementarVisualizaciones: async () => { vistas++; },
-  }, {}, {}, {}, new AnunciantesService({}));
+  }, catalogosDePrueba(), {}, {}, new AnunciantesService({}));
   const favoritos = new FavoritosService({
     buscarPorUsuario: async () => [{ publicacion }],
     existe: async () => true,

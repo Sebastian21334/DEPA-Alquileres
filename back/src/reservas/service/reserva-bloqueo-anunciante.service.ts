@@ -1,10 +1,6 @@
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
-import {
-  EstadoLiquidacionReserva,
-  EstadoPagoReserva,
-  EstadoReembolso,
-} from '../../catalogos/estados';
 import {
   OrigenReembolso,
   Reembolso,
@@ -16,13 +12,8 @@ import {
   RESERVA_REPOSITORY,
   type IReservaRepository,
 } from '../repository/reserva.repository.interface';
-import { ReservaBloqueoDevolucionService } from './reserva-bloqueo-devolucion.service';
-import { ReservaReembolsoAplicacionService } from './reserva-reembolso-aplicacion.service';
-import { MOTIVO_CANCELACION_BLOQUEO } from '../reserva.constants';
-import { ReservaDecisionService } from './reserva-decision.service';
-import { ReservaCicloVidaService } from './reserva-ciclo-vida.service';
 import { ReservasService } from './reservas.service';
-import { LiquidacionesService } from './liquidaciones.service';
+import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
 export type ResultadoBloqueoAnunciante =
@@ -46,6 +37,7 @@ export type ResumenBloqueoAnunciante = {
  */
 @Injectable()
 export class ReservaBloqueoAnuncianteService {
+  private readonly descripcionBloqueo = 'Bloqueo de cuenta del anunciante';
   private readonly logger = new Logger(ReservaBloqueoAnuncianteService.name);
 
   constructor(
@@ -53,12 +45,8 @@ export class ReservaBloqueoAnuncianteService {
     private readonly reservaRepository: IReservaRepository,
     private readonly disponibilidadService: DisponibilidadService,
     private readonly reembolsosService: ReembolsosService,
-    private readonly decision: ReservaDecisionService,
-    private readonly ciclo: ReservaCicloVidaService,
     private readonly reservasService: ReservasService,
-    private readonly aplicacion: ReservaReembolsoAplicacionService,
-    private readonly devolucion: ReservaBloqueoDevolucionService,
-    private readonly liquidaciones: LiquidacionesService,
+    private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService,
   ) {}
 
   async cancelarReservasPorBloqueoAnunciante(
@@ -68,7 +56,7 @@ export class ReservaBloqueoAnuncianteService {
   ): Promise<ResumenBloqueoAnunciante> {
     const motivoTexto = this.motivoBloqueo(motivo);
     const reservas =
-      await this.reservaRepository.buscarPorAnunciante(idAnunciante);
+      await this.liquidaciones.proyectarListado(await this.reservaRepository.buscarPorAnunciante(idAnunciante));
     const resumen: ResumenBloqueoAnunciante = {
       canceladasPendientes: 0,
       canceladasConDevolucion: 0,
@@ -111,18 +99,18 @@ export class ReservaBloqueoAnuncianteService {
       return 'enRevision';
     }
 
-    const codigoValidado = this.decision.codigoValidado(reserva);
-    const liquidacionResuelta = this.decision.liquidacionResuelta(reserva);
+    const codigoValidado = this.reservasService.codigoValidado(reserva);
+    const liquidacionResuelta = this.reservasService.liquidacionResuelta(reserva);
     const enRevision =
-      this.decision.liquidacionEnRevision(reserva) ||
-      reserva.estado_pago === EstadoPagoReserva.CONTRACARGO;
+      this.reservasService.liquidacionEnRevision(reserva) ||
+      reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO');
 
     // En curso o finalizada: se preserva la estadía y no se devuelve
     // automáticamente. Si la liquidación sigue pendiente, se congela para que
     // un Administrador la revise.
     if (
-      this.decision.esEstadiaEnCurso(reserva) ||
-      this.decision.esEstadiaFinalizada(reserva)
+      this.reservasService.esEstadiaEnCurso(reserva) ||
+      this.reservasService.esEstadiaFinalizada(reserva)
     ) {
       if (liquidacionResuelta) return 'sinAccion';
       await this.congelarLiquidacion(reserva, motivo);
@@ -130,7 +118,7 @@ export class ReservaBloqueoAnuncianteService {
     }
 
     // Reclamo, contracargo o liquidación ya en revisión: decide el Administrador.
-    if (enRevision) {
+    if (enRevision && !this.esCancelacionPorBloqueo(reserva)) {
       await this.congelarLiquidacion(reserva, motivo);
       return 'enRevision';
     }
@@ -145,22 +133,23 @@ export class ReservaBloqueoAnuncianteService {
 
     // Sin código y fuera del período: no hubo ingreso acreditado.
     if (
-      reserva.estado_pago === EstadoPagoReserva.PENDIENTE ||
-      reserva.estado_pago === EstadoPagoReserva.RECHAZADO ||
-      reserva.estado_pago === EstadoPagoReserva.CANCELADO
+      reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE') ||
+      reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'RECHAZADO') ||
+      reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO')
     ) {
       if (reserva.cancelada) return 'sinAccion';
       const estadoCierre =
-        reserva.estado_pago === EstadoPagoReserva.PENDIENTE
-          ? EstadoPagoReserva.CANCELADO
+        reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE')
+          ? this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO')
           : reserva.estado_pago;
       const cerrada = await this.reservasService.rechazarPago(
         reserva.id,
         estadoCierre,
         'ADMINISTRADOR',
         this.mensajeLiquidacion(motivo),
+        'BLOQUEO_ANUNCIANTE',
       );
-      if (this.decision.pagoAprobado(cerrada)) {
+      if (this.reservasService.pagoAprobado(cerrada)) {
         return this.cancelarYDevolverPorBloqueo(
           cerrada,
           idAnunciante,
@@ -176,12 +165,12 @@ export class ReservaBloqueoAnuncianteService {
     }
 
     if (
-      reserva.estado_pago === EstadoPagoReserva.REEMBOLSADO ||
+      reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO') ||
       liquidacionResuelta
     )
       return 'sinAccion';
 
-    if (reserva.estado_pago !== EstadoPagoReserva.APROBADO)
+    if (reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))
       return 'sinAccion';
 
     return this.cancelarYDevolverPorBloqueo(
@@ -200,11 +189,12 @@ export class ReservaBloqueoAnuncianteService {
   ): Promise<ResultadoBloqueoAnunciante> {
     const fresca = await this.reservaRepository.buscarPorId(reserva.id);
     if (!fresca) return 'sinAccion';
-    if (this.decision.liquidacionResuelta(fresca)) return 'sinAccion';
+    await this.liquidaciones.proyectarEnReserva(fresca);
+    if (this.reservasService.liquidacionResuelta(fresca)) return 'sinAccion';
 
     if (
-      this.decision.esEstadiaEnCurso(fresca) ||
-      this.decision.esEstadiaFinalizada(fresca)
+      this.reservasService.esEstadiaEnCurso(fresca) ||
+      this.reservasService.esEstadiaFinalizada(fresca)
     ) {
       await this.congelarLiquidacion(fresca, motivo);
       return 'enRevision';
@@ -215,14 +205,14 @@ export class ReservaBloqueoAnuncianteService {
       await this.congelarLiquidacion(fresca, motivo);
       return 'enRevision';
     }
-    if (this.decision.codigoValidado(fresca) || fresca.finalizada) {
+    if (this.reservasService.codigoValidado(fresca) || fresca.finalizada) {
       await this.congelarLiquidacion(fresca, motivo);
       return 'enRevision';
     }
     if (
-      (this.decision.liquidacionEnRevision(fresca) && !bloqueoPrevio) ||
-      fresca.estado_pago === EstadoPagoReserva.CONTRACARGO ||
-      fresca.estado_pago !== EstadoPagoReserva.APROBADO
+      (this.reservasService.liquidacionEnRevision(fresca) && !bloqueoPrevio) ||
+      fresca.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO') ||
+      fresca.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO')
     ) {
       await this.congelarLiquidacion(fresca, motivo);
       return 'enRevision';
@@ -245,13 +235,13 @@ export class ReservaBloqueoAnuncianteService {
       creado: boolean;
     };
     try {
-      devolucion = await this.devolucion.asegurarDevolucion(
+      devolucion = await this.reembolsosService.asegurarDevolucion(
         reserva,
         pago,
         existentes,
         idAnunciante,
         idAdmin,
-        motivo,
+        this.mensajeLiquidacion(motivo),
       );
     } catch (error) {
       await this.congelarLiquidacion(fresca, motivo);
@@ -297,7 +287,7 @@ export class ReservaBloqueoAnuncianteService {
       return resultado;
     }
 
-    const cobertura = await this.devolucion.coberturaDevolucion(
+    const cobertura = await this.reembolsosService.coberturaDevolucion(
       reserva.id,
       pago,
     );
@@ -316,21 +306,22 @@ export class ReservaBloqueoAnuncianteService {
               : TipoReembolso.PARCIAL,
           origen: OrigenReembolso.CANCELACION,
           importe: cobertura.faltante,
-          motivo: `${MOTIVO_CANCELACION_BLOQUEO}: ${motivo}`,
+          motivo: this.mensajeLiquidacion(motivo),
           idSolicitadoPor: idAdmin,
+          referenciaInterna: `blq:${idAnunciante}:${reserva.id}`,
           idempotencyKey: `blq:${idAnunciante}:${reserva.id}:r1:${sello}`,
         });
 
       const cubreReintento =
-        reintento.estado === EstadoReembolso.APROBADO
+        reintento.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')
           ? this.reembolsosService.saldoReembolsable(cobertura.pago) <=
             TOLERANCIA_MONETARIA
           : Number(reintento.importe) >=
             cobertura.faltante - TOLERANCIA_MONETARIA;
       if (
-        (reintento.estado !== EstadoReembolso.PENDIENTE &&
-          reintento.estado !== EstadoReembolso.EN_PROCESO &&
-          reintento.estado !== EstadoReembolso.APROBADO) ||
+        (reintento.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') &&
+          reintento.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') &&
+          reintento.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) ||
         !cubreReintento
       ) {
         throw new Error(
@@ -352,21 +343,21 @@ export class ReservaBloqueoAnuncianteService {
         devolucion.reembolso;
     }
 
-    if (devolucion.reembolso?.estado === EstadoReembolso.APROBADO) {
-      await this.aplicacion.aplicarReembolsoConfirmado(devolucion.reembolso.id);
+    if (devolucion.reembolso?.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) {
+      await this.reembolsosService.aplicarConfirmado(devolucion.reembolso.id, (reembolso, transaccion) =>
+        this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
+      );
     }
 
     const errores: string[] = [];
     for (const pendiente of devolucion.pendientes) {
-      if (pendiente.estado !== EstadoReembolso.PENDIENTE) continue;
+      if (pendiente.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE')) continue;
       try {
-        const ejecutado = await this.reembolsosService.registrarOejecutar(
-          pendiente.id,
-          null,
-          idAdmin,
-        );
-        if (ejecutado.estado === EstadoReembolso.APROBADO)
-          await this.aplicacion.aplicarReembolsoConfirmado(ejecutado.id);
+        const ejecutado = await this.reembolsosService.ejecutarYConfirmar(pendiente.id, idAdmin);
+        if (ejecutado.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
+          await this.reembolsosService.aplicarConfirmado(ejecutado.id, (reembolso, transaccion) =>
+            this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
+          );
       } catch (error) {
         const mensaje =
           error instanceof Error ? error.message : String(error);
@@ -384,19 +375,15 @@ export class ReservaBloqueoAnuncianteService {
     return this.reservaRepository.conTransaccion(
       async (reservaRepository) => {
         const actual = await reservaRepository.buscarPorId(idReserva);
-        return actual ? this.esCancelacionPorBloqueo(actual) : false;
+        return actual ? this.esCancelacionPorBloqueo(await this.liquidaciones.proyectarEnReserva(actual)) : false;
       },
     );
   }
 
   private esCancelacionPorBloqueo(reserva: Reserva): boolean {
     return (
-      reserva.cancelada &&
-      reserva.cancelada_por === 'ADMINISTRADOR' &&
-      !!reserva.motivo_cancelacion?.startsWith(
-        MOTIVO_CANCELACION_BLOQUEO,
-      ) &&
-      reserva.estado_liquidacion === EstadoLiquidacionReserva.EN_REVISION
+      this.reservasService.fueCanceladaPorBloqueo(reserva) &&
+      reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION')
     );
   }
 
@@ -408,12 +395,13 @@ export class ReservaBloqueoAnuncianteService {
       async (reservaRepository, transaccion) => {
         const actual = await reservaRepository.buscarPorId(idReserva);
         if (!actual) return 'sinAccion';
-        if (this.decision.liquidacionResuelta(actual)) return 'sinAccion';
+        await this.liquidaciones.proyectarEnReserva(actual, transaccion);
+        if (this.reservasService.liquidacionResuelta(actual)) return 'sinAccion';
         if (
-          this.decision.esEstadiaEnCurso(actual) ||
-          this.decision.esEstadiaFinalizada(actual)
+          this.reservasService.esEstadiaEnCurso(actual) ||
+          this.reservasService.esEstadiaFinalizada(actual)
         ) {
-          actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+          actual.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
           actual.observacion_liquidacion = this.observacionConMotivo(
             actual.observacion_liquidacion,
             motivo,
@@ -427,21 +415,21 @@ export class ReservaBloqueoAnuncianteService {
           return 'enRevision';
         if (
           this.esCancelacionPorBloqueo(actual) &&
-          actual.estado_pago === EstadoPagoReserva.APROBADO &&
-          !this.decision.codigoValidado(actual) &&
+          actual.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO') &&
+          !this.reservasService.codigoValidado(actual) &&
           !actual.finalizada
         )
           return 'yaCancelada';
 
         const debeIrARevision =
-          this.decision.codigoValidado(actual) ||
+          this.reservasService.codigoValidado(actual) ||
           actual.finalizada ||
-          this.decision.liquidacionEnRevision(actual) ||
-          actual.estado_pago === EstadoPagoReserva.CONTRACARGO ||
-          actual.estado_pago !== EstadoPagoReserva.APROBADO;
+          this.reservasService.liquidacionEnRevision(actual) ||
+          actual.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO') ||
+          actual.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
 
         if (debeIrARevision) {
-          actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+          actual.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
           actual.observacion_liquidacion = this.observacionConMotivo(
             actual.observacion_liquidacion,
             motivo,
@@ -453,12 +441,13 @@ export class ReservaBloqueoAnuncianteService {
         }
 
         if (!actual.cancelada)
-          this.ciclo.cancelar(
+          this.reservasService.marcarCancelada(
             actual,
             'ADMINISTRADOR',
             this.mensajeLiquidacion(motivo),
+            'BLOQUEO_ANUNCIANTE',
           );
-        actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+        actual.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
         actual.observacion_liquidacion = this.observacionConMotivo(
           actual.observacion_liquidacion,
           motivo,
@@ -482,8 +471,10 @@ export class ReservaBloqueoAnuncianteService {
     await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
         const actual = await reservaRepository.buscarPorId(reserva.id);
-        if (!actual || this.decision.liquidacionResuelta(actual)) return;
-        actual.estado_liquidacion = EstadoLiquidacionReserva.EN_REVISION;
+        if (!actual) return;
+        await this.liquidaciones.proyectarEnReserva(actual, transaccion);
+        if (this.reservasService.liquidacionResuelta(actual)) return;
+        actual.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
         actual.observacion_liquidacion = this.observacionConMotivo(
           actual.observacion_liquidacion,
           motivo,
@@ -496,18 +487,18 @@ export class ReservaBloqueoAnuncianteService {
   }
 
   private motivoBloqueo(motivo?: string): string {
-    return (motivo?.trim() || MOTIVO_CANCELACION_BLOQUEO).slice(0, 200);
+    return (motivo?.trim() || this.descripcionBloqueo).slice(0, 200);
   }
 
   private mensajeLiquidacion(motivo: string): string {
-    return `${MOTIVO_CANCELACION_BLOQUEO}: ${motivo}`.slice(0, 500);
+    return `${this.descripcionBloqueo}: ${motivo}`.slice(0, 500);
   }
 
   private observacionConMotivo(
     actual: string | null,
     motivo: string,
   ): string {
-    if (actual?.includes(MOTIVO_CANCELACION_BLOQUEO)) return actual;
+    if (actual?.includes(this.descripcionBloqueo)) return actual;
     const bloqueo = this.mensajeLiquidacion(motivo);
     return actual ? `${actual} | ${bloqueo}`.slice(0, 500) : bloqueo;
   }

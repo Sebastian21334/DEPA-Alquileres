@@ -1,4 +1,4 @@
-import { EstadoPagoReserva } from '../../catalogos/estados';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Injectable } from '@nestjs/common';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
 import type { EstadoEstadia, ReservaRespuestaDto } from '../dto/reserva-respuesta.dto';
@@ -8,25 +8,33 @@ import { PublicacionesService } from '../../publicaciones/service/publicaciones.
 /** Proyección compartida con los módulos que devuelven reservas en sus respuestas. */
 @Injectable()
 export class ReservaEstadoService {
-  constructor(private readonly publicaciones: PublicacionesService) {}
+  constructor(private readonly publicaciones: PublicacionesService, private readonly catalogos: CatalogosService) {}
 
   prepararRespuesta(reserva: Reserva): ReservaRespuestaDto {
     if (reserva.publicacion) {
       reserva.publicacion = this.publicaciones.prepararRespuesta(reserva.publicacion);
     }
+    const { liquidacion } = reserva;
+    if (reserva.estado_liquidacion == null) {
+      reserva.estado_liquidacion = liquidacion?.estado ?? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA');
+      reserva.referencia_liquidacion = liquidacion?.referencia ?? null;
+      reserva.observacion_liquidacion = liquidacion?.observacion ?? null;
+      reserva.fecha_resolucion_liquidacion = liquidacion?.fecha_resolucion ?? null;
+    }
+    delete reserva.liquidacion;
     return Object.assign(reserva, { estado_estadia: this.calcularEstadoEstadia(reserva) });
   }
 
   calcularEstadoEstadia(reserva: Reserva, ahora = new Date()): EstadoEstadia {
-    if (reserva.estado_pago === EstadoPagoReserva.CONTRACARGO)
+    if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO'))
       return 'EN_DISPUTA';
-    if (reserva.estado_pago === EstadoPagoReserva.REEMBOLSADO)
+    if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO'))
       return 'REEMBOLSADA';
-    if (reserva.estado_pago === EstadoPagoReserva.RECHAZADO)
+    if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'RECHAZADO'))
       return 'PAGO_RECHAZADO';
-    if (reserva.cancelada || reserva.estado_pago === EstadoPagoReserva.CANCELADO)
+    if (reserva.cancelada || reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'))
       return 'CANCELADA';
-    if (reserva.estado_pago === EstadoPagoReserva.PENDIENTE)
+    if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'))
       return 'PENDIENTE_PAGO';
     // Conserva los cierres manuales existentes.
     if (reserva.finalizada) return 'FINALIZADA';

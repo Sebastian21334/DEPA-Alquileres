@@ -1,7 +1,6 @@
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
-import { EstadoDisputa } from '../../catalogos/estados';
 
-const RESULTADOS_DISPUTA = [EstadoDisputa.GANADA, EstadoDisputa.PERDIDA] as const;
+const RESULTADOS_DISPUTA = ['GANADA', 'PERDIDA'] as const;
 
 export class ResolverDisputaDto {
   @IsIn(RESULTADOS_DISPUTA)

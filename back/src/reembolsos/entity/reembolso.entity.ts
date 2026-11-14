@@ -1,6 +1,6 @@
+import { codigosCatalogo } from '../../catalogos/codigos-catalogo';
 import type { Relation } from 'typeorm';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado, EstadoReembolso } from '../../catalogos/estados';
 import {
   Check,
   Column,
@@ -15,23 +15,15 @@ import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Pago } from '../../pagos/entity/pago.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
-export enum TipoReembolso {
-  TOTAL = 'TOTAL',
-  PARCIAL = 'PARCIAL',
-  CONTRACARGO = 'CONTRACARGO',
-}
+export const TipoReembolso = codigosCatalogo('REEMBOLSO_TIPO');
+export type TipoReembolso = keyof typeof TipoReembolso;
 
-export enum OrigenReembolso {
-  CANCELACION = 'CANCELACION',
-  RECLAMO = 'RECLAMO',
-  CONTRACARGO = 'CONTRACARGO',
-  PAGO_TARDIO = 'PAGO_TARDIO',
-  AJUSTE_ADMIN = 'AJUSTE_ADMIN',
-}
+export const OrigenReembolso = codigosCatalogo('REEMBOLSO_ORIGEN');
+export type OrigenReembolso = keyof typeof OrigenReembolso;
 
 /** Registro auditable de una devolución total o parcial. */
 @Entity('reembolso')
-@Check('ck_reembolso_estado_ambito', `"ambito_estado" = '${AmbitoEstado.REEMBOLSO}'`)
+@Check('ck_reembolso_estado_ambito', `"ambito_estado" = '${"REEMBOLSO"}'`)
 @ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_reembolso_estado',
   onDelete: 'RESTRICT',
@@ -54,10 +46,10 @@ export class Reembolso {
   })
   pago: Relation<Pago>;
 
-  @Column({ name: 'tipo', type: 'enum', enum: TipoReembolso })
+  @Column({ name: 'tipo', type: 'varchar', length: 40, })
   tipo: TipoReembolso;
 
-  @Column({ name: 'origen', type: 'enum', enum: OrigenReembolso })
+  @Column({ name: 'origen', type: 'varchar', length: 40, })
   origen: OrigenReembolso;
 
   @Column({ name: 'importe', type: 'decimal', precision: 10, scale: 2 })
@@ -66,8 +58,8 @@ export class Reembolso {
   @Column({ name: 'moneda', type: 'varchar', length: 3, default: 'ARS' })
   moneda: string;
 
-  @Column({ name: 'estado', type: 'varchar', length: 40, default: EstadoReembolso.PENDIENTE })
-  estado: EstadoReembolso;
+  @Column({ name: 'estado', type: 'varchar', length: 40, default: 'PENDIENTE' })
+  estado: string;
 
   @Column({
     name: 'ambito_estado',
@@ -77,7 +69,7 @@ export class Reembolso {
     insert: false,
     update: false,
   })
-  readonly ambitoEstado: typeof AmbitoEstado.REEMBOLSO;
+  readonly ambitoEstado: "REEMBOLSO";
 
   @Column({ name: 'motivo', type: 'varchar', length: 500 })
   motivo: string;
@@ -129,6 +121,18 @@ export class Reembolso {
 
   @Column({ name: 'resuelto_en', type: 'timestamp', nullable: true })
   resuelto_en: Date | null;
+
+  @Column({ name: 'aplicado_en', type: 'timestamp', nullable: true })
+  aplicado_en: Date | null;
+
+  @Column({ name: 'revision_aplicacion', type: 'boolean', default: false })
+  revision_aplicacion: boolean;
+
+  @Column({ name: 'conciliar_en', type: 'timestamptz', nullable: true, select: false })
+  conciliar_en: Date | null;
+
+  @Column({ name: 'primer_intento_en', type: 'timestamptz', nullable: true, select: false })
+  primer_intento_en: Date | null;
 
   @Column({
     name: 'error_detalle',

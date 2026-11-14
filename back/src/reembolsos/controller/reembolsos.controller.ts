@@ -11,11 +11,7 @@ export class ReembolsosController {
   constructor(private readonly reembolsosService: ReembolsosService) {}
 
   @Get('administracion')
-  async listar() {
-    const reembolsos = await this.reembolsosService.listarAdministracion();
-    return reembolsos.map((reembolso) => ({
-      ...reembolso,
-      ejecucion_automatica: this.reembolsosService.ejecucionAutomaticaHabilitada,
-    }));
+  listar() {
+    return this.reembolsosService.listarAdministracion();
   }
 }

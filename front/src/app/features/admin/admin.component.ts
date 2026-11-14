@@ -15,7 +15,6 @@ import {
   LucideX,
   LucideCalendarX,
   LucideMessageCircle,
-  LucideTriangleAlert,
   LucideChevronRight,
   LucideHouse,
   LucideWallet,
@@ -81,7 +80,6 @@ type AdminSection = 'resumen' | typeof ADMIN_NAVIGATION[number]['items'][number]
     LucideX,
     LucideCalendarX,
     LucideMessageCircle,
-    LucideTriangleAlert,
     LucideChevronRight,
     LucideHouse,
     LucideWallet,
@@ -136,7 +134,6 @@ export class AdminComponent {
   protected textoReclamo = '';
   protected resolucionReclamo: NonNullable<Reclamo['resolucion']> = 'SIN_DEVOLUCION';
   protected importeReclamo: number | null = null;
-  protected referenciaReclamo = '';
   protected observacionReclamo = '';
   protected readonly cancellations = signal<AdminCancellationRequest[]>([]);
   private readonly dialogoAprobacion = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoAprobacion');
@@ -172,9 +169,6 @@ export class AdminComponent {
   protected readonly pendingRefunds = computed(() => this.refunds().filter(({ estado }) =>
     estado === 'PENDIENTE' || estado === 'EN_PROCESO' || estado === 'FALLIDO',
   ));
-  protected readonly manualRefunds = computed(() =>
-    this.pendingRefunds().filter((item) => !item.ejecucion_automatica && this.puedeRegistrarReembolso(item)),
-  );
   protected readonly pendingCases = computed(() => [
     ...this.cancellations().slice(0, 2).map((item) => ({
       section: 'cancelaciones' as const, id: item.id,
@@ -189,7 +183,7 @@ export class AdminComponent {
     ...this.pendingRefunds().slice(0, 2).map((item) => ({
       section: 'reembolsos' as const, id: item.id,
       label: item.reserva ? `Reembolso · Reserva #${item.reserva.id}` : `Reembolso #${item.id}`,
-      status: this.manualRefunds().includes(item) ? 'Registro manual' : this.estadosReembolso[item.estado],
+      status: this.estadosReembolso[item.estado],
       tone: 'refund', action: 'Ver detalle',
     })),
     ...this.requests().slice(0, 2).map((item) => ({
@@ -449,17 +443,9 @@ export class AdminComponent {
     });
   }
 
-  protected registrarDevolucion(settlement: AdminSettlement): void {
-    const referencia = window
-      .prompt('Referencia o comprobante de la devolución manual al inquilino:')
-      ?.trim();
-    if (referencia === undefined) return;
-    this.resolverSettlement(
-      settlement,
-      'DEVUELTO_INQUILINO',
-      referencia,
-      'Devolución manual al inquilino registrada',
-    );
+  protected solicitarDevolucionLiquidacion(settlement: AdminSettlement): void {
+    if (!window.confirm('¿Solicitar la devolución del pago original por Mercado Pago?')) return;
+    this.resolverSettlement(settlement, 'DEVUELTO_INQUILINO', undefined, 'Devolución confirmada por Mercado Pago.');
   }
 
   protected resolverReclamo(settlement: AdminSettlement): void {
@@ -513,7 +499,7 @@ export class AdminComponent {
             this.toast.mostrar('Cancelación aprobada sin devolución.', 'exito');
             return;
           }
-          this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente de registrar.', 'exito');
+          this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente en Reembolsos.', 'exito');
           this.reload();
         },
         error: (error: Error) => this.errorAprobacion.set(error.message),
@@ -532,24 +518,35 @@ export class AdminComponent {
     if (!this.guardandoReembolso()) this.dialogoReembolso().nativeElement.close();
   }
 
-  protected puedeRegistrarReembolso(reembolso: AdminReembolso): boolean {
-    return reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO' ||
-      (reembolso.estado === 'EN_PROCESO' && !reembolso.ejecucion_automatica);
+  protected puedeSolicitarReembolso(reembolso: AdminReembolso): boolean {
+    return reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
   }
 
-  protected registrarReembolsoPendiente(reembolso: AdminReembolso): void {
+  protected puedeConciliarReembolso(reembolso: AdminReembolso): boolean {
+    return !!reembolso.pago?.payment_id && (reembolso.estado === 'FALLIDO' || reembolso.estado === 'EN_PROCESO');
+  }
+
+  protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
     const referencia = this.referenciaReembolso.trim();
-    if (this.guardandoReembolso() || !this.puedeRegistrarReembolso(reembolso) ||
-        (!reembolso.ejecucion_automatica && (!referencia || referencia.length > 150))) return;
+    if (this.puedeConciliarReembolso(reembolso)) return /^\d{1,100}$/.test(referencia);
+    return this.puedeSolicitarReembolso(reembolso);
+  }
+
+  protected procesarReembolso(reembolso: AdminReembolso): void {
+    const referencia = this.referenciaReembolso.trim();
+    if (this.guardandoReembolso() || !this.referenciaReembolsoValida(reembolso)) return;
 
     this.errorReembolso.set('');
     this.guardandoReembolso.set(true);
-    this.api.registrarReembolso(reembolso.id, reembolso.ejecucion_automatica ? undefined : referencia)
+    const operacion = this.puedeConciliarReembolso(reembolso)
+      ? this.api.conciliarReembolso(reembolso.id, referencia)
+      : this.api.solicitarReembolso(reembolso.id);
+    operacion
       .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
       .subscribe({
         next: () => {
           this.dialogoReembolso().nativeElement.close();
-          this.toast.mostrar('Reembolso registrado y aplicado a la reserva.', 'exito');
+          this.toast.mostrar('Reembolso confirmado y aplicado a la reserva.', 'exito');
           this.reload();
         },
         error: (e: Error) => {
@@ -593,7 +590,6 @@ export class AdminComponent {
     this.textoReclamo = '';
     this.resolucionReclamo = 'SIN_DEVOLUCION';
     this.importeReclamo = null;
-    this.referenciaReclamo = '';
     this.observacionReclamo = '';
     this.gestionReclamo.set({ id, accion });
   }
@@ -621,7 +617,6 @@ export class AdminComponent {
     if (this.busy()) return;
     const resolucion = this.resolucionReclamo;
     const importe = resolucion === 'DEVOLUCION_PARCIAL' ? this.importeReclamo : undefined;
-    const referencia = resolucion === 'SIN_DEVOLUCION' ? undefined : this.referenciaReclamo.trim() || undefined;
     const observacion = this.observacionReclamo.trim();
     if (!observacion || observacion.length > 500) return;
     if (resolucion === 'DEVOLUCION_PARCIAL' && (importe == null || !Number.isFinite(importe) || importe <= 0)) {
@@ -630,7 +625,7 @@ export class AdminComponent {
     }
     this.run(
       `claim-${reclamo.id}`,
-      () => this.api.resolverReclamo(reclamo.id, resolucion, importe ?? undefined, referencia, observacion),
+      () => this.api.resolverReclamo(reclamo.id, resolucion, importe ?? undefined, observacion),
       (value) => {
         const resuelto = value as Reclamo;
         this.claims.update((items) => items.map((item) => item.id === reclamo.id ? { ...item, ...resuelto, reserva: item.reserva } : item));
@@ -659,12 +654,12 @@ export class AdminComponent {
     });
   }
 
-  private resolverSettlement(settlement: AdminSettlement, estado: 'DEVUELTO_INQUILINO', referencia: string, observacion: string): void {
+  private resolverSettlement(settlement: AdminSettlement, estado: 'PAGADO_PROPIETARIO' | 'DEVUELTO_INQUILINO', referencia: string | undefined, observacion: string): void {
     this.run(
       `settlement-${settlement.id}`,
       () => this.api.resolverLiquidacion(settlement.id, estado, referencia, observacion),
       () => this.settlements.update((items) => items.filter((item) => item.id !== settlement.id)),
-      'Devolución manual registrada.',
+      estado === 'PAGADO_PROPIETARIO' ? 'Pago manual registrado.' : 'Devolución confirmada por Mercado Pago.',
     );
   }
   protected cargarBloqueados(): void {

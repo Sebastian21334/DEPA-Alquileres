@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { PruebaVidaService } = require('../dist/verificacion-anunciante/service/prueba-vida.service');
 const { CAMPOS_PRUEBA_PRIVADOS } = require('../dist/verificacion-anunciante/dto/solicitud-verificacion-respuesta.dto');
@@ -6,7 +7,6 @@ const assert = require('node:assert/strict');
 const { DataSource } = require('typeorm');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const { SolicitudVerificacion: Solicitud } = require('../dist/verificacion-anunciante/entity/solicitud-verificacion.entity');
-const { EstadoVerificacion: Estado } = require('../dist/catalogos/estados');
 const { EliminacionDocumento: Trabajo } = require('../dist/verificacion-anunciante/entity/eliminacion-documento.entity');
 const { RevisionVerificacion: Revision } = require('../dist/verificacion-anunciante/entity/revision-verificacion.entity');
 const { Anunciante } = require('../dist/anunciantes/entity/anunciante.entity');
@@ -21,7 +21,7 @@ const campos = ['dni_frente_url', 'dni_dorso_url', 'rostro_url', 'matricula_url'
 const source = new DataSource({ type: 'postgres', entities: [__dirname + '/../dist/**/*.entity.js'] });
 before(async () => source.buildMetadatas());
 
-function solicitud(estado = Estado.PENDIENTE, empresa = false) {
+function solicitud(estado = 'pendiente', empresa = false) {
   const s = Object.assign(new Solicitud(), {
     id: 4, numero_revision: 1, estado, motivo_rechazo: null,
     prueba_vida_desafio: 'desafio', prueba_vida_revision: 1,
@@ -112,7 +112,7 @@ function escenario(s = solicitud()) {
   const mail = { async enviarResultadoVerificacion(...args) { correos.push(args); } };
   const anunciantes = new AnunciantesService(new AnunciantesRepository({}));
   const catalogos = { esInmobiliaria: (tipo) => tipo?.nombre === 'Inmobiliaria' };
-  const servicio = new VerificacionAnuncianteService(anunciantes, {}, catalogos, repo, mail, archivos, new PruebaVidaService(), limpieza);
+  const servicio = new VerificacionAnuncianteService(anunciantes, {}, catalogosDePrueba(catalogos), repo, mail, archivos, new PruebaVidaService(undefined, undefined, undefined, catalogosDePrueba()), limpieza);
   return { repo, limpieza, servicio, borrados, avisos, consultas, correos,
     get estado() { return estado; },
     fallarRevision: v => { falloRevision = v; }, fallarCommit: v => { falloCommit = v; },
@@ -123,12 +123,12 @@ function escenario(s = solicitud()) {
 for (const empresa of [false, true]) {
   for (const aprobada of [false, true]) {
     test(`${aprobada ? 'aprobar' : 'rechazar'} ${empresa ? 'inmobiliaria' : 'particular'} borra adjuntos y conserva auditoría`, async () => {
-      const e = escenario(solicitud(Estado.PENDIENTE, empresa));
+      const e = escenario(solicitud('pendiente', empresa));
       const fechaPrueba = e.estado.solicitud.prueba_vida_validada_en.getTime();
       if (aprobada) await e.servicio.aprobar(7, 12, { numero_revision: 1 });
       else await e.servicio.rechazar(7, 12, { numero_revision: 1, motivo: 'Documento ilegible' });
       const s = e.estado.solicitud;
-      assert.equal(s.estado, aprobada ? Estado.APROBADA : Estado.RECHAZADA);
+      assert.equal(s.estado, aprobada ? 'aprobada' : 'rechazada');
       assert.equal(s.anunciante.verificado, aprobada);
       campos.forEach(campo => assert.equal(s[campo], null));
       CAMPOS_PRUEBA_PRIVADOS.forEach(campo => assert.equal(s[campo], null));
@@ -152,7 +152,7 @@ test('una decisión fallida revierte cola, historial y referencias sin borrar Az
   const originales = campos.map(c => e.estado.solicitud[c]);
   e.fallarRevision(true);
   await assert.rejects(e.servicio.aprobar(7, 12, { numero_revision: 1 }), /historial/);
-  assert.equal(e.estado.solicitud.estado, Estado.PENDIENTE);
+  assert.equal(e.estado.solicitud.estado, 'pendiente');
   assert.equal(e.estado.solicitud.anunciante.verificado, false);
   assert.deepEqual(campos.map(c => e.estado.solicitud[c]), originales);
   assert.equal(e.estado.trabajos.length, 0);
@@ -165,7 +165,7 @@ test('un fallo de Azure persiste el trabajo y permite continuar con una nueva re
   const e = escenario();
   e.fallarAzure(true);
   await e.servicio.rechazar(7, 12, { numero_revision: 1, motivo: 'Documento ilegible' });
-  assert.equal(e.estado.solicitud.estado, Estado.RECHAZADA);
+  assert.equal(e.estado.solicitud.estado, 'rechazada');
   assert.equal(e.estado.trabajos.length, 3);
   assert.ok(e.estado.trabajos.every(t => t.intentos === 1 && t.proximo_intento > new Date()));
   assert.ok(e.avisos.every(msg => !msg.includes('https://') && !msg.includes('URL privada')));
@@ -173,9 +173,9 @@ test('un fallo de Azure persiste el trabajo y permite continuar con una nueva re
   // Simula que el usuario presentó otra revisión antes de que se reintente la limpieza.
   Object.assign(s, {
     dni_frente_url: 'frente-nuevo', dni_dorso_url: 'dorso-nuevo', rostro_url: 'rostro-nuevo',
-    estado: Estado.REENVIADA, numero_revision: 2,
+    estado: 'reenviada', numero_revision: 2,
   });
-  assert.equal(s.estado, Estado.REENVIADA);
+  assert.equal(s.estado, 'reenviada');
   assert.equal(s.numero_revision, 2);
   const nuevaLimpieza = new EliminacionDocumentosService(e.repo, { async eliminarDocumentoPropio(url) { e.borrados.push(url); } });
   e.estado.trabajos.forEach(t => { t.proximo_intento = new Date(0); });
@@ -202,7 +202,7 @@ test('si falla el COMMIT después del borrado se reintenta sin perder el trabajo
   assert.equal(e.borrados.length, 6);
 });
 
-for (const estado of [Estado.BORRADOR, Estado.PENDIENTE, Estado.REENVIADA]) {
+for (const estado of ['borrador', 'pendiente', 'reenviada']) {
   test(`el procesador no elimina documentos de solicitudes ${estado}`, async () => {
     const e = escenario(solicitud(estado));
     await e.limpieza.ejecutar();
@@ -212,7 +212,7 @@ for (const estado of [Estado.BORRADOR, Estado.PENDIENTE, Estado.REENVIADA]) {
 }
 
 test('rechaza resoluciones repetidas o de otra revisión sin borrar archivos', async () => {
-  for (const s of [solicitud(Estado.APROBADA), Object.assign(solicitud(), { numero_revision: 2 })]) {
+  for (const s of [solicitud('aprobada'), Object.assign(solicitud(), { numero_revision: 2 })]) {
     const e = escenario(s);
     await assert.rejects(e.servicio.aprobar(7, 12, { numero_revision: 1 }));
     assert.equal(e.borrados.length, 0);
@@ -222,7 +222,7 @@ test('rechaza resoluciones repetidas o de otra revisión sin borrar archivos', a
 
 test('no aprueba una identidad sin evidencia válida ni constancias requeridas', async () => {
   for (const cambio of [{ prueba_vida_consumida_en: null }, { dni_frente_url: null }, { matricula_url: null }]) {
-    const e = escenario(Object.assign(solicitud(Estado.PENDIENTE, true), cambio));
+    const e = escenario(Object.assign(solicitud('pendiente', true), cambio));
     await assert.rejects(e.servicio.aprobar(7, 12, { numero_revision: 1 }));
     assert.equal(e.estado.trabajos.length, 0);
     assert.equal(e.borrados.length, 0);
@@ -234,7 +234,7 @@ test('el correo fallido no revierte la decisión ni evita la eliminación', asyn
   e.servicio.mailService.enviarResultadoVerificacion = async () => { throw new Error('fallo correo'); };
   e.servicio.logger = { error() {} };
   await e.servicio.aprobar(7, 12, { numero_revision: 1 });
-  assert.equal(e.estado.solicitud.estado, Estado.APROBADA);
+  assert.equal(e.estado.solicitud.estado, 'aprobada');
   assert.equal(e.borrados.length, 3);
 });
 
@@ -300,7 +300,7 @@ test('la migración PostgreSQL es repetible, preserva solicitudes abiertas e his
       prueba_vida_vence_en TIMESTAMPTZ, prueba_vida_consumida_en TIMESTAMPTZ);
       CREATE TABLE revision_verificacion (id INT, id_administrador INT, motivo TEXT);
       INSERT INTO revision_verificacion VALUES (1, 12, 'Documento ilegible');`);
-    for (const [i, estado] of Object.values(Estado).entries()) {
+    for (const [i, estado] of Object.keys(require('../src/catalogos/estados-iniciales.json').VERIFICACION_ANUNCIANTE.estados).entries()) {
       await db.query(`INSERT INTO solicitud_verificacion VALUES
         ($1, $2, 1, 'Motivo original', '2026-11-01', '2026-11-01',
          $3, $4, $5, $6, $7, '00000000-0000-0000-0000-000000000001',
@@ -317,7 +317,7 @@ test('la migración PostgreSQL es repetible, preserva solicitudes abiertas e his
     const primera = await consultar();
     for (const actual of primera) {
       const anterior = originales.find(s => s.id === actual.id);
-      if ([Estado.APROBADA, Estado.RECHAZADA].includes(actual.estado)) {
+      if (['aprobada', 'rechazada'].includes(actual.estado)) {
         campos.forEach(c => assert.equal(actual[c], null));
         CAMPOS_PRUEBA_PRIVADOS.forEach(c => assert.equal(actual[c], null));
         for (const c of ['estado', 'numero_revision', 'motivo_rechazo', 'actualizada_en', 'prueba_vida_validada_en']) {

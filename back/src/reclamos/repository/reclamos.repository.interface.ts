@@ -8,7 +8,7 @@ export const RECLAMOS_REPOSITORY = 'RECLAMOS_REPOSITORY';
 
 export interface IReclamosRepository {
   enTransaccion(transaccion: EntityManager): IReclamosRepository;
-  existeAbierto(idReserva: number): Promise<boolean>;
+  existeAbierto(idReserva: number, estados: string[]): Promise<boolean>;
   guardar(reclamo: Partial<Reclamo>): Promise<Reclamo>;
   listarPorParticipante(idUsuario: number): Promise<Reclamo[]>;
   listarAdministracion(): Promise<Reclamo[]>;

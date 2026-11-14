@@ -1,16 +1,10 @@
 // reservas/repositorio/reserva.repository.ts
-import {
-  EstadoLiquidacionReserva,
-  EstadoPagoReserva,
-  EstadoSolicitudCancelacion,
-} from '../../catalogos/estados';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThan, Repository, type EntityManager } from 'typeorm';
+import { LessThan, Repository, type EntityManager } from 'typeorm';
 import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
-import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 
 @Injectable()
 export class ReservaRepository implements IReservaRepository {
@@ -20,14 +14,14 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.create(datos);
   }
 
-  async finalizarEstadiasVencidas(hoy: string): Promise<void> {
+  async finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<void> {
     // PostgreSQL vuelve a comprobar las condiciones tras adquirir el bloqueo.
     await this.repository.createQueryBuilder()
       .update(Reserva)
       .set({ finalizada: true })
       .where('finalizada = false')
       .andWhere('cancelada = false')
-      .andWhere('estado_pago = :aprobado', { aprobado: EstadoPagoReserva.APROBADO })
+      .andWhere('estado_pago = :aprobado', { aprobado })
       .andWhere('codigo_validado_en IS NOT NULL')
       .andWhere('fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL')
       .andWhere('fecha_inicio <= fecha_fin')
@@ -37,8 +31,13 @@ export class ReservaRepository implements IReservaRepository {
 
   conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
     return this.repository.manager.transaction('READ COMMITTED', (transaccion) =>
-      operacion(new ReservaRepository(transaccion.getRepository(Reserva)), transaccion),
+      operacion(this.enTransaccion(transaccion), transaccion),
     );
+  }
+
+  /** Permite participar de la transacción que abrió el servicio coordinador. */
+  enTransaccion(transaccion: EntityManager): IReservaRepository {
+    return new ReservaRepository(transaccion.getRepository(Reserva));
   }
 
   guardarReprogramacion(datos: Partial<ReprogramacionReserva>): Promise<ReprogramacionReserva> {
@@ -79,18 +78,18 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.save(reservas);
   }
 
-  private async bloquear(id: number): Promise<void> {
+  private async bloquear(id: number, modo: 'pessimistic_write' | 'for_no_key_update' = 'pessimistic_write'): Promise<void> {
     if (this.repository.manager.queryRunner?.isTransactionActive) {
       await this.repository
         .createQueryBuilder('reserva')
         .where('reserva.id = :id', { id })
-        .setLock('pessimistic_write')
+        .setLock(modo)
         .getOne();
     }
   }
 
-  async buscarPorId(id: number): Promise<Reserva | null> {
-    await this.bloquear(id);
+  async buscarPorId(id: number, modoBloqueo?: 'pessimistic_write' | 'for_no_key_update'): Promise<Reserva | null> {
+    await this.bloquear(id, modoBloqueo);
     return this.repository.findOne({
       where: { id },
       relations: {
@@ -178,11 +177,11 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, aprobado: string): Promise<Reserva[]> {
     return this.repository.find({
       where: {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
-        estado_pago: EstadoPagoReserva.APROBADO,
+        estado_pago: aprobado,
         cancelada: false,
       },
       relations: {
@@ -200,95 +199,24 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarPendientesVencidas(fecha: Date): Promise<Reserva[]> {
+  buscarPendientesVencidas(fecha: Date, pendiente: string): Promise<Reserva[]> {
     return this.repository.find({
       where: {
-        estado_pago: EstadoPagoReserva.PENDIENTE,
+        estado_pago: pendiente,
         cancelada: false,
         pago_vencimiento: LessThan(fecha),
       },
     });
   }
 
-  existeAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
+  existeAprobada(idPublicacion: number, idUsuarioInquilino: number, aprobado: string): Promise<boolean> {
     return this.repository.exists({
       where: {
         publicacion: { id: idPublicacion },
         usuario: { id: idUsuarioInquilino },
-        estado_pago: EstadoPagoReserva.APROBADO,
+        estado_pago: aprobado,
         cancelada: false,
       },
-    });
-  }
-
-  buscarLiquidacionesAdministracion(): Promise<Reserva[]> {
-    return this.repository.find({
-      where: {
-        estado_liquidacion: In([
-          EstadoLiquidacionReserva.PENDIENTE_PAGO_PROPIETARIO,
-          EstadoLiquidacionReserva.EN_REVISION,
-        ]),
-      },
-      relations: {
-        usuario: true,
-        publicacion: {
-          anunciante: { usuario: true },
-          ciudad: true,
-          provincia: true,
-        },
-      },
-      order: { codigo_validado_en: 'ASC', id: 'DESC' },
-    });
-  }
-
-  private solicitudes() {
-    return this.repository.manager.getRepository(SolicitudCancelacion);
-  }
-
-  crearSolicitudCancelacion(datos: Partial<SolicitudCancelacion>): SolicitudCancelacion {
-    return this.solicitudes().create(datos);
-  }
-
-  guardarSolicitudCancelacion(solicitud: SolicitudCancelacion): Promise<SolicitudCancelacion> {
-    return this.solicitudes().save(solicitud);
-  }
-
-  buscarSolicitudCancelacion(id: number, idReserva: number): Promise<SolicitudCancelacion | null> {
-    return this.solicitudes().findOne({
-      where: { id, reserva: { id: idReserva } },
-      relations: {
-        solicitante: true,
-        decidida_por: true,
-        reserva: {
-          usuario: true,
-          publicacion: { anunciante: { usuario: true } },
-        },
-      },
-    });
-  }
-
-  buscarSolicitudCancelacionActiva(idReserva: number): Promise<SolicitudCancelacion | null> {
-    return this.solicitudes().findOne({
-      where: {
-        reserva: { id: idReserva },
-        estado: EstadoSolicitudCancelacion.PENDIENTE,
-      },
-      relations: { solicitante: true, decidida_por: true },
-      order: { id: 'DESC' },
-    });
-  }
-
-  listarSolicitudesCancelacionAdministracion(): Promise<SolicitudCancelacion[]> {
-    return this.solicitudes().find({
-      where: { estado: EstadoSolicitudCancelacion.PENDIENTE },
-      relations: {
-        solicitante: true,
-        reserva: {
-          usuario: true,
-          publicacion: { anunciante: { usuario: true } },
-        },
-      },
-      order: { id: 'ASC' },
     });
   }
 }

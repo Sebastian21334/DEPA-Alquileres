@@ -1,4 +1,3 @@
-import { EstadoVerificacion } from '../../catalogos/estados';
 import {
   type IVerificacionRepository,
   type PersistenciaVerificacion,
@@ -98,13 +97,10 @@ export class VerificacionRepository implements IVerificacionRepository {
     });
   }
 
-  buscarPendientes() {
+  buscarPendientes(estados: string[]) {
     // Solo devuelve estados que todavía requieren una decisión administrativa.
     return this.solicitudes.find({
-      where: [
-        { estado: EstadoVerificacion.PENDIENTE },
-        { estado: EstadoVerificacion.REENVIADA },
-      ],
+      where: estados.map((estado) => ({ estado })),
       relations: { anunciante: { usuario: true, tipoAnunciante: true } },
       order: { actualizada_en: 'ASC' },
     });

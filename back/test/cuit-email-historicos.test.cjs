@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
@@ -43,6 +44,7 @@ function base() {
     CREATE TABLE reserva (id INTEGER PRIMARY KEY, id_usuario INTEGER, id_publicacion INTEGER,
       estado_pago TEXT, cancelada BOOLEAN, finalizada BOOLEAN, fecha_inicio TEXT, fecha_fin TEXT,
       estado_liquidacion TEXT);
+    CREATE TABLE liquidacion (id_reserva INTEGER PRIMARY KEY, estado TEXT);
     CREATE TABLE pago (id INTEGER PRIMARY KEY, id_reserva INTEGER, payment_id TEXT, status TEXT, created_at TEXT);
     INSERT INTO usuario VALUES (1, 1, 0, NULL, 'ana@mail.com', NULL), (2, 1, 0, NULL, 'beto@mail.com', NULL);
     INSERT INTO anunciante VALUES (1, 1, '20-12345678-9', NULL, '3510000000', 1);
@@ -70,6 +72,7 @@ function consulta(db, tabla, alias) {
   };
   const b = {
     select() { return b; }, orderBy() { return b; }, setLock() { return b; },
+    leftJoin() { joins.push('LEFT JOIN liquidacion liquidacion ON liquidacion.id_reserva = reserva.id'); return b; },
     innerJoin(ruta) { joins.push(JOINS[ruta]); return b; },
     where(c, v = {}) { condiciones.push(c); Object.assign(params, v); return b; },
     andWhere(c, v) { return b.where(c, v); },
@@ -109,7 +112,7 @@ function servicioUsuarios(db) {
     },
   };
   const repo = new UsuariosRepository({ manager: { transaction: (fn) => fn(manager) } });
-  return new UsuariosService(repo, {}, {}, {}, {},
+  return new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     new PublicacionesService(new PublicacionesRepository()),
     new AnunciantesService(new AnunciantesRepository()));
 }
@@ -126,7 +129,7 @@ test('la baja de la cuenta mueve el email al histórico y lo libera', async () =
     }),
     guardar: async (cuenta) => cuenta,
   };
-  const servicio = new UsuariosService(repo, {}, {}, {}, {},
+  const servicio = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => false, desactivarPorBajaDeCuenta: async () => {} },
     { archivarCuitPorBajaDeCuenta: async () => {} });
   await servicio.darDeBajaPropia(usuario.id);
@@ -243,7 +246,7 @@ test('si falla el borrador, revierte el alta del anunciante y permite reintentar
     const servicio = new VerificacionAnuncianteService(
       new AnunciantesService(new AnunciantesRepository(anunciantes)),
       new UsuariosService(new UsuariosRepository(usuarios)),
-      { getTipoAnunciantePorId: async () => ({ id }), esInmobiliaria: () => false },
+      catalogosDePrueba({ getTipoAnunciantePorId: async () => ({ id }), esInmobiliaria: () => false }),
       new VerificacionRepository(solicitudes, db.getRepository(RevisionVerificacion), db),
       { enviarSolicitudAnunciante: async () => { notificaciones++; } },
     );
@@ -300,7 +303,7 @@ test('el panel recibe el email y el CUIT/CUIL históricos de una cuenta dada de 
     listarAdministracion: async () => ({ datos: [usuario], pagina: 1, limite: 10, total: 1, totalPaginas: 1 }),
     contarUsuarios: async () => 1,
   };
-  const servicio = new UsuariosService(repo, {}, {}, {}, {}, {});
+  const servicio = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {}, {});
   const { datos: [fila] } = await servicio.listarAdministracion({ pagina: 1, limite: 10 });
   assert.equal(fila.email, null);
   assert.equal(fila.email_historico, 'ana@mail.com');

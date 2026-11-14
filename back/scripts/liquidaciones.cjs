@@ -78,6 +78,8 @@ async function main() {
       await aplicarMigracion(client, '20261110-estados-por-ambito.sql');
     }
     await aplicarMigracion(client, '20261112-liquidaciones.sql');
+    await aplicarMigracion(client, '20261113-reconciliar-liquidaciones.sql');
+    await aplicarMigracion(client, '20261113-retirar-liquidacion-de-reserva.sql');
     console.log(JSON.stringify({
       aplicada: true,
       ...(await estadoBase(client)),

@@ -1,4 +1,4 @@
-import { EstadoVerificacion } from '../../catalogos/estados';
+import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   type IVerificacionRepository,
   VERIFICACION_REPOSITORY,
@@ -58,7 +58,7 @@ export class PruebaVidaService {
   private readonly logger = new Logger(PruebaVidaService.name);
   private readonly umbralCoincidencia = 0.6;
 
-  constructor(private readonly jwtService: JwtService, @Inject(ANALISIS_FACIAL) private readonly analisis: IAnalisisFacial, @Inject(VERIFICACION_REPOSITORY) private readonly verificaciones: IVerificacionRepository) {}
+  constructor(private readonly jwtService: JwtService, @Inject(ANALISIS_FACIAL) private readonly analisis: IAnalisisFacial, @Inject(VERIFICACION_REPOSITORY) private readonly verificaciones: IVerificacionRepository, private readonly catalogos: CatalogosService) {}
 
   async crearDesafio(idUsuario: number, accionesAnteriores: AccionVitalidad[] = []) {
     let instructions: Array<{ type: AccionVitalidad; label: string }> = [];
@@ -85,7 +85,7 @@ export class PruebaVidaService {
       async (solicitud, persistencia) => {
         if (
           !solicitud ||
-          !this.puedeRecibirDocumentos(solicitud, solicitud.estado === EstadoVerificacion.RECHAZADA)
+          !this.puedeRecibirDocumentos(solicitud, solicitud.estado === this.catalogos.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada'))
         ) {
           throw new ConflictException(
             'La solicitud no admite una nueva prueba de vida',
@@ -295,12 +295,12 @@ export class PruebaVidaService {
 
   puedeRecibirDocumentos(solicitud: SolicitudVerificacion, reenvio: boolean): boolean {
     return reenvio
-      ? (solicitud.estado === EstadoVerificacion.RECHAZADA)
-      : solicitud.estado === EstadoVerificacion.BORRADOR;
+      ? (solicitud.estado === this.catalogos.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada'))
+      : solicitud.estado === this.catalogos.codigoEstado('VERIFICACION_ANUNCIANTE', 'borrador');
   }
 
   private revisionParaPresentacion(solicitud: SolicitudVerificacion): number {
-    return solicitud.numero_revision + ((solicitud.estado === EstadoVerificacion.RECHAZADA) ? 1 : 0);
+    return solicitud.numero_revision + ((solicitud.estado === this.catalogos.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada')) ? 1 : 0);
   }
 
   private iniciarPruebaVida(solicitud: SolicitudVerificacion, desafio: string): void {
@@ -314,7 +314,7 @@ export class PruebaVidaService {
 
   private desafioPruebaVidaVigente(solicitud: SolicitudVerificacion, desafio: string, revision: number): boolean {
     return (
-      (solicitud.estado === EstadoVerificacion.BORRADOR || (solicitud.estado === EstadoVerificacion.RECHAZADA)) &&
+      (solicitud.estado === this.catalogos.codigoEstado('VERIFICACION_ANUNCIANTE', 'borrador') || (solicitud.estado === this.catalogos.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada'))) &&
       solicitud.prueba_vida_desafio === desafio &&
       solicitud.prueba_vida_revision === revision &&
       this.revisionParaPresentacion(solicitud) === revision &&

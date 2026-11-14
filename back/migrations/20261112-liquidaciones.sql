@@ -45,6 +45,13 @@ CREATE INDEX IF NOT EXISTS IX_liquidacion_estado
 
 -- Una fila por reserva. El importe solo se copia si la liquidación ya se resolvió;
 -- la reserva conserva la caché de compatibilidad que consumen los flujos actuales.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.reserva'::regclass
+    AND attname = 'estado_liquidacion' AND NOT attisdropped) THEN
+    RETURN;
+  END IF;
+
 INSERT INTO public.liquidacion (
   id_reserva,
   estado,
@@ -83,3 +90,4 @@ SELECT
   COALESCE(reserva.fecha_resolucion_liquidacion, now())
 FROM public.reserva AS reserva
 ON CONFLICT (id_reserva) DO NOTHING;
+END $$;

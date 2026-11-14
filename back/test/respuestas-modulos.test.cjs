@@ -1,3 +1,4 @@
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -5,15 +6,15 @@ const { CatalogosService } = require('../dist/catalogos/service/catalogos.servic
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
-const { ReservaDecisionService } = require('../dist/reservas/service/reserva-decision.service');
+const { CancelacionesService } = require('../dist/cancelaciones/service/cancelaciones.service');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { ReclamosService } = require('../dist/reclamos/service/reclamos.service');
 const { VerificacionAnuncianteService } = require('../dist/verificacion-anunciante/service/verificacion-anunciante.service');
 const { CAMPOS_PRUEBA_PRIVADOS } = require('../dist/verificacion-anunciante/dto/solicitud-verificacion-respuesta.dto');
 
 const catalogos = new CatalogosService();
-const publicaciones = new PublicacionesService({}, catalogos);
-const estados = new ReservaEstadoService(publicaciones);
+const publicaciones = new PublicacionesService({}, catalogosDePrueba(catalogos));
+const estados = new ReservaEstadoService(publicaciones, catalogosDePrueba());
 const reserva = () => ({
   id: 1, estado_pago: 'APROBADO', cancelada: false, finalizada: false,
   fecha_inicio: '2099-01-01', fecha_fin: '2099-01-05',
@@ -41,10 +42,10 @@ test('la proyección de modalidades conserva los valores explícitos y el respal
 test('reembolsos y reclamos conservan los campos calculados de las reservas anidadas', async () => {
   const reembolsos = new ReembolsosService({
     listarAdministracion: async () => [{ id: 3, reserva: reserva(), pago: { reserva: reserva() } }],
-  }, {}, {}, {}, estados);
+  }, {}, {}, estados, catalogosDePrueba());
   const reclamos = new ReclamosService({
     listarAdministracion: async () => [{ id: 4, reserva: reserva() }],
-  }, { prepararRespuesta: (actual) => estados.prepararRespuesta(actual) });
+  }, { prepararRespuesta: (actual) => estados.prepararRespuesta(actual) }, undefined, undefined, catalogosDePrueba());
   const [devolucion] = json(await reembolsos.listarAdministracion());
   const [reclamo] = json(await reclamos.listarAdministracion());
   for (const actual of [devolucion.reserva, devolucion.pago.reserva, reclamo.reserva]) {
@@ -56,7 +57,7 @@ test('reembolsos y reclamos conservan los campos calculados de las reservas anid
 test('el historial de verificación omite secretos aunque el repositorio los haya seleccionado', async () => {
   const solicitud = { id: 1, estado: 'pendiente', numero_revision: 2 };
   for (const campo of CAMPOS_PRUEBA_PRIVADOS) solicitud[campo] = 'dato-privado';
-  const servicio = new VerificacionAnuncianteService({}, {}, {}, {
+  const servicio = new VerificacionAnuncianteService({}, {}, catalogosDePrueba(), {
     buscarSolicitudPorAnunciante: async () => solicitud,
     buscarRevisiones: async () => [{ numero_revision: 1, estado: 'rechazada' }],
   });
@@ -68,14 +69,13 @@ test('el historial de verificación omite secretos aunque el repositorio los hay
 
 test('consultar una solicitud activa conserva las relaciones que cargó el repositorio', async () => {
   const solicitud = { id: 5, estado: 'PENDIENTE', solicitante: { id: 7 } };
-  const repo = {
-    buscarPorId: async () => ({ ...reserva(), usuario: { id: 7 } }),
-    buscarSolicitudCancelacionActiva: async () => solicitud,
-  };
-  const servicio = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados,
-    new ReservaDecisionService(),
-    { sincronizarDesdeReserva: async () => ({}) });
-  const respuesta = await servicio.consultarSolicitudCancelacion(1, 7);
+  const repo = { buscarPorId: async () => ({ ...reserva(), usuario: { id: 7 } }) };
+  const reservas = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados,
+    { proyectarEnReserva: async reserva => reserva }, catalogosDePrueba());
+  const servicio = new CancelacionesService({ buscarActiva: async () => solicitud }, reservas, {}, catalogosDePrueba());
+  const respuesta = await servicio.consultarActiva(1, 7);
   assert.deepEqual(respuesta, solicitud);
   assert.equal(Object.hasOwn(respuesta, 'reserva'), false);
+  // Quien no participa de la reserva no puede consultar su solicitud.
+  await assert.rejects(servicio.consultarActiva(1, 8), { status: 403 });
 });

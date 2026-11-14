@@ -1,3 +1,4 @@
+import { codigosCatalogo } from '../../catalogos/codigos-catalogo';
 import type { Relation } from 'typeorm';
 import {
   Check,
@@ -12,15 +13,13 @@ import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Pago } from '../../pagos/entity/pago.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Estado } from '../../catalogos/entity/estado.entity';
-import { AmbitoEstado } from '../../catalogos/estados';
 
-export enum OrigenDisputa {
-  CONTRACARGO = 'CONTRACARGO',
-}
+export const OrigenDisputa = codigosCatalogo('DISPUTA_ORIGEN');
+export type OrigenDisputa = keyof typeof OrigenDisputa;
 
 /** Expediente de un contracargo informado por Mercado Pago. */
 @Entity('disputa')
-@Check('ck_disputa_estado_ambito', `"ambito_estado" = '${AmbitoEstado.DISPUTA}'`)
+@Check('ck_disputa_estado_ambito', `"ambito_estado" = '${"DISPUTA"}'`)
 export class Disputa {
   @PrimaryGeneratedColumn({ name: 'id_disputa' })
   id: number;
@@ -39,7 +38,7 @@ export class Disputa {
   })
   pago: Relation<Pago>;
 
-  @Column({ name: 'origen', type: 'enum', enum: OrigenDisputa })
+  @Column({ name: 'origen', type: 'varchar', length: 40, })
   origen: OrigenDisputa;
 
   @Column({
@@ -50,7 +49,7 @@ export class Disputa {
     insert: false,
     update: false,
   })
-  readonly ambitoEstado: typeof AmbitoEstado.DISPUTA;
+  readonly ambitoEstado: "DISPUTA";
 
   @ManyToOne(() => Estado, { nullable: false, onDelete: 'RESTRICT' })
   @JoinColumn([

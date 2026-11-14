@@ -8,8 +8,7 @@ import type { Estado } from '../entity/estado.entity';
 export const CATALOGOS_REPOSITORY = 'CATALOGOS_REPOSITORY';
 
 export interface ICatalogosRepository {
-  listarClavesEstado(): Promise<Pick<Estado, 'codigoAmbito' | 'codigo'>[]>;
-  buscarEstadoPorCodigo(codigoAmbito: string, codigo: string): Promise<Estado | null>;
+  listarEstados(): Promise<Estado[]>;
 
   buscarTodosRoles(): Promise<Rol[]>;
   buscarRolPorNombre(nombre: string): Promise<Rol | null>;

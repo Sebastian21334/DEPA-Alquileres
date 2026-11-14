@@ -64,12 +64,6 @@
     @if (summaryError()) {
       <p class="alert alert--error" role="alert">No se pudieron actualizar todos los datos del resumen. Podés volver a intentar con Actualizar.</p>
     }
-    @if (manualRefunds().length) {
-      <div class="dashboard-notice">
-        <p><svg lucideTriangleAlert [size]="23" aria-hidden="true"></svg> Hay reembolsos que requieren registro manual</p>
-        <button type="button" class="button" (click)="openSection('reembolsos')">Ver reembolsos</button>
-      </div>
-    }
     <div class="dashboard-metrics" [attr.aria-busy]="otherLoading()">
       <button type="button" class="dashboard-metric metric-cancellation" (click)="openSection('cancelaciones')">
         <svg lucideCalendarX [size]="29" aria-hidden="true"></svg>
@@ -224,7 +218,7 @@
               @if (settlement.estado_liquidacion === 'EN_REVISION') {
                 <button type="button" class="button button--ghost" [disabled]="busy() === 'settlement-' + settlement.id" (click)="resolverReclamo(settlement)">Resolver reclamo</button>
               }
-              <button type="button" class="button button--danger-outline" [disabled]="busy() === 'settlement-' + settlement.id" (click)="registrarDevolucion(settlement)">Registrar devolución</button>
+              <button type="button" class="button button--danger-outline" [disabled]="busy() === 'settlement-' + settlement.id" (click)="solicitarDevolucionLiquidacion(settlement)">Solicitar devolución</button>
               @if (settlement.codigo_validado_en) {
                 <button type="button" class="button button--success" [disabled]="busy() === 'settlement-' + settlement.id || settlement.estado_liquidacion === 'EN_REVISION'" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
               }
@@ -350,7 +344,7 @@
   <dialog #dialogoReembolso class="block-dialog refund-dialog" aria-labelledby="refund-title"
     (cancel)="cerrarReembolso($event)" (close)="reembolsoSeleccionado.set(null)">
     @if (reembolsoSeleccionado(); as item) {
-      <form class="block-form" (ngSubmit)="registrarReembolsoPendiente(item)" [attr.aria-busy]="guardandoReembolso()">
+      <form class="block-form" (ngSubmit)="procesarReembolso(item)" [attr.aria-busy]="guardandoReembolso()">
         <header class="refund-heading">
           <div>
             <p class="refund-meta">Reembolso #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
@@ -362,7 +356,7 @@
         <div class="refund-amount">
           <span>{{ item.tipo === 'TOTAL' ? 'Devolución total' : item.tipo === 'PARCIAL' ? 'Devolución parcial' : 'Contracargo' }}</span>
           <strong>{{ item.importe | currency: item.moneda }} {{ item.moneda }}</strong>
-          <span class="status" [class.status--blocked]="puedeRegistrarReembolso(item)">{{ estadosReembolso[item.estado] }}</span>
+          <span class="status" [class.status--blocked]="item.estado === 'PENDIENTE' || puedeConciliarReembolso(item)">{{ estadosReembolso[item.estado] }}</span>
         </div>
         <dl class="refund-data">
           <div><dt>Publicación</dt><dd>{{ item.reserva?.publicacion?.titulo || 'Sin datos' }}</dd></div>
@@ -381,25 +375,33 @@
           @if (item.resuelto_en) {
             <div><dt>Resuelto</dt><dd>{{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
           }
+          @if (item.aplicado_en) {
+            <div><dt>Aplicado a la reserva</dt><dd>{{ item.aplicado_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
+          }
           <div class="refund-reason"><dt>Motivo</dt><dd>{{ item.motivo }}</dd></div>
         </dl>
-        @if (puedeRegistrarReembolso(item)) {
-          @if (item.ejecucion_automatica) {
-            <p class="refund-help">Al confirmar, se solicitará la devolución a Mercado Pago por el importe indicado.</p>
-          } @else {
-            <label for="refund-reference">Referencia o número de comprobante <span aria-hidden="true">*</span></label>
-            <input id="refund-reference" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
-              required maxlength="150" [disabled]="guardandoReembolso()" aria-describedby="refund-reference-help" />
-            <p class="refund-help" id="refund-reference-help">Ingresá el número del comprobante de una devolución ya realizada. El registro actualiza la reserva.</p>
-          }
+        @if (item.revision_aplicacion) {
+          <p class="refund-help">Reembolso histórico pendiente de revisión administrativa.</p>
+        } @else if (item.estado === 'APROBADO' && !item.aplicado_en) {
+          <p class="refund-help">El reembolso está aprobado y pendiente de aplicar a la reserva.</p>
+        }
+        @if (puedeConciliarReembolso(item)) {
+          <label for="refund-external-id">ID del reembolso en Mercado Pago</label>
+          <input id="refund-external-id" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
+            required maxlength="100" inputmode="numeric" pattern="[0-9]+" [disabled]="guardandoReembolso()" />
+          <p class="refund-help">Se verifica una devolución ya realizada en Mercado Pago.</p>
+        } @else if (puedeSolicitarReembolso(item)) {
+          <p class="refund-help">Al confirmar, se solicitará la devolución a Mercado Pago por el importe indicado.</p>
+        } @else if (item.estado === 'PENDIENTE') {
+          <p class="refund-help">El pago original no tiene un identificador de Mercado Pago.</p>
         }
         @if (errorReembolso()) { <p class="refund-error" role="alert">{{ errorReembolso() }}</p> }
         <div class="block-actions">
           <button type="button" class="button button--ghost" [disabled]="guardandoReembolso()" (click)="cerrarReembolso()">Volver</button>
-          @if (puedeRegistrarReembolso(item)) {
+          @if (puedeSolicitarReembolso(item) || puedeConciliarReembolso(item)) {
             <button type="submit" class="button button--success"
-              [disabled]="guardandoReembolso() || (!item.ejecucion_automatica && !referenciaReembolso.trim())">
-              {{ guardandoReembolso() ? 'Procesando…' : item.ejecucion_automatica ? 'Solicitar devolución' : 'Registrar devolución' }}
+              [disabled]="guardandoReembolso() || !referenciaReembolsoValida(item)">
+              {{ guardandoReembolso() ? 'Procesando…' : puedeConciliarReembolso(item) ? 'Conciliar devolución' : 'Solicitar devolución' }}
             </button>
           }
         </div>
@@ -457,12 +459,6 @@
                 @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
                   <label>Importe a devolver en pesos
                     <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required [disabled]="!!busy()" />
-                  </label>
-                }
-                @if (resolucionReclamo !== 'SIN_DEVOLUCION') {
-                  <label>Referencia o comprobante de la devolución
-                    <input name="referenciaReclamo" [(ngModel)]="referenciaReclamo" maxlength="150" [disabled]="!!busy()" />
-                    <small>Obligatorio para devoluciones manuales.</small>
                   </label>
                 }
                 <label>Conclusión de la revisión
