@@ -499,8 +499,9 @@ export class AdminComponent {
             this.toast.mostrar('Cancelación aprobada sin devolución.', 'exito');
             return;
           }
+          this.refunds.update((items) => [reembolso, ...items.filter((item) => item.id !== reembolso.id)]);
           this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente en Reembolsos.', 'exito');
-          this.reload();
+          this.openSection('reembolsos', reembolso.id);
         },
         error: (error: Error) => this.errorAprobacion.set(error.message),
       });

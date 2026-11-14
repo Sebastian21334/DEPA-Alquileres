@@ -172,7 +172,7 @@ export class AdminService {
   resolverSolicitudCancelacion(idReserva: number, idSolicitud: number, decision: 'APROBADA' | 'RECHAZADA', observacion?: string) {
     return this.http.patch<{
       solicitud: AdminCancellationRequest;
-      reembolso: { id: number; importe: number; moneda: string } | null;
+      reembolso: AdminReembolso | null;
     }>(`${this.api}/reservas/${idReserva}/cancelacion/${idSolicitud}`, {
       decision,
       observacion,

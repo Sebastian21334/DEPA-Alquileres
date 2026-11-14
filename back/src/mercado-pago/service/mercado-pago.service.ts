@@ -41,9 +41,9 @@ export class MercadoPagoService {
       throw new UnauthorizedException('Firma de webhook inválida');
   }
 
-  reembolsar(paymentId: string, importe: number, idempotencyKey: string): Promise<ResultadoReembolsoExterno> {
+  reembolsar(paymentId: string, importe: number, idempotencyKey: string, total = false): Promise<ResultadoReembolsoExterno> {
     this.configRequerida('MP_ACCESS_TOKEN');
-    return this.proveedor.reembolsar(paymentId, importe, idempotencyKey);
+    return this.proveedor.reembolsar(paymentId, importe, idempotencyKey, total);
   }
 
   consultarReembolso(paymentId: string, refundId: string): Promise<ResultadoReembolsoExterno> {
