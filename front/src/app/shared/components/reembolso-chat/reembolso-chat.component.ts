@@ -1,10 +1,11 @@
-import { DatePipe } from '@angular/common';
+import { ConversationPanelComponent } from '../conversation-panel/conversation-panel.component';
+import { ConversationComposerComponent } from '../conversation-panel/conversation-composer.component';
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
 import { EMPTY, Subject, catchError, exhaustMap, expand, finalize, merge, timer } from 'rxjs';
 import { environment } from '../../../../environments/environment';
+import { ActividadReembolsosService } from '../../../core/services/actividad-reembolsos.service';
 
 interface Mensaje {
   id: number;
@@ -21,54 +22,34 @@ interface Conversacion {
 
 @Component({
   selector: 'app-reembolso-chat',
-  imports: [DatePipe, FormsModule],
+  imports: [ConversationPanelComponent, ConversationComposerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section aria-label="Conversación de reembolso">
-      <h3>Conversación de reembolso</h3>
-      <p>Administración y el inquilino pueden coordinar acá la transferencia.</p>
-      <div class="mensajes" role="log" aria-label="Mensajes">
-        @for (mensaje of mensajes(); track mensaje.id) {
-          <article>
-            <strong>{{ mensaje.autor }} · {{ mensaje.administracion ? 'Administración' : 'Inquilino' }}</strong>
-            <small>{{ mensaje.creado_en | date:'dd/MM HH:mm' }}</small>
-            <p>{{ mensaje.texto }}</p>
-          </article>
-        } @empty {
-          @if (abierta() !== null) { <p>Todavía no hay mensajes.</p> }
-        }
-      </div>
-      @if (error()) { <p role="alert">{{ error() }}</p> }
+    <app-conversation-panel titulo="Conversación de reembolso" subtitulo="Coordiná la transferencia con Administración."
+      [mensajes]="hilo()" [vacio]="abierta() === null ? 'Cargando conversación…' : 'Todavía no hay mensajes.'">
+      @if (error()) { <p class="aviso" role="alert">{{ error() }}</p> }
       @if (abierta()) {
-        <label for="mensaje-reembolso-{{ reembolsoId() }}">Mensaje</label>
-        <textarea id="mensaje-reembolso-{{ reembolsoId() }}" [(ngModel)]="borrador"
-          [ngModelOptions]="{ standalone: true }" rows="3" maxlength="1000"
-          [disabled]="enviando()"></textarea>
-        <button type="button" [disabled]="enviando() || !borrador.trim()" (click)="enviar()">Enviar mensaje</button>
+        <app-conversation-composer [(texto)]="borrador" [deshabilitado]="enviando()" (enviar)="enviar()" />
       } @else if (abierta() === false) {
-        <p>La conversación está cerrada.</p>
+        <p class="aviso">La conversación está cerrada.</p>
       }
-    </section>
+    </app-conversation-panel>
   `,
-  styles: `
-    :host { display: block; }
-    section { padding: 16px; border: 1px solid #dce4e8; border-radius: 10px; background: #f8fafb; }
-    h3 { margin: 0; }
-    .mensajes { display: grid; gap: 8px; max-height: 18rem; overflow-y: auto; }
-    article { padding: 8px 10px; border-radius: 6px; background: white; overflow-wrap: anywhere; }
-    article p { margin: 4px 0 0; white-space: pre-wrap; }
-    small { margin-inline-start: 8px; color: #526773; }
-    label { display: block; margin-top: 10px; }
-    textarea { box-sizing: border-box; width: 100%; padding: 8px; }
-    button { margin-top: 6px; padding: 6px 12px; cursor: pointer; }
-  `,
+  styles: ':host { display: block; } .aviso { margin: 0; padding: 12px; color: #52607a; }',
 })
 export class ReembolsoChatComponent {
   readonly reembolsoId = input.required<number>();
+  readonly vistaInquilino = input(false);
   private readonly http = inject(HttpClient);
+  private readonly actividad = inject(ActividadReembolsosService);
   private readonly actualizar = new Subject<void>();
   protected readonly abierta = signal<boolean | null>(null);
   protected readonly mensajes = signal<Mensaje[]>([]);
+  protected readonly hilo = computed(() => this.mensajes().map(mensaje => ({
+    id: mensaje.id, autor: mensaje.autor, texto: mensaje.texto, fecha: mensaje.creado_en,
+    rol: mensaje.administracion ? 'Administración' : 'Inquilino',
+    propio: this.vistaInquilino() && !mensaje.administracion,
+  })));
   protected readonly error = signal('');
   protected readonly enviando = signal(false);
   protected borrador = '';
@@ -91,6 +72,8 @@ export class ReembolsoChatComponent {
         if (!this.enviando()) this.error.set('');
         this.abierta.set(pagina.abierta);
         this.mensajes.update(actuales => [...actuales, ...pagina.mensajes]);
+        const ultimo = [...pagina.mensajes].reverse().find(mensaje => mensaje.administracion);
+        if (this.vistaInquilino() && ultimo) this.actividad.marcarLeido(id, ultimo.id);
       });
       onCleanup(() => consulta.unsubscribe());
     });

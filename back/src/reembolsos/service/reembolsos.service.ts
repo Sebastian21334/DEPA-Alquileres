@@ -181,6 +181,12 @@ export class ReembolsosService {
     });
   }
 
+  actividadInquilino(idUsuario: number) {
+    return this.reembolsos.actividadInquilino(idUsuario, this.estadosActivos.filter(estado =>
+      estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
+    ));
+  }
+
   listarConversaciones(idReserva: number, idInquilino: number) {
     return this.reembolsos.listarConversaciones(idReserva, idInquilino);
   }

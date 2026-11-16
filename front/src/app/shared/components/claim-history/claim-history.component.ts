@@ -1,11 +1,13 @@
+import { ConversationPanelComponent } from '../conversation-panel/conversation-panel.component';
+import { AuthService } from '../../../core/services/auth.service';
 import { CurrencyPipe, DatePipe } from '@angular/common';
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
 
 @Component({
   selector: 'app-claim-history',
-  imports: [CurrencyPipe, DatePipe, RouterLink],
+  imports: [CurrencyPipe, DatePipe, RouterLink, ConversationPanelComponent],
   host: { '[class.administracion]': 'administracion()' },
   template: `
     @let item = reclamo();
@@ -65,27 +67,9 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
         }
       </div>
     }
-    <details [open]="administracion()">
-      <summary>Historial de mensajes ({{ mensajes().length }})</summary>
-      <ol>
-        @for (mensaje of mensajes(); track mensaje.id) {
-          <li>
-            <strong>{{ nombreCompleto(mensaje.autor) || 'Usuario' }}</strong>
-            @if (administracion() && rolMensaje(mensaje); as rol) {
-              <span class="meta"> · {{ rol }}</span>
-            }
-            @if (mensaje.visible_para === 'ADMIN') { <span class="meta"> · Nota interna</span> }
-            <time class="meta" [class.message-date]="administracion()" [attr.datetime]="mensaje.creado_en">
-              @if (!administracion()) { · }
-              {{ mensaje.creado_en | date:'dd/MM/yyyy, HH:mm' }}
-            </time>
-            <p class="body">{{ mensaje.texto }}</p>
-          </li>
-        } @empty {
-          <li class="meta">Todavía no hay mensajes.</li>
-        }
-      </ol>
-    </details>
+    <app-conversation-panel titulo="Conversación del reclamo" [mensajes]="mensajes()">
+      <ng-content />
+    </app-conversation-panel>
     @if (item.resolucion) {
       <div class="resolution">
         <strong>{{ resoluciones[item.resolucion] }}</strong>
@@ -105,18 +89,13 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
     .body { white-space: pre-wrap; overflow-wrap: anywhere; }
     .attachments { display: flex; flex-wrap: wrap; gap: .45rem; }
     .attachments button { max-width: 100%; overflow-wrap: anywhere; padding: .4rem .65rem; border: 1px solid #d9e3ea; border-radius: .45rem; background: #fff; color: #204b66; cursor: pointer; }
-    details, .resolution { padding: .75rem; border-radius: .6rem; }
-    details { background: #f4f7fa; }
-    summary { cursor: pointer; font-weight: 650; }
-    ol { display: grid; gap: .5rem; list-style: none; padding: 0; margin: .6rem 0 0; }
-    li { background: #fff; padding: .65rem; border-radius: .45rem; }
+    .resolution { padding: .75rem; border-radius: .6rem; }
     :host(.administracion) { color: #101d36; gap: .75rem; }
     :host(.administracion) h3 { margin-top: .2rem; font-size: 1.45rem; }
-    :host(.administracion) details, .context-card, .claim-description .body {
+    .context-card, .claim-description .body {
       border: 1px solid #dce4ef;
       border-radius: .65rem;
     }
-    :host(.administracion) details { background: #eef2f8; }
     .claim-context {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -148,7 +127,6 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
     .listing-cover { width: clamp(3.5rem, 7vw, 7rem); aspect-ratio: 3 / 2; object-fit: cover; border-radius: .5rem; }
     .claim-description h4 { margin: 0 0 .35rem; }
     .claim-description .body { padding: .6rem .8rem; background: #f6f8fb; }
-    .message-date { display: block; }
     @media (max-width: 900px) {
       .claim-context { grid-template-columns: 1fr; }
     }
@@ -183,7 +161,15 @@ export class ClaimHistoryComponent {
     (evento.target as HTMLImageElement).hidden = true;
   }
   readonly verArchivo = output<ReclamoEvidencia>();
-  protected readonly mensajes = computed(() => [...(this.reclamo().mensajes ?? [])].sort((a, b) => a.id - b.id));
+  private readonly auth = inject(AuthService);
+  protected readonly mensajes = computed(() => [...(this.reclamo().mensajes ?? [])]
+    .sort((a, b) => a.id - b.id)
+    .map(mensaje => ({
+      id: mensaje.id, autor: this.nombreCompleto(mensaje.autor) || 'Usuario',
+      texto: mensaje.texto, fecha: mensaje.creado_en,
+      rol: this.rolMensaje(mensaje), interno: mensaje.visible_para === 'ADMIN',
+      propio: mensaje.autor?.id === Number(this.auth.currentUser()?.sub),
+    })));
   protected readonly categorias = {
     LIMPIEZA: 'Limpieza', MANTENIMIENTO: 'Mantenimiento', INGRESO: 'Problemas de ingreso',
     DESCRIPCION: 'La propiedad no coincide', OTRO: 'Otro motivo',

@@ -31,6 +31,35 @@
 
     <div class="navbar__end">
       @if (auth.isAuthenticated) {
+        <div class="navbar__notifications">
+          <button type="button" class="navbar__bell" (click)="alternarNotificaciones()"
+            [attr.aria-expanded]="notificacionesAbiertas()" aria-controls="notificaciones-pendientes"
+            [attr.aria-label]="'Notificaciones pendientes: ' + totalNotificaciones()">
+            <svg lucideBell [size]="22" aria-hidden="true"></svg>
+            @if (totalNotificaciones()) {
+              <span class="navbar__bell-count" aria-hidden="true">{{ totalNotificaciones() }}</span>
+            }
+          </button>
+          @if (notificacionesAbiertas()) {
+            <section id="notificaciones-pendientes" class="navbar__notification-panel" aria-label="Notificaciones pendientes">
+              <h2>Notificaciones</h2>
+              @for (item of actividadReembolsos.notificaciones(); track item.reembolsoId) {
+                <a routerLink="/reserva/resultado" [queryParams]="{ reserva_id: item.reservaId, reembolso: item.reembolsoId }"
+                  (click)="cerrarMenu()">
+                  <strong>Nuevo mensaje de administración</strong>
+                  <small>Reserva #{{ item.reservaId }} · {{ item.texto }}</small>
+                </a>
+              }
+              @for (conv of chatsNoLeidos(); track conv.idPublicacion + '-' + conv.idOtroUsuario) {
+                <button type="button" (click)="abrirChat(conv)">
+                  <strong>{{ nombreOtro(conv) }} · {{ conv.cantidadNoLeidos }} sin leer</strong>
+                  <small>{{ conv.ultimoMensaje.publicacion.titulo }} · {{ conv.ultimoMensaje.texto }}</small>
+                </button>
+              }
+              @if (!totalNotificaciones()) { <p>Estás al día con tus mensajes.</p> }
+            </section>
+          }
+        </div>
         <a routerLink="/mis-reservas" class="navbar__owner-cta">Mis reservas</a>
       } @else {
         <a routerLink="/ser-anunciante" class="navbar__owner-cta">¿Sos propietario?</a>

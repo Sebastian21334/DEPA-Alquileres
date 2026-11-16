@@ -16,6 +16,11 @@ export class ReembolsosController {
     return this.reembolsosService.listarAdministracion();
   }
 
+  @Get('actividad')
+  actividad(@Req() req: AuthenticatedRequest) {
+    return this.reembolsosService.actividadInquilino(req.user.id);
+  }
+
   @Get('reserva/:id/conversaciones')
   listarConversaciones(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reembolsosService.listarConversaciones(id, req.user.id);

@@ -83,6 +83,67 @@
   transition: color 0.15s ease;
 }
 
+.navbar__notifications { position: relative; }
+.navbar__bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface, #fff);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.navbar__bell-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  padding: 1px 4px;
+  border-radius: 20px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: .7rem;
+}
+.navbar__notification-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(330px, calc(100vw - 2rem));
+  max-height: min(65vh, 420px);
+  overflow-y: auto;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface, #fff);
+  box-shadow: 0 12px 28px #0002;
+}
+.navbar__notification-panel h2 { margin: 0 0 10px; font-size: 1rem; }
+.navbar__notification-panel p { margin: 0; font-size: .9rem; }
+.navbar__notification-panel a,
+.navbar__notification-panel button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  text-decoration: none;
+  color: var(--color-text);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.navbar__notification-panel a:hover,
+.navbar__notification-panel button:hover { background: #f1f4f5; }
+@media (max-width: 720px) {
+  .navbar__notifications { position: static; }
+  .navbar__notification-panel { right: 1rem; top: calc(100% + 6px); }
+}
+
 .navbar__owner-cta:hover {
   color: var(--color-primary);
   text-decoration: underline;

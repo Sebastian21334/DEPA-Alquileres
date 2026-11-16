@@ -1,3 +1,5 @@
+import { ConversationPanelComponent, mensajesApelacion } from '../../../shared/components/conversation-panel/conversation-panel.component';
+import { ConversationComposerComponent } from '../../../shared/components/conversation-panel/conversation-composer.component';
 import { DatePipe } from '@angular/common';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -8,7 +10,7 @@ import { AuthService, type VistaBloqueo } from '../../../core/services/auth.serv
 
 @Component({
   selector: 'app-cuenta-bloqueada',
-  imports: [DatePipe, FormsModule, RouterLink],
+  imports: [DatePipe, RouterLink, ConversationPanelComponent, ConversationComposerComponent],
   templateUrl: './cuenta-bloqueada.component.html',
   styleUrl: './cuenta-bloqueada.component.scss',
 })
@@ -20,6 +22,7 @@ export class CuentaBloqueadaComponent {
   protected readonly ocupado = signal(false);
   protected readonly accesoVigente = signal(Boolean(this.auth.tokenBloqueo));
   protected texto = '';
+  protected readonly mensajesApelacion = mensajesApelacion;
 
   constructor() {
     if (this.accesoVigente()) this.consultar();

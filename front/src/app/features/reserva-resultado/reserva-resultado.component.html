@@ -14,18 +14,23 @@
       </section>
     } @else if (reserva(); as item) {
       @if (esInquilino() && conversacionesReembolso().length) {
-        <section class="receipt-card" aria-label="Transferencias de reembolsos">
-          <h2>Reembolsos por transferencia</h2>
+        <section class="receipt-card refund-threads" aria-label="Transferencias de reembolsos">
           @for (reembolso of conversacionesReembolso(); track reembolso.id) {
-            <p>Reembolso #{{ reembolso.id }} · {{ monto(reembolso.importe, reembolso.moneda) }}
-              @if (reembolso.estado === 'APROBADO') { · Transferencia registrada }
-            </p>
-            <button type="button" class="acct-btn" [attr.aria-expanded]="conversacionAbierta() === reembolso.id"
-              (click)="conversacionAbierta.set(conversacionAbierta() === reembolso.id ? null : reembolso.id)">
-              {{ conversacionAbierta() === reembolso.id ? 'Ocultar conversación' : 'Ver conversación' }}
-            </button>
+            <header class="refund-threads__head">
+              <span class="refund-threads__icon"><svg lucideLandmark [size]="26" aria-hidden="true"></svg></span>
+              <div>
+                <h2>Reembolsos por transferencia</h2>
+                <p>Reembolso #{{ reembolso.id }} @if (reembolso.estado === 'APROBADO') { · Transferencia registrada }</p>
+              </div>
+              <strong>{{ monto(reembolso.importe, reembolso.moneda) }}</strong>
+              <button type="button" class="acct-btn" [attr.aria-expanded]="conversacionAbierta() === reembolso.id"
+                (click)="conversacionAbierta.set(conversacionAbierta() === reembolso.id ? null : reembolso.id)">
+                <svg lucideChevronDown [size]="18" aria-hidden="true"></svg>
+                {{ conversacionAbierta() === reembolso.id ? 'Ocultar conversación' : 'Ver conversación' }}
+              </button>
+            </header>
             @if (conversacionAbierta() === reembolso.id) {
-              <app-reembolso-chat [reembolsoId]="reembolso.id" />
+              <app-reembolso-chat [reembolsoId]="reembolso.id" [vistaInquilino]="true" />
             }
           }
         </section>
@@ -64,11 +69,11 @@
       } @else {
       <header
         class="receipt-hero"
-        [class.is-approved]="item.estado_pago === 'APROBADO' && !item.cancelada"
-        [class.is-pending]="item.estado_pago === 'PENDIENTE' || (item.cancelada && item.estado_pago === 'APROBADO' && item.estado_liquidacion === 'EN_REVISION')"
+        [class.is-approved]="!devolucionPendiente() && item.estado_pago === 'APROBADO' && !item.cancelada"
+        [class.is-pending]="devolucionPendiente() || item.estado_pago === 'PENDIENTE' || (item.cancelada && item.estado_pago === 'APROBADO' && item.estado_liquidacion === 'EN_REVISION')"
       >
         <div class="status-icon">
-          {{ item.estado_pago === 'APROBADO' && !item.cancelada ? '✓' : item.estado_pago === 'PENDIENTE' ? '…' : '!' }}
+          {{ devolucionPendiente() || item.estado_pago === 'PENDIENTE' ? '…' : item.estado_pago === 'APROBADO' && !item.cancelada ? '✓' : '!' }}
         </div>
         <div>
           <span class="eyebrow">Reserva #{{ item.id }}</span>
