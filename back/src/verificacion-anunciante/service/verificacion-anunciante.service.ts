@@ -98,14 +98,17 @@ export class VerificacionAnuncianteService {
   }
 
   private validarCbu(cbu: string): void {
+    if (!/^\d{22}$/.test(cbu)) {
+      throw new BadRequestException('El CBU debe contener 22 dígitos');
+    }
     const digitoValido = (bloque: string) => {
       const pesos = [3, 1, 7, 9];
       const datos = bloque.slice(0, -1).split('').reverse();
       const suma = datos.reduce((total, digito, indice) => total + Number(digito) * pesos[indice % pesos.length], 0);
       return Number(bloque.at(-1)) === (10 - suma % 10) % 10;
     };
-    if (!/^\d{22}$/.test(cbu) || /^0{22}$/.test(cbu) || !digitoValido(cbu.slice(0, 8)) || !digitoValido(cbu.slice(8))) {
-      throw new BadRequestException('Ingresá un CBU válido de 22 dígitos');
+    if (/^0{22}$/.test(cbu) || !digitoValido(cbu.slice(0, 8)) || !digitoValido(cbu.slice(8))) {
+      throw new BadRequestException('El número ingresado no pasa la validación de CBU. Copiá el CBU completo desde los datos de tu cuenta bancaria.');
     }
   }
 
