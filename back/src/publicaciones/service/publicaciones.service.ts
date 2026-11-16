@@ -1,6 +1,7 @@
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -178,9 +179,9 @@ export class PublicacionesService {
     return { visualizaciones: Number(publicacion.visualizaciones ?? 0) + 1 };
   }
 
-  /** Deja visible una publicación (se llama cuando ya tiene al menos una imagen). */
+  /** Activa con la primera foto; recibe la galería leída antes de la subida. */
   async activar(publicacion: Publicacion) {
-    if (publicacion.eliminada || publicacion.activa || publicacion.motivo_baja_admin)
+    if (publicacion.eliminada || publicacion.activa || publicacion.motivo_baja_admin || publicacion.imagenes?.length)
       return;
     // Se actualiza solo la columna: guardar la entidad completa haría que TypeORM
     // sincronice publicacion.imagenes (leída antes de subir la foto, vacía) y
@@ -236,6 +237,12 @@ export class PublicacionesService {
       .map((publicacion) => this.prepararRespuesta(publicacion));
   }
 
+  /** La papelera solo se entrega al dueño autenticado, nunca al listado público. */
+  async listarPropias(anunciante: Anunciante) {
+    const publicaciones = await this.publicacionesRepo.buscarPorAnunciante(anunciante.idUsuario, false, true);
+    return publicaciones.map((publicacion) => this.prepararRespuesta(publicacion));
+  }
+
   /** Modifica una publicación conservando la fecha original y validando propiedad. */
   async actualizar(id: number, anuncianteQueOpera: Anunciante, dto: ActualizarPublicacionDto) {
     const publicacion = await this.obtenerPropia(
@@ -245,6 +252,9 @@ export class PublicacionesService {
     );
     if (dto.activa === true && publicacion.motivo_baja_admin) {
       throw new ForbiddenException('La publicación fue desactivada por un administrador y no puede reactivarse');
+    }
+    if (dto.activa === true && !publicacion.imagenes?.length) {
+      throw new BadRequestException('La publicación necesita al menos una imagen para activarse');
     }
 
     // Los catálogos y la ubicación se validan contra la base antes de asignarlos.
@@ -285,7 +295,12 @@ export class PublicacionesService {
     const datos = Object.fromEntries(informados);
     // Un UPDATE parcial no puede restaurar eliminada=false desde una lectura anterior.
     if (informados.length && !await this.publicacionesRepo.actualizarSiNoEliminada(id, datos)) {
-      throw new NotFoundException('La publicación ha sido eliminada');
+      // Volver a leer permite distinguir una baja administrativa concurrente.
+      const actual = await this.obtenerPropia(id, anuncianteQueOpera.idUsuario);
+      if (dto.activa === true && actual.motivo_baja_admin) {
+        throw new ForbiddenException('La publicación fue desactivada por un administrador y no puede reactivarse');
+      }
+      throw new ConflictException('La publicación cambió. Recargá e intentá nuevamente');
     }
     return this.prepararRespuesta(Object.assign(publicacion, datos));
   }
@@ -333,5 +348,19 @@ export class PublicacionesService {
     publicacion.activa = false;
     publicacion.eliminada = true;
     return this.prepararRespuesta(await this.publicacionesRepo.eliminar(publicacion));
+  }
+
+  /** Recupera el anuncio sin publicarlo ni levantar una baja administrativa. */
+  async restaurar(id: number, anuncianteQueOpera: Anunciante) {
+    const publicacion = await this.buscarPorId(id);
+    if (!this.perteneceA(publicacion, anuncianteQueOpera.idUsuario)) {
+      throw new ForbiddenException('No podés restaurar una publicación que no es tuya');
+    }
+    if (!publicacion.eliminada || !await this.publicacionesRepo.restaurar(id)) {
+      throw new ConflictException('La publicación ya no está en la papelera');
+    }
+    publicacion.eliminada = false;
+    publicacion.activa = false;
+    return this.prepararRespuesta(publicacion);
   }
 }

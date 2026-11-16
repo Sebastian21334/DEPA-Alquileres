@@ -71,6 +71,12 @@ export class PublicacionesController {
     );
   }
 
+  @Get('mias')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  listarPropias(@Req() req: AnuncianteRequest) {
+    return this.publicacionesService.listarPropias(req.anunciante);
+  }
+
   @Post(':id/visualizacion')
   async registrarVisualizacion(@Param('id', ParseIntPipe) id: number) {
     return this.publicacionesService.registrarVisualizacion(id);
@@ -99,5 +105,11 @@ export class PublicacionesController {
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
   async eliminar(@Param('id', ParseIntPipe) id: number, @Req() req: AnuncianteRequest) {
     return this.publicacionesService.eliminar(id, req.anunciante);
+  }
+
+  @Patch(':id/restaurar')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  restaurar(@Param('id', ParseIntPipe) id: number, @Req() req: AnuncianteRequest) {
+    return this.publicacionesService.restaurar(id, req.anunciante);
   }
 }

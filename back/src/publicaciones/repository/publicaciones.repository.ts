@@ -72,7 +72,9 @@ export class PublicacionesRepository implements IPublicacionesRepository {
   }
 
   async actualizarSiNoEliminada(id: number, cambios: Partial<Publicacion>): Promise<boolean> {
-    const resultado = await this.repo.update({ id, eliminada: false }, cambios);
+    const resultado = await this.repo.update({ id, eliminada: false,
+      ...(cambios.activa === true ? { motivo_baja_admin: IsNull() } : {}),
+    }, cambios);
     return (resultado.affected ?? 0) > 0;
   }
 
@@ -391,12 +393,12 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
-  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]> {
+  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean, incluirEliminadas = false): Promise<Publicacion[]> {
     // El spread agrega el filtro activa únicamente cuando el caller lo solicita.
     return this.repo.find({
       where: {
         anunciante: { idUsuario: idAnunciante },
-        eliminada: false,
+        ...(incluirEliminadas ? {} : { eliminada: false }),
         ...(soloActivas ? { activa: true } : {}),
       },
       relations: {
@@ -419,5 +421,10 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       activa: publicacion.activa, eliminada: publicacion.eliminada,
     });
     return publicacion;
+  }
+
+  async restaurar(id: number): Promise<boolean> {
+    const resultado = await this.repo.update({ id, eliminada: true }, { eliminada: false, activa: false });
+    return (resultado.affected ?? 0) > 0;
   }
 }

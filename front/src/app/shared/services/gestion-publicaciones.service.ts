@@ -17,6 +17,19 @@ export class GestionPublicacionesService {
     return this.http.get<Publicacion[]>(`${this.api}/publicaciones/anunciante/${idAnunciante}`);
   }
 
+  /** Lista privada que incluye la papelera del anunciante autenticado. */
+  listarConPapelera(): Observable<Publicacion[]> {
+    return this.http.get<Publicacion[]>(`${this.api}/publicaciones/mias`);
+  }
+
+  cambiarActividad(id: number, activa: boolean): Observable<Publicacion> {
+    return this.http.patch<Publicacion>(`${this.api}/publicaciones/${id}`, { activa });
+  }
+
+  restaurar(id: number): Observable<Publicacion> {
+    return this.http.patch<Publicacion>(`${this.api}/publicaciones/${id}/restaurar`, {});
+  }
+
   /** POST /publicaciones (alineado con back/src/publicaciones/dto/crear-publicacion.dto.ts). */
   crear(dto: PublicacionPayload): Observable<Publicacion> {
     return this.http.post<Publicacion>(`${this.api}/publicaciones`, dto);
@@ -24,7 +37,7 @@ export class GestionPublicacionesService {
 
   /** DELETE /publicaciones/:id */
   eliminar(id: number) {
-    return this.http.delete(`${this.api}/publicaciones/${id}`);
+    return this.http.delete<Publicacion>(`${this.api}/publicaciones/${id}`);
   }
 
   /** POST /imagenes/publicacion/:id (multipart, campo "archivo") */

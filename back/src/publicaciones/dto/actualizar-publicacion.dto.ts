@@ -87,7 +87,7 @@ export class ActualizarPublicacionDto {
   @IsInt()
   idTipoPropiedad?: number;
 
-  @IsOptional()
+  @ValidateIf((_dto, activa: unknown) => activa !== undefined)
   @IsBoolean()
   activa?: boolean;
 }
