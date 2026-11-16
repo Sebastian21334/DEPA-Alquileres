@@ -2,7 +2,6 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { concatMap, from } from 'rxjs';
 import { LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
-import { AuthService } from '../../core/services/auth.service';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
@@ -13,7 +12,7 @@ const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'im
 const MAX_IMAGEN = 10 * 1024 * 1024;
 
 // Panel del anunciante verificado para administrar sus publicaciones: ver,
-// eliminar y gestionar la galería de imágenes de cada una.
+// activar, desactivar, mover a la papelera, restaurar y gestionar sus imágenes.
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
@@ -22,13 +21,15 @@ const MAX_IMAGEN = 10 * 1024 * 1024;
   styleUrl: './mis-publicaciones.component.scss',
 })
 export class MisPublicacionesComponent {
-  private readonly auth = inject(AuthService);
   private readonly gestion = inject(GestionPublicacionesService);
 
-  protected readonly publicaciones = signal<Publicacion[]>([]);
+  private readonly todas = signal<Publicacion[]>([]);
+  protected readonly publicaciones = computed(() => this.todas().filter((p) => !p.eliminada));
+  protected readonly papelera = computed(() => this.todas().filter((p) => p.eliminada));
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
   protected readonly aviso = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('aviso') ?? '');
+  protected readonly resultado = signal('');
   protected readonly expandida = signal<number | null>(null);
   protected readonly confirmandoBorrado = signal<number | null>(null);
   protected readonly ocupada = signal<number | null>(null);
@@ -41,10 +42,9 @@ export class MisPublicacionesComponent {
   }
 
   private cargar(): void {
-    const id = Number(this.auth.currentUser()?.sub);
-    this.gestion.listarMias(id).subscribe({
+    this.gestion.listarConPapelera().subscribe({
       next: (lista) => {
-        this.publicaciones.set(lista);
+        this.todas.set(lista);
         this.cargando.set(false);
       },
       error: (err: Error) => {
@@ -60,11 +60,46 @@ export class MisPublicacionesComponent {
   }
 
   protected eliminar(pub: Publicacion): void {
+    if (this.ocupada() !== null) return;
     this.ocupada.set(pub.id);
+    this.errorFila.set(null);
+    this.resultado.set('');
     this.gestion.eliminar(pub.id).subscribe({
-      next: () => {
-        this.publicaciones.update((lista) => lista.filter((p) => p.id !== pub.id));
+      next: (eliminada) => {
+        this.actualizar(pub.id, () => eliminada);
         this.confirmandoBorrado.set(null);
+        if (this.expandida() === pub.id) this.expandida.set(null);
+        this.resultado.set('La publicación se movió a la Papelera. Podés restaurarla desde allí.');
+        this.ocupada.set(null);
+      },
+      error: (err: Error) => this.fallo(pub.id, err),
+    });
+  }
+
+  protected restaurar(pub: Publicacion): void {
+    if (this.ocupada() !== null) return;
+    this.ocupada.set(pub.id);
+    this.errorFila.set(null);
+    this.resultado.set('');
+    this.gestion.restaurar(pub.id).subscribe({
+      next: (restaurada) => {
+        this.actualizar(pub.id, () => restaurada);
+        this.resultado.set('La publicación volvió a Mis publicaciones como inactiva.');
+        this.ocupada.set(null);
+      },
+      error: (err: Error) => this.fallo(pub.id, err),
+    });
+  }
+
+  protected alternarActividad(pub: Publicacion): void {
+    if (this.ocupada() !== null) return;
+    this.ocupada.set(pub.id);
+    this.errorFila.set(null);
+    this.resultado.set('');
+    this.gestion.cambiarActividad(pub.id, !pub.activa).subscribe({
+      next: (actualizada) => {
+        this.actualizar(pub.id, () => actualizada);
+        this.resultado.set(actualizada.activa ? 'Publicación activada.' : 'Publicación desactivada. Ya no aparece en el feed.');
         this.ocupada.set(null);
       },
       error: (err: Error) => this.fallo(pub.id, err),
@@ -72,6 +107,7 @@ export class MisPublicacionesComponent {
   }
 
   protected subirImagenes(pub: Publicacion, event: Event): void {
+    if (this.ocupada() !== null) return;
     const input = event.target as HTMLInputElement;
     const archivos = Array.from(input.files ?? []);
     input.value = '';
@@ -89,13 +125,14 @@ export class MisPublicacionesComponent {
       .subscribe({
         next: (imagen) =>
           // El backend activa la publicación al recibir su primera imagen.
-          this.actualizar(pub.id, (p) => ({ ...p, activa: !p.motivo_baja_admin, imagenes: [...(p.imagenes ?? []), { id: imagen.id, url: imagen.url }] })),
+          this.actualizar(pub.id, (p) => ({ ...p, activa: p.activa || (!p.motivo_baja_admin && !p.imagenes?.length), imagenes: [...(p.imagenes ?? []), { id: imagen.id, url: imagen.url }] })),
         error: (err: Error) => this.fallo(pub.id, err),
         complete: () => this.ocupada.set(null),
       });
   }
 
   protected eliminarImagen(pub: Publicacion, idImagen: number): void {
+    if (this.ocupada() !== null) return;
     this.ocupada.set(pub.id);
     this.gestion.eliminarImagen(idImagen).subscribe({
       next: () => {
@@ -107,7 +144,7 @@ export class MisPublicacionesComponent {
   }
 
   protected ordenarImagenes(pub: Publicacion, cambio: { desde: number; hasta: number }): void {
-    if (this.ocupada() === pub.id) return;
+    if (this.ocupada() !== null) return;
     const imagenes = moverImagen(pub.imagenes ?? [], cambio.desde, cambio.hasta);
     this.ocupada.set(pub.id);
     this.errorFila.set(null);
@@ -133,7 +170,7 @@ export class MisPublicacionesComponent {
   }
 
   private actualizar(id: number, cambio: (p: Publicacion) => Publicacion): void {
-    this.publicaciones.update((lista) => lista.map((p) => (p.id === id ? cambio(p) : p)));
+    this.todas.update((lista) => lista.map((p) => (p.id === id ? cambio(p) : p)));
   }
 
   private fallo(id: number, err: Error): void {

@@ -82,7 +82,9 @@ const publicaciones = Array.from({ length: 4 }, (_, i) => ({
     'Propiedad amplia y luminosa, con todos los servicios y excelente ubicación. Consultá la disponibilidad y las condiciones de la estadía.',
   fecha_publicacion: new Date().toISOString(),
   precio: 35000 + i * 1200,
-  activa: true,
+  activa: location.pathname !== '/mis-publicaciones' || i === 0,
+  eliminada: location.pathname === '/mis-publicaciones' && i === 2,
+  motivo_baja_admin: location.pathname === '/mis-publicaciones' && i === 3 ? 'La publicación requiere revisión del administrador.' : null,
   visualizaciones: 125 + i * 20,
   direccion: 'Avenida Universidad Nacional 1234, departamento 8 B',
   latitud: -32.41,
@@ -171,6 +173,16 @@ const interceptor: HttpInterceptorFn = (req) => {
   let body;
   if (req.method !== 'GET') {
     if (p.endsWith('/visualizacion')) body = { visualizaciones: 126 };
+    else if (location.pathname === '/mis-publicaciones' && /^\/publicaciones\/\d+\/restaurar$/.test(p) && req.method === 'PATCH') {
+      const pub = publicaciones.find(pub => pub.id === Number(p.split('/')[2]))!;
+      Object.assign(pub, { eliminada: false, activa: false });
+      body = { ...pub };
+    }
+    else if (location.pathname === '/mis-publicaciones' && /^\/publicaciones\/\d+$/.test(p) && ['PATCH', 'DELETE'].includes(req.method)) {
+      const pub = publicaciones.find(pub => pub.id === Number(p.split('/')[2]))!;
+      Object.assign(pub, req.method === 'DELETE' ? { eliminada: true, activa: false } : req.body);
+      body = { ...pub };
+    }
     else
       return throwError(
         () =>
@@ -203,6 +215,7 @@ const interceptor: HttpInterceptorFn = (req) => {
   else if (p === '/usuarios/administracion')
     body = page([user, { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true }]);
   else if (p === '/publicaciones/administracion') body = page(publicaciones);
+  else if (p === '/publicaciones/mias') body = publicaciones.map(pub => ({ ...pub }));
   else if (p.startsWith('/publicaciones/anunciante/')) {
     const requestedCount = Number(params.get('publicacionesPerfil') ?? publicaciones.length);
     const count = Number.isSafeInteger(requestedCount) && requestedCount >= 0

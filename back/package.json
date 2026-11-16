@@ -10,6 +10,7 @@
     "db:apelaciones-bloqueo": "node scripts/apelaciones-bloqueo.cjs",
     "db:publicaciones-eliminadas": "node scripts/publicaciones-eliminadas.cjs --aplicar",
     "test:publicaciones-eliminadas": "npm run build && node --test test/publicaciones-eliminadas.test.cjs test/publicaciones-cuentas-bloqueadas.test.cjs test/bajas-y-bloqueos.test.cjs test/condiciones-economicas.test.cjs",
+    "test:papelera-publicaciones": "npm run build && node --test test/papelera-publicaciones.test.cjs test/publicaciones-eliminadas.test.cjs test/publicaciones-cuentas-bloqueadas.test.cjs test/orden-imagenes.test.cjs",
     "db:eliminacion-documentos": "node scripts/eliminacion-documentos.cjs --aplicar",
     "test:eliminacion-documentos": "npm run build && node --test test/eliminacion-documentos.test.cjs",
     "db:inicializar": "node scripts/inicializar-base.cjs --aplicar",

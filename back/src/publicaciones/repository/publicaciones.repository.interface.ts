@@ -59,7 +59,8 @@ export interface IPublicacionesRepository {
   buscarTodas(): Promise<Publicacion[]>;
   buscarAdministracion(consulta: ListarAdministracionDto): Promise<Pagina<Publicacion>>;
   buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones>;
-  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean): Promise<Publicacion[]>;
+  buscarPorAnunciante(idAnunciante: number, soloActivas: boolean, incluirEliminadas?: boolean): Promise<Publicacion[]>;
+  restaurar(id: number): Promise<boolean>;
   eliminar(publicacion: Publicacion): Promise<Publicacion>;
 }
 
