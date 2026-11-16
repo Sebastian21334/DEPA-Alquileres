@@ -208,7 +208,19 @@
           @if (errorAccionReclamo()) { <p class="claim-error" role="alert">{{ errorAccionReclamo() }}</p> }
           @for (reclamo of reclamos(); track reclamo.id) {
             <article class="acct-card reservation claim-card">
-              <app-claim-history [reclamo]="reclamo" (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)" />
+              <app-claim-history [reclamo]="reclamo" (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)">
+                @if (reclamo.estado !== 'CERRADO') {
+                  @if (respuestaReclamo() === reclamo.id) {
+                    <app-conversation-composer [(texto)]="textoRespuesta" etiqueta="Mensaje para el reclamo"
+                      [deshabilitado]="enviandoRespuesta()" (enviar)="responderReclamo(reclamo)" />
+                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="respuestaReclamo.set(null)"
+                      [disabled]="enviandoRespuesta()">Cancelar</button>
+                  } @else {
+                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="abrirRespuestaReclamo(reclamo.id)"
+                      [disabled]="enviandoRespuesta()">Escribir un mensaje</button>
+                  }
+                }
+              </app-claim-history>
               @if ((reclamo.estado === 'ABIERTO' || reclamo.estado === 'EN_REVISION') && (reclamo.evidencias?.length ?? 0) < 5) {
                 <div class="claim-form">
                   <label>{{ subiendoEvidencia() === reclamo.id ? 'Subiendo imágenes…' : 'Adjuntar imágenes al reclamo' }}
@@ -216,21 +228,6 @@
                     <small>JPEG o PNG · Hasta 5 MB por imagen</small>
                   </label>
                 </div>
-              }
-              @if (reclamo.estado !== 'CERRADO') {
-                @if (respuestaReclamo() === reclamo.id) {
-                  <form class="claim-form" (ngSubmit)="responderReclamo(reclamo)">
-                    <label>Mensaje para el reclamo
-                      <textarea name="textoRespuesta" [(ngModel)]="textoRespuesta" rows="3" maxlength="1000" required [disabled]="enviandoRespuesta()"></textarea>
-                    </label>
-                    <div class="reschedule-form__actions">
-                      <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="enviandoRespuesta() || !textoRespuesta.trim()">Enviar mensaje</button>
-                      <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="respuestaReclamo.set(null)" [disabled]="enviandoRespuesta()">Cancelar</button>
-                    </div>
-                  </form>
-                } @else {
-                  <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="abrirRespuestaReclamo(reclamo.id)" [disabled]="enviandoRespuesta()">Escribir un mensaje</button>
-                }
               }
             </article>
           } @empty {
@@ -244,12 +241,13 @@
 
 
 <ng-template #tarjetaReserva let-reserva let-recibida="recibida">
+  @let devolucionPendiente = !recibida && actividadReembolsos.pendientes().has(reserva.id);
   @let portada = reserva.publicacion?.imagenes?.[0]?.url;
   @let puedeReportar = !recibida && !reserva.cancelada && reserva.estado_pago === 'APROBADO'
     && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO'
     && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION';
   @let cancelarDirecto = !recibida && !reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE';
-  @let cambiarFechas = !recibida && puedeReprogramar(reserva);
+  @let cambiarFechas = !recibida && !devolucionPendiente && puedeReprogramar(reserva);
   @let solicitarBaja = puedeSolicitarCancelacion(reserva);
   @let menuId = 'acciones-reserva-' + reserva.id;
   <div class="booking-card__cover">
@@ -264,13 +262,15 @@
       <div class="booking-card__info">
         <div class="booking-card__heading">
           <h2>{{ reserva.publicacion?.titulo || 'Publicación no disponible' }}</h2>
-          <span class="acct-badge" [class.acct-badge--error]="reserva.cancelada || reserva.estado_estadia === 'INGRESO_NO_VERIFICADO'" [class.acct-badge--ok]="estadiaActiva(reserva)">{{ estado(reserva) }}</span>
+          <span class="acct-badge" [class.acct-badge--error]="!devolucionPendiente && (reserva.cancelada || reserva.estado_estadia === 'INGRESO_NO_VERIFICADO')" [class.acct-badge--ok]="!devolucionPendiente && estadiaActiva(reserva)">{{ devolucionPendiente ? 'Devolución pendiente' : estado(reserva) }}</span>
         </div>
         <dl class="booking-card__dates">
           <div><dt>Ingreso</dt><dd>{{ fechaTarjeta(reserva.fecha_inicio) }}</dd></div>
           <div><dt>Salida</dt><dd>{{ fechaTarjeta(reserva.fecha_fin) }}</dd></div>
         </dl>
-        @if (devolucionRegistrada(reserva); as devolucion) {
+        @if (devolucionPendiente) {
+          <p class="booking-card__settlement">Tu devolución está en gestión. Podés seguirla desde el detalle.</p>
+        } @else if (devolucionRegistrada(reserva); as devolucion) {
           <p class="booking-card__settlement">{{ devolucion.mensaje }}</p>
         } @else if (reserva.estado_pago === 'APROBADO') {
           <p class="booking-card__settlement">
@@ -292,7 +292,7 @@
         </details>
       }
       <div class="booking-card__actions">
-        @if (!recibida && puedeConsultarCodigo(reserva)) {
+        @if (!recibida && !devolucionPendiente && puedeConsultarCodigo(reserva)) {
           <button type="button" class="booking-button" [disabled]="ocupada() !== null" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
         }
         <a class="booking-button booking-button--primary" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">{{ recibida ? 'Ver detalle y contactar' : 'Ver detalle' }}</a>

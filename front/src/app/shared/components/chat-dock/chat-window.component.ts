@@ -1,21 +1,19 @@
+import { ConversationPanelComponent } from '../conversation-panel/conversation-panel.component';
+import { ConversationComposerComponent } from '../conversation-panel/conversation-composer.component';
 import {
   Component,
-  ElementRef,
   OnInit,
   PLATFORM_ID,
-  afterRenderEffect,
   computed,
   inject,
   input,
   signal,
-  viewChild,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { EMPTY, Subject, catchError, switchMap, timer } from 'rxjs';
-import { LucideMinus, LucideSend, LucideX } from '@lucide/angular';
+import { LucideMinus, LucideX } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { ChatAbierto, ChatService } from '../../../core/services/chat.service';
 import { Mensaje } from '../../models/mensaje.model';
@@ -28,7 +26,7 @@ const INTERVALO_MS = 5000;
 @Component({
   selector: 'app-chat-window',
   standalone: true,
-  imports: [FormsModule, RouterLink, AvatarComponent, LucideMinus, LucideSend, LucideX],
+  imports: [RouterLink, AvatarComponent, LucideMinus, LucideX, ConversationPanelComponent, ConversationComposerComponent],
   templateUrl: './chat-window.component.html',
   styleUrl: './chat-window.component.scss',
 })
@@ -37,7 +35,6 @@ export class ChatWindowComponent implements OnInit {
 
   protected readonly chatService = inject(ChatService);
   private readonly auth = inject(AuthService);
-  private readonly lista = viewChild<ElementRef<HTMLElement>>('lista');
   private readonly refrescar$ = new Subject<void>();
 
   protected readonly mensajes = signal<Mensaje[]>([]);
@@ -87,12 +84,6 @@ export class ChatWindowComponent implements OnInit {
         });
     }
 
-    // Mantiene visible el último mensaje cada vez que llegan mensajes nuevos.
-    afterRenderEffect(() => {
-      this.mensajes();
-      const el = this.lista()?.nativeElement;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
   }
 
   ngOnInit(): void {
@@ -120,7 +111,13 @@ export class ChatWindowComponent implements OnInit {
     });
   }
 
-  protected hora(fecha: string): string {
-    return new Date(fecha).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  }
+  protected readonly hilo = computed(() => this.mensajes().map(mensaje => {
+    const autor = mensaje.origenUsuario;
+    const propio = autor.id === this.miId();
+    return {
+      id: mensaje.id, autor: [autor.nombre, autor.apellido].filter(Boolean).join(' ') || 'Usuario',
+      foto: autor.foto_url, texto: mensaje.texto, fecha: mensaje.fecha, propio,
+      leido: propio ? mensaje.leido : undefined,
+    };
+  }));
 }

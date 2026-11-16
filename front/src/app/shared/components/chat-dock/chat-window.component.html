@@ -16,42 +16,16 @@
   @if (!chat().minimizado) {
     <a class="chat__link" [routerLink]="['/publicaciones', chat().idPublicacion]">Ver publicación</a>
 
-    <div class="chat__body" #lista>
-      @if (cargando()) {
-        <p class="chat__empty">Cargando…</p>
+    <app-conversation-panel [mensajes]="hilo()"
+      [vacio]="cargando() ? 'Cargando conversación…' : 'Escribí tu consulta a ' + chat().nombreOtro + '.'">
+      @if (error()) { <p class="chat__error" role="alert">{{ error() }}</p> }
+      @if (publicacionEliminada()) {
+        <p class="chat__error" role="status">Esta publicación ha sido eliminada y no admite contactos. El historial se conserva.</p>
+      } @else if (contactoSuspendido()) {
+        <p class="chat__error" role="status">Contacto suspendido. Para reservas anteriores, contactá a soporte.</p>
       } @else {
-        @for (m of mensajes(); track m.id) {
-          <div class="chat__msg" [class.is-mine]="m.origenUsuario.id === miId()">
-            <p>{{ m.texto }}</p>
-            <time>{{ hora(m.fecha) }} @if (m.origenUsuario.id === miId()) { <span class="chat__read" [class.is-read]="m.leido" [attr.aria-label]="m.leido ? 'Leído' : 'Enviado'">{{ m.leido ? '✓✓' : '✓' }}</span> }</time>
-          </div>
-        } @empty {
-          <p class="chat__empty">Escribí tu consulta a {{ chat().nombreOtro }}.</p>
-        }
+        <app-conversation-composer [(texto)]="texto" [limite]="250" [deshabilitado]="enviando()" (enviar)="enviar()" />
       }
-    </div>
-
-    @if (error()) {
-      <p class="chat__error" role="alert">{{ error() }}</p>
-    }
-
-    @if (publicacionEliminada()) {
-      <p class="chat__error" role="status">Esta publicación ha sido eliminada y no admite contactos. El historial se conserva.</p>
-    } @else if (contactoSuspendido()) {
-      <p class="chat__error" role="status">Contacto suspendido: la cuenta no está disponible. El historial se conserva. Para reservas anteriores, contactá a soporte.</p>
-    }
-    <form class="chat__form" (ngSubmit)="enviar()">
-      <input
-        name="texto"
-        [(ngModel)]="texto"
-        maxlength="250"
-        placeholder="Escribí un mensaje…"
-        autocomplete="off"
-        [disabled]="enviando() || contactoSuspendido()"
-      />
-      <button type="submit" aria-label="Enviar" [disabled]="enviando() || contactoSuspendido() || !texto.trim()">
-        <svg lucideSend [size]="18"></svg>
-      </button>
-    </form>
+    </app-conversation-panel>
   }
 </section>

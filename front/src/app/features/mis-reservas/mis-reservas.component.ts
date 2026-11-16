@@ -1,3 +1,4 @@
+import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
 import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
@@ -19,12 +20,13 @@ import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCo
 import { PerfilService } from '../../core/services/perfil.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
+import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
 
 @Component({
   selector: 'app-mis-reservas',
   standalone: true,
   imports: [
-    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, NgTemplateOutlet,
+    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, NgTemplateOutlet,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
   ],
@@ -33,6 +35,7 @@ import { ClaimHistoryComponent } from '../../shared/components/claim-history/cla
 })
 export class MisReservasComponent {
   private readonly reservasApi = inject(ReservationService);
+  protected readonly actividadReembolsos = inject(ActividadReembolsosService);
   private readonly toast = inject(ToastService);
   private readonly perfil = inject(PerfilService);
   private readonly route = inject(ActivatedRoute);

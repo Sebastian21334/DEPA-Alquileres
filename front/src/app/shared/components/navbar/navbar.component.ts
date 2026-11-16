@@ -1,9 +1,10 @@
 import { Component, HostListener, PLATFORM_ID, computed, effect, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { filter } from 'rxjs';
+import { EMPTY, Subject, catchError, exhaustMap, filter, merge, timer } from 'rxjs';
 import {
   LucideBadgeCheck,
+  LucideBell,
   LucideCalendarDays,
   LucideChevronDown,
   LucideHouse,
@@ -22,6 +23,7 @@ import {
 import { AuthService } from '../../../core/services/auth.service';
 import { PerfilService } from '../../../core/services/perfil.service';
 import { ChatService } from '../../../core/services/chat.service';
+import { ActividadReembolsosService } from '../../../core/services/actividad-reembolsos.service';
 import { ConversacionResumen } from '../../models/mensaje.model';
 import { etiquetaRol } from '../../models/perfil.model';
 import { AvatarComponent } from '../avatar/avatar.component';
@@ -36,6 +38,7 @@ import { AvatarComponent } from '../avatar/avatar.component';
     RouterLinkActive,
     AvatarComponent,
     LucideBadgeCheck,
+    LucideBell,
     LucideCalendarDays,
     LucideChevronDown,
     LucideHouse,
@@ -58,6 +61,12 @@ export class NavbarComponent {
   protected readonly auth = inject(AuthService);
   protected readonly perfil = inject(PerfilService);
   private readonly chat = inject(ChatService);
+  protected readonly actividadReembolsos = inject(ActividadReembolsosService);
+  protected readonly notificacionesAbiertas = signal(false);
+  private readonly refrescoNotificaciones = new Subject<void>();
+  protected readonly chatsNoLeidos = signal<ConversacionResumen[]>([]);
+  protected readonly totalNotificaciones = computed(() =>
+    this.chatsNoLeidos().length + this.actividadReembolsos.notificaciones().length);
   private readonly router = inject(Router);
 
   protected readonly etiquetaRol = etiquetaRol;
@@ -92,6 +101,15 @@ export class NavbarComponent {
         this.perfil.limpiar();
       }
     });
+    effect(onCleanup => {
+      const usuario = this.auth.currentUser()?.sub;
+      this.chatsNoLeidos.set([]);
+      if (!isBrowser || usuario == null) return;
+      const consulta = merge(timer(0, 15000), this.refrescoNotificaciones).pipe(exhaustMap(() =>
+        this.chat.listarConversaciones().pipe(catchError(() => EMPTY)),
+      )).subscribe(lista => this.chatsNoLeidos.set(lista.filter(conv => conv.cantidadNoLeidos > 0)));
+      onCleanup(() => consulta.unsubscribe());
+    });
 
     this.router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe(() => this.cerrarMenu());
   }
@@ -100,6 +118,15 @@ export class NavbarComponent {
   protected cerrarMenu(): void {
     this.menuAbierto.set(false);
     this.chatsAbiertos.set(false);
+    this.notificacionesAbiertas.set(false);
+  }
+
+  protected alternarNotificaciones(): void {
+    this.notificacionesAbiertas.update(abiertas => !abiertas);
+    if (this.notificacionesAbiertas()) {
+      this.actividadReembolsos.actualizar();
+      this.refrescoNotificaciones.next();
+    }
   }
 
   protected abrirMenu(): void {

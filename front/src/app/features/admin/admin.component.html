@@ -508,7 +508,13 @@
     <div class="settlement-list">
       @for (claim of claims(); track claim.id) {
         <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
-          <app-claim-history [reclamo]="claim" [administracion]="true" (verArchivo)="verEvidencia(claim, $event)" />
+          <app-claim-history [reclamo]="claim" [administracion]="true" (verArchivo)="verEvidencia(claim, $event)">
+            @if (gestionReclamo()?.id === claim.id && gestionReclamo()?.accion === 'mensaje') {
+              <app-conversation-composer [(texto)]="textoReclamo" etiqueta="Mensaje para el inquilino y el anunciante"
+                [deshabilitado]="!!busy()" (enviar)="responderReclamo(claim)" />
+              <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
+            }
+          </app-claim-history>
           @if (claim.estado !== 'CERRADO') {
             <div class="actions">
               <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'mensaje')">Escribir mensaje</button>
@@ -518,17 +524,6 @@
             </div>
           }
           @if (gestionReclamo(); as gestion) {
-            @if (gestion.id === claim.id && gestion.accion === 'mensaje') {
-              <form class="claim-form" (ngSubmit)="responderReclamo(claim)">
-                <label>Mensaje para el inquilino y el anunciante
-                  <textarea name="textoReclamo" [(ngModel)]="textoReclamo" rows="3" maxlength="1000" required [disabled]="!!busy()"></textarea>
-                </label>
-                <div class="actions">
-                  <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
-                  <button type="submit" class="button button--light" [disabled]="!!busy() || !textoReclamo.trim()">Enviar mensaje</button>
-                </div>
-              </form>
-            }
             @if (gestion.id === claim.id && gestion.accion === 'resolver') {
               <form class="claim-form" (ngSubmit)="resolverReclamoReserva(claim)">
                 <label>Resultado de la revisión
@@ -816,22 +811,19 @@
               <p><strong>Fecha del bloqueo</strong> {{ bloqueo.detalle.fecha | date: 'dd/MM/yyyy' }}</p>
             }
             <p><strong>Motivo</strong> {{ bloqueo.detalle.motivo || 'Sin registro' }}</p>
-            @if (bloqueo.detalle.apelacion; as apelacion) {
-              <p><strong>Apelación del {{ apelacion.fecha | date: 'dd/MM/yyyy' }}</strong> {{ apelacion.texto }}</p>
-              @if (bloqueo.detalle.respuesta; as respuesta) {
-                <p><strong>Respuesta del {{ respuesta.fecha | date: 'dd/MM/yyyy' }}</strong> {{ respuesta.texto }}</p>
-              } @else if (apelacionSeleccionada() === bloqueo.detalle.id) {
-                <form class="block-form" (ngSubmit)="responderApelacion(bloqueo)">
-                  <label [for]="'reply-' + bloqueo.detalle.id">Respuesta de administración</label>
-                  <textarea [id]="'reply-' + bloqueo.detalle.id" name="respuesta" [(ngModel)]="respuestaApelacion" rows="4" maxlength="2000" required></textarea>
-                  <div class="block-actions">
+            @if (bloqueo.detalle.apelacion) {
+              <app-conversation-panel titulo="Apelación del bloqueo"
+                [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">
+                @if (!bloqueo.detalle.respuesta) {
+                  @if (apelacionSeleccionada() === bloqueo.detalle.id) {
+                    <app-conversation-composer [(texto)]="respuestaApelacion" [limite]="2000"
+                      etiqueta="Respuesta de Administración" [deshabilitado]="!!busy()" (enviar)="responderApelacion(bloqueo)" />
                     <button type="button" class="button button--ghost" (click)="apelacionSeleccionada.set(null)" [disabled]="!!busy()">Cancelar</button>
-                    <button type="submit" class="button button--primary" [disabled]="!!busy() || !respuestaApelacion.trim()">Enviar respuesta</button>
-                  </div>
-                </form>
-              } @else {
-                <button type="button" class="button button--ghost" (click)="abrirRespuesta(bloqueo)" [disabled]="!!busy()">Responder apelación</button>
-              }
+                  } @else {
+                    <button type="button" class="button button--ghost" (click)="abrirRespuesta(bloqueo)" [disabled]="!!busy()">Responder apelación</button>
+                  }
+                }
+              </app-conversation-panel>
             } @else {
               <p>Sin apelación.</p>
             }

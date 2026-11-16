@@ -5,10 +5,11 @@ import { EMPTY, Subscription, catchError, exhaustMap, timer } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
+import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LucideCalendar, LucideCheck, LucideCopy, LucideKeyRound } from '@lucide/angular';
+import { LucideCalendar, LucideCheck, LucideChevronDown, LucideCopy, LucideKeyRound, LucideLandmark } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
 import { ChatService } from '../../core/services/chat.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -24,7 +25,7 @@ import {
 @Component({
   selector: 'app-reserva-resultado',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, ReservaReprogramacionComponent, ReembolsoChatComponent],
+  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, ReservaReprogramacionComponent, ReembolsoChatComponent],
   templateUrl: './reserva-resultado.component.html',
   styleUrl: './reserva-resultado.component.scss',
 })
@@ -35,6 +36,7 @@ export class ReservaResultadoComponent {
   private readonly chat = inject(ChatService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
+  private readonly actividadReembolsos = inject(ActividadReembolsosService);
   protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string }[]>([]);
   protected readonly conversacionAbierta = signal<number | null>(null);
   private consultaResumen?: Subscription;
@@ -61,14 +63,18 @@ export class ReservaResultadoComponent {
     () => this.reserva()?.usuario?.id === Number(this.auth.currentUser()?.sub),
   );
   private readonly reservaConversacionId = computed(() => this.esInquilino() ? this.reserva()?.id : undefined);
+  protected readonly devolucionPendiente = computed(() => {
+    const id = this.reservaConversacionId();
+    return id !== undefined && this.actividadReembolsos.pendientes().has(id);
+  });
   protected readonly puedeCambiarFechas = computed(() => {
     const reserva = this.reserva();
-    return !!reserva && this.esInquilino() && puedeReprogramar(reserva);
+    return !!reserva && this.esInquilino() && !this.devolucionPendiente() && puedeReprogramar(reserva);
   });
 
   protected readonly mostrarCodigo = computed(() => {
     const reserva = this.reserva();
-    return this.esInquilino() && !!reserva &&
+    return this.esInquilino() && !this.devolucionPendiente() && !!reserva &&
       (puedeConsultarCodigo(reserva) || reserva.estado_estadia === 'EN_CURSO');
   });
   protected readonly codigoValidado = computed(() =>
@@ -111,7 +117,6 @@ export class ReservaResultadoComponent {
       onCleanup(() => {
         consulta.unsubscribe();
         this.conversacionesReembolso.set([]);
-        this.conversacionAbierta.set(null);
       });
     });
     effect((onCleanup) => {
@@ -146,10 +151,23 @@ export class ReservaResultadoComponent {
       return;
     }
 
+    let reservaActual = idReserva;
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+      const chatId = Number(params.get('reembolso'));
+      this.conversacionAbierta.set(chatId > 0 ? chatId : null);
+      const nueva = this.obtenerIdReserva();
+      if (nueva && nueva !== reservaActual) {
+        reservaActual = nueva;
+        this.resumen.set(null);
+        this.cargando.set(true);
+        this.reprogramando.set(params.get('reprogramar') === '1');
+        this.cargarResumen(nueva);
+      }
+    });
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
     activarActualizacionReservas(() => {
       if (!this.cargando() && !(this.reprogramando() && this.puedeCambiarFechas())) {
-        this.cargarResumen(idReserva, true);
+        this.cargarResumen(reservaActual, true);
       }
     });
     const paymentId =
@@ -296,6 +314,7 @@ export class ReservaResultadoComponent {
   }
 
   protected tituloEstado(reserva: Reserva): string {
+    if (this.devolucionPendiente()) return 'Devolución pendiente';
     const devolucion = devolucionRegistrada(reserva);
     if (reserva.cancelada && devolucion) return devolucion.etiqueta;
     if (reserva.cancelada && reserva.estado_pago === 'APROBADO' && reserva.estado_liquidacion === 'EN_REVISION')
@@ -305,6 +324,8 @@ export class ReservaResultadoComponent {
   }
 
   protected descripcionEstado(reserva: Reserva): string {
+    if (this.devolucionPendiente())
+      return 'Tu devolución está en gestión. Si se realiza por transferencia, podés coordinarla en la conversación con administración.';
     const devolucion = devolucionRegistrada(reserva);
     if (devolucion) return devolucion.mensaje;
     if (reserva.estado_pago === 'PENDIENTE' && this.resumen()?.puede_reintentar)

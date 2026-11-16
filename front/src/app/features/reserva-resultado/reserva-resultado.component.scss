@@ -432,3 +432,17 @@
   .reservation-summary img { width: 100%; aspect-ratio: 3 / 1; }
   .reservation-summary__total { padding-inline: 0; }
 }
+.refund-threads { display: grid; gap: 14px; }
+.refund-threads__head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; color: #121b36; }
+.refund-threads__head h2, .refund-threads__head p { margin: 0; }
+.refund-threads__head h2 { font-size: clamp(1rem, 2.2vw, 1.3rem); }
+.refund-threads__head p { color: #52607a; }
+.refund-threads__head strong { border-inline-start: 1px solid #d5deee; padding-inline: 12px; font-size: 1.2rem; }
+.refund-threads__icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 10px; color: #1648f5; background: #dbe8ff; }
+.refund-threads__head button { display: flex; align-items: center; justify-content: center; gap: 5px; }
+.refund-threads__head button[aria-expanded='true'] svg { transform: rotate(180deg); }
+@media (max-width: 640px) {
+  .refund-threads__head { grid-template-columns: auto minmax(0, 1fr); }
+  .refund-threads__head strong { border: 0; padding: 0; white-space: nowrap; }
+  .refund-threads__head button { justify-self: end; }
+}

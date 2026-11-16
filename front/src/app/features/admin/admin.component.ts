@@ -1,3 +1,5 @@
+import { ConversationPanelComponent, mensajesApelacion } from '../../shared/components/conversation-panel/conversation-panel.component';
+import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
 import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, PLATFORM_ID, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -88,6 +90,8 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   imports: [
     CotizacionesAdminComponent,
     ClaimHistoryComponent,
+    ConversationComposerComponent,
+    ConversationPanelComponent,
     ReembolsoChatComponent,
     CurrencyPipe,
     DatePipe,
@@ -805,6 +809,8 @@ export class AdminComponent {
     this.users.update((usuarios) => usuarios.map((usuario) => usuario.id === id ? { ...usuario, bloqueado } : usuario));
     this.cargarBloqueados();
   }
+
+  protected readonly mensajesApelacion = mensajesApelacion;
 
   protected abrirRespuesta(bloqueo: AdminBloqueo): void {
     this.respuestaApelacion = '';

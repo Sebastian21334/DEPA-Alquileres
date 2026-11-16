@@ -153,6 +153,23 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
+  actividadInquilino(idUsuario: number, estados: string[]): ReturnType<IReembolsosRepository['actividadInquilino']> {
+    return this.repository.query(
+      `SELECT r.id_reembolso AS "reembolsoId", r.id_reserva AS "reservaId",
+              r.estado = ANY($2) AS pendiente, m.id AS "mensajeId", left(m.texto, 120) AS texto, m.creado_en AS fecha
+       FROM public.reembolso r
+       JOIN public.reserva reserva ON reserva.id_reserva = r.id_reserva
+       LEFT JOIN LATERAL (
+         SELECT id, texto, creado_en FROM public.reembolso_mensaje
+         WHERE id_reembolso = r.id_reembolso AND administracion AND id_autor IS DISTINCT FROM $1
+         ORDER BY id DESC LIMIT 1
+       ) m ON r.transferencia_manual
+       WHERE reserva.id_usuario = $1 AND (r.estado = ANY($2) OR m.id IS NOT NULL)
+       ORDER BY m.id DESC NULLS LAST`,
+      [idUsuario, estados],
+    );
+  }
+
   listarMensajes(id: number, despuesDe: number): Promise<MensajeReembolso[]> {
     return this.repository.query(
       'SELECT id, autor, administracion, texto, creado_en FROM reembolso_mensaje WHERE id_reembolso = $1 AND id > $2 ORDER BY id LIMIT 100',

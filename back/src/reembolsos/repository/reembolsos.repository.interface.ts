@@ -32,6 +32,10 @@ export interface IReembolsosRepository {
   buscarPorOrigen(origen: Reembolso['origen'], referencia: string): Promise<Reembolso | null>;
   listarAdministracion(): Promise<Reembolso[]>;
   listarMensajes(id: number, despuesDe: number): Promise<MensajeReembolso[]>;
+  actividadInquilino(idUsuario: number, estados: string[]): Promise<{
+    reembolsoId: number; reservaId: number; pendiente: boolean;
+    mensajeId: number | null; texto: string | null; fecha: Date | null;
+  }[]>;
   listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado'>[]>;
   guardarMensaje(id: number, idAutor: number, administracion: boolean, texto: string): Promise<MensajeReembolso>;
 }
