@@ -136,6 +136,7 @@ export interface CondicionesCancelacion {
   solicitud: SolicitudCancelacion | null;
   motivoBloqueo: string | null;
   admiteReembolso: boolean;
+  devolucionPorTransferencia?: boolean;
   politica: {
     diasDevolucionTotal: number;
     diasDevolucionParcial: number;

@@ -24,10 +24,16 @@ export class OperacionesLiquidacionService {
 
   async listarLiquidacionesAdministracion(): Promise<Reserva[]> {
     const reservas = await this.liquidaciones.listarParaAdministracion();
-    return reservas.map(reserva => this.reservasService.prepararRespuesta(reserva));
+    const reembolsos = await this.reembolsosService.listarActivosPorReservas(reservas.map(reserva => reserva.id));
+    const transferidas = new Set(reembolsos.map(reembolso => reembolso.reserva.id));
+    return reservas.filter(reserva => !transferidas.has(reserva.id))
+      .map(reserva => this.reservasService.prepararRespuesta(reserva));
   }
 
-  /** Registra una decisión administrativa; la devolución se ejecuta antes de modificar la reserva. */
+  listarPagosRegistrados() {
+    return this.liquidaciones.listarPagosRegistrados();
+  }
+
   async resolverLiquidacion(id: number, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reserva> {
     const permitidos: string[] = [
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
@@ -43,27 +49,19 @@ export class OperacionesLiquidacionService {
       );
     }
 
-    const reserva = await this.liquidaciones.proyectarEnReserva(await this.reservasService.obtenerReserva(id));
-    this.validarResolucion(reserva, dto);
-    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
-      await this.asegurarSinDevoluciones(id);
-
-    const esDevolucion =
-      dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO') ||
-      dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO');
-
-    if (esDevolucion) {
-      const devolucion = await this.ejecutarDevolucion(reserva, dto, idAdmin);
-      const aplicada = await this.reembolsosService.aplicarConfirmado(devolucion.id, (confirmado, transaccion) =>
-        this.reservasService.aplicarEfectoReembolso(confirmado, transaccion, dto.observacion),
-      );
-      return aplicada ?? this.reservasService.prepararRespuesta(await this.reservasService.obtenerReserva(id));
-    }
-
     return this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
       this.validarResolucion(actual, dto);
       const registraPago = dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
-      if (registraPago) await this.asegurarSinDevoluciones(id, transaccion);
+      const esDevolucion =
+        dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO') ||
+        dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO');
+      if (esDevolucion) {
+        await this.derivarReembolso(actual, dto, idAdmin, transaccion);
+        return;
+      }
+      if (actual.cancelada && !registraPago)
+        throw new ConflictException('Una reserva cancelada no puede volver al circuito de ingreso');
+      await this.asegurarSinDevoluciones(id, transaccion);
       const pago = registraPago ? await this.reembolsosService.buscarPagoPorReserva(id, transaccion) : null;
       await this.liquidaciones.registrarResolucion(actual, dto.estado, {
         importe: registraPago ? (pago ? this.reembolsosService.saldoReembolsable(pago) : Number(actual.monto_pago)) : null,
@@ -76,101 +74,36 @@ export class OperacionesLiquidacionService {
     });
   }
 
-  private async ejecutarDevolucion(reserva: Reserva, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reembolso> {
-    const id = reserva.id;
-    const pago = await this.reembolsosService.buscarPagoPorReserva(id);
-    if (!pago)
-      throw new ConflictException(
-        'La reserva no tiene un pago registrado para devolver',
-      );
+  private async derivarReembolso(reserva: Reserva, dto: ResolverLiquidacionDto, idAdmin: number, transaccion: EntityManager): Promise<void> {
+    const pago = await this.reembolsosService.buscarPagoPorReserva(reserva.id, transaccion);
+    if (!pago) throw new ConflictException('La reserva no tiene un pago registrado para devolver');
     const saldo = this.reembolsosService.saldoReembolsable(pago);
-    const existentes = await this.reembolsosService.listarPorReserva(id);
-    const previa = existentes.find(actual => actual.referencia_interna === `liq:${id}` &&
-      actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO') && !actual.aplicado_en);
-    const importe =
-      dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO')
-        ? previa ? Number(previa.importe) : saldo
-        : Number(dto.importe ?? 0);
+    const importe = dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO')
+      ? saldo : Number(dto.importe ?? 0);
     if (!Number.isFinite(importe) || importe <= 0)
-      throw new BadRequestException(
-        'Indicá el importe de la devolución parcial',
-      );
-    if (!previa && importe > saldo + TOLERANCIA_MONETARIA)
-      throw new ConflictException(
-        `La devolución supera el saldo reembolsable de ${pago.currency} ${saldo.toFixed(2)}`,
-      );
-    await this.prepararLiquidacion(id, dto);
-    const enCurso = existentes.find(
-      (actual) =>
-        actual.origen === OrigenReembolso.AJUSTE_ADMIN &&
-        (actual.referencia_interna === `liq:${id}` || actual.idempotency_key.startsWith(`liq:${id}:`)) &&
-        (
-          [
-            this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
-            this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'),
-            this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
-            this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
-          ] as string[]
-        ).includes(actual.estado),
-    );
-    let reembolso: Reembolso;
-    if (enCurso) {
-      if (Math.abs(Number(enCurso.importe) - importe) > TOLERANCIA_MONETARIA)
-        throw new ConflictException(
-          'Hay una devolución en curso por otro importe; revisar la liquidación',
-        );
-      reembolso = enCurso;
-    } else {
-      const sufijo =
-        importe >= Number(pago.amount) - TOLERANCIA_MONETARIA ? 't' : 'p';
-      const base = `liq:${id}:${sufijo}:${Math.round(importe * 100)}`;
-      let clave = base;
-      let intento = 1;
-      while (
-        existentes.some(
-          (actual) =>
-            actual.idempotency_key === clave &&
-            (actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'RECHAZADO') ||
-              actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'CANCELADO')),
-        )
-      )
-        clave = `${base}:r${intento++}`;
-      reembolso = await this.reembolsosService.crearSolicitud({
-        reserva,
-        pago,
-        tipo:
-          importe >= Number(pago.amount) - TOLERANCIA_MONETARIA
-            ? TipoReembolso.TOTAL
-            : TipoReembolso.PARCIAL,
-        origen: OrigenReembolso.AJUSTE_ADMIN,
-        importe,
-        motivo:
-          dto.observacion?.trim() ||
-          'Resolución administrativa de la liquidación',
-        idSolicitadoPor: idAdmin,
-        idempotencyKey: clave,
-        referenciaInterna: `liq:${id}`,
-      });
+      throw new BadRequestException('Indicá un importe válido para la devolución');
+    const referencia = `liq:${reserva.id}`;
+    const existentes = await this.reembolsosService.listarPorReserva(reserva.id, transaccion);
+    const previo = existentes.find(item => item.referencia_interna === referencia &&
+      item.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'RECHAZADO') &&
+      item.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'CANCELADO'));
+    if (previo) {
+      if (Math.abs(Number(previo.importe) - importe) > TOLERANCIA_MONETARIA)
+        throw new ConflictException('Ya existe una devolución por otro importe');
+      return;
     }
-
-    if (
-      reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') &&
-      reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') &&
-      reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO') &&
-      reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')
-    )
-      throw new ConflictException(
-        'El reembolso existente no es válido; reintentá la resolución',
-      );
-
-    // La pasarela se ejecuta antes de modificar la reserva. Si falla,
-    // la reserva queda intacta y el reembolso puede reintentarse.
-    const ejecutado = await this.reembolsosService.ejecutarYConfirmar(reembolso.id, idAdmin);
-    if (ejecutado.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
-      throw new ConflictException(
-        'La devolución no quedó aprobada; la reserva no se modificó',
-      );
-    return ejecutado;
+    await this.asegurarSinDevoluciones(reserva.id, transaccion);
+    const intento = existentes.filter(item => item.referencia_interna === referencia).length;
+    await this.reembolsosService.crearSolicitud({
+      reserva, pago, importe,
+      tipo: importe >= Number(pago.amount) - TOLERANCIA_MONETARIA ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL,
+      origen: OrigenReembolso.AJUSTE_ADMIN,
+      motivo: dto.observacion?.trim() || 'Resolución administrativa de la liquidación',
+      idSolicitadoPor: idAdmin,
+      idempotencyKey: `${referencia}:${intento}`,
+      referenciaInterna: referencia,
+    }, transaccion);
+    await this.liquidaciones.registrarRevision(reserva, 'Devolución derivada a Reembolsos', transaccion);
   }
 
   private async asegurarSinDevoluciones(id: number, transaccion?: EntityManager): Promise<void> {
@@ -186,13 +119,6 @@ export class OperacionesLiquidacionService {
       throw new ConflictException(
         'La reserva tiene una devolución registrada; no se puede pagar al propietario',
       );
-  }
-
-  private async prepararLiquidacion(id: number, dto: ResolverLiquidacionDto): Promise<void> {
-    await this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
-      this.validarResolucion(actual, dto);
-      await this.liquidaciones.registrarRevision(actual, 'Devolución de liquidación en ejecución', transaccion);
-    });
   }
 
   private validarResolucion(reserva: Reserva, dto: ResolverLiquidacionDto): void {

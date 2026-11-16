@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, MoreThan, Repository, type EntityManager } from 'typeorm';
 import { Reembolso } from '../entity/reembolso.entity';
-import type { IReembolsosRepository } from './reembolsos.repository.interface';
+import type { IReembolsosRepository, MensajeReembolso } from './reembolsos.repository.interface';
 
 @Injectable()
 export class ReembolsosRepository implements IReembolsosRepository {
@@ -151,5 +151,30 @@ export class ReembolsosRepository implements IReembolsosRepository {
       order: { id: 'DESC' },
       take: 200,
     });
+  }
+
+  listarMensajes(id: number, despuesDe: number): Promise<MensajeReembolso[]> {
+    return this.repository.query(
+      'SELECT id, autor, administracion, texto, creado_en FROM reembolso_mensaje WHERE id_reembolso = $1 AND id > $2 ORDER BY id LIMIT 100',
+      [id, despuesDe],
+    );
+  }
+
+  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado'>[]> {
+    return this.repository.find({
+      select: { id: true, importe: true, moneda: true, estado: true },
+      where: { transferencia_manual: true, reserva: { id: idReserva, usuario: { id: idInquilino } } },
+      order: { id: 'DESC' },
+    });
+  }
+
+  async guardarMensaje(id: number, idAutor: number, administracion: boolean, texto: string): Promise<MensajeReembolso> {
+    const [mensaje] = await this.repository.query(
+      `INSERT INTO reembolso_mensaje (id_reembolso, id_autor, autor, administracion, texto)
+       SELECT $1, id_usuario, concat_ws(' ', nombre, apellido), $3, $4 FROM usuario WHERE id_usuario = $2
+       RETURNING id, autor, administracion, texto, creado_en`,
+      [id, idAutor, administracion, texto],
+    );
+    return mensaje;
   }
 }

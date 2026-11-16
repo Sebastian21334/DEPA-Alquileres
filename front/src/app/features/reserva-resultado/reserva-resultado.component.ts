@@ -1,7 +1,10 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Subscription } from 'rxjs';
+import { EMPTY, Subscription, catchError, exhaustMap, timer } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
+import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -21,7 +24,7 @@ import {
 @Component({
   selector: 'app-reserva-resultado',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, ReservaReprogramacionComponent],
+  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, ReservaReprogramacionComponent, ReembolsoChatComponent],
   templateUrl: './reserva-resultado.component.html',
   styleUrl: './reserva-resultado.component.scss',
 })
@@ -31,6 +34,9 @@ export class ReservaResultadoComponent {
   private readonly auth = inject(AuthService);
   private readonly chat = inject(ChatService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly http = inject(HttpClient);
+  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string }[]>([]);
+  protected readonly conversacionAbierta = signal<number | null>(null);
   private consultaResumen?: Subscription;
 
   protected readonly cargando = signal(true);
@@ -54,6 +60,7 @@ export class ReservaResultadoComponent {
   protected readonly esInquilino = computed(
     () => this.reserva()?.usuario?.id === Number(this.auth.currentUser()?.sub),
   );
+  private readonly reservaConversacionId = computed(() => this.esInquilino() ? this.reserva()?.id : undefined);
   protected readonly puedeCambiarFechas = computed(() => {
     const reserva = this.reserva();
     return !!reserva && this.esInquilino() && puedeReprogramar(reserva);
@@ -93,6 +100,20 @@ export class ReservaResultadoComponent {
   });
 
   constructor() {
+    effect(onCleanup => {
+      const id = this.reservaConversacionId();
+      if (!id) return;
+      const consulta = timer(0, 10000).pipe(exhaustMap(() =>
+        this.http.get<ReturnType<typeof this.conversacionesReembolso>>(
+          `${environment.apiUrl}/reembolsos/reserva/${id}/conversaciones`,
+        ).pipe(catchError(() => EMPTY)),
+      )).subscribe(conversaciones => this.conversacionesReembolso.set(conversaciones));
+      onCleanup(() => {
+        consulta.unsubscribe();
+        this.conversacionesReembolso.set([]);
+        this.conversacionAbierta.set(null);
+      });
+    });
     effect((onCleanup) => {
       const reserva = this.reserva();
       const mostrarCodigo = this.mostrarCodigo();

@@ -376,6 +376,7 @@ export class ReservasService
             transaccion,
           );
           await this.disponibilidadService.liberarReserva(id, transaccion);
+          await this.reembolsosService.registrarPagoTardio(guardada, guardada.observacion_liquidacion!, transaccion);
           this.logger.warn(
             `La reserva ${reserva.id} recibió un pago aprobado con el anunciante bloqueado o inactivo; requiere devolución`,
           );
@@ -394,6 +395,7 @@ export class ReservasService
             guardada,
             transaccion,
           );
+          await this.reembolsosService.registrarPagoTardio(guardada, guardada.observacion_liquidacion!, transaccion);
           this.logger.warn(
             `La reserva ${reserva.id} recibió un pago tardío tras una cancelación por bloqueo; requiere devolución`,
           );
@@ -464,6 +466,7 @@ export class ReservasService
             enRevision,
             transaccion,
           );
+          await this.reembolsosService.registrarPagoTardio(enRevision, motivo, transaccion);
           return enRevision;
         }
 
@@ -843,6 +846,8 @@ export class ReservasService
         }
         if (this.liquidacionEnRevision(reserva))
           throw new ConflictException('La reserva tiene un reclamo abierto y debe revisarla un administrador');
+        if (await this.reembolsosService.tieneDevolucionDeCancelacionActiva(id, transaccion))
+          throw new ConflictException('La reserva tiene una cancelación aprobada con devolución en gestión');
 
         const coincide = this.registrarIntentoCodigo(reserva, codigo);
         if (!coincide && this.codigoBloqueado(reserva))

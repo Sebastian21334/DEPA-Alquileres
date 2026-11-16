@@ -15,6 +15,15 @@ import {
 import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
+export interface PagoAnuncianteRegistrado {
+  fecha: string | null;
+  importe: number | null;
+  moneda: string | null;
+  referencia: string | null;
+  observacion: string | null;
+  administradorId: number | null;
+}
+
 /**
  * Registro completo y auditable de la liquidación de una reserva.
  * `reserva.estado_liquidacion` se conserva como caché de compatibilidad.
@@ -94,6 +103,9 @@ export class Liquidacion {
 
   @Column({ name: 'fecha_pago_propietario', type: 'timestamp', nullable: true })
   fecha_pago_propietario: Date | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  pagos_anunciante: PagoAnuncianteRegistrado[] | null;
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;

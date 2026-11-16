@@ -49,8 +49,8 @@
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
               <p>Un administrador revisará tu solicitud. Si corresponde una devolución, la reserva se cancela cuando se confirma el reembolso.</p>
             </div>
-            @if (condicionesCancelacion()?.admiteReembolso === false) {
-              <p role="status">Si se aprueba esta solicitud, se cancelará la reserva sin devolución. El reembolso por cancelación solo está disponible para pagos con dinero en cuenta de Mercado Pago.</p>
+            @if (condicionesCancelacion()?.devolucionPorTransferencia) {
+              <p role="status">Si corresponde una devolución, vas a poder coordinar la transferencia con administración desde el detalle de la reserva.</p>
             }
           } @else if (estadoCancelacion() === 'pendiente') {
             <div class="cancellation-info" role="status">

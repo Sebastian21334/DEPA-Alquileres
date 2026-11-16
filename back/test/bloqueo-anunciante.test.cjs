@@ -138,7 +138,7 @@ function crearEscenario(reserva, reservas = [reserva]) {
       estado.reembolsos.push(reembolso);
       return { reembolso, creado: true };
     },
-    async ejecutarYConfirmar(id) {
+    async ejecutar(id) {
       const reembolso = estado.reembolsos.find(
         (actual) => actual.id === id,
       );

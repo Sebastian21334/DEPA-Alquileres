@@ -82,7 +82,21 @@ export interface AdminCity extends AdminCatalogItem {
 }
 export type AdminSettlement = Reserva;
 
+export interface AdminPagoLiquidacion {
+  id: string;
+  reservaId: number;
+  publicacion: string | null;
+  anunciante: string | null;
+  administrador: string | null;
+  fecha: string | null;
+  importe: number | null;
+  moneda: string | null;
+  referencia: string | null;
+  observacion: string | null;
+}
+
 export interface AdminReembolso {
+  transferencia_manual?: boolean;
   aplicado_en?: string | null;
   revision_aplicacion?: boolean;
   id: number;
@@ -95,6 +109,7 @@ export interface AdminReembolso {
   creado_en: string;
   referencia_externa?: string | null;
   resuelto_en?: string | null;
+  resuelto_por?: { nombre?: string; apellido?: string } | null;
   pago?: { id: number; payment_id?: string | null } | null;
   reserva?: {
     id: number;
@@ -154,6 +169,9 @@ export class AdminService {
   listarLiquidaciones() {
     return this.http.get<AdminSettlement[]>(`${this.api}/reservas/liquidaciones/administracion`);
   }
+  listarHistorialLiquidaciones() {
+    return this.http.get<AdminPagoLiquidacion[]>(`${this.api}/reservas/liquidaciones/administracion/historial`);
+  }
   resolverLiquidacion(id: number, estado: Reserva['estado_liquidacion'], referencia?: string, observacion?: string) {
     return this.http.patch<AdminSettlement>(`${this.api}/reservas/${id}/liquidacion`, {
       estado,
@@ -179,10 +197,14 @@ export class AdminService {
     });
   }
   solicitarReembolso(id: number) {
-    return this.http.patch(`${this.api}/reservas/reembolsos/${id}/ejecutar`, {});
+    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/ejecutar`, {});
   }
   conciliarReembolso(id: number, referencia: string) {
-    return this.http.patch(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
+    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
+  }
+
+  registrarTransferenciaReembolso(id: number, referencia: string) {
+    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, { referencia });
   }
 
   listarReclamos() {

@@ -107,7 +107,8 @@ export class CancelacionesService {
       solicitud,
       politica,
       motivoBloqueo: this.bloqueoPorPlazo(reserva, fechaArgentina(), politica),
-      admiteReembolso: pago?.payment_method_id === 'account_money',
+      admiteReembolso: pago != null,
+      devolucionPorTransferencia: pago != null && pago.payment_method_id !== 'account_money',
     };
   }
 
@@ -196,7 +197,7 @@ export class CancelacionesService {
       const pago = importe > 0 ? await this.reembolsos.buscarPagoPorReserva(idReserva, transaccion) : null;
       if (importe > 0 && !pago)
         throw new ConflictException('La reserva no tiene un pago registrado');
-      if (importe > 0 && pago?.payment_method_id === 'account_money') {
+      if (importe > 0 && pago) {
         // El reembolso y la aprobación se confirman juntos: no queda una
         // solicitud aprobada sin registro económico ni un registro sin decisión.
         const reembolso = await this.reembolsos.crearSolicitud(

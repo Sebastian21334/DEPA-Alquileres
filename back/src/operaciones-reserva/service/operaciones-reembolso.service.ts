@@ -15,12 +15,18 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
   constructor(private readonly reembolsos: ReembolsosService, private readonly reservas: ReservasService, private readonly reclamos: ReclamosService, private readonly disputas: DisputasService) {}
 
   async ejecutar(id: number, idAdmin: number) {
-    await this.reembolsos.ejecutarYConfirmar(id, idAdmin);
+    const reembolso = await this.reembolsos.ejecutar(id, idAdmin);
+    if (!this.reembolsos.estaAprobado(reembolso)) return { reembolso, reserva: reembolso.reserva };
     return this.aplicarReembolsoConfirmado(id);
   }
 
   async recuperarConfirmacion(id: number, referencia: string, idAdmin: number) {
     await this.reembolsos.recuperarConfirmacion(id, referencia, idAdmin);
+    return this.aplicarReembolsoConfirmado(id);
+  }
+
+  async registrarTransferencia(id: number, referencia: string, idAdmin: number) {
+    await this.reembolsos.registrarTransferencia(id, referencia, idAdmin);
     return this.aplicarReembolsoConfirmado(id);
   }
 

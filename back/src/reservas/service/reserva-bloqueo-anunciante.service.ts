@@ -351,13 +351,15 @@ export class ReservaBloqueoAnuncianteService {
 
     const errores: string[] = [];
     for (const pendiente of devolucion.pendientes) {
-      if (pendiente.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE')) continue;
+      if (pendiente.transferencia_manual || pendiente.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE')) continue;
       try {
-        const ejecutado = await this.reembolsosService.ejecutarYConfirmar(pendiente.id, idAdmin);
+        const ejecutado = await this.reembolsosService.ejecutar(pendiente.id, idAdmin);
+        if (ejecutado.transferencia_manual) continue;
         if (ejecutado.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
           await this.reembolsosService.aplicarConfirmado(ejecutado.id, (reembolso, transaccion) =>
             this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
           );
+        else errores.push(`Reembolso ${pendiente.id}: pendiente de confirmación`);
       } catch (error) {
         const mensaje =
           error instanceof Error ? error.message : String(error);

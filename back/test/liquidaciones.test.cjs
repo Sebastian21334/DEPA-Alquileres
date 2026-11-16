@@ -109,11 +109,12 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
 
   assert.equal(solicitudCreada.importe, 100);
   assert.equal(solicitudCreada.tipo, 'TOTAL');
-  assert.equal(solicitudCreada.idempotencyKey, 'liq:1:t:10000');
-  assert.equal(adminEjecutor, 7);
+  assert.equal(solicitudCreada.idempotencyKey, 'liq:1:0');
+  assert.equal(solicitudCreada.idSolicitadoPor, 7);
+  assert.equal(adminEjecutor, null);
 });
 
-test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
+test('deriva la liquidación y conserva el estado de revisión hasta confirmar la devolución', async () => {
   const reserva = crearReserva();
   let guardados = 0;
   let ejecuciones = 0;
@@ -138,10 +139,7 @@ test('no resuelve la reserva si la devolución quedó EN_PROCESO', async () => {
     liquidacionesService(), catalogosDePrueba(),
   );
 
-  await assert.rejects(
-    () => service.resolverLiquidacion(1, { estado: 'DEVUELTO_PARCIAL_INQUILINO', importe: 30 }, 7),
-    /no quedó aprobada/,
-  );
+  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_PARCIAL_INQUILINO', importe: 30 }, 7);
   assert.equal(guardados, 1);
   assert.equal(ejecuciones, 1);
   assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
@@ -169,8 +167,9 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
 
-  assert.equal(reserva.estado_liquidacion, 'DEVUELTO_INQUILINO');
-  assert.equal(reserva.estado_pago, 'REEMBOLSADO');
+  assert.equal(reserva.cancelada, true);
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.equal(reserva.estado_pago, 'APROBADO');
 });
 
 test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear otro', async () => {
@@ -181,7 +180,7 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
     listarPorReserva: async () => [
-      { id: 8, estado: 'FALLIDO', importe: 100, origen: 'AJUSTE_ADMIN', idempotency_key: 'liq:1:t:10000' },
+      { id: 8, estado: 'FALLIDO', importe: 100, origen: 'AJUSTE_ADMIN', referencia_interna: 'liq:1', idempotency_key: 'liq:1:t:10000' },
     ],
     saldoReembolsable: () => 100,
     crearSolicitud: async () => { creados += 1; return { id: 9, estado: 'PENDIENTE' }; },
@@ -196,5 +195,5 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
 
   assert.equal(creados, 0);
-  assert.equal(ejecutado, 8);
+  assert.equal(ejecutado, null);
 });
