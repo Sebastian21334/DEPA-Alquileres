@@ -20,4 +20,9 @@ export class ReembolsosReservaController {
   recuperarConfirmacion(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarReembolsoManualDto, @Req() req: AuthenticatedRequest) {
     return this.operaciones.recuperarConfirmacion(id, dto.referencia ?? '', req.user.id);
   }
+
+  @Patch(':id/transferencia')
+  registrarTransferencia(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarReembolsoManualDto, @Req() req: AuthenticatedRequest) {
+    return this.operaciones.registrarTransferencia(id, dto.referencia ?? '', req.user.id);
+  }
 }

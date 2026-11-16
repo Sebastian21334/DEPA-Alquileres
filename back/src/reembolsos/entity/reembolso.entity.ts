@@ -134,6 +134,9 @@ export class Reembolso {
   @Column({ name: 'primer_intento_en', type: 'timestamptz', nullable: true, select: false })
   primer_intento_en: Date | null;
 
+  @Column({ name: 'transferencia_manual', type: 'boolean', default: false })
+  transferencia_manual: boolean;
+
   @Column({
     name: 'error_detalle',
     type: 'varchar',

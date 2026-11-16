@@ -24,6 +24,7 @@ import {
   AdminCancellationRequest,
   AdminCatalogItem,
   AdminReembolso,
+  AdminPagoLiquidacion,
   AdminSettlement,
   AdminCity,
   AdminProvince,
@@ -34,6 +35,7 @@ import {
 } from './admin.service';
 import { Reclamo } from '../../shared/services/reservation.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
+import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
 
 interface CatalogSection {
   key: CatalogKey;
@@ -46,7 +48,8 @@ const ADMIN_NAVIGATION = [
     { id: 'cancelaciones', label: 'Cancelaciones' },
     { id: 'reclamos', label: 'Reclamos' },
     { id: 'reembolsos', label: 'Reembolsos' },
-    { id: 'liquidaciones', label: 'Liquidaciones' },
+    { id: 'liquidaciones', label: 'Liquidaciones pendientes' },
+    { id: 'historial-liquidaciones', label: 'Historial de liquidaciones' },
   ] },
   { label: 'Gestión', items: [
     { id: 'verificaciones', label: 'Verificaciones' },
@@ -63,12 +66,29 @@ const ADMIN_NAVIGATION = [
 
 type AdminSection = 'resumen' | typeof ADMIN_NAVIGATION[number]['items'][number]['id'];
 
+const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
+  resumen: 'Consultá los casos que requieren atención y accedé a cada operación.',
+  cancelaciones: 'Revisá las solicitudes para cancelar reservas y decidí si corresponde aprobarlas.',
+  reclamos: 'Consultá los problemas reportados sobre reservas, su evidencia y el historial del caso.',
+  reembolsos: 'Gestioná y seguí las devoluciones de dinero a los inquilinos.',
+  liquidaciones: 'Registrá transferencias realizadas a anunciantes y revisá las reservas con el pago retenido.',
+  'historial-liquidaciones': 'Consultá los pagos ya registrados a anunciantes, con su importe, fecha y referencia.',
+  verificaciones: 'Revisá las solicitudes de verificación de identidad.',
+  publicaciones: 'Consultá y moderá los alojamientos publicados.',
+  usuarios: 'Buscá cuentas y administrá sus roles y estado.',
+  bloqueos: 'Consultá las cuentas bloqueadas, sus motivos y las apelaciones.',
+  catalogos: 'Administrá las opciones que usa el sistema en los formularios.',
+  ubicaciones: 'Administrá las provincias y ciudades disponibles para las publicaciones.',
+  cotizaciones: 'Consultá y administrá las cotizaciones que usa el sistema para convertir importes.',
+};
+
 @Component({
   selector: 'app-admin',
   standalone: true,
   imports: [
     CotizacionesAdminComponent,
     ClaimHistoryComponent,
+    ReembolsoChatComponent,
     CurrencyPipe,
     DatePipe,
     FormsModule,
@@ -92,6 +112,16 @@ export class AdminComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly navigation = ADMIN_NAVIGATION;
   protected readonly activeSection = signal<AdminSection>('resumen');
+  protected readonly sectionDescription = computed(() => SECTION_DESCRIPTIONS[this.activeSection()]);
+  protected readonly historialLiquidaciones = signal<AdminPagoLiquidacion[]>([]);
+  protected readonly historialCargando = signal(false);
+  protected readonly historialError = signal('');
+  private historialRequest?: Subscription;
+  private readonly dialogoResolucion = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoResolucion');
+  protected readonly resolucionLiquidacion = signal<{ reserva: AdminSettlement; devolver: boolean } | null>(null);
+  protected readonly resolucionCargando = signal(false);
+  protected readonly resolucionError = signal('');
+  protected motivoResolucion = '';
   protected readonly sectionLabel = computed(() =>
     this.navigation.flatMap(({ items }) => [...items]).find(({ id }) => id === this.activeSection())?.label ?? 'Resumen',
   );
@@ -226,6 +256,7 @@ export class AdminComponent {
     }
   }
   protected reload(): void {
+    if (this.activeSection() === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
     this.otherLoading.set(true);
     this.summaryError.set(false);
     this.loadPublications(this.publicationsPage());
@@ -294,6 +325,7 @@ export class AdminComponent {
 
   protected openSection(section: AdminSection, caseId?: number): void {
     this.activeSection.set(section);
+    if (section === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
     afterNextRender(() => {
       if (this.activeSection() !== section) return;
       const heading = this.host.nativeElement.querySelector<HTMLElement>('#admin-section-title');
@@ -437,27 +469,66 @@ export class AdminComponent {
         this.registrandoPagoAnunciante.set(false);
         this.cerrarPagoAnunciante();
         this.settlements.update((items) => items.filter((item) => item.id !== settlement.id));
-        this.toast.mostrar('Pago manual registrado.', 'exito');
+        this.toast.mostrar('Pago registrado en el historial de liquidaciones.', 'exito');
       },
       error: (error: Error) => this.errorPagoAnunciante.set(error.message),
     });
   }
 
-  protected solicitarDevolucionLiquidacion(settlement: AdminSettlement): void {
-    if (!window.confirm('¿Solicitar la devolución del pago original por Mercado Pago?')) return;
-    this.resolverSettlement(settlement, 'DEVUELTO_INQUILINO', undefined, 'Devolución confirmada por Mercado Pago.');
+  protected cargarHistorialLiquidaciones(): void {
+    this.historialRequest?.unsubscribe();
+    this.historialCargando.set(true);
+    this.historialError.set('');
+    this.historialRequest = this.api.listarHistorialLiquidaciones().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.historialCargando.set(false)),
+    ).subscribe({
+      next: (pagos) => this.historialLiquidaciones.set(pagos),
+      error: (error: Error) => this.historialError.set(error.message),
+    });
   }
 
-  protected resolverReclamo(settlement: AdminSettlement): void {
-    const observacion = window.prompt('Conclusión de la revisión administrativa:')?.trim();
-    if (!observacion) return;
-    const siguiente = settlement.codigo_validado_en ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
-    this.run(
-      `settlement-${settlement.id}`,
-      () => this.api.resolverLiquidacion(settlement.id, siguiente, undefined, observacion),
-      () => this.settlements.update((items) => items.filter((item) => item.id !== settlement.id)),
-      'Reclamo resuelto. La reserva volvió a su circuito normal.',
-    );
+  protected abrirResolucionLiquidacion(reserva: AdminSettlement, devolver: boolean): void {
+    this.resolucionLiquidacion.set({ reserva, devolver });
+    this.motivoResolucion = '';
+    this.resolucionError.set('');
+    this.dialogoResolucion().nativeElement.showModal();
+  }
+
+  protected cerrarResolucionLiquidacion(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.resolucionCargando()) return;
+    this.dialogoResolucion().nativeElement.close();
+    this.resolucionLiquidacion.set(null);
+  }
+
+  protected confirmarResolucionLiquidacion(): void {
+    const resolucion = this.resolucionLiquidacion();
+    const motivo = this.motivoResolucion.trim();
+    if (!resolucion || (!resolucion.devolver && !motivo) || motivo.length > 500 || this.resolucionCargando()) return;
+    const { reserva, devolver } = resolucion;
+    const estado = devolver ? 'DEVUELTO_INQUILINO'
+      : reserva.codigo_validado_en ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
+    this.resolucionError.set('');
+    this.resolucionCargando.set(true);
+    this.api.resolverLiquidacion(reserva.id, estado, undefined, motivo || 'Devolución solicitada desde liquidaciones.').pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.resolucionCargando.set(false)),
+    ).subscribe({
+      next: (actualizada) => {
+        this.resolucionCargando.set(false);
+        this.cerrarResolucionLiquidacion();
+        this.settlements.update(items => estado === 'PENDIENTE_PAGO_PROPIETARIO'
+          ? items.map(item => item.id === reserva.id ? { ...item, ...actualizada } : item)
+          : items.filter(item => item.id !== reserva.id));
+        this.toast.mostrar(devolver ? 'Caso enviado a Reembolsos.' : 'Revisión de liquidación cerrada.', 'exito');
+        if (devolver) {
+          this.reload();
+          this.openSection('reembolsos');
+        }
+      },
+      error: (error: Error) => this.resolucionError.set(error.message),
+    });
   }
 
   protected verEvidencia(reclamo: Reclamo, evidencia: { id: number; nombre_archivo: string }): void {
@@ -520,15 +591,20 @@ export class AdminComponent {
   }
 
   protected puedeSolicitarReembolso(reembolso: AdminReembolso): boolean {
-    return reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
+    return !reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
   }
 
   protected puedeConciliarReembolso(reembolso: AdminReembolso): boolean {
-    return !!reembolso.pago?.payment_id && (reembolso.estado === 'FALLIDO' || reembolso.estado === 'EN_PROCESO');
+    return !reembolso.transferencia_manual && !!reembolso.pago?.payment_id && (reembolso.estado === 'FALLIDO' || reembolso.estado === 'EN_PROCESO');
+  }
+
+  protected puedeRegistrarTransferencia(reembolso: AdminReembolso): boolean {
+    return !!reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE';
   }
 
   protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
     const referencia = this.referenciaReembolso.trim();
+    if (this.puedeRegistrarTransferencia(reembolso)) return referencia.length > 0 && referencia.length <= 150;
     if (this.puedeConciliarReembolso(reembolso)) return /^\d{1,100}$/.test(referencia);
     return this.puedeSolicitarReembolso(reembolso);
   }
@@ -539,13 +615,24 @@ export class AdminComponent {
 
     this.errorReembolso.set('');
     this.guardandoReembolso.set(true);
-    const operacion = this.puedeConciliarReembolso(reembolso)
+    const operacion = this.puedeRegistrarTransferencia(reembolso)
+      ? this.api.registrarTransferenciaReembolso(reembolso.id, referencia)
+      : this.puedeConciliarReembolso(reembolso)
       ? this.api.conciliarReembolso(reembolso.id, referencia)
       : this.api.solicitarReembolso(reembolso.id);
     operacion
       .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
       .subscribe({
-        next: () => {
+        next: ({ reembolso: actualizado }) => {
+          if (actualizado.estado !== 'APROBADO') {
+            this.reembolsoSeleccionado.set(actualizado);
+            this.referenciaReembolso = '';
+            this.toast.mostrar(actualizado.transferencia_manual
+              ? 'Mercado Pago rechazó el reembolso. Continuá por el chat de transferencia.'
+              : 'La devolución quedó en seguimiento en Mercado Pago.', 'advertencia');
+            this.reload();
+            return;
+          }
           this.dialogoReembolso().nativeElement.close();
           this.toast.mostrar('Reembolso confirmado y aplicado a la reserva.', 'exito');
           this.reload();
@@ -633,7 +720,7 @@ export class AdminComponent {
         this.gestionReclamo.set(null);
         this.reload();
       },
-      'Reclamo resuelto.',
+      resolucion === 'SIN_DEVOLUCION' ? 'Reclamo resuelto.' : 'Decisión registrada. Consultá el estado en Reembolsos.',
     );
   }
 
@@ -655,14 +742,6 @@ export class AdminComponent {
     });
   }
 
-  private resolverSettlement(settlement: AdminSettlement, estado: 'PAGADO_PROPIETARIO' | 'DEVUELTO_INQUILINO', referencia: string | undefined, observacion: string): void {
-    this.run(
-      `settlement-${settlement.id}`,
-      () => this.api.resolverLiquidacion(settlement.id, estado, referencia, observacion),
-      () => this.settlements.update((items) => items.filter((item) => item.id !== settlement.id)),
-      estado === 'PAGADO_PROPIETARIO' ? 'Pago manual registrado.' : 'Devolución confirmada por Mercado Pago.',
-    );
-  }
   protected cargarBloqueados(): void {
     this.bloqueadosRequest?.unsubscribe();
     this.bloqueadosCargando.set(true);

@@ -41,6 +41,39 @@ export class LiquidacionesService {
     });
   }
 
+  async listarPagosRegistrados() {
+    const pagos = await this.liquidaciones.listarPagosRegistrados(
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
+    );
+    return pagos.flatMap(pago => {
+      const publicacion = pago.reserva.publicacion;
+      const anunciante = publicacion?.anunciante?.usuario;
+      const administrador = pago.admin_resolucion;
+      const registros = pago.pagos_anunciante ?? [{
+        fecha: (pago.fecha_pago_propietario ?? pago.fecha_resolucion)?.toISOString() ?? null,
+        importe: pago.importe,
+        moneda: pago.moneda,
+        referencia: pago.referencia,
+        observacion: pago.observacion,
+        administradorId: administrador?.id ?? null,
+      }];
+      return registros.map((registro, indice) => ({
+        id: `${pago.id}-${indice}`,
+        reservaId: pago.reserva.id,
+        publicacion: publicacion?.titulo ?? null,
+        anunciante: anunciante ? [anunciante.nombre, anunciante.apellido].filter(Boolean).join(' ') : null,
+        administrador: administrador && administrador.id === registro.administradorId
+          ? [administrador.nombre, administrador.apellido].filter(Boolean).join(' ')
+          : registro.administradorId == null ? null : `Usuario #${registro.administradorId}`,
+        fecha: registro.fecha,
+        importe: registro.importe == null ? null : Number(registro.importe),
+        moneda: registro.moneda,
+        referencia: registro.referencia,
+        observacion: registro.observacion,
+      }));
+    }).sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? ''));
+  }
+
   async proyectarListado(reservas: Reserva[]): Promise<Reserva[]> {
     if (!reservas.length) return reservas;
     const filas = await this.liquidaciones.buscarPorReservas(reservas.map(reserva => reserva.id));
@@ -148,6 +181,8 @@ export class LiquidacionesService {
   /** Registra la decisión administrativa en la entidad y en la caché de la reserva. */
   async registrarResolucion(reserva: Reserva, estado: string, datos: ResolucionLiquidacionDatos, idAdmin: number, transaccion?: EntityManager): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
+    const estadoPagado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
+    const yaRegistrado = liquidacion.estado === estadoPagado && !!liquidacion.pagos_anunciante?.length;
     const ahora = new Date();
     const resuelta = this.esLiquidacionResuelta(estado);
     liquidacion.estado = estado;
@@ -161,7 +196,17 @@ export class LiquidacionesService {
     liquidacion.admin_resolucion = referenciaUsuario(idAdmin);
     liquidacion.fecha_resolucion = resuelta ? ahora : null;
     liquidacion.fecha_pago_propietario =
-      estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') ? ahora : null;
+      estado === estadoPagado ? ahora : null;
+    if (liquidacion.fecha_pago_propietario && !yaRegistrado) {
+      liquidacion.pagos_anunciante = [...(liquidacion.pagos_anunciante ?? []), {
+        fecha: ahora.toISOString(),
+        importe: liquidacion.importe,
+        moneda: liquidacion.moneda,
+        referencia: liquidacion.referencia,
+        observacion: liquidacion.observacion,
+        administradorId: idAdmin,
+      }];
+    }
     this.sincronizarReserva(reserva, liquidacion);
     return this.liquidaciones.guardar(liquidacion, transaccion);
   }

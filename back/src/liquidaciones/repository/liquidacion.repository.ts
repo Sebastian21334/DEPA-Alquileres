@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, type EntityManager } from 'typeorm';
+import { In, IsNull, Not, Repository, type EntityManager } from 'typeorm';
 import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
 import { Liquidacion } from '../entity/liquidacion.entity';
 import { ILiquidacionRepository } from './liquidacion.repository.interface';
@@ -18,6 +18,13 @@ export class LiquidacionRepository implements ILiquidacionRepository {
       where: { estado: In(estados) },
       relations: { reserva: { usuario: true, publicacion: { anunciante: { usuario: true }, ciudad: true, provincia: true } } },
       order: { reserva: { codigo_validado_en: 'ASC', id: 'DESC' } },
+    });
+  }
+
+  listarPagosRegistrados(estadoPagado: string): Promise<Liquidacion[]> {
+    return this.repository.find({
+      where: [{ estado: estadoPagado }, { pagos_anunciante: Not(IsNull()) }],
+      relations: { reserva: { publicacion: { anunciante: { usuario: true } } }, admin_resolucion: true },
     });
   }
 

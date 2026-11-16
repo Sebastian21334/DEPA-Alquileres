@@ -1,6 +1,14 @@
 import type { Reembolso } from '../entity/reembolso.entity';
 import type { EntityManager } from 'typeorm';
 
+export interface MensajeReembolso {
+  id: number;
+  autor: string;
+  administracion: boolean;
+  texto: string;
+  creado_en: Date;
+}
+
 export const REEMBOLSOS_REPOSITORY = 'REEMBOLSOS_REPOSITORY';
 
 export interface IReembolsosRepository {
@@ -23,4 +31,7 @@ export interface IReembolsosRepository {
   buscarPendientesAplicacion(estado: string, desdeId: number): Promise<Reembolso[]>;
   buscarPorOrigen(origen: Reembolso['origen'], referencia: string): Promise<Reembolso | null>;
   listarAdministracion(): Promise<Reembolso[]>;
+  listarMensajes(id: number, despuesDe: number): Promise<MensajeReembolso[]>;
+  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado'>[]>;
+  guardarMensaje(id: number, idAutor: number, administracion: boolean, texto: string): Promise<MensajeReembolso>;
 }

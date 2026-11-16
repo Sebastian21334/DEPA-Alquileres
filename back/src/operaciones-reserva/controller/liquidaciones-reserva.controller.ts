@@ -18,6 +18,13 @@ export class LiquidacionesReservaController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
+  @Get('liquidaciones/administracion/historial')
+  listarPagosRegistrados() {
+    return this.liquidacionesService.listarPagosRegistrados();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
   @Patch(':id/liquidacion')
   resolverLiquidacion(@Param('id', ParseIntPipe) id: number, @Body() dto: ResolverLiquidacionDto, @Req() req: AuthenticatedRequest) {
     return this.liquidacionesService.resolverLiquidacion(id, dto, req.user.id);

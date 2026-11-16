@@ -29,9 +29,31 @@ function crearRepositorio() {
     },
     buscarPorReserva: async (idReserva) => filas.get(idReserva) ?? null,
     buscarPorReservaConBloqueo: async (idReserva) => filas.get(idReserva) ?? null,
+    listarPagosRegistrados: async (estado) =>
+      [...filas.values()].filter(fila => fila.estado === estado || fila.pagos_anunciante),
   };
   return repositorio;
 }
+
+test('el historial conserva los datos del pago al anunciante después de una devolución', async () => {
+  const reserva = crearReserva();
+  const service = new LiquidacionesService(crearRepositorio(), catalogosDePrueba());
+  const importe = 95;
+  await service.registrarResolucion(reserva, 'PAGADO_PROPIETARIO', {
+    importe, moneda: 'ARS', referencia: 'transferencia-1', observacion: 'Pago acreditado',
+  }, 7);
+  await service.registrarDevolucion(reserva, {
+    parcial: false, importe: 100, moneda: 'ARS', referencia: 'reembolso-1',
+  }, 8);
+
+  const [pago] = await service.listarPagosRegistrados();
+  assert.equal(pago.reservaId, reserva.id);
+  assert.equal(pago.importe, importe);
+  assert.equal(pago.referencia, 'transferencia-1');
+  assert.equal(pago.observacion, 'Pago acreditado');
+  assert.equal(pago.administrador, 'Usuario #7');
+  assert.ok(pago.fecha);
+});
 
 test('asegurarParaReserva copia la caché de la reserva y solo crea una fila', async () => {
   const fecha = new Date('2026-01-02T03:04:05.000Z');

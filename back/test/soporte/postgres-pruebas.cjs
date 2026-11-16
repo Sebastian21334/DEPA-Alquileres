@@ -65,7 +65,11 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
       await db.exec(leerMigracion('20261113-aplicacion-reembolsos.sql'));
     await db.exec('SET search_path TO public');
     if (estadosPorAmbito) await db.exec(leerMigracion('20261113-catalogos-de-expedientes.sql'));
-    if (estadosPorAmbito) await db.exec('BEGIN;\n' + leerMigracion('20261113-retirar-liquidacion-de-reserva.sql') + '\nCOMMIT;');
+    if (estadosPorAmbito) {
+      await db.exec('BEGIN;\n' + leerMigracion('20261113-retirar-liquidacion-de-reserva.sql') + '\nCOMMIT;');
+      await db.exec(leerMigracion('20261116-historial-pagos-anunciantes.sql'));
+      await db.exec(leerMigracion('20261116-chat-reembolsos.sql'));
+    }
     await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };

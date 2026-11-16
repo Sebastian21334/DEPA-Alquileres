@@ -80,6 +80,7 @@ async function main() {
     await aplicarMigracion(client, '20261112-liquidaciones.sql');
     await aplicarMigracion(client, '20261113-reconciliar-liquidaciones.sql');
     await aplicarMigracion(client, '20261113-retirar-liquidacion-de-reserva.sql');
+    await aplicarMigracion(client, '20261116-historial-pagos-anunciantes.sql');
     console.log(JSON.stringify({
       aplicada: true,
       ...(await estadoBase(client)),

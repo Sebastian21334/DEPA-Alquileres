@@ -37,8 +37,11 @@
     </div>
     <div class="admin-content">
       <header class="admin__header">
-        <h1 id="admin-section-title" tabindex="-1">{{ activeSection() === 'resumen' ? 'Panel de control' : sectionLabel() }}</h1>
-        <button class="button dashboard-button" type="button" (click)="reload()" [disabled]="loading()">
+        <div>
+          <h1 id="admin-section-title" tabindex="-1">{{ activeSection() === 'resumen' ? 'Panel de control' : sectionLabel() }}</h1>
+          <p class="admin-section-description">{{ sectionDescription() }}</p>
+        </div>
+        <button class="button dashboard-button" type="button" (click)="reload()" [disabled]="loading() || historialCargando()">
           <svg lucideRefreshCw [size]="17" aria-hidden="true"></svg> Actualizar
         </button>
       </header>
@@ -185,8 +188,8 @@
   <section class="panel admin-module" [hidden]="activeSection() !== 'liquidaciones'">
     <div class="panel__title">
       <div>
-        <h2>Liquidación manual de reservas</h2>
-        <p>Registro académico de pagos y devoluciones. Estas acciones no mueven dinero real.</p>
+        <h2>Reservas por liquidar</h2>
+        <p>Registrá pagos a anunciantes con el código validado. Derivá a Reembolsos los casos que deben devolverse al inquilino.</p>
       </div>
       <span class="counter">{{ settlements().length }}</span>
     </div>
@@ -215,12 +218,12 @@
               }
             </div>
             <div class="actions">
-              @if (settlement.estado_liquidacion === 'EN_REVISION') {
-                <button type="button" class="button button--ghost" [disabled]="busy() === 'settlement-' + settlement.id" (click)="resolverReclamo(settlement)">Resolver reclamo</button>
+              @if (settlement.estado_liquidacion === 'EN_REVISION' && !settlement.cancelada) {
+                <button type="button" class="button button--ghost" (click)="abrirResolucionLiquidacion(settlement, false)">Cerrar revisión del pago</button>
               }
-              <button type="button" class="button button--danger-outline" [disabled]="busy() === 'settlement-' + settlement.id" (click)="solicitarDevolucionLiquidacion(settlement)">Solicitar devolución</button>
+              <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
               @if (settlement.codigo_validado_en) {
-                <button type="button" class="button button--success" [disabled]="busy() === 'settlement-' + settlement.id || settlement.estado_liquidacion === 'EN_REVISION'" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+                <button type="button" class="button button--success" [disabled]="settlement.estado_liquidacion === 'EN_REVISION'" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
               }
             </div>
           </article>
@@ -280,16 +283,83 @@
               <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ estadosReembolso[reembolso.estado] }}</span>
               <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
               <p><strong>{{ reembolso.tipo }}</strong> · {{ reembolso.importe | currency: reembolso.moneda }}</p>
-              <p class="muted">{{ reembolso.origen }} · {{ reembolso.motivo }}</p>
+              <p class="muted">{{ origenesReembolso[reembolso.origen] || reembolso.origen }} · {{ reembolso.motivo }}</p>
+              @if (puedeRegistrarTransferencia(reembolso)) {
+                <p>Transferencia bancaria pendiente · Chat disponible</p>
+              }
             </div>
             <div class="actions">
-              <button type="button" class="button button--ghost" (click)="abrirReembolso(reembolso)">Ver detalle</button>
+              <button type="button" class="button button--ghost" (click)="abrirReembolso(reembolso)">
+                {{ puedeRegistrarTransferencia(reembolso) ? 'Ver detalle y chat' : 'Ver detalle' }}
+              </button>
             </div>
           </article>
         }
       </div>
     }
   </section>
+
+  <section class="panel admin-module" [hidden]="activeSection() !== 'historial-liquidaciones'">
+    @if (historialCargando()) {
+      <p class="empty" role="status">Cargando historial de liquidaciones.</p>
+    } @else if (historialError()) {
+      <p class="refund-error" role="alert">{{ historialError() }}</p>
+      <button type="button" class="button button--ghost" (click)="cargarHistorialLiquidaciones()">Reintentar</button>
+    } @else if (!historialLiquidaciones().length) {
+      <p class="empty">Todavía no hay pagos a anunciantes registrados.</p>
+    } @else {
+      <div class="table-wrap settlement-history">
+        <table>
+          <caption class="settlement-history-caption">Pagos registrados a anunciantes</caption>
+          <thead>
+            <tr><th scope="col">Fecha de registro</th><th scope="col">Reserva</th><th scope="col">Anunciante</th><th scope="col">Importe</th><th scope="col">Comprobante y observación</th><th scope="col">Registrado por</th></tr>
+          </thead>
+          <tbody>
+            @for (pago of historialLiquidaciones(); track pago.id) {
+              <tr>
+                <td>{{ pago.fecha ? (pago.fecha | date:'dd/MM/yyyy HH:mm':'-0300') : 'Sin fecha' }}</td>
+                <td><strong>#{{ pago.reservaId }}</strong><br />{{ pago.publicacion || 'Publicación no disponible' }}</td>
+                <td>{{ pago.anunciante || 'Sin datos' }}</td>
+                <td>{{ pago.importe !== null && pago.moneda ? (pago.importe | currency:pago.moneda:'code') : (pago.importe ?? 'Sin importe') }}</td>
+                <td>{{ pago.referencia || 'Sin referencia' }}@if (pago.observacion) { <p class="settlement-note">{{ pago.observacion }}</p> }</td>
+                <td>{{ pago.administrador || 'Sin datos' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+
+  <dialog #dialogoResolucion class="block-dialog refund-dialog cancellation-approval-dialog" aria-labelledby="settlement-decision-title"
+    (cancel)="cerrarResolucionLiquidacion($event)">
+    <form class="block-form" (ngSubmit)="confirmarResolucionLiquidacion()" [attr.aria-busy]="resolucionCargando()">
+      @if (resolucionLiquidacion(); as decision) {
+        <h2 id="settlement-decision-title">{{ decision.devolver ? 'Devolver el pago al inquilino' : 'Cerrar revisión del pago' }}</h2>
+        <p class="refund-meta">Reserva #{{ decision.reserva.id }} · {{ decision.reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</p>
+        <p class="refund-help">
+          @if (decision.devolver) {
+            El saldo se derivará a Reembolsos para devolverlo al inquilino según el medio de pago.
+          } @else if (decision.reserva.codigo_validado_en) {
+            La reserva quedará pendiente de pago al anunciante.
+          } @else {
+            El pago seguirá retenido hasta que se valide el código de alojamiento.
+          }
+        </p>
+        <label for="settlement-decision-note">{{ decision.devolver ? 'Motivo (opcional)' : 'Conclusión de la revisión' }}</label>
+        <textarea id="settlement-decision-note" name="motivoResolucion" [(ngModel)]="motivoResolucion"
+          rows="4" maxlength="500" [required]="!decision.devolver" [disabled]="resolucionCargando()" autofocus></textarea>
+        @if (resolucionError()) { <p class="refund-error" role="alert">{{ resolucionError() }}</p> }
+        <div class="block-actions">
+          <button type="button" class="button button--ghost" [disabled]="resolucionCargando()" (click)="cerrarResolucionLiquidacion()">Volver</button>
+          <button type="submit" class="button" [class.button--danger-outline]="decision.devolver" [class.button--success]="!decision.devolver"
+            [disabled]="resolucionCargando() || (!decision.devolver && !motivoResolucion.trim())">
+            {{ resolucionCargando() ? 'Guardando…' : decision.devolver ? 'Pasar a Reembolsos' : 'Guardar conclusión' }}
+          </button>
+        </div>
+      }
+    </form>
+  </dialog>
 
   <dialog #dialogoPagoAnunciante class="block-dialog refund-dialog cancellation-approval-dialog" aria-labelledby="advertiser-payment-title"
     (cancel)="cerrarPagoAnunciante($event)">
@@ -298,7 +368,8 @@
       <h2 id="advertiser-payment-title">Registrar pago al anunciante</h2>
       @if (pagoAnuncianteSeleccionado(); as item) {
         <p class="refund-meta">Reserva #{{ item.id }} · {{ item.publicacion?.titulo ?? 'Publicación eliminada' }}</p>
-        <p>{{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
+        <p><strong>Anunciante</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
+        <p><strong>Importe</strong> {{ montoLiquidacion(item) }}</p>
       }
       <p class="refund-help" id="advertiser-payment-help">Registrá acá una transferencia que ya realizaste al anunciante.</p>
       <label for="advertiser-payment-reference">Referencia o número de comprobante <span class="muted">(opcional)</span></label>
@@ -375,6 +446,9 @@
           @if (item.resuelto_en) {
             <div><dt>Resuelto</dt><dd>{{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
           }
+          @if (item.resuelto_por; as administrador) {
+            <div><dt>Registrado por</dt><dd>{{ administrador.nombre }} {{ administrador.apellido }}</dd></div>
+          }
           @if (item.aplicado_en) {
             <div><dt>Aplicado a la reserva</dt><dd>{{ item.aplicado_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
           }
@@ -385,7 +459,15 @@
         } @else if (item.estado === 'APROBADO' && !item.aplicado_en) {
           <p class="refund-help">El reembolso está aprobado y pendiente de aplicar a la reserva.</p>
         }
-        @if (puedeConciliarReembolso(item)) {
+        @if (item.transferencia_manual) {
+          <app-reembolso-chat [reembolsoId]="item.id" />
+        }
+        @if (puedeRegistrarTransferencia(item)) {
+          <label for="refund-bank-reference">Referencia del comprobante de transferencia</label>
+          <input id="refund-bank-reference" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
+            required maxlength="150" [disabled]="guardandoReembolso()" />
+          <p class="refund-help">Registrá el comprobante después de transferir el importe al inquilino.</p>
+        } @else if (puedeConciliarReembolso(item)) {
           <label for="refund-external-id">ID del reembolso en Mercado Pago</label>
           <input id="refund-external-id" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
             required maxlength="100" inputmode="numeric" pattern="[0-9]+" [disabled]="guardandoReembolso()" />
@@ -398,10 +480,10 @@
         @if (errorReembolso()) { <p class="refund-error" role="alert">{{ errorReembolso() }}</p> }
         <div class="block-actions">
           <button type="button" class="button button--ghost" [disabled]="guardandoReembolso()" (click)="cerrarReembolso()">Volver</button>
-          @if (puedeSolicitarReembolso(item) || puedeConciliarReembolso(item)) {
+          @if (puedeRegistrarTransferencia(item) || puedeSolicitarReembolso(item) || puedeConciliarReembolso(item)) {
             <button type="submit" class="button button--success"
               [disabled]="guardandoReembolso() || !referenciaReembolsoValida(item)">
-              {{ guardandoReembolso() ? 'Procesando…' : puedeConciliarReembolso(item) ? 'Conciliar devolución' : 'Solicitar devolución' }}
+              {{ guardandoReembolso() ? 'Procesando…' : puedeRegistrarTransferencia(item) ? 'Registrar transferencia' : puedeConciliarReembolso(item) ? 'Conciliar devolución' : 'Solicitar devolución' }}
             </button>
           }
         </div>

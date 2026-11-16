@@ -358,6 +358,15 @@ dd {
 .table-wrap {
   overflow-x: auto;
 }
+.settlement-history-caption {
+  padding: 16px 24px;
+  text-align: left;
+  font-weight: 700;
+}
+.settlement-history td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
 .pagination {
   display: flex;
   flex-wrap: wrap;

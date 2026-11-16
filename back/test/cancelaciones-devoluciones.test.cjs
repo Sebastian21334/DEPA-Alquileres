@@ -371,17 +371,18 @@ test('la consulta muestra los términos aunque el plazo haya vencido', async () 
 });
 
 for (const medio of ['visa', 'debvisa', null]) {
-  test(`permite cancelar sin reembolso con medio de pago ${medio}`, async () => {
+  test(`deriva a transferencia el reembolso por cancelación con medio ${medio}`, async () => {
     const { reserva, pago } = await escenario(fechaEnDias(7));
     await source.getRepository(Pago).update(pago.id, { payment_method_id: medio });
     const condicionesPago = await cancelaciones.consultarCondiciones(reserva.id, 1);
     assert.equal(condicionesPago.motivoBloqueo, null);
-    assert.equal(condicionesPago.admiteReembolso, false);
+    assert.equal(condicionesPago.admiteReembolso, true);
+    assert.equal(condicionesPago.devolucionPorTransferencia, true);
     const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
     const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
-    assert.equal(resultado.reembolso, null);
-    assert.equal(await source.getRepository(Reembolso).count(), 0);
-    assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, true);
+    assert.equal(resultado.reembolso.transferencia_manual, true);
+    assert.equal(resultado.reembolso.estado, 'PENDIENTE');
+    assert.equal(await source.getRepository(Reembolso).count(), 1);
   });
 }
 

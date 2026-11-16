@@ -255,7 +255,11 @@ export class ReclamosService {
     });
     if (!resultado.reembolso) return this.prepararRespuesta(resultado.reclamo);
     const reembolso = resultado.reembolso;
-    const ejecutado = await this.reembolsos.ejecutarYConfirmar(reembolso.id, idAdmin);
+    if (reembolso.transferencia_manual && reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
+      return this.prepararRespuesta(await this.obtener(id, idAdmin, true));
+    const ejecutado = await this.reembolsos.ejecutar(reembolso.id, idAdmin);
+    if (ejecutado.transferencia_manual && ejecutado.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
+      return this.prepararRespuesta(await this.obtener(id, idAdmin, true));
     const aplicado = await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
       this.aplicarResolucionReembolso(confirmado, transaccion),
     );
