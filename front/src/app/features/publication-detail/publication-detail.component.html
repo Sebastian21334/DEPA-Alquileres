@@ -77,6 +77,53 @@
         </div>
       </div>
 
+      @if (!administracion && esMiPublicacion() && esTemporaria() && !item.eliminada) {
+        <section class="booking-card ingresos-card" aria-labelledby="ingresos-heading">
+          <h2 id="ingresos-heading">Validar ingreso</h2>
+          @if (resultadoIngreso(); as resultado) {
+            @if (!resultado.error) {
+              <p class="booking-message booking-message--success" role="status">{{ resultado.mensaje }}</p>
+            }
+          }
+          @if (errorIngresos()) {
+            <p class="booking-message booking-message--error" role="alert">No pudimos cargar las reservas pendientes de ingreso.</p>
+            <button type="button" class="button button--secondary" (click)="cargarIngresos(item.id)">Reintentar</button>
+          } @else if (ingresosPendientes(); as ingresos) {
+            @for (reserva of ingresos; track reserva.id) {
+              <form (submit)="validarIngreso($event, reserva, codigo.value)">
+                <p>
+                  <strong>Reserva #{{ reserva.id }}</strong>
+                  @if (reserva.usuario_nombre || reserva.usuario?.nombre) {
+                    · {{ reserva.usuario_nombre ?? reserva.usuario?.nombre }} {{ reserva.usuario_apellido ?? reserva.usuario?.apellido }}
+                  }
+                  @if (reserva.fecha_inicio && reserva.fecha_fin) {
+                    · {{ formatDate(reserva.fecha_inicio) }} al {{ formatDate(reserva.fecha_fin) }}
+                  }
+                </p>
+                <label [for]="'ingreso-' + reserva.id">Código entregado por el inquilino</label>
+                <div class="ingresos-card__campo">
+                  <input #codigo [id]="'ingreso-' + reserva.id" type="text" maxlength="8"
+                    autocomplete="off" autocapitalize="characters" spellcheck="false" required
+                    [readonly]="validandoIngreso() === reserva.id" />
+                  <button type="submit" class="button button--secondary" [disabled]="validandoIngreso() !== null">
+                    {{ validandoIngreso() === reserva.id ? 'Validando…' : 'Validar código' }}
+                  </button>
+                </div>
+                @if (resultadoIngreso(); as resultado) {
+                  @if (resultado.error && resultado.reservaId === reserva.id) {
+                    <p class="booking-message booking-message--error" role="alert">{{ resultado.mensaje }}</p>
+                  }
+                }
+              </form>
+            } @empty {
+              <p>No hay reservas pendientes de ingreso para esta publicación.</p>
+            }
+          } @else {
+            <p role="status">Cargando reservas…</p>
+          }
+        </section>
+      }
+
       <section class="features" appReveal>
         <h2>Características principales</h2>
         <div class="features__grid">

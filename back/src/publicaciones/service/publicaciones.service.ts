@@ -34,6 +34,9 @@ export class PublicacionesService {
 
   /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
   async crear(anunciante: Anunciante, dto: CrearPublicacionDto) {
+    if (!await this.anunciantesService.buscarCbuValidado(anunciante.idUsuario)) {
+      throw new ForbiddenException('Necesitás un CBU validado para crear publicaciones. Cargalo desde Mi perfil.');
+    }
     // Estos servicios validan que cada catalogo y ubicacion exista; asi la
     // publicacion no queda apuntando a claves foraneas inexistentes.
     const tipoMoneda = await this.catalogosService.getTipoMonedaPorId(

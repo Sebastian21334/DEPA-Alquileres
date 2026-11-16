@@ -37,6 +37,8 @@ export interface RevisionVerificacion {
   numero_revision: number;
   estado: EstadoVerificacion;
   motivo: string | null;
+  identidad_aprobada?: boolean | null;
+  cbu_aprobado?: boolean | null;
   creada_en: string;
 }
 
@@ -48,6 +50,9 @@ export interface SolicitudVerificacion {
   dni_dorso_url: string | null;
   rostro_url: string | null;
   motivo_rechazo: string | null;
+  motivo_rechazo_cbu: string | null;
+  cbu_en_revision: boolean;
+  cbu_ultimos_digitos: string | null;
   razon_social?: string;
   matricula_profesional?: string;
   colegio_profesional?: string;

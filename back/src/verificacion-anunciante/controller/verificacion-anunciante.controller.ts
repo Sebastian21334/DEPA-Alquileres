@@ -4,6 +4,7 @@ import {
   Patch,
   Delete,
   Get,
+  Header,
   Param,
   Body,
   UseGuards,
@@ -24,6 +25,7 @@ import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 import { PruebaVidaService } from '../service/prueba-vida.service';
 import { DatosInmobiliariaDto } from '../dto/datos-inmobiliaria.dto';
 import { RevisarVerificacionDto } from '../dto/revisar-verificacion.dto';
+import { CbuDto } from '../dto/cbu.dto';
 
 const TIPOS_DOCUMENTO = [
   // Las tres fotos proceden de la captura de cámara del flujo de identidad.
@@ -117,6 +119,13 @@ export class VerificacionAnuncianteController {
     return this.verificacionService.solicitarAlta(req.user.id, dto);
   }
 
+  @Patch('mi-solicitud/cbu')
+  @UseGuards(JwtAuthGuard)
+  async solicitarCambioCbu(@Req() req: AuthenticatedRequest, @Body() dto: CbuDto) {
+    await this.verificacionService.solicitarCambioCbu(req.user.id, dto.cbu);
+    return { mensaje: 'El CBU quedó pendiente de revisión' };
+  }
+
   @Patch('mi-solicitud/datos-inmobiliaria')
   @UseGuards(JwtAuthGuard)
   actualizarDatosInmobiliaria(@Req() req: AuthenticatedRequest, @Body() dto: DatosInmobiliariaDto) {
@@ -152,6 +161,7 @@ export class VerificacionAnuncianteController {
   }
 
   @Get('pendientes')
+  @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   // Solo un administrador puede revisar solicitudes de terceros.
@@ -160,6 +170,7 @@ export class VerificacionAnuncianteController {
   }
 
   @Get('mi-solicitud')
+  @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)
   async miSolicitud(@Req() req: AuthenticatedRequest) {
     // No tener solicitud es un estado normal del perfil, no un recurso que la

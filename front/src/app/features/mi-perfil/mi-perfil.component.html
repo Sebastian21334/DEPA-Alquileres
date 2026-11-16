@@ -102,6 +102,10 @@
           >
         </nav>
 
+        @if (solicitud()?.estado === 'aprobada') {
+          <app-cbu-anunciante />
+        }
+
         <div class="profile-layout">
           <section class="profile-section" aria-labelledby="datos-personales">
             <div class="card-head">
@@ -212,7 +216,7 @@
           <section class="profile-section advertiser" aria-labelledby="cuenta-anunciante">
             <div class="card-head">
               <h2 id="cuenta-anunciante">Cuenta de anunciante</h2>
-              @if (solicitud()?.estado === 'aprobada') {
+              @if (solicitud()?.estado === 'aprobada' && solicitud()?.cbu_ultimos_digitos) {
                 <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--ghost acct-btn--sm">
                   <svg lucidePlus [size]="16" aria-hidden="true"></svg> Publicar propiedad
                 </a>

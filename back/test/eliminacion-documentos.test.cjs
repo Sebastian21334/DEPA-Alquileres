@@ -42,7 +42,7 @@ function solicitud(estado = 'pendiente', empresa = false) {
 // Adaptador transaccional en memoria para el repositorio real: publica los
 // cambios solo tras completar el callback. No conecta con servicios desplegados.
 function escenario(s = solicitud()) {
-  let estado = { solicitud: s, revisiones: [], trabajos: [] };
+  let estado = { solicitud: s, revisiones: [], trabajos: [], cbuValidado: null };
   let falloRevision = false, falloCommit = false, falloAzure = false;
   const borrados = [], avisos = [], consultas = [], correos = [];
   const clonar = valor => {
@@ -64,11 +64,17 @@ function escenario(s = solicitud()) {
         },
         async save(actual) { copia.solicitud = actual; return actual; },
       };
-      if (entidad === Anunciante) return { async update(criterio, cambios) {
-        assert.deepEqual(criterio, { idUsuario: copia.solicitud.anunciante.idUsuario });
-        assert.deepEqual(cambios, { verificado: true });
-        Object.assign(copia.solicitud.anunciante, cambios);
-      } };
+      if (entidad === Anunciante) return {
+        async findOne() { return { cbu_validado: copia.cbuValidado }; },
+        async update(criterio, cambios) {
+          assert.deepEqual(criterio, { idUsuario: copia.solicitud.anunciante.idUsuario });
+          if (Object.hasOwn(cambios, 'cbu_validado')) copia.cbuValidado = cambios.cbu_validado;
+          else {
+            assert.deepEqual(cambios, { verificado: true });
+            Object.assign(copia.solicitud.anunciante, cambios);
+          }
+        },
+      };
       if (entidad === Revision) return { async save(r) {
         if (falloRevision) throw new Error('fallo de historial');
         copia.revisiones.push(r); return r;
@@ -119,6 +125,93 @@ function escenario(s = solicitud()) {
     fallarAzure: v => { falloAzure = v; },
   };
 }
+
+const primerCbu = '0010000700000000000017';
+const segundoCbu = '0010000700000000000024';
+const revisarCbu = (numero_revision, titular_cbu_confirmado = true) =>
+  ({ numero_revision, revisar_cbu: true, titular_cbu_confirmado });
+
+test('rechazar solo el CBU conserva la identidad y permite reenviar únicamente el CBU', async () => {
+  const e = escenario(Object.assign(solicitud(), { cbu_pendiente: primerCbu }));
+  await assert.rejects(e.servicio.aprobar(7, 12, revisarCbu(1, false)), { status: 400 });
+  await e.servicio.rechazar(7, 12, {
+    ...revisarCbu(1, false), rechazar_identidad: false, rechazar_cbu: true, motivo: 'El titular no coincide',
+  });
+  assert.equal(e.estado.solicitud.estado, 'aprobada');
+  assert.equal(e.estado.solicitud.anunciante.verificado, true);
+  assert.equal(e.estado.solicitud.motivo_rechazo_cbu, 'El titular no coincide');
+  assert.equal(e.estado.revisiones[0].identidad_aprobada, true);
+  assert.equal(e.estado.revisiones[0].cbu_aprobado, false);
+  assert.equal(e.estado.cbuValidado, null);
+  assert.equal(e.borrados.length, 3);
+  await assert.rejects(e.servicio.solicitarCambioCbu(7, '0010000700000000000025'), { status: 400 });
+  await e.servicio.solicitarCambioCbu(7, segundoCbu);
+  await assert.rejects(e.servicio.aprobar(7, 12, revisarCbu(1)), { status: 409 });
+  await e.servicio.aprobar(7, 12, revisarCbu(2));
+  assert.equal(e.estado.solicitud.cbu_pendiente, null);
+  assert.equal(e.estado.cbuValidado, segundoCbu);
+  assert.equal(e.estado.revisiones[1].identidad_aprobada, null);
+  assert.equal(e.borrados.length, 3);
+});
+
+test('se puede rechazar la identidad sola o junto con el CBU', async () => {
+  for (const rechazar_cbu of [false, true]) {
+    const e = escenario(Object.assign(solicitud(), { cbu_pendiente: primerCbu }));
+    await e.servicio.rechazar(7, 12, {
+      ...revisarCbu(1), rechazar_identidad: true, rechazar_cbu, motivo: 'Verificación observada',
+    });
+    assert.equal(e.estado.solicitud.estado, 'rechazada');
+    assert.equal(e.estado.revisiones[0].identidad_aprobada, false);
+    assert.equal(e.estado.revisiones[0].cbu_aprobado, !rechazar_cbu);
+    assert.equal(e.estado.cbuValidado, rechazar_cbu ? null : primerCbu);
+  }
+});
+
+test('un cambio rechazado o una aprobación fallida conservan el CBU vigente', async () => {
+  const e = escenario(Object.assign(solicitud(), { cbu_pendiente: primerCbu }));
+  e.servicio.logger = { error() {} };
+  await e.servicio.aprobar(7, 12, revisarCbu(1));
+  await e.servicio.solicitarCambioCbu(7, segundoCbu);
+  assert.equal(e.estado.cbuValidado, primerCbu);
+  e.fallarRevision(true);
+  await assert.rejects(e.servicio.aprobar(7, 12, revisarCbu(2)), { status: 500 });
+  assert.equal(e.estado.solicitud.cbu_pendiente, segundoCbu);
+  assert.equal(e.estado.cbuValidado, primerCbu);
+  e.fallarRevision(false);
+  await e.servicio.rechazar(7, 12, {
+    ...revisarCbu(2, false), rechazar_identidad: false, rechazar_cbu: true, motivo: 'El titular no coincide',
+  });
+  assert.equal(e.estado.solicitud.estado, 'aprobada');
+  assert.equal(e.estado.cbuValidado, primerCbu);
+});
+
+test('la migración del CBU conserva las solicitudes existentes y se puede aplicar dos veces', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const { readFileSync } = require('node:fs');
+  const { join } = require('node:path');
+  const db = new PGlite();
+  try {
+    await db.exec(`CREATE TABLE anunciante (id_usuario int PRIMARY KEY, verificado boolean);
+      CREATE TABLE solicitud_verificacion (id_anunciante int NOT NULL, estado text NOT NULL);
+      CREATE TABLE revision_verificacion (id int PRIMARY KEY, motivo text);
+      INSERT INTO anunciante VALUES (1, true), (2, true), (3, false), (4, false);
+      INSERT INTO solicitud_verificacion VALUES (2, 'aprobada'), (3, 'pendiente');
+      INSERT INTO revision_verificacion VALUES (1, 'Motivo histórico');`);
+    const sql = readFileSync(join(__dirname, '../migrations/20261116-cbu-anunciantes.sql'), 'utf8');
+    await db.exec(sql);
+    await db.query('UPDATE anunciante SET cbu_validado = $1 WHERE id_usuario = 2', [primerCbu]);
+    await db.exec(sql);
+    assert.deepEqual((await db.query('SELECT id_anunciante, estado FROM solicitud_verificacion ORDER BY id_anunciante')).rows, [
+      { id_anunciante: 1, estado: 'aprobada' },
+      { id_anunciante: 2, estado: 'aprobada' },
+      { id_anunciante: 3, estado: 'pendiente' },
+    ]);
+    assert.equal((await db.query('SELECT cbu_validado FROM anunciante WHERE id_usuario = 2')).rows[0].cbu_validado, primerCbu);
+    assert.equal((await db.query('SELECT motivo FROM revision_verificacion')).rows[0].motivo, 'Motivo histórico');
+  } finally {
+    await db.close();
+  }
+});
 
 for (const empresa of [false, true]) {
   for (const aprobada of [false, true]) {

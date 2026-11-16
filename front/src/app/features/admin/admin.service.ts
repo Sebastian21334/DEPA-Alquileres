@@ -50,6 +50,8 @@ export interface AdminBloqueo {
 
 export interface VerificationRequest {
   id: number;
+  revisar_identidad: boolean;
+  cbu_pendiente: string | null;
   estado: string;
   numero_revision: number;
   actualizada_en: string;
@@ -169,6 +171,9 @@ export class AdminService {
   listarLiquidaciones() {
     return this.http.get<AdminSettlement[]>(`${this.api}/reservas/liquidaciones/administracion`);
   }
+  consultarCbuParaPago(id: number) {
+    return this.http.get<{ cbu: string | null }>(`${this.api}/reservas/${id}/liquidacion/cbu`);
+  }
   listarHistorialLiquidaciones() {
     return this.http.get<AdminPagoLiquidacion[]>(`${this.api}/reservas/liquidaciones/administracion/historial`);
   }
@@ -242,11 +247,11 @@ export class AdminService {
   cambiarRol(id: number, nombreRol: string) {
     return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });
   }
-  aprobar(id: number, numero_revision: number) {
-    return this.http.patch(`${this.api}/anunciantes/${id}/aprobar`, { numero_revision });
+  aprobar(id: number, numero_revision: number, revisar_cbu: boolean, titular_cbu_confirmado: boolean) {
+    return this.http.patch(`${this.api}/anunciantes/${id}/aprobar`, { numero_revision, revisar_cbu, titular_cbu_confirmado });
   }
-  rechazar(id: number, motivo: string, numero_revision: number) {
-    return this.http.delete(`${this.api}/anunciantes/${id}/rechazar`, { body: { motivo, numero_revision } });
+  rechazar(id: number, body: { motivo: string; numero_revision: number; revisar_cbu: boolean; titular_cbu_confirmado: boolean; rechazar_identidad: boolean; rechazar_cbu: boolean }) {
+    return this.http.delete(`${this.api}/anunciantes/${id}/rechazar`, { body });
   }
   listarCatalogo(key: CatalogKey) {
     return this.http.get<AdminCatalogItem[]>(`${this.api}/catalogos/${key}`);

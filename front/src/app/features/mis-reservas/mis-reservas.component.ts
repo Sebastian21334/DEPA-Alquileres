@@ -16,7 +16,7 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
+import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
@@ -46,6 +46,7 @@ export class MisReservasComponent {
   protected readonly puedeReprogramar = puedeReprogramar;
   protected readonly imagenesConError = signal<Record<number, string>>({});
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
+  protected readonly puedeValidarCodigo = puedeValidarCodigo;
   protected readonly esAnunciante = this.perfil.esAnuncianteVerificado;
 
   protected readonly propias = signal<Reserva[]>([]);
@@ -299,7 +300,7 @@ export class MisReservasComponent {
   }
 
   protected validarCodigo(reserva: Reserva): void {
-    if (reserva.estado_estadia !== 'PENDIENTE_INGRESO') return;
+    if (!puedeValidarCodigo(reserva)) return;
     const codigo = (this.codigoIngresado[reserva.id] ?? '').trim().toUpperCase();
     if (codigo.length !== 8) {
       this.error.set('El código debe tener ocho caracteres.');

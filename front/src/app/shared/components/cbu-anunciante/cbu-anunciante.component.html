@@ -1,0 +1,48 @@
+@if (solicitud(); as datos) {
+  <section class="acct-card" aria-labelledby="cbu-anunciante-titulo">
+    <h2 id="cbu-anunciante-titulo">CBU para cobrar</h2>
+    @if (datos.cbu_ultimos_digitos) {
+      <p>CBU validado terminado en <strong>{{ datos.cbu_ultimos_digitos }}</strong>.</p>
+    }
+    @if (datos.motivo_rechazo_cbu) {
+      <p class="acct-alert acct-alert--error" role="alert"><strong>CBU rechazado.</strong> {{ datos.motivo_rechazo_cbu }}</p>
+    }
+    @if (datos.cbu_en_revision) {
+      <p class="acct-alert acct-alert--info" role="status">
+        @if (datos.estado === 'borrador' || datos.estado === 'rechazada') {
+          CBU cargado. Terminá la verificación de identidad para enviarlo a revisión.
+        } @else {
+          El CBU está pendiente de revisión por un administrador.
+        }
+      </p>
+      @if (datos.cbu_ultimos_digitos) {
+        <p>El CBU validado sigue vigente mientras se revisa el cambio.</p>
+      }
+    } @else if (!datos.cbu_ultimos_digitos || editando()) {
+      <form (submit)="guardar($event)" novalidate>
+        <div class="acct-field">
+          <label for="cbu-anunciante">CBU de la cuenta bancaria</label>
+          <input id="cbu-anunciante" [formControl]="cbu" inputmode="numeric" maxlength="22"
+            autocomplete="off" aria-describedby="cbu-anunciante-ayuda" [readonly]="enviando()" />
+          <small id="cbu-anunciante-ayuda">Ingresá los 22 dígitos. La cuenta bancaria debe estar obligatoriamente a nombre del titular de tu cuenta en DEPA. Un administrador verificará la titularidad antes de aprobar el CBU.</small>
+          @if (cbu.touched && cbu.invalid) {
+            <span class="acct-hint acct-hint--error">Ingresá un CBU de 22 dígitos.</span>
+          }
+        </div>
+        <label><input type="checkbox" [formControl]="titularidad" /> Confirmo que la cuenta bancaria está a mi nombre.</label>
+        @if (titularidad.touched && titularidad.invalid) {
+          <span class="acct-hint acct-hint--error">Confirmá que sos titular de la cuenta bancaria.</span>
+        }
+        @if (error()) { <p class="acct-alert acct-alert--error" role="alert">{{ error() }}</p> }
+        <div class="acct-actions">
+          @if (datos.cbu_ultimos_digitos) {
+            <button type="button" class="acct-btn acct-btn--ghost" [disabled]="enviando()" (click)="cbu.reset(); titularidad.reset(); error.set(''); editando.set(false)">Cancelar</button>
+          }
+          <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviando()">Enviar CBU para revisión</button>
+        </div>
+      </form>
+    } @else {
+      <button type="button" class="acct-btn acct-btn--ghost" (click)="editando.set(true)">Cambiar CBU</button>
+    }
+  </section>
+}

@@ -69,6 +69,12 @@ export class SolicitudVerificacion {
   })
   motivo_rechazo: string | null;
 
+  @Column({ name: 'cbu_pendiente', type: 'varchar', length: 22, nullable: true, select: false })
+  cbu_pendiente: string | null;
+
+  @Column({ name: 'motivo_rechazo_cbu', type: 'varchar', length: 500, nullable: true })
+  motivo_rechazo_cbu: string | null;
+
   @Column({ name: 'numero_revision', type: 'int', default: 1 })
   numero_revision: number;
 

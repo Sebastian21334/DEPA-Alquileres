@@ -15,12 +15,13 @@ import {
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
+import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 
 import type { EntityManager } from 'typeorm';
 
 @Injectable()
 export class OperacionesLiquidacionService {
-  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService) {}
+  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService, private readonly anunciantes: AnunciantesService) {}
 
   async listarLiquidacionesAdministracion(): Promise<Reserva[]> {
     const reservas = await this.liquidaciones.listarParaAdministracion();
@@ -32,6 +33,16 @@ export class OperacionesLiquidacionService {
 
   listarPagosRegistrados() {
     return this.liquidaciones.listarPagosRegistrados();
+  }
+
+  listarPagosDelAnunciante(idUsuario: number, idPublicacion: number) {
+    return this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion);
+  }
+
+  async consultarCbuParaPago(idReserva: number): Promise<{ cbu: string | null }> {
+    const reserva = await this.reservasService.obtenerReserva(idReserva);
+    const idAnunciante = reserva.publicacion?.anunciante?.idUsuario;
+    return { cbu: idAnunciante ? await this.anunciantes.buscarCbuValidado(idAnunciante) : null };
   }
 
   async resolverLiquidacion(id: number, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reserva> {
@@ -52,6 +63,10 @@ export class OperacionesLiquidacionService {
     return this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
       this.validarResolucion(actual, dto);
       const registraPago = dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
+      const idAnunciante = actual.publicacion?.anunciante?.idUsuario;
+      if (registraPago && (!idAnunciante || !await this.anunciantes.buscarCbuValidado(idAnunciante, transaccion))) {
+        throw new ConflictException('El anunciante necesita un CBU validado para registrar el pago');
+      }
       const esDevolucion =
         dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO') ||
         dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO');

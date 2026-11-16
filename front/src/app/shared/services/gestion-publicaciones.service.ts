@@ -5,6 +5,16 @@ import { environment } from '../../../environments/environment';
 import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { Imagen } from '../models/imagen.model';
 
+export interface PagoPublicacion {
+  id: string;
+  reservaId: number;
+  fecha: string | null;
+  importe: number | null;
+  moneda: string | null;
+  referencia: string | null;
+  observacion: string | null;
+}
+
 // Operaciones del anunciante verificado sobre sus propias publicaciones e imágenes.
 // El backend valida la propiedad con AnuncianteGuard; acá solo se arman los requests.
 @Injectable({ providedIn: 'root' })
@@ -28,6 +38,10 @@ export class GestionPublicacionesService {
 
   restaurar(id: number): Observable<Publicacion> {
     return this.http.patch<Publicacion>(`${this.api}/publicaciones/${id}/restaurar`, {});
+  }
+
+  listarLiquidaciones(idPublicacion: number): Observable<PagoPublicacion[]> {
+    return this.http.get<PagoPublicacion[]>(`${this.api}/reservas/liquidaciones/publicacion/${idPublicacion}`);
   }
 
   /** POST /publicaciones (alineado con back/src/publicaciones/dto/crear-publicacion.dto.ts). */

@@ -823,6 +823,10 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     });
     const codigoUrl = `/reservas/${ingreso.id}/codigo-alojamiento`;
     const validarUrl = `/reservas/${ingreso.id}/validar-codigo`;
+    const reservasPublicacion = '/reservas/publicacion/1';
+    await request(http).get(reservasPublicacion).set('Authorization', ajeno).expect(403);
+    const { body: reservasDelAnunciante } = await request(http).get(reservasPublicacion).set('Authorization', anunciante).expect(200);
+    assert.equal(reservasDelAnunciante.find(fila => fila.id === ingreso.id).estado_estadia, 'PENDIENTE_INGRESO');
     await request(http).get(codigoUrl).set('Authorization', anunciante).expect(403);
     const { body: acceso } = await request(http).get(codigoUrl).set('Authorization', tenant).expect(200);
     await request(http).patch(validarUrl).set('Authorization', ajeno).send({ codigo: acceso.codigo }).expect(403);
@@ -840,7 +844,30 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.equal(lista.body.find(fila => fila.id === ingreso.id).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
     const detalle = await request(http).get(`/reservas/${ingreso.id}`).set('Authorization', tenant).expect(200);
     assert.equal(detalle.body.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }).expect(200);
+    const historialAnunciante = '/reservas/liquidaciones/publicacion/1';
+    await request(http).get(historialAnunciante).set('Authorization', anunciante).expect(200, []);
+    const consultaCbu = `/reservas/${ingreso.id}/liquidacion/cbu`;
+    await request(http).get(consultaCbu).set('Authorization', anunciante).expect(403);
+    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu: null });
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO' }).expect(409);
+    const cbu = '0010000700000000000017';
+    await source.query('UPDATE anunciante SET cbu_validado = $1 WHERE id_usuario = 2', [cbu]);
+    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu });
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({
+      estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
+    }).expect(200);
+    await request(http).get(historialAnunciante).expect(401);
+    await request(http).get(historialAnunciante).set('Authorization', tenant).expect(200, []);
+    await request(http).get(historialAnunciante).set('Authorization', ajeno).expect(200, []);
+    await request(http).get('/reservas/liquidaciones/publicacion/999').set('Authorization', anunciante).expect(200, []);
+    const { body: historialPropio } = await request(http).get(historialAnunciante).set('Authorization', anunciante).expect(200);
+    const [{ id: idPago, fecha: fechaPago }] = historialPropio;
+    assert.ok(idPago);
+    assert.ok(Number.isFinite(Date.parse(fechaPago)));
+    assert.deepEqual(historialPropio, [{
+      id: idPago, reservaId: ingreso.id, fecha: fechaPago, importe: 100, moneda: 'ARS',
+      referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
+    }]);
     await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-repetido' }).expect(409);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);

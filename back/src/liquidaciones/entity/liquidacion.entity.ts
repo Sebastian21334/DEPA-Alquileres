@@ -104,7 +104,7 @@ export class Liquidacion {
   @Column({ name: 'fecha_pago_propietario', type: 'timestamp', nullable: true })
   fecha_pago_propietario: Date | null;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ name: 'pagos_anunciante', type: 'jsonb', nullable: true })
   pagos_anunciante: PagoAnuncianteRegistrado[] | null;
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })

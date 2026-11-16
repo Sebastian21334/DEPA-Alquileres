@@ -33,6 +33,9 @@ export class Anunciante {
   @Column({ name: 'cuit_cuil', type: 'varchar', length: 15, nullable: true })
   cuit_cuil: string | null;
 
+  @Column({ name: 'cbu_validado', type: 'varchar', length: 22, nullable: true, select: false })
+  cbu_validado: string | null;
+
   // CUIT/CUIL original de una cuenta dada de baja; la sigue identificando en el historial.
   @Column({name: 'cuit_cuil_historico',type: 'varchar',length: 15, nullable: true,
   })

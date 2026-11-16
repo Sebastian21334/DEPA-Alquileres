@@ -55,14 +55,17 @@ test('reembolsos y reclamos conservan los campos calculados de las reservas anid
 });
 
 test('el historial de verificación omite secretos aunque el repositorio los haya seleccionado', async () => {
-  const solicitud = { id: 1, estado: 'pendiente', numero_revision: 2 };
+  const solicitud = { id: 1, estado: 'pendiente', numero_revision: 2, cbu_pendiente: '0010000700000000000017' };
   for (const campo of CAMPOS_PRUEBA_PRIVADOS) solicitud[campo] = 'dato-privado';
-  const servicio = new VerificacionAnuncianteService({}, {}, catalogosDePrueba(), {
-    buscarSolicitudPorAnunciante: async () => solicitud,
+  const servicio = new VerificacionAnuncianteService({ buscarCbuValidado: async () => '0010000700000000000024' }, {}, catalogosDePrueba(), {
+    buscarSolicitudConCbu: async () => solicitud,
     buscarRevisiones: async () => [{ numero_revision: 1, estado: 'rechazada' }],
   });
   const respuesta = json(await servicio.buscarSolicitudConHistorial(1));
   for (const campo of CAMPOS_PRUEBA_PRIVADOS) assert.equal(Object.hasOwn(respuesta, campo), false);
+  assert.equal(Object.hasOwn(respuesta, 'cbu_pendiente'), false);
+  assert.equal(respuesta.cbu_en_revision, true);
+  assert.equal(respuesta.cbu_ultimos_digitos, '0024');
   assert.equal(respuesta.numero_revision, 2);
   assert.equal(respuesta.revisiones[0].estado, 'rechazada');
 });

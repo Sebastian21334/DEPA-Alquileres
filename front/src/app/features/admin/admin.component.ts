@@ -185,6 +185,9 @@ export class AdminComponent {
   protected readonly pagoAnuncianteSeleccionado = signal<AdminSettlement | null>(null);
   protected readonly registrandoPagoAnunciante = signal(false);
   protected readonly errorPagoAnunciante = signal('');
+  protected readonly cbuParaPago = signal<string | null>(null);
+  protected readonly consultandoCbuParaPago = signal(false);
+  private consultaCbuParaPago?: Subscription;
   protected referenciaPagoAnunciante = '';
   protected observacionPagoAnunciante = '';
   protected readonly estadosReembolso = {
@@ -246,6 +249,9 @@ export class AdminComponent {
   protected draft = '';
   protected newValues: Record<string, string> = {};
   protected rejectReason = '';
+  protected rechazarIdentidad = false;
+  protected rechazarCbu = false;
+  protected titularCbuConfirmado: number | null = null;
   // Opciones del select de rol: salen del catálogo de roles de la BD, así que
   // crear o renombrar un rol en la sección Catálogos se refleja al instante.
   protected readonly roles = computed(
@@ -441,13 +447,25 @@ export class AdminComponent {
     this.referenciaPagoAnunciante = '';
     this.observacionPagoAnunciante = '';
     this.errorPagoAnunciante.set('');
+    this.cbuParaPago.set(null);
+    this.consultaCbuParaPago?.unsubscribe();
+    this.consultandoCbuParaPago.set(true);
     this.dialogoPagoAnunciante().nativeElement.showModal();
+    this.consultaCbuParaPago = this.api.consultarCbuParaPago(settlement.id).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.consultandoCbuParaPago.set(false)),
+    ).subscribe({
+      next: ({ cbu }) => this.cbuParaPago.set(cbu),
+      error: (error: Error) => this.errorPagoAnunciante.set(error.message),
+    });
   }
 
   protected cerrarPagoAnunciante(evento?: Event): void {
     evento?.preventDefault();
     if (this.registrandoPagoAnunciante()) return;
     this.dialogoPagoAnunciante().nativeElement.close();
+    this.consultaCbuParaPago?.unsubscribe();
+    this.cbuParaPago.set(null);
     this.pagoAnuncianteSeleccionado.set(null);
   }
 
@@ -455,7 +473,7 @@ export class AdminComponent {
     const settlement = this.pagoAnuncianteSeleccionado();
     const referencia = this.referenciaPagoAnunciante.trim();
     const observacion = this.observacionPagoAnunciante.trim();
-    if (!settlement?.codigo_validado_en || settlement.estado_liquidacion === 'EN_REVISION' ||
+    if (!settlement?.codigo_validado_en || !this.cbuParaPago() || settlement.estado_liquidacion === 'EN_REVISION' ||
         this.registrandoPagoAnunciante() || referencia.length > 150 || observacion.length > 500) return;
 
     this.errorPagoAnunciante.set('');
@@ -850,16 +868,22 @@ export class AdminComponent {
     );
   }
   protected approve(request: VerificationRequest): void {
+    if (!this.puedeResolverVerificacion(request, false, false)) return;
     const id = request.anunciante.idUsuario;
     this.run(
       `request-${id}`,
-      () => this.api.aprobar(id, request.numero_revision),
-      () => this.requests.update((v) => v.filter((r) => r.id !== request.id)),
+      () => this.api.aprobar(id, request.numero_revision, !!request.cbu_pendiente, this.titularCbuConfirmado === request.id),
+      () => {
+        this.titularCbuConfirmado = null;
+        this.requests.update((v) => v.filter((r) => r.id !== request.id));
+      },
       'Solicitud aprobada.',
     );
   }
   protected openReject(request: VerificationRequest): void {
     this.rejectReason = '';
+    this.rechazarIdentidad = request.revisar_identidad && !request.cbu_pendiente;
+    this.rechazarCbu = !!request.cbu_pendiente && !request.revisar_identidad;
     this.rejectId.set(request.id);
   }
   protected cancelReject(): void {
@@ -868,17 +892,31 @@ export class AdminComponent {
   }
   protected confirmReject(request: VerificationRequest): void {
     const motivo = this.rejectReason.trim();
-    if (!motivo) return;
+    if (motivo.length < 5 || (!this.rechazarIdentidad && !this.rechazarCbu) ||
+      !this.puedeResolverVerificacion(request, this.rechazarIdentidad, this.rechazarCbu)) return;
     const id = request.anunciante.idUsuario;
     this.run(
       `request-${id}`,
-      () => this.api.rechazar(id, motivo, request.numero_revision),
+      () => this.api.rechazar(id, {
+        motivo,
+        numero_revision: request.numero_revision,
+        revisar_cbu: !!request.cbu_pendiente,
+        titular_cbu_confirmado: this.titularCbuConfirmado === request.id,
+        rechazar_identidad: this.rechazarIdentidad,
+        rechazar_cbu: this.rechazarCbu,
+      }),
       () => {
+        this.titularCbuConfirmado = null;
         this.requests.update((v) => v.filter((r) => r.id !== request.id));
         this.cancelReject();
       },
       'Solicitud rechazada.',
     );
+  }
+  protected puedeResolverVerificacion(request: VerificationRequest, rechazaIdentidad: boolean, rechazaCbu: boolean): boolean {
+    return this.busy() !== 'request-' + request.anunciante.idUsuario &&
+      (!request.revisar_identidad || rechazaIdentidad || !!request.prueba_vida_validada_en) &&
+      (!request.cbu_pendiente || rechazaCbu || this.titularCbuConfirmado === request.id);
   }
   protected esVideo(url: string): boolean {
     return /\.(mp4|webm|mov)(?:\?|$)/i.test(url);

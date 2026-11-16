@@ -7,6 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "db:pausa-actividades": "node scripts/pausa-actividades.cjs",
+    "db:cbu-anunciantes": "node scripts/cbu-anunciantes.cjs --aplicar",
     "db:apelaciones-bloqueo": "node scripts/apelaciones-bloqueo.cjs",
     "db:publicaciones-eliminadas": "node scripts/publicaciones-eliminadas.cjs --aplicar",
     "test:publicaciones-eliminadas": "npm run build && node --test test/publicaciones-eliminadas.test.cjs test/publicaciones-cuentas-bloqueadas.test.cjs test/bajas-y-bloqueos.test.cjs test/condiciones-economicas.test.cjs",

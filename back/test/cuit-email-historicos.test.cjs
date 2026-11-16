@@ -251,7 +251,10 @@ test('si falla el borrador, revierte el alta del anunciante y permite reintentar
       { enviarSolicitudAnunciante: async () => { notificaciones++; } },
     );
     servicio.logger = { error() {} };
-    const datos = { cuit: '20-12345678-9', numero_contacto: '351', idTipoAnunciante: id };
+    const datos = {
+      cuit: '20-12345678-9', numero_contacto: '351', idTipoAnunciante: id,
+      cbu: '0010000700000000000017', titularidad_declarada: true,
+    };
 
     await db.query('ALTER TABLE solicitud_verificacion ADD CONSTRAINT fallo_alta_prueba CHECK (numero_revision > 1)');
     await assert.rejects(servicio.solicitarAlta(usuario.id, datos), /No se pudo iniciar la solicitud/);

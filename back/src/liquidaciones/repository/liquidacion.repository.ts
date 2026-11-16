@@ -21,10 +21,15 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     });
   }
 
-  listarPagosRegistrados(estadoPagado: string): Promise<Liquidacion[]> {
+  listarPagosRegistrados(estadoPagado: string, propietario?: { idUsuario: number; idPublicacion: number }): Promise<Liquidacion[]> {
+    const reserva = propietario ? {
+      publicacion: { id: propietario.idPublicacion, anunciante: { usuario: { id: propietario.idUsuario } } },
+    } : undefined;
     return this.repository.find({
-      where: [{ estado: estadoPagado }, { pagos_anunciante: Not(IsNull()) }],
-      relations: { reserva: { publicacion: { anunciante: { usuario: true } } }, admin_resolucion: true },
+      where: [{ estado: estadoPagado, reserva }, { pagos_anunciante: Not(IsNull()), reserva }],
+      relations: propietario
+        ? { reserva: true }
+        : { reserva: { publicacion: { anunciante: { usuario: true } } }, admin_resolucion: true },
     });
   }
 

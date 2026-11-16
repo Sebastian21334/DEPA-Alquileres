@@ -45,6 +45,20 @@ export class LiquidacionesService {
     const pagos = await this.liquidaciones.listarPagosRegistrados(
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
     );
+    return this.formatearPagosRegistrados(pagos);
+  }
+
+  async listarPagosDelAnunciante(idUsuario: number, idPublicacion: number) {
+    const pagos = await this.liquidaciones.listarPagosRegistrados(
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
+      { idUsuario, idPublicacion },
+    );
+    return this.formatearPagosRegistrados(pagos).map(({ id, reservaId, fecha, importe, moneda, referencia, observacion }) => ({
+      id, reservaId, fecha, importe, moneda, referencia, observacion,
+    }));
+  }
+
+  private formatearPagosRegistrados(pagos: Liquidacion[]) {
     return pagos.flatMap(pago => {
       const publicacion = pago.reserva.publicacion;
       const anunciante = publicacion?.anunciante?.usuario;
@@ -203,7 +217,7 @@ export class LiquidacionesService {
         importe: liquidacion.importe,
         moneda: liquidacion.moneda,
         referencia: liquidacion.referencia,
-        observacion: liquidacion.observacion,
+        observacion: datos.observacion?.trim() || null,
         administradorId: idAdmin,
       }];
     }

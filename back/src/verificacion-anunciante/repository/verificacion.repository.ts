@@ -31,6 +31,7 @@ export class VerificacionRepository implements IVerificacionRepository {
             (campo) => `solicitud.${campo}`,
           ),
         )
+        .addSelect('solicitud.cbu_pendiente')
         .leftJoinAndSelect('solicitud.anunciante', 'anunciante')
         .leftJoinAndSelect('anunciante.usuario', 'usuario')
         .leftJoinAndSelect('anunciante.tipoAnunciante', 'tipoAnunciante')
@@ -97,13 +98,25 @@ export class VerificacionRepository implements IVerificacionRepository {
     });
   }
 
-  buscarPendientes(estados: string[]) {
-    // Solo devuelve estados que todavía requieren una decisión administrativa.
-    return this.solicitudes.find({
-      where: estados.map((estado) => ({ estado })),
-      relations: { anunciante: { usuario: true, tipoAnunciante: true } },
-      order: { actualizada_en: 'ASC' },
-    });
+  buscarSolicitudConCbu(idAnunciante: number) {
+    return this.consultaConCbu().where('anunciante.idUsuario = :idAnunciante', { idAnunciante }).getOne();
+  }
+
+  buscarPendientes(estados: string[], identidadAprobada: string) {
+    return this.consultaConCbu()
+      .where('usuario.activa = true')
+      .andWhere('(solicitud.estado IN (:...estados) OR (solicitud.estado = :identidadAprobada AND solicitud.cbu_pendiente IS NOT NULL))',
+        { estados, identidadAprobada })
+      .orderBy('solicitud.actualizada_en', 'ASC')
+      .getMany();
+  }
+
+  private consultaConCbu() {
+    return this.solicitudes.createQueryBuilder('solicitud')
+      .addSelect('solicitud.cbu_pendiente')
+      .innerJoinAndSelect('solicitud.anunciante', 'anunciante')
+      .innerJoinAndSelect('anunciante.usuario', 'usuario')
+      .leftJoinAndSelect('anunciante.tipoAnunciante', 'tipo');
   }
 
   crearRevision(datos: Partial<RevisionVerificacion>) {

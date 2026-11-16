@@ -33,9 +33,10 @@ import {
   rentalDays,
 } from '../../shared/utils/rental-dates';
 import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
-import { PresupuestoReserva, ReservationService } from '../../shared/services/reservation.service';
+import { PresupuestoReserva, ReservationService, type Reserva } from '../../shared/services/reservation.service';
 import { FavoritesService } from '../../shared/services/favorites.service';
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
+import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
 
 @Component({
   selector: 'app-publication-detail',
@@ -95,11 +96,18 @@ export class PublicationDetailComponent {
   protected readonly cotizando = signal(false);
   protected readonly aceptaConversion = signal(false);
   protected readonly savingFavorite = signal(false);
+  protected readonly ingresosPendientes = signal<Reserva[] | null>(null);
+  protected readonly errorIngresos = signal(false);
+  protected readonly validandoIngreso = signal<number | null>(null);
+  protected readonly resultadoIngreso = signal<{ reservaId: number; error: boolean; mensaje: string } | null>(null);
 
   protected readonly images = computed(() => this.publication()?.imagenes ?? []);
   protected readonly currentImage = computed(() => this.images()[this.selectedImage()] ?? null);
   protected readonly esMiPublicacion = computed(
-    () => this.publication()?.anunciante?.usuario?.id === Number(this.auth.currentUser()?.sub),
+    () => {
+      const anunciante = this.publication()?.anunciante;
+      return (anunciante?.usuario?.id ?? anunciante?.idUsuario) === Number(this.auth.currentUser()?.sub);
+    },
   );
   protected readonly isFavorite = computed(() => {
     const id = this.publication()?.id;
@@ -157,11 +165,45 @@ export class PublicationDetailComponent {
           if (!this.administracion && this.esTemporaria() && !publication.eliminada && !publication.anunciante?.actividades_pausadas) {
             this.loadAvailability(publication.id);
           }
+          if (!this.administracion && this.esMiPublicacion() && this.esTemporaria() && !publication.eliminada) {
+            this.cargarIngresos(publication.id);
+          }
         },
         error: () => this.error.set(this.administracion
           ? 'No pudimos cargar la publicación de la reserva.'
           : 'Esta publicación no está disponible para consultas ni nuevas reservas. Si ya tenés una reserva, podés consultarla en Mis reservas y acudir a soporte.'),
       });
+  }
+
+  protected cargarIngresos(idPublicacion: number): void {
+    this.errorIngresos.set(false);
+    this.ingresosPendientes.set(null);
+    this.reservations.byPublication(idPublicacion).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: reservas => this.ingresosPendientes.set(reservas.filter(puedeValidarCodigo)),
+      error: () => this.errorIngresos.set(true),
+    });
+  }
+
+  protected validarIngreso(evento: Event, reserva: Reserva, valor: string): void {
+    evento.preventDefault();
+    if (this.validandoIngreso() !== null || !puedeValidarCodigo(reserva)) return;
+    const codigo = valor.trim().toUpperCase();
+    if (codigo.length !== 8) {
+      this.resultadoIngreso.set({ reservaId: reserva.id, error: true, mensaje: 'El código debe tener ocho caracteres.' });
+      return;
+    }
+    this.resultadoIngreso.set(null);
+    this.validandoIngreso.set(reserva.id);
+    this.reservations.validateLodgingCode(reserva.id, codigo).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.validandoIngreso.set(null)),
+    ).subscribe({
+      next: () => {
+        this.ingresosPendientes.update(reservas => reservas?.filter(item => item.id !== reserva.id) ?? null);
+        this.resultadoIngreso.set({ reservaId: reserva.id, error: false, mensaje: `Ingreso de la reserva #${reserva.id} validado.` });
+      },
+      error: (err: ApiError) => this.resultadoIngreso.set({ reservaId: reserva.id, error: true, mensaje: err.message }),
+    });
   }
 
   private registerView(publication: Publicacion): void {
