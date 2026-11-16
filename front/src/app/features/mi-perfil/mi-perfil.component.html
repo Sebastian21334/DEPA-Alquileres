@@ -1,7 +1,10 @@
 <section class="acct-page">
   <div class="acct-wrap">
     @if (cargando()) {
-      <div class="acct-state"><app-spinner /><p>Cargando tu perfil…</p></div>
+      <div class="acct-state">
+        <app-spinner />
+        <p>Cargando tu perfil…</p>
+      </div>
     } @else if (error()) {
       <div class="acct-state">
         <h1>No pudimos cargar tu perfil</h1>
@@ -9,182 +12,398 @@
         <a routerLink="/" class="acct-btn acct-btn--ghost">Volver al inicio</a>
       </div>
     } @else if (perfil(); as p) {
-      <header class="acct-card profile-hero">
-        <div class="photo">
-          <label class="photo__picker" [class.is-busy]="subiendoFoto()" title="Cambiar foto de perfil">
-            <input type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              [disabled]="subiendoFoto()" (change)="elegirFoto($event)" />
-            <app-avatar class="profile-hero__avatar" [foto]="p.foto_url" [nombre]="p.nombre" />
-            <span class="photo__overlay" aria-hidden="true">
-              <svg lucideCamera [size]="22"></svg>
-              {{ subiendoFoto() ? 'Subiendo…' : (p.foto_url ? 'Cambiar' : 'Subir foto') }}
-            </span>
-            <span class="sr-only">Cambiar foto de perfil</span>
-          </label>
-          @if (p.foto_url && !subiendoFoto()) {
-            <button type="button" class="photo__remove" (click)="quitarFoto()">Quitar foto</button>
-          }
-        </div>
-        <div class="profile-hero__info">
-          <h1>{{ nombreCompleto() }}</h1>
-          <p>{{ p.email }}</p>
-          <div class="profile-hero__badges">
-            <span class="acct-badge acct-badge--info">{{ rol() }}</span>
-            @switch (solicitud()?.estado) {
-              @case ('aprobada') { <span class="acct-badge acct-badge--ok"><svg lucideBadgeCheck [size]="14"></svg> Anunciante verificado</span> }
-              @case ('rechazada') { <span class="acct-badge acct-badge--error">Verificación rechazada</span> }
-              @case ('pendiente') { <span class="acct-badge acct-badge--warn"><svg lucideClock [size]="14"></svg> Verificación pendiente</span> }
-              @case ('reenviada') { <span class="acct-badge acct-badge--warn"><svg lucideClock [size]="14"></svg> Verificación reenviada</span> }
-            }
-            @if (p.bloqueado) { <span class="acct-badge acct-badge--error">Cuenta bloqueada</span> }
-          </div>
-        </div>
-      </header>
-
-      @if (errorFoto()) {
-        <div class="acct-alert acct-alert--error" role="alert">{{ errorFoto() }}</div>
-      }
-
-      <div class="profile-layout">
-        <section class="acct-card">
-          <div class="card-head">
-            <h2>Datos personales</h2>
-            @if (!editando()) {
-              <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="empezarEdicion()">
-                <svg lucidePencil [size]="15"></svg> Editar
+      <h1 class="profile-title">Mi perfil</h1>
+      <article class="acct-card profile-card">
+        <header class="profile-hero">
+          <div class="photo">
+            <label
+              class="photo__picker"
+              [class.is-busy]="subiendoFoto()"
+              title="Cambiar foto de perfil"
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                [disabled]="subiendoFoto()"
+                (change)="elegirFoto($event)"
+              />
+              <app-avatar
+                class="profile-hero__avatar"
+                [foto]="p.foto_url"
+                [nombre]="nombreCompleto()"
+                [usarDosIniciales]="true"
+              />
+              <span class="photo__overlay" aria-hidden="true">
+                <svg lucideCamera [size]="22"></svg>
+                {{ subiendoFoto() ? 'Subiendo…' : p.foto_url ? 'Cambiar' : 'Subir foto' }}
+              </span>
+              <span class="sr-only">Cambiar foto de perfil</span>
+            </label>
+            @if (p.foto_url && !subiendoFoto()) {
+              <button type="button" class="photo__remove" (click)="quitarFoto()">
+                Quitar foto
               </button>
             }
           </div>
-
-          @if (guardado()) {
-            <div class="acct-alert acct-alert--success spaced" role="status">Tus datos se actualizaron correctamente.</div>
-          }
-
-          @if (editando()) {
-            <form class="edit-form" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
-              @if (errorEdicion()) {
-                <div class="acct-alert acct-alert--error" role="alert">{{ errorEdicion() }}</div>
+          <div class="profile-hero__info">
+            <h2>{{ nombreCompleto() }}</h2>
+            <div class="profile-hero__badges">
+              <span class="acct-badge acct-badge--info">{{ rol() }}</span>
+              @switch (solicitud()?.estado) {
+                @case ('aprobada') {
+                  <span class="acct-badge acct-badge--ok"
+                    ><svg lucideBadgeCheck [size]="14"></svg> Anunciante verificado</span
+                  >
+                  @if (solicitud()?.anunciante?.actividades_pausadas) {
+                    <span class="acct-badge acct-badge--warn">Actividades pausadas</span>
+                  }
+                }
+                @case ('rechazada') {
+                  <span class="acct-badge acct-badge--error">Verificación rechazada</span>
+                }
+                @case ('pendiente') {
+                  <span class="acct-badge acct-badge--warn"
+                    ><svg lucideClock [size]="14"></svg> Verificación pendiente</span
+                  >
+                }
+                @case ('reenviada') {
+                  <span class="acct-badge acct-badge--warn"
+                    ><svg lucideClock [size]="14"></svg> Verificación reenviada</span
+                  >
+                }
               }
-              <div class="acct-field">
-                <label for="nombre">Nombre</label>
-                <input id="nombre" formControlName="nombre" autocomplete="given-name" maxlength="100" />
-                @if (invalido('nombre')) { <span class="acct-hint acct-hint--error">Mínimo 2 caracteres.</span> }
-              </div>
-              <div class="acct-field">
-                <label for="apellido">Apellido</label>
-                <input id="apellido" formControlName="apellido" autocomplete="family-name" maxlength="100" />
-                @if (invalido('apellido')) { <span class="acct-hint acct-hint--error">Mínimo 2 caracteres.</span> }
-              </div>
-              <div class="acct-field">
-                <label for="telefono">Teléfono</label>
-                <input id="telefono" type="tel" formControlName="telefono" autocomplete="tel" maxlength="20" />
-                @if (invalido('telefono')) { <span class="acct-hint acct-hint--error">Ingresá un teléfono (máximo 20 caracteres).</span> }
-              </div>
-              <div class="acct-actions">
-                <button type="button" class="acct-btn acct-btn--ghost" (click)="cancelarEdicion()" [disabled]="guardando()">Cancelar</button>
-                <button type="submit" class="acct-btn acct-btn--primary" [disabled]="guardando()">
-                  {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
-                </button>
-              </div>
-            </form>
-          } @else {
-            <dl class="data-list">
-              <div><dt><svg lucideUser [size]="16"></svg> Nombre</dt><dd>{{ p.nombre }}</dd></div>
-              <div><dt><svg lucideUser [size]="16"></svg> Apellido</dt><dd>{{ p.apellido }}</dd></div>
-              <div><dt><svg lucideMail [size]="16"></svg> Email</dt><dd>{{ p.email }}</dd></div>
-              <div><dt><svg lucidePhone [size]="16"></svg> Teléfono</dt><dd>{{ p.telefono || '—' }}</dd></div>
-              <div><dt>Tipo de usuario</dt><dd>{{ tipoUsuario() }}</dd></div>
-              <div><dt>Estado de la cuenta</dt><dd>{{ p.bloqueado ? 'Bloqueada' : 'Habilitada' }}</dd></div>
-            </dl>
-          }
-        </section>
-
-        <section class="acct-card advertiser">
-          <h2>Cuenta de anunciante</h2>
-          @switch (solicitud()?.estado) {
-            @case ('aprobada') {
-              @let s = solicitud()!;
-              <p>Tu identidad está verificada. Ya podés publicar propiedades y administrarlas.</p>
-              <dl class="data-list data-list--compact">
-                <div><dt>Tipo de anunciante</dt><dd>{{ s.anunciante.tipoAnunciante?.nombre ?? '—' }}</dd></div>
-                <div><dt>CUIT / CUIL</dt><dd>{{ s.anunciante.cuit_cuil ?? '—' }}</dd></div>
-                <div><dt>Contacto</dt><dd>{{ s.anunciante.numero_contacto }}</dd></div>
-                <div><dt>Verificado el</dt><dd>{{ fecha(s.actualizada_en) }}</dd></div>
-              </dl>
-              <div class="acct-actions">
-                <a [routerLink]="['/perfil', p.id]" class="acct-btn acct-btn--ghost">Ver perfil público</a>
-                <a routerLink="/favoritos" class="acct-btn acct-btn--ghost">Mis favoritos</a>
-                <a routerLink="/mis-reservas" class="acct-btn acct-btn--ghost">Mis reservas</a>
-                <a routerLink="/mis-publicaciones" class="acct-btn acct-btn--ghost">Mis publicaciones</a>
-                <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">Publicar propiedad</a>
-              </div>
-            }
-            @case ('rechazada') {
-              <div class="acct-alert acct-alert--error">
-                <strong>Tu verificación fue rechazada.</strong>
-                @if (solicitud()?.motivo_rechazo) { <br />Motivo: {{ solicitud()?.motivo_rechazo }} }
-              </div>
-              <p>Corregí la documentación y volvé a enviarla para que un administrador la revise.</p>
-              <div class="acct-actions">
-                <a routerLink="/mi-perfil/anunciante" class="acct-btn acct-btn--primary">Reenviar documentación</a>
-              </div>
-            }
-            @case (undefined) {
-              <p>
-                ¿Tenés propiedades para alquilar? Convertite en anunciante: cargá tus datos y tu
-                documentación de identidad, y una vez aprobada vas a poder publicar.
-              </p>
-              <div class="acct-actions">
-                <a routerLink="/mi-perfil/anunciante" class="acct-btn acct-btn--primary">Quiero ser anunciante</a>
-              </div>
-            }
-            @default {
-              @if (solicitud()?.dni_frente_url) {
-                <div class="acct-alert acct-alert--info">
-                  Tu documentación está en revisión. Te avisamos por email cuando un administrador la apruebe.
-                </div>
-              } @else {
-                <div class="acct-alert acct-alert--info">
-                  Ya cargaste tus datos. Falta subir la documentación de identidad para completar la solicitud.
-                </div>
+              @if (p.bloqueado) {
+                <span class="acct-badge acct-badge--error">Cuenta bloqueada</span>
               }
-              <div class="acct-actions">
-                <a routerLink="/mi-perfil/anunciante" class="acct-btn acct-btn--primary">
-                  {{ solicitud()?.dni_frente_url ? 'Ver estado de la solicitud' : 'Subir documentación' }}
-                </a>
-              </div>
-            }
-          }
-        </section>
-      </div>
-      <app-cambiar-contrasenia />
-      @if (solicitud()?.estado !== 'aprobada') {
-        <div class="acct-actions profile-reservations"><a routerLink="/favoritos" class="acct-btn acct-btn--ghost">Mis favoritos</a><a routerLink="/mis-reservas" class="acct-btn acct-btn--ghost">Mis reservas</a></div>
-      }
-
-      <section class="acct-card delete-account" aria-labelledby="titulo-baja-cuenta">
-        <h2 id="titulo-baja-cuenta">Eliminar mi cuenta</h2>
-        <p>Podés solicitar la baja de tu cuenta desde acá.</p>
-        @if (!mostrarConfirmacionBaja()) {
-          <button type="button" class="acct-btn acct-btn--danger" (click)="mostrarConfirmacionBaja.set(true)">
-            Eliminar cuenta
-          </button>
-        } @else {
-          <div class="delete-account__warning" role="alert">
-            <strong>¿Seguro que querés dar de baja tu cuenta?</strong>
-            <p>Perderás el acceso a DEPA. Si sos anunciante, todas tus publicaciones dejarán de estar disponibles. Las reservas y pagos registrados se conservarán como historial. Si tenés reservas, estadías, pagos, liquidaciones o reclamos pendientes de resolver, como inquilino o como anunciante, no vas a poder dar de baja la cuenta hasta regularizarlos. Esta acción no cancela ni reembolsa operaciones.</p>
-            @if (errorBaja()) {
-              <p class="acct-alert acct-alert--error">{{ errorBaja() }}</p>
-            }
-            <div class="acct-actions">
-              <button type="button" class="acct-btn acct-btn--ghost" [disabled]="eliminandoCuenta()" (click)="mostrarConfirmacionBaja.set(false)">Cancelar</button>
-              <button type="button" class="acct-btn acct-btn--danger" [disabled]="eliminandoCuenta()" (click)="confirmarBajaCuenta()">
-                {{ eliminandoCuenta() ? 'Procesando…' : 'Sí, eliminar mi cuenta' }}
-              </button>
             </div>
           </div>
+          @if (solicitud()?.estado === 'aprobada') {
+            <a [routerLink]="['/perfil', p.id]" class="acct-btn acct-btn--ghost profile-public">
+              <svg lucideExternalLink [size]="18" aria-hidden="true"></svg> Ver perfil público
+            </a>
+          }
+        </header>
+
+        @if (errorFoto()) {
+          <div class="acct-alert acct-alert--error photo-error" role="alert">{{ errorFoto() }}</div>
         }
-      </section>
+
+        <nav class="profile-shortcuts" aria-label="Accesos de Mi perfil">
+          @if (solicitud()?.estado === 'aprobada') {
+            <a routerLink="/mis-publicaciones"
+              ><svg lucideLayers [size]="25" aria-hidden="true"></svg> Mis publicaciones</a
+            >
+          }
+          <a routerLink="/mis-reservas"
+            ><svg lucideCalendarDays [size]="25" aria-hidden="true"></svg> Mis reservas</a
+          >
+          <a routerLink="/favoritos"
+            ><svg lucideHeart [size]="25" aria-hidden="true"></svg> Mis favoritos</a
+          >
+        </nav>
+
+        <div class="profile-layout">
+          <section class="profile-section" aria-labelledby="datos-personales">
+            <div class="card-head">
+              <h2 id="datos-personales">Datos personales</h2>
+              @if (!editando()) {
+                <button
+                  type="button"
+                  class="acct-btn acct-btn--ghost acct-btn--sm"
+                  (click)="empezarEdicion()"
+                >
+                  <svg lucidePencil [size]="15"></svg> Editar
+                </button>
+              }
+            </div>
+
+            @if (guardado()) {
+              <div class="acct-alert acct-alert--success spaced" role="status">
+                Tus datos se actualizaron correctamente.
+              </div>
+            }
+
+            @if (editando()) {
+              <form class="edit-form" [formGroup]="form" (ngSubmit)="guardar()" novalidate>
+                @if (errorEdicion()) {
+                  <div class="acct-alert acct-alert--error" role="alert">{{ errorEdicion() }}</div>
+                }
+                <div class="acct-field">
+                  <label for="nombre">Nombre</label>
+                  <input
+                    id="nombre"
+                    formControlName="nombre"
+                    autocomplete="given-name"
+                    maxlength="100"
+                  />
+                  @if (invalido('nombre')) {
+                    <span class="acct-hint acct-hint--error">Mínimo 2 caracteres.</span>
+                  }
+                </div>
+                <div class="acct-field">
+                  <label for="apellido">Apellido</label>
+                  <input
+                    id="apellido"
+                    formControlName="apellido"
+                    autocomplete="family-name"
+                    maxlength="100"
+                  />
+                  @if (invalido('apellido')) {
+                    <span class="acct-hint acct-hint--error">Mínimo 2 caracteres.</span>
+                  }
+                </div>
+                <div class="acct-field">
+                  <label for="telefono">Teléfono</label>
+                  <input
+                    id="telefono"
+                    type="tel"
+                    formControlName="telefono"
+                    autocomplete="tel"
+                    maxlength="20"
+                  />
+                  @if (invalido('telefono')) {
+                    <span class="acct-hint acct-hint--error"
+                      >Ingresá un teléfono (máximo 20 caracteres).</span
+                    >
+                  }
+                </div>
+                <div class="acct-actions">
+                  <button
+                    type="button"
+                    class="acct-btn acct-btn--ghost"
+                    (click)="cancelarEdicion()"
+                    [disabled]="guardando()"
+                  >
+                    Cancelar
+                  </button>
+                  <button type="submit" class="acct-btn acct-btn--primary" [disabled]="guardando()">
+                    {{ guardando() ? 'Guardando…' : 'Guardar cambios' }}
+                  </button>
+                </div>
+              </form>
+            } @else {
+              <dl class="data-list">
+                <div>
+                  <dt>Nombre</dt>
+                  <dd>{{ p.nombre }}</dd>
+                </div>
+                <div>
+                  <dt>Apellido</dt>
+                  <dd>{{ p.apellido }}</dd>
+                </div>
+                <div>
+                  <dt>Correo</dt>
+                  <dd>{{ p.email }}</dd>
+                </div>
+                <div>
+                  <dt>Teléfono</dt>
+                  <dd>{{ p.telefono || '—' }}</dd>
+                </div>
+                @if (solicitud()?.estado !== 'aprobada') {
+                  <div>
+                    <dt>Estado de la cuenta</dt>
+                    <dd>{{ p.bloqueado ? 'Bloqueada' : !p.activa ? 'Inactiva' : 'Habilitada' }}</dd>
+                  </div>
+                }
+              </dl>
+            }
+          </section>
+
+          <section class="profile-section advertiser" aria-labelledby="cuenta-anunciante">
+            <div class="card-head">
+              <h2 id="cuenta-anunciante">Cuenta de anunciante</h2>
+              @if (solicitud()?.estado === 'aprobada') {
+                <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--ghost acct-btn--sm">
+                  <svg lucidePlus [size]="16" aria-hidden="true"></svg> Publicar propiedad
+                </a>
+              }
+            </div>
+            @switch (solicitud()?.estado) {
+              @case ('aprobada') {
+                @let s = solicitud()!;
+                <dl class="data-list">
+                  <div>
+                    <dt>Tipo de anunciante</dt>
+                    <dd>{{ s.anunciante.tipoAnunciante?.nombre ?? '—' }}</dd>
+                  </div>
+                  <div>
+                    <dt>CUIT / CUIL</dt>
+                    <dd>{{ s.anunciante.cuit_cuil ?? '—' }}</dd>
+                  </div>
+                  <div>
+                    <dt>Contacto</dt>
+                    <dd>{{ s.anunciante.numero_contacto }}</dd>
+                  </div>
+                  <div>
+                    <dt>Verificado el</dt>
+                    <dd>{{ fecha(s.actualizada_en) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Estado de la cuenta</dt>
+                    <dd>{{ p.bloqueado ? 'Bloqueada' : !p.activa ? 'Inactiva' : 'Habilitada' }}</dd>
+                  </div>
+                </dl>
+                <div class="advertiser-activity">
+                  @if (s.anunciante.actividades_pausadas) {
+                    <p role="status">
+                      Podés seguir gestionando tus reservas y solicitar la baja cuando resuelvas tus
+                      compromisos pendientes.
+                    </p>
+                    <button
+                      type="button"
+                      class="acct-btn acct-btn--ghost"
+                      [disabled]="cambiandoPausa()"
+                      (click)="cambiarPausaActividades(false)"
+                    >
+                      {{ cambiandoPausa() ? 'Reanudando…' : 'Reanudar actividades' }}
+                    </button>
+                  } @else if (confirmarPausa()) {
+                    <p>
+                      Tus publicaciones saldrán del catálogo y dejarán de recibir nuevas reservas.
+                      Vas a conservar el acceso a tu cuenta, tus reservas, tus pagos y tu historial.
+                    </p>
+                    <div class="acct-actions">
+                      <button
+                        type="button"
+                        class="acct-btn acct-btn--ghost"
+                        [disabled]="cambiandoPausa()"
+                        (click)="confirmarPausa.set(false); errorPausa.set('')"
+                      >
+                        Volver
+                      </button>
+                      <button
+                        type="button"
+                        class="acct-btn acct-btn--primary"
+                        [disabled]="cambiandoPausa()"
+                        (click)="cambiarPausaActividades(true)"
+                      >
+                        {{ cambiandoPausa() ? 'Pausando…' : 'Confirmar pausa' }}
+                      </button>
+                    </div>
+                  } @else {
+                    <p>
+                      Pausá las nuevas reservas de todas tus publicaciones mientras terminás de
+                      atender las que ya tenés.
+                    </p>
+                    <button
+                      type="button"
+                      class="acct-btn acct-btn--ghost"
+                      (click)="confirmarPausa.set(true)"
+                    >
+                      Pausar actividades
+                    </button>
+                  }
+                  @if (errorPausa()) {
+                    <p role="alert" class="acct-alert acct-alert--error">{{ errorPausa() }}</p>
+                  }
+                </div>
+              }
+              @case ('rechazada') {
+                <div class="acct-alert acct-alert--error">
+                  <strong>Tu verificación fue rechazada.</strong>
+                  @if (solicitud()?.motivo_rechazo) {
+                    <br />Motivo: {{ solicitud()?.motivo_rechazo }}
+                  }
+                </div>
+                <p>
+                  Corregí la documentación y volvé a enviarla para que un administrador la revise.
+                </p>
+                <div class="acct-actions">
+                  <a routerLink="/mi-perfil/anunciante" class="acct-btn acct-btn--primary"
+                    >Reenviar documentación</a
+                  >
+                </div>
+              }
+              @case (undefined) {
+                <p>
+                  ¿Tenés propiedades para alquilar? Convertite en anunciante: cargá tus datos y tu
+                  documentación de identidad, y una vez aprobada vas a poder publicar.
+                </p>
+                <div class="acct-actions">
+                  <a routerLink="/mi-perfil/anunciante" class="acct-btn acct-btn--primary"
+                    >Quiero ser anunciante</a
+                  >
+                </div>
+              }
+              @default {
+                @if (solicitud()?.dni_frente_url) {
+                  <div class="acct-alert acct-alert--info">
+                    Tu documentación está en revisión. Te avisamos por email cuando un administrador
+                    la apruebe.
+                  </div>
+                } @else {
+                  <div class="acct-alert acct-alert--info">
+                    Ya cargaste tus datos. Falta subir la documentación de identidad para completar
+                    la solicitud.
+                  </div>
+                }
+                <div class="acct-actions">
+                  <a routerLink="/mi-perfil/anunciante" class="acct-btn acct-btn--primary">
+                    {{
+                      solicitud()?.dni_frente_url
+                        ? 'Ver estado de la solicitud'
+                        : 'Subir documentación'
+                    }}
+                  </a>
+                </div>
+              }
+            }
+          </section>
+        </div>
+        <section class="profile-settings" aria-labelledby="configuracion-cuenta">
+          <h2 id="configuracion-cuenta">Configuración de la cuenta</h2>
+          <app-cambiar-contrasenia />
+          <section class="delete-account" aria-labelledby="titulo-baja-cuenta">
+            <div class="account-setting-row">
+              <h3 id="titulo-baja-cuenta" class="account-setting-label">
+                <svg lucideTrash2 [size]="20" aria-hidden="true"></svg> Baja de cuenta
+              </h3>
+              @if (!mostrarConfirmacionBaja()) {
+                <button
+                  type="button"
+                  class="acct-btn acct-btn--danger acct-btn--sm"
+                  (click)="mostrarConfirmacionBaja.set(true)"
+                >
+                  Eliminar cuenta
+                </button>
+              }
+            </div>
+            @if (mostrarConfirmacionBaja()) {
+              <div class="delete-account__warning" role="alert">
+                <strong>¿Seguro que querés dar de baja tu cuenta?</strong>
+                <p>
+                  Perderás el acceso a DEPA. Si sos anunciante, todas tus publicaciones dejarán de
+                  estar disponibles. Las reservas y pagos registrados se conservarán como historial.
+                  Si tenés reservas, estadías, pagos, liquidaciones o reclamos pendientes de
+                  resolver, como inquilino o como anunciante, no vas a poder dar de baja la cuenta
+                  hasta regularizarlos. Esta acción no cancela ni reembolsa operaciones.
+                </p>
+                @if (errorBaja()) {
+                  <p class="acct-alert acct-alert--error">{{ errorBaja() }}</p>
+                }
+                <div class="acct-actions">
+                  <button
+                    type="button"
+                    class="acct-btn acct-btn--ghost"
+                    [disabled]="eliminandoCuenta()"
+                    (click)="mostrarConfirmacionBaja.set(false); errorBaja.set('')"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    class="acct-btn acct-btn--danger"
+                    [disabled]="eliminandoCuenta()"
+                    (click)="confirmarBajaCuenta()"
+                  >
+                    {{ eliminandoCuenta() ? 'Procesando…' : 'Sí, eliminar mi cuenta' }}
+                  </button>
+                </div>
+              </div>
+            }
+          </section>
+        </section>
+      </article>
     }
   </div>
 </section>

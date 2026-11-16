@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import {
   ANUNCIANTES_REPOSITORY,
@@ -20,6 +20,13 @@ export class AnunciantesService {
 
   buscarPorUsuario(idUsuario: number, transaccion?: EntityManager): Promise<Anunciante | null> {
     return this.anunciantesRepo.buscarPorUsuario(idUsuario, transaccion);
+  }
+
+  async cambiarPausaActividades(idUsuario: number, pausadas: boolean, transaccion: EntityManager): Promise<void> {
+    const actualizado = await this.anunciantesRepo.actualizarPausaActividades(idUsuario, pausadas, transaccion);
+    if (!actualizado) {
+      throw new ForbiddenException('Esta acción requiere una cuenta de anunciante verificada');
+    }
   }
 
   archivarCuitPorBajaDeCuenta(idUsuario: number, transaccion: EntityManager): Promise<void> {

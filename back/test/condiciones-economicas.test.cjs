@@ -130,6 +130,29 @@ function sinOperaciones(estado) {
   assert.equal(estado.checkouts.length, 0);
 }
 
+test('la pausa bloquea cotización y checkout, incluso si se confirma durante la creación', async () => {
+  const e = escenario();
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  const checkout = { ...solicitud, presupuesto_token: presupuesto.token };
+  e.publicacion.anunciante.actividades_pausadas = true;
+  await assert.rejects(e.presupuestos.cotizar(solicitud, USUARIO), { status: 409 });
+  await assert.rejects(e.pagos.crearCheckout(checkout, USUARIO), { status: 409 });
+
+  e.publicacion.anunciante.actividades_pausadas = false;
+  e.estado.alBloquear = () => { e.publicacion.anunciante.actividades_pausadas = true; };
+  await assert.rejects(e.pagos.crearCheckout(checkout, USUARIO), { status: 409 });
+  sinOperaciones(e.estado);
+
+  e.publicacion.anunciante.actividades_pausadas = false;
+  e.estado.alBloquear = () => {};
+  await e.pagos.crearCheckout(checkout, USUARIO);
+  assert.equal(e.estado.reservas.length, 1);
+
+  e.publicacion.anunciante.actividades_pausadas = true;
+  const confirmada = await e.reservas.confirmarPago(e.estado.reservas[0].id, new Date());
+  assert.equal(confirmada.estado_pago, 'APROBADO');
+});
+
 test('bloquear impide nuevos presupuestos y checkout con presupuesto anterior', async () => {
   const e = escenario();
   const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);

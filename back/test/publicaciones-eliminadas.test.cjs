@@ -40,6 +40,65 @@ function escenario() {
   return { publicacion, reservas, servicio };
 }
 
+test('la pausa conserva el detalle y las publicaciones propias, y las retira del catálogo', async (t) => {
+  const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
+  const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
+  const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
+  const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
+  const { UsuariosController } = require('../dist/usuarios/controller/usuarios.controller');
+  const { CambiarPausaActividadesDto } = require('../dist/usuarios/dto/cambiar-pausa-actividades.dto');
+  const { Anunciante } = require('../dist/anunciantes/entity/anunciante.entity');
+  const { AnunciantesRepository } = require('../dist/anunciantes/repository/anunciantes.repository');
+  const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
+  const { ValidationPipe } = require('@nestjs/common');
+  const base = await crearPostgresPruebas();
+  t.after(() => base.cerrar());
+  const { db, source: datos } = base;
+  await db.exec(`
+    ALTER TABLE anunciante DROP COLUMN actividades_pausadas;
+    INSERT INTO rol (id_rol,nombre) VALUES (1,'Inquilino'),(2,'Anunciante');
+    INSERT INTO usuario (id_usuario,nombre,apellido,email,telefono,contrasenia,email_verificado,id_rol)
+      VALUES (1,'Inquilino','Prueba','inquilino@example.invalid','123','hash',true,1),
+        (2,'Anunciante','Prueba','anunciante@example.invalid','123','hash',true,2);
+    INSERT INTO anunciante (id_usuario,numero_contacto,verificado) VALUES (2,'123',true);
+    INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante,activa)
+      VALUES (10,'Casa de prueba','Prueba',CURRENT_DATE,100,'Calle de prueba',1,30,2,true);
+    INSERT INTO imagen (id_imagen,url,id_publicacion) VALUES (50,'foto.jpg',10);
+  `);
+  const migracion = fs.readFileSync(path.join(__dirname, '../migrations/20261116-pausa-actividades.sql'), 'utf8');
+  await db.exec(migracion);
+  await db.exec(migracion);
+  const repo = new PublicacionesRepository(datos.getRepository(Publicacion), datos.getRepository(Reserva));
+  const publicaciones = new PublicacionesService(repo, catalogosDePrueba());
+  const anunciantes = new AnunciantesService(new AnunciantesRepository(datos.getRepository(Anunciante)));
+  const usuarios = new UsuariosService(new UsuariosRepository(datos.getRepository(Usuario)),
+    undefined, undefined, undefined, undefined, publicaciones, anunciantes);
+  const controlador = new UsuariosController(usuarios);
+  const validacion = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });
+  const cambiar = async (id, body) => controlador.cambiarPausaActividades(
+    { user: { id } },
+    await validacion.transform(body, { type: 'body', metatype: CambiarPausaActividadesDto }),
+  );
+  const catalogo = () => publicaciones.listarActivas(1, 12, undefined, { busqueda: 'Casa' });
+  assert.equal((await catalogo()).total, 1);
+  await assert.rejects(cambiar(1, { actividades_pausadas: true }), { status: 403 });
+  await assert.rejects(cambiar(2, { actividades_pausadas: 'true' }), { status: 400 });
+  await assert.rejects(cambiar(2, { actividades_pausadas: true, id: 1 }), { status: 400 });
+  assert.deepEqual(await cambiar(2, { actividades_pausadas: true }), { actividades_pausadas: true });
+  assert.equal((await catalogo()).total, 0);
+  assert.deepEqual(await publicaciones.listarPorAnunciante(2, true), []);
+  assert.equal((await publicaciones.listarPorAnunciante(2, false)).length, 1);
+  const detalle = await publicaciones.buscarPublicaPorId(10);
+  assert.equal(detalle.activa, true);
+  assert.equal(detalle.anunciante.actividades_pausadas, true);
+  await datos.manager.transaction(async transaccion => {
+    const actual = await repo.buscarCondicionesDeReserva(10, transaccion);
+    assert.equal(actual.anunciante.actividades_pausadas, true);
+  });
+  assert.deepEqual(await cambiar(2, { actividades_pausadas: false }), { actividades_pausadas: false });
+  assert.equal((await catalogo()).total, 1);
+});
+
 test('eliminar conserva la publicación, fotos y reserva; solo el inquilino vigente puede abrirla', async () => {
   const e = escenario();
   await assert.rejects(e.servicio.eliminar(10, { idUsuario: 99 }), { status: 403 });

@@ -45,6 +45,18 @@ export class PerfilService {
   private solicitud$: Observable<SolicitudVerificacion | null> | null = null;
   private solicitudDeUsuario: number | null = null;
 
+  cambiarPausaActividades(pausadas: boolean): Observable<{ actividades_pausadas: boolean }> {
+    return this.http.patch<{ actividades_pausadas: boolean }>(`${this.api}/usuarios/me/actividades`, {
+      actividades_pausadas: pausadas,
+    }).pipe(tap(({ actividades_pausadas }) => {
+      this.solicitud.update(solicitud => solicitud && {
+        ...solicitud,
+        anunciante: { ...solicitud.anunciante, actividades_pausadas },
+      });
+      this.solicitud$ = null;
+    }));
+  }
+
   getPerfil(): Observable<PerfilUsuario> {
     return this.http
       .get<PerfilUsuario>(`${this.api}/usuarios/me`)

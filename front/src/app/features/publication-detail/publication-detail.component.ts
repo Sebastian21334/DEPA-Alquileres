@@ -154,7 +154,7 @@ export class PublicationDetailComponent {
               next: (items) => this.activeCount.set(items.length),
             });
           }
-          if (!this.administracion && this.esTemporaria() && !publication.eliminada) {
+          if (!this.administracion && this.esTemporaria() && !publication.eliminada && !publication.anunciante?.actividades_pausadas) {
             this.loadAvailability(publication.id);
           }
         },
@@ -279,7 +279,8 @@ export class PublicationDetailComponent {
   }
 
   protected openPayment(): void {
-    if (this.publication()?.eliminada) return;
+    const publicacion = this.publication();
+    if (!publicacion || publicacion.eliminada || publicacion.anunciante?.actividades_pausadas) return;
     this.bookingError.set('');
     if (!this.auth.isAuthenticated) {
       this.router.navigate(['/login'], { queryParams: { returnUrl: this.router.url } });

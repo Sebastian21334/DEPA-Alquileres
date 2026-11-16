@@ -7,6 +7,7 @@ import { Usuario } from './usuario.model';
 export interface Anunciante {
   idUsuario: number;
   verificado: boolean;
+  actividades_pausadas: boolean;
   /** null cuando la cuenta se dio de baja; el original queda en cuit_cuil_historico (RN-37). */
   cuit_cuil: string | null;
   cuit_cuil_historico?: string | null;

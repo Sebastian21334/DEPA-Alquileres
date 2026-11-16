@@ -234,3 +234,11 @@ npm run db:cuit-email-historicos
 El primer comando informa qué se movería y si hay repetidos, sin cambios. El
 segundo aplica la migración en una transacción. Es repetible. En una base nueva,
 aplicarla después de `npm run db:inicializar`.
+
+# Pausa de actividades del anunciante (F-08)
+
+Desde `back`, ejecutar `npm run db:pausa-actividades` antes de iniciar esta
+versión del backend sobre una base existente. El comando aplica
+`20261116-pausa-actividades.sql` a la base de `DATABASE_URL` (entorno o
+`back/.env`). Es reejecutable. Las bases nuevas creadas con el esquema
+inicial ya incluyen la columna.

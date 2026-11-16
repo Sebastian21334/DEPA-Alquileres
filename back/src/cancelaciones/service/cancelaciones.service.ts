@@ -53,7 +53,8 @@ export class CancelacionesService {
 
       const hoy = fechaArgentina();
       this.validarReserva(reserva, hoy);
-      const { motivoBloqueo } = await this.condiciones(cancelaciones, reserva, hoy, transaccion);
+      const politica = await this.politicaAplicable(cancelaciones, reserva);
+      const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica);
       if (motivoBloqueo) throw new BadRequestException(motivoBloqueo);
       await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
       const solicitud = cancelaciones.crear({
@@ -100,20 +101,21 @@ export class CancelacionesService {
   async consultarCondiciones(idReserva: number, idUsuario: number) {
     const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
     const solicitud = await this.buscarEnCurso(this.cancelaciones, reserva);
-    return { solicitud, ...await this.condiciones(this.cancelaciones, reserva, fechaArgentina()) };
+    const politica = await this.politicaAplicable(this.cancelaciones, reserva);
+    const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id);
+    return {
+      solicitud,
+      politica,
+      motivoBloqueo: this.bloqueoPorPlazo(reserva, fechaArgentina(), politica),
+      admiteReembolso: pago?.payment_method_id === 'account_money',
+    };
   }
 
-  private async condiciones(cancelaciones: ICancelacionesRepository, reserva: Reserva, hoy: string, transaccion?: EntityManager) {
-    const politica = await this.politicaAplicable(cancelaciones, reserva);
+  private bloqueoPorPlazo(reserva: Reserva, hoy: string, politica: PoliticaCancelacion): string | null {
     const diasMinimos = politica.diasDevolucionParcial;
-    const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
-    const motivos: string[] = [];
-    if (this.diasHastaIngreso(reserva, hoy) < diasMinimos)
-      motivos.push(`El plazo venció. Tenés que solicitar la cancelación al menos ${diasMinimos} días antes del ingreso.`);
-    if (pago?.payment_method_id !== 'account_money')
-      motivos.push('Solo se pueden cancelar reservas pagadas con dinero en cuenta de Mercado Pago.');
-
-    return { politica, motivoBloqueo: motivos.join(' ') || null };
+    return this.diasHastaIngreso(reserva, hoy) < diasMinimos
+      ? `El plazo venció. Tenés que solicitar la cancelación al menos ${diasMinimos} días antes del ingreso.`
+      : null;
   }
 
   private async politicaAplicable(cancelaciones: ICancelacionesRepository, reserva: Reserva): Promise<PoliticaCancelacion> {
@@ -191,12 +193,12 @@ export class CancelacionesService {
       );
       solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA');
 
-      if (importe > 0) {
+      const pago = importe > 0 ? await this.reembolsos.buscarPagoPorReserva(idReserva, transaccion) : null;
+      if (importe > 0 && !pago)
+        throw new ConflictException('La reserva no tiene un pago registrado');
+      if (importe > 0 && pago?.payment_method_id === 'account_money') {
         // El reembolso y la aprobación se confirman juntos: no queda una
         // solicitud aprobada sin registro económico ni un registro sin decisión.
-        const pago = await this.reembolsos.buscarPagoPorReserva(idReserva, transaccion);
-        if (!pago)
-          throw new ConflictException('La reserva no tiene un pago registrado');
         const reembolso = await this.reembolsos.crearSolicitud(
           {
             reserva,

@@ -167,6 +167,7 @@ export class ReservasService
     const publicacion = await this.publicacionesService.buscarPorId(
       dto.id_publicacion,
     );
+    this.validarActividadesAnunciante(publicacion.anunciante?.actividades_pausadas);
     if (publicacion.eliminada || !publicacion.activa || !this.publicacionesService.cuentaAnuncianteHabilitada(publicacion)) {
       throw new BadRequestException(
         'No se puede reservar: la publicación no está disponible',
@@ -237,6 +238,7 @@ export class ReservasService
           dto.id_publicacion,
           transaccion,
         );
+        this.validarActividadesAnunciante(actual?.anunciante?.actividades_pausadas);
         let monedaActual: 'ARS' | 'USD' | undefined;
         try {
           monedaActual = monedaPublicacion(actual?.tipoMoneda?.nombre);
@@ -336,6 +338,12 @@ export class ReservasService
       },
     );
     return this.prepararRespuesta(guardada);
+  }
+
+  private validarActividadesAnunciante(pausadas?: boolean): void {
+    if (pausadas) {
+      throw new ConflictException('El anunciante pausó sus actividades. Por el momento, no acepta nuevas reservas.');
+    }
   }
 
   /** Confirma la reserva únicamente después de verificar el pago con Mercado Pago. */

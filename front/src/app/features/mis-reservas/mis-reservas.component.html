@@ -49,6 +49,9 @@
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
               <p>Un administrador revisará tu solicitud. Si corresponde una devolución, la reserva se cancela cuando se confirma el reembolso.</p>
             </div>
+            @if (condicionesCancelacion()?.admiteReembolso === false) {
+              <p role="status">Si se aprueba esta solicitud, se cancelará la reserva sin devolución. El reembolso por cancelación solo está disponible para pagos con dinero en cuenta de Mercado Pago.</p>
+            }
           } @else if (estadoCancelacion() === 'pendiente') {
             <div class="cancellation-info" role="status">
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
@@ -67,7 +70,7 @@
               <summary>Términos y condiciones de cancelación</summary>
               <ul>
                 <li>Podés solicitar la cancelación hasta {{ politica.diasDevolucionParcial }} días antes del ingreso, inclusive. Se cuentan días calendario de Argentina.</li>
-                <li>Solo se admiten pagos con dinero en cuenta de Mercado Pago. Los pagos con tarjeta de débito o crédito están excluidos.</li>
+                <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Los porcentajes de devolución indicados a continuación solo se aplican a pagos con dinero en cuenta de Mercado Pago. Los pagos con tarjeta de débito, crédito u otros medios se cancelan sin devolución.</li>
                 <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al momento de la aprobación.</li>
                 <li>Si al aprobar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
                 <li>Si la cancelación la solicita el anunciante o el administrador, la política prevé una devolución del {{ politica.porcentajeOtrosActores }} % si se aprueba antes del ingreso.</li>

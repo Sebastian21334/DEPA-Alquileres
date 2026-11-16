@@ -84,6 +84,7 @@ SET default_table_access_method = heap;
 CREATE TABLE public.anunciante (
     id_usuario integer NOT NULL,
     verificado boolean DEFAULT false NOT NULL,
+    actividades_pausadas boolean DEFAULT false NOT NULL,
     cuit_cuil character varying(15),
     numero_contacto character varying(20) NOT NULL,
     id_tipo_anunciante integer

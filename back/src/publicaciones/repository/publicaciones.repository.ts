@@ -33,10 +33,15 @@ export class PublicacionesRepository implements IPublicacionesRepository {
   }
 
   buscarCondicionesDeReserva(id: number, transaccion: EntityManager): Promise<Publicacion | null> {
-    return transaccion.getRepository(Publicacion).findOne({
-      where: { id },
-      relations: { tipoMoneda: true, anunciante: { usuario: true } },
-    });
+    // La pausa actualiza la misma fila y el bloqueo se conserva hasta el commit.
+    return transaccion.getRepository(Publicacion)
+      .createQueryBuilder('publicacion')
+      .innerJoinAndSelect('publicacion.anunciante', 'anunciante')
+      .leftJoinAndSelect('anunciante.usuario', 'usuario')
+      .leftJoinAndSelect('publicacion.tipoMoneda', 'tipoMoneda')
+      .where('publicacion.id = :id', { id })
+      .setLock('pessimistic_read', undefined, ['anunciante'])
+      .getOne();
   }
   async bloquearPorAnunciante(idUsuario: number, transaccion: EntityManager): Promise<boolean> {
     const publicaciones = await transaccion.getRepository(Publicacion)
@@ -147,7 +152,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     // Se agregan imagenes y anunciante porque el listado público (home) necesita
     // mostrar la imagen principal y el estado "verificado" del anunciante por cada tarjeta.
     return this.repo.find({
-      where: { activa: true, eliminada: false, anunciante: { usuario: { activa: true, bloqueado: false } } },
+      where: { activa: true, eliminada: false, anunciante: { actividades_pausadas: false, usuario: { activa: true, bloqueado: false } } },
       relations: {
         tipoPropiedad: true,
         ciudad: true,
@@ -196,6 +201,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .where('publicacion.activa = :activa', { activa: true })
       .andWhere('publicacion.eliminada = false')
       .andWhere('usuario.activa = true AND usuario.bloqueado = false')
+      .andWhere('anunciante.actividades_pausadas = false')
       .distinct(true);
 
     this.aplicarCategoria(base, categoria);
@@ -284,7 +290,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const publicaciones = ids.length
       ? await this.repo.find({
           where: ids.map((id) => ({ id, activa: true, eliminada: false,
-            anunciante: { usuario: { activa: true, bloqueado: false } } })),
+            anunciante: { actividades_pausadas: false, usuario: { activa: true, bloqueado: false } } })),
           relations: {
             tipoPropiedad: true,
             ciudad: true,

@@ -59,6 +59,9 @@ export class PresupuestosService {
     const publicacion = await this.publicaciones.buscarPorId(
       dto.id_publicacion,
     );
+    if (publicacion.anunciante?.actividades_pausadas) {
+      throw new ConflictException('El anunciante pausó sus actividades. Por el momento, no acepta nuevas reservas.');
+    }
     if (publicacion.eliminada || !publicacion.activa || !this.publicaciones.cuentaAnuncianteHabilitada(publicacion) ||
         !this.publicaciones.admiteReservaPorFecha(publicacion))
       throw new BadRequestException('Esta publicación no admite reservas');

@@ -7,17 +7,26 @@ devolución. Las fechas se liberan al cancelar.
 
 La cancelación de una reserva **pagada** antes del inicio requiere una solicitud
 y una decisión administrativa. La reserva no se cancela hasta que el reembolso
-quede registrado, salvo que el porcentaje sea 0 %.
+quede registrado cuando corresponde una devolución. El solicitante puede
+enviar el pedido hasta 2 días calendario antes del ingreso, inclusive, y debe
+aceptar los términos de cancelación. Se puede solicitar con cualquier medio
+de pago admitido para reservar. Si el pago se hizo con tarjeta u otro medio
+distinto de dinero en cuenta de Mercado Pago, la aprobación cancela la
+reserva y libera las fechas sin generar un reembolso.
 
-| Situación | Devolución |
+Los siguientes porcentajes se calculan al aprobar la solicitud y se aplican
+solo a pagos con dinero en cuenta de Mercado Pago.
+
+| Situación al aprobar la solicitud | Devolución |
 |---|---|
 | Inquilino cancela con 7 días o más de anticipación | 100 % |
 | Inquilino cancela entre 2 y 6 días antes | 50 % |
-| Inquilino cancela con menos de 48 horas | 0 % |
+| Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | 0 % |
 | Anunciante o Administrador cancela antes del inicio | 100 % |
 | La estadía ya comenzó o terminó | No se cancela; solo reclamo |
 
-Si la solicitud llega a la fecha de inicio sin resolución, queda `VENCIDA`.
+Si el Administrador intenta resolverla en la fecha de ingreso o después,
+el sistema marca la solicitud como `VENCIDA`.
 Después del inicio no se admite cancelación con devolución automática: el
 Inquilino debe abrir un reclamo.
 
@@ -36,7 +45,7 @@ rutas `/reservas/:id/cancelacion`, `/reservas/:id/cancelacion/:idSolicitud` y
 - Con devolución: crea el reembolso en esa misma transacción, con la clave de
   idempotencia `can:<idSolicitud>`. La reserva se cancela cuando el reembolso
   queda aprobado.
-- Sin devolución (0 %): pide a `ReservasService.cancelarConRetencionTotal` que
+- Sin devolución: pide a `ReservasService.cancelarConRetencionTotal` que
   cancele la estadía, deje la liquidación en revisión y libere las fechas. Si
   alguno de esos pasos falla, la aprobación se revierte y puede reintentarse.
 
