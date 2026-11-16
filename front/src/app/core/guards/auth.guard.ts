@@ -27,10 +27,12 @@ export const anuncianteGuard: CanActivateFn = (route, state) => {
     toast.mostrar('Para publicar una propiedad necesitás iniciar sesión o registrarte.');
     return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
   }
-  return inject(PerfilService)
-    .esAnunciante()
-    .pipe(map((ok) => {
-      if (ok) return true;
+  return inject(PerfilService).cargarSolicitud().pipe(map((solicitud) => {
+      if (solicitud?.estado === 'aprobada') {
+        if (!route.data['requiereCbu'] || solicitud.cbu_ultimos_digitos) return true;
+        toast.mostrar('Necesitás un CBU validado para publicar una propiedad.');
+        return router.createUrlTree(['/mi-perfil/anunciante']);
+      }
       toast.mostrar('Para publicar una propiedad primero debés solicitar ser anunciante.');
       return router.createUrlTree(['/mi-perfil/anunciante']);
     }));

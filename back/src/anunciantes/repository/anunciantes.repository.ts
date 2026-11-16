@@ -42,6 +42,16 @@ export class AnunciantesRepository implements IAnunciantesRepository {
     await transaccion.getRepository(Anunciante).update({ idUsuario }, { verificado });
   }
 
+  async buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null> {
+    const fila = await (transaccion?.getRepository(Anunciante) ?? this.repo)
+      .findOne({ select: { idUsuario: true, cbu_validado: true }, where: { idUsuario } });
+    return fila?.cbu_validado ?? null;
+  }
+
+  async actualizarCbuValidado(idUsuario: number, cbu: string, transaccion: EntityManager): Promise<void> {
+    await transaccion.getRepository(Anunciante).update({ idUsuario }, { cbu_validado: cbu });
+  }
+
   existeCuitVigente(cuit: string, transaccion?: EntityManager): Promise<boolean> {
     // Las cuentas dadas de baja tienen cuit_cuil en null, por eso no cuentan.
     return (transaccion?.getRepository(Anunciante) ?? this.repo)

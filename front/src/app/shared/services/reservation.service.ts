@@ -241,6 +241,10 @@ export class ReservationService {
     return this.http.get<Reserva[]>(`${this.baseUrl}/recibidas`);
   }
 
+  byPublication(idPublicacion: number): Observable<Reserva[]> {
+    return this.http.get<Reserva[]>(`${this.baseUrl}/publicacion/${idPublicacion}`);
+  }
+
   cancel(id: number): Observable<Reserva> {
     return this.http.patch<Reserva>(`${this.baseUrl}/${id}/cancelar`, {});
   }

@@ -45,6 +45,7 @@ export const routes: Routes = [
     // Debe ir antes de 'publicaciones/:id' para que "nueva" no se tome como id.
     path: 'publicaciones/nueva',
     canActivate: [anuncianteGuard],
+    data: { requiereCbu: true },
     loadComponent: () =>
       import('./features/crear-publicacion/crear-publicacion.component').then((m) => m.CrearPublicacionComponent),
     title: 'Publicar propiedad — DEPA',

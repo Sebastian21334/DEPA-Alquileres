@@ -11,6 +11,7 @@ import { ApiError } from '../../core/interceptors/api-error';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { TipoAnunciante } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { CbuAnuncianteComponent } from '../../shared/components/cbu-anunciante/cbu-anunciante.component';
 import {
   CapturaIdentidadComponent,
   IdentidadCapturada,
@@ -23,7 +24,7 @@ import {
 @Component({
   selector: 'app-solicitud-anunciante',
   standalone: true,
-  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, LucideBadgeCheck, LucideClock],
+  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, CbuAnuncianteComponent, LucideBadgeCheck, LucideClock],
   templateUrl: './solicitud-anunciante.component.html',
   styleUrl: './solicitud-anunciante.component.scss',
 })
@@ -56,6 +57,8 @@ export class SolicitudAnuncianteComponent {
   protected readonly form = this.fb.nonNullable.group({
     idTipoAnunciante: [0, [Validators.required, Validators.min(1)]],
     cuit: ['', [Validators.required, Validators.pattern(/^\d{2}-?\d{8}-?\d$/), Validators.maxLength(15)]],
+    cbu: ['', [Validators.required, Validators.pattern(/^\d{22}$/)]],
+    titularidad_declarada: [false, Validators.requiredTrue],
     numero_contacto: ['', [Validators.required, Validators.maxLength(20)]],
   });
 
@@ -120,6 +123,8 @@ export class SolicitudAnuncianteComponent {
       .solicitarAnunciante({ ...valor, ...(this.esInmobiliaria() ? this.empresaForm.getRawValue() : {}), cuit: valor.cuit.trim(), numero_contacto: valor.numero_contacto.trim() })
       .subscribe({
         next: () => {
+          this.form.controls.cbu.reset();
+          this.form.controls.titularidad_declarada.reset();
           this.enviando.set(false);
           this.recargar();
         },

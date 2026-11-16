@@ -1,8 +1,9 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { concatMap, from } from 'rxjs';
+import { concatMap, from, type Subscription } from 'rxjs';
 import { LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
-import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
+import { GestionPublicacionesService, type PagoPublicacion } from '../../shared/services/gestion-publicaciones.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
@@ -22,6 +23,8 @@ const MAX_IMAGEN = 10 * 1024 * 1024;
 })
 export class MisPublicacionesComponent {
   private readonly gestion = inject(GestionPublicacionesService);
+  private readonly destroyRef = inject(DestroyRef);
+  private solicitudLiquidaciones?: Subscription;
 
   private readonly todas = signal<Publicacion[]>([]);
   protected readonly publicaciones = computed(() => this.todas().filter((p) => !p.eliminada));
@@ -31,6 +34,9 @@ export class MisPublicacionesComponent {
   protected readonly aviso = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('aviso') ?? '');
   protected readonly resultado = signal('');
   protected readonly expandida = signal<number | null>(null);
+  protected readonly liquidacionesAbiertas = signal<number | null>(null);
+  protected readonly liquidaciones = signal<PagoPublicacion[] | null>(null);
+  protected readonly errorLiquidaciones = signal(false);
   protected readonly confirmandoBorrado = signal<number | null>(null);
   protected readonly ocupada = signal<number | null>(null);
   protected readonly errorFila = signal<{ id: number; mensaje: string } | null>(null);
@@ -57,6 +63,38 @@ export class MisPublicacionesComponent {
   protected alternarImagenes(id: number): void {
     this.expandida.update((actual) => (actual === id ? null : id));
     this.errorFila.set(null);
+  }
+
+  protected alternarLiquidaciones(id: number): void {
+    if (this.liquidacionesAbiertas() === id) {
+      this.solicitudLiquidaciones?.unsubscribe();
+      this.liquidacionesAbiertas.set(null);
+      return;
+    }
+    this.liquidacionesAbiertas.set(id);
+    this.cargarLiquidaciones(id);
+  }
+
+  protected cargarLiquidaciones(id: number): void {
+    this.solicitudLiquidaciones?.unsubscribe();
+    this.liquidaciones.set(null);
+    this.errorLiquidaciones.set(false);
+    this.solicitudLiquidaciones = this.gestion.listarLiquidaciones(id).pipe(
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe({
+      next: pagos => this.liquidaciones.set(pagos),
+      error: () => this.errorLiquidaciones.set(true),
+    });
+  }
+
+  protected importeLiquidacion(pago: PagoPublicacion): string {
+    if (pago.importe === null) return 'Importe sin registrar';
+    const importe = pago.importe.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return [pago.moneda, importe].filter(Boolean).join(' ');
+  }
+
+  protected fechaLiquidacion(valor: string): string {
+    return new Date(valor).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
   }
 
   protected eliminar(pub: Publicacion): void {

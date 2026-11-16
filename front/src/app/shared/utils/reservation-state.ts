@@ -69,3 +69,7 @@ export function puedeReprogramar(reserva: Reserva): boolean {
 export function puedeConsultarCodigo(reserva: Reserva): boolean {
   return estadiaActiva(reserva) && !reserva.codigo_validado_en;
 }
+
+export function puedeValidarCodigo(reserva: Reserva): boolean {
+  return reserva.estado_estadia === 'PENDIENTE_INGRESO' && reserva.estado_liquidacion !== 'EN_REVISION';
+}

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CatalogosModule } from '../catalogos/catalogos.module';
+import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { CotizacionesModule } from '../cotizaciones/cotizaciones.module';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
 import { DisputasModule } from '../disputas/disputas.module';
@@ -24,6 +25,7 @@ import { LiquidacionesReservaController } from './controller/liquidaciones-reser
 @Module({
   imports: [
     ConfigModule,
+    AnunciantesModule,
     CatalogosModule,
     CotizacionesModule,
     DisponibilidadModule,

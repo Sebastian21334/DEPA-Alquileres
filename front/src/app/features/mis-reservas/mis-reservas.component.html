@@ -350,7 +350,7 @@
           <span>No lo compartas hasta estar físicamente en la propiedad.</span>
         </div>
       }
-      @if (recibida && reserva.estado_estadia === 'PENDIENTE_INGRESO' && reserva.estado_liquidacion !== 'EN_REVISION') {
+      @if (recibida && puedeValidarCodigo(reserva)) {
         <form class="code-entry" (ngSubmit)="validarCodigo(reserva)">
           <label [for]="'code-' + reserva.id">Código entregado por el inquilino</label>
           <div>

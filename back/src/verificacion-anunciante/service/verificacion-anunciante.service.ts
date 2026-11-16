@@ -10,6 +10,7 @@ import {
   Inject,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   Injectable,
   InternalServerErrorException,
@@ -41,6 +42,7 @@ export class VerificacionAnuncianteService {
 
   /** Guarda los datos como borrador y evita que un usuario tenga dos solicitudes. */
   async solicitarAlta(idUsuario: number, dto: SolicitarAnuncianteDto) {
+    this.validarCbu(dto.cbu);
     const tipoAnunciante = await this.catalogosService.getTipoAnunciantePorId(
       dto.idTipoAnunciante,
     );
@@ -70,6 +72,7 @@ export class VerificacionAnuncianteService {
           anunciante: nuevo,
           estado: this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'borrador'),
           numero_revision: 1,
+          cbu_pendiente: dto.cbu,
           ...datosEmpresa,
         });
         await this.verificacionRepo.guardarSolicitud(solicitud, transaccion);
@@ -92,6 +95,44 @@ export class VerificacionAnuncianteService {
       }
     }
     return anunciante;
+  }
+
+  private validarCbu(cbu: string): void {
+    const digitoValido = (bloque: string) => {
+      const pesos = [3, 1, 7, 9];
+      const datos = bloque.slice(0, -1).split('').reverse();
+      const suma = datos.reduce((total, digito, indice) => total + Number(digito) * pesos[indice % pesos.length], 0);
+      return Number(bloque.at(-1)) === (10 - suma % 10) % 10;
+    };
+    if (!/^\d{22}$/.test(cbu) || /^0{22}$/.test(cbu) || !digitoValido(cbu.slice(0, 8)) || !digitoValido(cbu.slice(8))) {
+      throw new BadRequestException('Ingresá un CBU válido de 22 dígitos');
+    }
+  }
+
+  async solicitarCambioCbu(idUsuario: number, cbu: string): Promise<void> {
+    this.validarCbu(cbu);
+    await this.verificacionRepo.conSolicitudBloqueada(idUsuario, async (solicitud, persistencia, transaccion) => {
+      if (!solicitud) throw new NotFoundException('Primero iniciá el alta como anunciante');
+      if (solicitud.anunciante.usuario?.bloqueado || solicitud.anunciante.usuario?.activa === false) {
+        throw new ForbiddenException('La cuenta no está habilitada');
+      }
+      if (solicitud.cbu_pendiente === cbu) return;
+      if (solicitud.cbu_pendiente) throw new ConflictException('Ya hay un CBU pendiente de revisión');
+      if (await this.anunciantesService.buscarCbuValidado(idUsuario, transaccion) === cbu) {
+        throw new ConflictException('Ese CBU ya está validado');
+      }
+      solicitud.cbu_pendiente = cbu;
+      solicitud.motivo_rechazo_cbu = null;
+      if (solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada')) {
+        solicitud.numero_revision += 1;
+      }
+      solicitud.actualizada_en = new Date();
+      await persistencia.guardarSolicitud(solicitud);
+    }).catch((error: unknown) => {
+      if (error instanceof HttpException) throw error;
+      this.logger.error('No se pudo guardar la solicitud de CBU');
+      throw new InternalServerErrorException('No se pudo guardar el CBU. Intentá nuevamente.');
+    });
   }
 
   private datosEmpresa(dto: Partial<DatosInmobiliariaDto>, requerida: boolean) {
@@ -314,13 +355,12 @@ export class VerificacionAnuncianteService {
 
   /** Solo una resolución administrativa habilita a publicar. */
   async aprobar(idAnunciante: number, idAdministrador: number, dto: RevisarVerificacionDto): Promise<Anunciante> {
-    const solicitud = await this.resolverRevision(
+    const { solicitud, revisarIdentidad } = await this.resolverRevision(
       idAnunciante,
       idAdministrador,
-      dto.numero_revision,
-      this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada'),
+      dto,
     );
-    await this.eliminacionDocumentos.ejecutar();
+    if (revisarIdentidad) await this.eliminacionDocumentos.ejecutar();
     await this.notificarResolucion(solicitud, true);
     return solicitud.anunciante;
   }
@@ -332,37 +372,43 @@ export class VerificacionAnuncianteService {
         'El motivo debe contener entre 5 y 500 caracteres',
       );
     }
-    const solicitud = await this.resolverRevision(
-      idAnunciante,
-      idAdministrador,
-      dto.numero_revision,
-      this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada'),
-      motivo,
-    );
-    await this.eliminacionDocumentos.ejecutar();
-    await this.notificarResolucion(solicitud, false);
+    const rechazo = { identidad: dto.rechazar_identidad ?? true, cbu: dto.rechazar_cbu ?? false, motivo };
+    if (!rechazo.identidad && !rechazo.cbu) throw new BadRequestException('Elegí qué parte rechazar');
+    const { solicitud, revisarIdentidad } = await this.resolverRevision(idAnunciante, idAdministrador, dto, rechazo);
+    if (revisarIdentidad) await this.eliminacionDocumentos.ejecutar();
+    await this.notificarResolucion(solicitud, false, motivo);
     return { mensaje: 'Solicitud de verificación rechazada' };
   }
 
-  private resolverRevision(idAnunciante: number, idAdministrador: number, numeroRevision: number, estado: 'aprobada' | 'rechazada', motivo: string | null = null): Promise<SolicitudVerificacion> {
+  private resolverRevision(idAnunciante: number, idAdministrador: number, dto: RevisarVerificacionDto, rechazo?: { identidad: boolean; cbu: boolean; motivo: string }): Promise<{ solicitud: SolicitudVerificacion; revisarIdentidad: boolean }> {
     return this.verificacionRepo.conSolicitudBloqueada(
       idAnunciante,
       async (solicitud, persistencia, transaccion) => {
-        if (!solicitud)
+        if (!solicitud || solicitud.anunciante.usuario?.activa === false)
           throw new NotFoundException(
             'Solicitud de verificación no encontrada',
           );
-        if (!this.estaPendienteDeRevision(solicitud)) {
+        const revisarIdentidad = this.estaPendienteDeRevision(solicitud);
+        const cbu = solicitud.cbu_pendiente;
+        const revisarCbu = !!cbu && (revisarIdentidad ||
+          solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada'));
+        if (!revisarIdentidad && !revisarCbu) {
           throw new ConflictException(
             'La solicitud ya fue resuelta o no está pendiente de revisión',
           );
         }
-        if (solicitud.numero_revision !== numeroRevision) {
+        if (solicitud.numero_revision !== dto.numero_revision || revisarCbu !== (dto.revisar_cbu ?? false)) {
           throw new ConflictException(
             'La documentación cambió. Actualizá la solicitud antes de resolverla',
           );
         }
-        if (estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada')) {
+        if ((rechazo?.identidad && !revisarIdentidad) || (rechazo?.cbu && !revisarCbu)) {
+          throw new ConflictException('La parte seleccionada ya no está pendiente de revisión');
+        }
+        if (revisarCbu && !rechazo?.cbu && !dto.titular_cbu_confirmado) {
+          throw new BadRequestException('Confirmá la titularidad del CBU antes de aprobarlo');
+        }
+        if (revisarIdentidad && !rechazo?.identidad) {
           if (
             !this.tieneDocumentacionCompleta(solicitud) ||
             !this.pruebaVidaService.tienePruebaVidaPresentada(solicitud)
@@ -380,29 +426,41 @@ export class VerificacionAnuncianteService {
             );
           }
           this.marcarAprobada(solicitud);
-          await this.anunciantesService.verificar(solicitud.anunciante, transaccion,);
+          await this.anunciantesService.verificar(solicitud.anunciante, transaccion);
 
-        } else {
-          this.marcarRechazada(solicitud, motivo!);
+        } else if (rechazo?.identidad) {
+          this.marcarRechazada(solicitud, rechazo.motivo);
         }
         // La cola y la resolución se confirman juntas. Azure se procesa después
         // del COMMIT: una transacción fallida nunca borra evidencia pendiente.
-        await persistencia.programarEliminacionDocumentos(
-          this.retirarDocumentos(solicitud),
-        );
+        if (revisarIdentidad) {
+          await persistencia.programarEliminacionDocumentos(this.retirarDocumentos(solicitud));
+        }
+        if (revisarCbu && cbu) {
+          if (!rechazo?.cbu) await this.anunciantesService.actualizarCbuValidado(idAnunciante, cbu, transaccion);
+          solicitud.cbu_pendiente = null;
+          solicitud.motivo_rechazo_cbu = rechazo?.cbu ? rechazo.motivo : null;
+          solicitud.actualizada_en = new Date();
+        }
         await persistencia.guardarSolicitud(solicitud);
         await persistencia.guardarRevision(
           this.verificacionRepo.crearRevision({
             anunciante: solicitud.anunciante,
             numero_revision: solicitud.numero_revision,
-            estado,
-            motivo,
+            estado: this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', rechazo ? 'rechazada' : 'aprobada'),
+            motivo: rechazo?.motivo ?? null,
+            identidad_aprobada: revisarIdentidad ? !rechazo?.identidad : null,
+            cbu_aprobado: revisarCbu ? !rechazo?.cbu : null,
             id_administrador: idAdministrador,
           }),
         );
-        return solicitud;
+        return { solicitud, revisarIdentidad };
       },
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof HttpException || !dto.revisar_cbu) throw error;
+      this.logger.error('No se pudo guardar la revisión de CBU');
+      throw new InternalServerErrorException('No se pudo guardar la revisión del CBU. Intentá nuevamente.');
+    });
   }
 
   private tieneDatosInmobiliaria(solicitud: SolicitudVerificacion): boolean {
@@ -477,7 +535,7 @@ export class VerificacionAnuncianteService {
     solicitud.actualizada_en = new Date();
   }
 
-  private async notificarResolucion(solicitud: SolicitudVerificacion, aprobada: boolean) {
+  private async notificarResolucion(solicitud: SolicitudVerificacion, aprobada: boolean, motivo?: string) {
     try {
       const { email } = this.anunciantesService.datosContacto(
         solicitud.anunciante,
@@ -487,7 +545,7 @@ export class VerificacionAnuncianteService {
       await this.mailService.enviarResultadoVerificacion(
         email,
         aprobada,
-        solicitud.motivo_rechazo ?? undefined,
+        motivo,
       );
     } catch (error) {
       // La decisión ya está confirmada. Un fallo de correo no la revierte.
@@ -499,28 +557,36 @@ export class VerificacionAnuncianteService {
   }
 
   private respuestaSolicitud(solicitud: SolicitudVerificacion): SolicitudVerificacionRespuestaDto {
-    const privados: readonly string[] = CAMPOS_PRUEBA_PRIVADOS;
-    return Object.fromEntries(
+    const privados: readonly string[] = [...CAMPOS_PRUEBA_PRIVADOS, 'cbu_pendiente'];
+    const datos = Object.fromEntries(
       Object.entries(solicitud).filter(([campo]) => !privados.includes(campo)),
-    ) as SolicitudVerificacionRespuestaDto;
+    );
+    return { ...datos, cbu_en_revision: !!solicitud.cbu_pendiente } as SolicitudVerificacionRespuestaDto;
   }
 
   /** Devuelve las solicitudes que todavia requieren una decision administrativa. */
   async getPendientes() {
-    const solicitudes = await this.verificacionRepo.buscarPendientes([this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'pendiente'), this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'reenviada')]);
+    const solicitudes = await this.verificacionRepo.buscarPendientes(
+      [this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'pendiente'), this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'reenviada')],
+      this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada'),
+    );
     // El contenedor de documentos es privado: la URL guardada no se puede abrir
     // directamente, así que al administrador se le entregan URLs firmadas temporales.
     return Promise.all(
-      solicitudes.map(async (solicitud) => ({
-        ...this.respuestaSolicitud(solicitud),
-        dni_frente_url: await this.firmarUrlDocumento(solicitud.dni_frente_url),
-        dni_dorso_url: await this.firmarUrlDocumento(solicitud.dni_dorso_url),
-        rostro_url: await this.firmarUrlDocumento(solicitud.rostro_url),
-        matricula_url: await this.firmarUrlDocumento(solicitud.matricula_url),
-        constancia_cuit_url: await this.firmarUrlDocumento(
-          solicitud.constancia_cuit_url,
-        ),
-      })),
+      solicitudes.map(async (solicitud) => {
+        const revisarIdentidad = this.estaPendienteDeRevision(solicitud);
+        const firmarEvidencia = (url: string | null) => revisarIdentidad ? this.firmarUrlDocumento(url) : null;
+        return {
+          ...this.respuestaSolicitud(solicitud),
+          revisar_identidad: revisarIdentidad,
+          cbu_pendiente: solicitud.cbu_pendiente,
+          dni_frente_url: await firmarEvidencia(solicitud.dni_frente_url),
+          dni_dorso_url: await firmarEvidencia(solicitud.dni_dorso_url),
+          rostro_url: await firmarEvidencia(solicitud.rostro_url),
+          matricula_url: await firmarEvidencia(solicitud.matricula_url),
+          constancia_cuit_url: await firmarEvidencia(solicitud.constancia_cuit_url),
+        };
+      }),
     );
   }
 
@@ -539,10 +605,12 @@ export class VerificacionAnuncianteService {
   async buscarSolicitudConHistorial(idUsuario: number) {
     // Expone la solicitud y las decisiones administrativas anteriores.
     const solicitud =
-      await this.verificacionRepo.buscarSolicitudPorAnunciante(idUsuario);
+      await this.verificacionRepo.buscarSolicitudConCbu(idUsuario);
     if (!solicitud) return null;
+    const cbu = await this.anunciantesService.buscarCbuValidado(idUsuario);
     return {
       ...this.respuestaSolicitud(solicitud),
+      cbu_ultimos_digitos: cbu?.slice(-4) ?? null,
       revisiones: await this.verificacionRepo.buscarRevisiones(idUsuario),
     };
   }

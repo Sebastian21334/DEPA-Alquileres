@@ -7,7 +7,9 @@ import {
   Matches,
 } from 'class-validator';
 
-export class SolicitarAnuncianteDto {
+import { CbuDto } from './cbu.dto';
+
+export class SolicitarAnuncianteDto extends CbuDto {
   // El CUIT/CUIL y el contacto identifican la solicitud que revisará un administrador.
   @IsString()
   @IsNotEmpty()

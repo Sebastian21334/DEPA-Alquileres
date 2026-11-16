@@ -8,6 +8,8 @@ import { AuthService } from './auth.service';
 
 export interface SolicitarAnuncianteDto {
   cuit: string;
+  cbu: string;
+  titularidad_declarada: boolean;
   numero_contacto: string;
   idTipoAnunciante: number;
   razon_social?: string;
@@ -40,6 +42,7 @@ export class PerfilService {
   /** Datos del usuario logueado, para mostrar su nombre en el header. */
   readonly usuario = signal<PerfilUsuario | null>(null);
   readonly esAnuncianteVerificado = computed(() => this.solicitud()?.estado === 'aprobada');
+  readonly necesitaCbu = computed(() => this.esAnuncianteVerificado() && !this.solicitud()?.cbu_ultimos_digitos);
 
   // Cachea la solicitud por sesión para que navbar + guard no dupliquen el request.
   private solicitud$: Observable<SolicitudVerificacion | null> | null = null;
@@ -125,6 +128,15 @@ export class PerfilService {
   /** POST /anunciantes/solicitar */
   solicitarAnunciante(dto: SolicitarAnuncianteDto) {
     return this.http.post(`${this.api}/anunciantes/solicitar`, dto);
+  }
+
+  solicitarCambioCbu(cbu: string): Observable<{ mensaje: string }> {
+    return this.http.patch<{ mensaje: string }>(`${this.api}/anunciantes/mi-solicitud/cbu`, { cbu, titularidad_declarada: true }).pipe(
+      tap(() => {
+        this.solicitud.update(solicitud => solicitud && { ...solicitud, cbu_en_revision: true, motivo_rechazo_cbu: null });
+        this.solicitud$ = null;
+      }),
+    );
   }
 
   actualizarDatosInmobiliaria(datos: { razon_social: string; matricula_profesional: string; colegio_profesional: string; domicilio_comercial: string; dni_corredor: string; }) {

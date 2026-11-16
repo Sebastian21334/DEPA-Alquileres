@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { RevisarVerificacionDto } from './revisar-verificacion.dto';
 
@@ -12,4 +12,12 @@ export class RechazarVerificacionDto extends RevisarVerificacionDto {
   @MinLength(5)
   @MaxLength(500)
   motivo: string;
+
+  @IsOptional()
+  @IsBoolean()
+  rechazar_identidad?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  rechazar_cbu?: boolean;
 }

@@ -84,23 +84,23 @@ export class MailService implements IMailService {
   async enviarResultadoVerificacion(destinatario: string, aprobada: boolean, motivo?: string): Promise<void> {
     // El mismo método cubre los dos resultados administrativos.
     const asunto = aprobada
-      ? 'Verificación de identidad aprobada'
-      : 'Verificación de identidad rechazada';
+      ? 'Revisión de anunciante aprobada'
+      : 'Tu solicitud de anunciante requiere una corrección';
     // El motivo proviene de un administrador y se escapa antes de insertarse en HTML.
     const motivoSeguro = this.plantillas.escapar(
       motivo ?? 'Documentación no válida',
     );
     const contenido = aprobada
-      ? '<p>Tu identidad fue verificada correctamente. Ya podés publicar propiedades.</p>'
-      : `<p>Tu solicitud de verificación fue rechazada.</p><p>Motivo: ${motivoSeguro}</p><p>Podés cargar nuevamente la documentación desde tu cuenta.</p>`;
+      ? '<p>La revisión fue aprobada. Entrá a Mi perfil para consultar el estado de tu identidad y del CBU para cobrar.</p>'
+      : `<p>Revisamos tu solicitud y hay datos por corregir.</p><p>Motivo: ${motivoSeguro}</p><p>Entrá a Mi perfil para ver si tenés que corregir la documentación, el CBU o ambos.</p>`;
 
     await this.enviar(
       destinatario,
       asunto,
       contenido,
       aprobada
-        ? 'Tu perfil ya está habilitado para publicar propiedades.'
-        : 'Revisá el resultado de la validación de tu identidad.',
+        ? 'Consultá el resultado en Mi perfil.'
+        : 'Consultá qué datos tenés que corregir.',
     );
   }
 

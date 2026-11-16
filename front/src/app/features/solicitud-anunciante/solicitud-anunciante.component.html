@@ -2,7 +2,7 @@
   <div class="acct-wrap acct-wrap--narrow">
     <div class="acct-heading">
       <div>
-        <h1>Convertite en anunciante</h1>
+        <h1>{{ paso() === 'aprobada' ? 'Datos de anunciante' : 'Convertite en anunciante' }}</h1>
         <p>Verificamos tu identidad para que quienes buscan alquiler confíen en tus publicaciones.</p>
       </div>
       <a routerLink="/mi-perfil" class="acct-btn acct-btn--ghost acct-btn--sm">Volver a mi perfil</a>
@@ -19,6 +19,8 @@
 
       @if (exito()) { <div class="acct-alert acct-alert--success" role="status">{{ exito() }}</div> }
       @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
+
+      @if (solicitud()) { <app-cbu-anunciante /> }
 
       @switch (paso()) {
         @case ('datos') {
@@ -52,6 +54,18 @@
                   <span class="acct-hint acct-hint--error">Ingresá un teléfono (máximo 20 caracteres).</span>
                 }
               </div>
+              <div class="acct-field acct-span">
+                <label for="alta-cbu">CBU de la cuenta bancaria</label>
+                <input id="alta-cbu" formControlName="cbu" inputmode="numeric" maxlength="22" autocomplete="off" aria-describedby="alta-cbu-ayuda" />
+                <small id="alta-cbu-ayuda">Es obligatorio que la cuenta bancaria esté a nombre del mismo titular de la cuenta en DEPA. Un administrador verificará la titularidad del CBU antes de que puedas usarlo para cobrar.</small>
+                @if (form.controls.cbu.invalid && form.controls.cbu.touched) {
+                  <span class="acct-hint acct-hint--error">Ingresá un CBU de 22 dígitos.</span>
+                }
+                <label><input type="checkbox" formControlName="titularidad_declarada" /> Confirmo que la cuenta bancaria está a mi nombre.</label>
+                @if (form.controls.titularidad_declarada.invalid && form.controls.titularidad_declarada.touched) {
+                  <span class="acct-hint acct-hint--error">Confirmá que sos titular de la cuenta bancaria.</span>
+                }
+              </div>
             </div>
             @if (esInmobiliaria()) { <ng-container [ngTemplateOutlet]="datosEmpresa" /> }
             <div class="acct-actions form-actions">
@@ -67,14 +81,14 @@
             <h2>Documentación de identidad</h2>
             @if (solicitud()?.estado === 'rechazada') {
               <div class="acct-alert acct-alert--error spaced">
-                <strong>Tu solicitud anterior fue rechazada.</strong>
+                <strong>La verificación de identidad fue rechazada.</strong>
                 @if (solicitud()?.motivo_rechazo) { <br />Motivo: {{ solicitud()?.motivo_rechazo }} }
               </div>
             }
             <p class="intro">
               Primero vas a fotografiar el frente y el dorso del DNI. Después te guiamos con una prueba breve de movimientos y una foto de frente. Al finalizar, podés enviar la documentación para que un administrador la revise.
             </p>
-            <p>Los documentos se conservan de forma privada mientras la solicitud está en borrador o en revisión. Al aprobarla o rechazarla, se inicia su eliminación permanente. Si se rechaza, tendrás que enviar documentos nuevos.</p>
+            <p>Los documentos se conservan de forma privada hasta que se revise la identidad. Si esa verificación se rechaza, vas a tener que enviar nuevas capturas.</p>
 
             @if (esInmobiliaria()) {
               <h3>Datos de la inmobiliaria y del corredor responsable</h3>
@@ -120,11 +134,14 @@
         @case ('aprobada') {
           <div class="acct-card status">
             <span class="status__icon"><svg lucideBadgeCheck [size]="34"></svg></span>
-            <h2>¡Ya sos anunciante verificado!</h2>
-            <p>Podés publicar propiedades y administrarlas desde el menú.</p>
+            <h2>Identidad aprobada</h2>
             <div class="acct-actions">
               <a routerLink="/mis-publicaciones" class="acct-btn acct-btn--ghost">Mis publicaciones</a>
-              <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">Publicar propiedad</a>
+              @if (solicitud()?.cbu_ultimos_digitos) {
+                <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">Publicar propiedad</a>
+              } @else {
+                <p>Necesitás un CBU aprobado para publicar propiedades y cobrar.</p>
+              }
             </div>
           </div>
         }
@@ -141,6 +158,8 @@
                 </span>
                 <div>
                   <strong>Revisión #{{ r.numero_revision }}</strong> · {{ fecha(r.creada_en) }}
+                  @if (r.identidad_aprobada != null) { <p>Identidad {{ r.identidad_aprobada ? 'aprobada' : 'rechazada' }}.</p> }
+                  @if (r.cbu_aprobado != null) { <p>CBU {{ r.cbu_aprobado ? 'aprobado' : 'rechazado' }}.</p> }
                   @if (r.motivo) { <p>{{ r.motivo }}</p> }
                 </div>
               </li>

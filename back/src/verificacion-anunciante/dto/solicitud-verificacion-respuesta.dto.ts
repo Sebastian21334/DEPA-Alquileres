@@ -10,5 +10,5 @@ export const CAMPOS_PRUEBA_PRIVADOS = [
 
 export type SolicitudVerificacionRespuestaDto = Omit<
   SolicitudVerificacion,
-  (typeof CAMPOS_PRUEBA_PRIVADOS)[number]
->;
+  (typeof CAMPOS_PRUEBA_PRIVADOS)[number] | 'cbu_pendiente'
+> & { cbu_en_revision: boolean };

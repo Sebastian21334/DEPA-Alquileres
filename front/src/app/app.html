@@ -3,6 +3,18 @@
 }
 
 <main class="app-content">
+  @if (!esPantallaAuth() && perfil.necesitaCbu()) {
+    <div class="acct-wrap cbu-warning">
+      <div class="acct-alert acct-alert--info" role="status">
+        @if (perfil.solicitud()?.cbu_en_revision) {
+          Tu CBU está en revisión. Necesitás que lo aprueben para publicar propiedades y cobrar.
+        } @else {
+          Cargá un CBU a tu nombre para seguir publicando propiedades y recibir pagos.
+        }
+        <a routerLink="/mi-perfil/anunciante">{{ perfil.solicitud()?.cbu_en_revision ? 'Ver estado del CBU' : 'Cargar CBU' }}</a>
+      </div>
+    </div>
+  }
   <router-outlet />
 </main>
 

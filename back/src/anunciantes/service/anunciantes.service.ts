@@ -22,6 +22,14 @@ export class AnunciantesService {
     return this.anunciantesRepo.buscarPorUsuario(idUsuario, transaccion);
   }
 
+  buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null> {
+    return this.anunciantesRepo.buscarCbuValidado(idUsuario, transaccion);
+  }
+
+  actualizarCbuValidado(idUsuario: number, cbu: string, transaccion: EntityManager): Promise<void> {
+    return this.anunciantesRepo.actualizarCbuValidado(idUsuario, cbu, transaccion);
+  }
+
   async cambiarPausaActividades(idUsuario: number, pausadas: boolean, transaccion: EntityManager): Promise<void> {
     const actualizado = await this.anunciantesRepo.actualizarPausaActividades(idUsuario, pausadas, transaccion);
     if (!actualizado) {

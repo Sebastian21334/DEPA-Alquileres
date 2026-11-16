@@ -48,6 +48,12 @@ export class RevisionVerificacion {
   @Column({ name: 'motivo', type: 'varchar', length: 500, nullable: true })
   motivo: string | null;
 
+  @Column({ name: 'identidad_aprobada', type: 'boolean', nullable: true })
+  identidad_aprobada: boolean | null;
+
+  @Column({ name: 'cbu_aprobado', type: 'boolean', nullable: true })
+  cbu_aprobado: boolean | null;
+
   @Column({
     name: 'creada_en',
     type: 'timestamp',

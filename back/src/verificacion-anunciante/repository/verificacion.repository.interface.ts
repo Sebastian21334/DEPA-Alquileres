@@ -23,7 +23,8 @@ export interface IVerificacionRepository {
   crearSolicitud(datos: Partial<SolicitudVerificacion>): SolicitudVerificacion;
   guardarSolicitud(solicitud: SolicitudVerificacion, transaccion?: EntityManager): Promise<SolicitudVerificacion>;
   buscarSolicitudPorAnunciante(idAnunciante: number): Promise<SolicitudVerificacion | null>;
-  buscarPendientes(estados: string[]): Promise<SolicitudVerificacion[]>;
+  buscarSolicitudConCbu(idAnunciante: number): Promise<SolicitudVerificacion | null>;
+  buscarPendientes(estados: string[], identidadAprobada: string): Promise<SolicitudVerificacion[]>;
   crearRevision(datos: Partial<RevisionVerificacion>): RevisionVerificacion;
   guardarRevision(revision: RevisionVerificacion): Promise<RevisionVerificacion>;
   buscarRevisiones(idAnunciante: number): Promise<RevisionVerificacion[]>;

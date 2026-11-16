@@ -9,6 +9,8 @@ export interface IAnunciantesRepository {
   archivarCuit(idUsuario: number, transaccion: EntityManager): Promise<void>;
   actualizarPausaActividades(idUsuario: number, pausadas: boolean, transaccion: EntityManager): Promise<boolean>;
   actualizarVerificacion(idUsuario: number, verificado: boolean, transaccion: EntityManager): Promise<void>;
+  buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null>;
+  actualizarCbuValidado(idUsuario: number, cbu: string, transaccion: EntityManager): Promise<void>;
   buscarPorUsuario(idUsuario: number, transaccion?: EntityManager): Promise<Anunciante | null>;
   buscarPendientes(): Promise<Anunciante[]>;
   eliminar(anunciante: Anunciante): Promise<Anunciante>;

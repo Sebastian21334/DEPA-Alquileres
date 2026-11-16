@@ -21,6 +21,7 @@ import { PerfilUsuario, etiquetaRol } from '../../shared/models/perfil.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { CambiarContraseniaComponent } from './cambiar-contrasenia.component';
+import { CbuAnuncianteComponent } from '../../shared/components/cbu-anunciante/cbu-anunciante.component';
 
 const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 const MAX_FOTO = 5 * 1024 * 1024;
@@ -36,6 +37,7 @@ const MAX_FOTO = 5 * 1024 * 1024;
     SpinnerComponent,
     AvatarComponent,
     CambiarContraseniaComponent,
+    CbuAnuncianteComponent,
     LucideBadgeCheck,
     LucideCamera,
     LucideCalendarDays,
