@@ -141,6 +141,8 @@ const pendiente = location.pathname === '/mi-perfil/anunciante';
 const solicitud = {
   id: 1,
   estado: pendiente ? 'borrador' : 'aprobada',
+  cbu_ultimos_digitos: pendiente || params.has('cbu') ? null : '0017',
+  cbu_en_revision: params.get('cbu') === 'en-revision',
   anunciante,
   numero_revision: 1,
   dni_frente_url: pendiente ? null : '/images/Logo.png',

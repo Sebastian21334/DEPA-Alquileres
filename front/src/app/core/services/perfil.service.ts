@@ -43,6 +43,10 @@ export class PerfilService {
   readonly usuario = signal<PerfilUsuario | null>(null);
   readonly esAnuncianteVerificado = computed(() => this.solicitud()?.estado === 'aprobada');
   readonly necesitaCbu = computed(() => this.esAnuncianteVerificado() && !this.solicitud()?.cbu_ultimos_digitos);
+  readonly cbuEnRevision = computed(() => this.esAnuncianteVerificado() && !!this.solicitud()?.cbu_en_revision);
+  private readonly usuarioConsultado = signal<number | null>(null);
+  readonly solicitudConsultada = computed(() => this.usuarioConsultado() === (this.auth.currentUser()?.sub ?? null));
+  readonly errorSolicitud = signal(false);
 
   // Cachea la solicitud por sesión para que navbar + guard no dupliquen el request.
   private solicitud$: Observable<SolicitudVerificacion | null> | null = null;
@@ -104,14 +108,24 @@ export class PerfilService {
     if (!forzar && this.solicitud$ && this.solicitudDeUsuario === idUsuario) return this.solicitud$;
 
     this.solicitudDeUsuario = idUsuario;
-    this.solicitud$ = this.http.get<SolicitudVerificacion | null>(`${this.api}/anunciantes/mi-solicitud`).pipe(
-      // El endpoint devuelve null cuando el usuario todavía no inició el alta.
-      // Se conserva el fallback para instalaciones con un backend anterior.
-      catchError(() => of(null)),
-      tap((solicitud) => this.solicitud.set(solicitud)),
+    this.errorSolicitud.set(false);
+    const consulta = this.http.get<SolicitudVerificacion | null>(`${this.api}/anunciantes/mi-solicitud`).pipe(
+      tap((solicitud) => {
+        if (this.solicitud$ !== consulta || this.auth.currentUser()?.sub !== idUsuario) return;
+        this.solicitud.set(solicitud);
+        this.usuarioConsultado.set(idUsuario);
+      }),
+      catchError(() => {
+        if (this.solicitud$ === consulta && this.auth.currentUser()?.sub === idUsuario) {
+          this.solicitud$ = null;
+          this.errorSolicitud.set(true);
+        }
+        return of(this.usuarioConsultado() === idUsuario ? this.solicitud() : null);
+      }),
       shareReplay(1),
     );
-    return this.solicitud$;
+    this.solicitud$ = consulta;
+    return consulta;
   }
 
   esAnunciante(): Observable<boolean> {
@@ -121,6 +135,8 @@ export class PerfilService {
   limpiar(): void {
     this.solicitud$ = null;
     this.solicitudDeUsuario = null;
+    this.usuarioConsultado.set(null);
+    this.errorSolicitud.set(false);
     this.solicitud.set(null);
     this.usuario.set(null);
   }

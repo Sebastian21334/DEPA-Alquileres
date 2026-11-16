@@ -1,24 +1,45 @@
-@if (!esPantallaAuth()) {
+@if (accesoRestringido() || esPantallaCbu()) {
+  <header class="cbu-header"><img src="/images/Logo.png" alt="DEPA" /></header>
+} @else if (!esPantallaAuth()) {
   <app-navbar />
 }
 
-<main class="app-content">
-  @if (!esPantallaAuth() && perfil.necesitaCbu()) {
-    <div class="acct-wrap cbu-warning">
-      <div class="acct-alert acct-alert--info" role="status">
-        @if (perfil.solicitud()?.cbu_en_revision) {
-          Tu CBU está en revisión. Necesitás que lo aprueben para publicar propiedades y cobrar.
-        } @else {
-          Cargá un CBU a tu nombre para seguir publicando propiedades y recibir pagos.
-        }
-        <a routerLink="/mi-perfil/anunciante">{{ perfil.solicitud()?.cbu_en_revision ? 'Ver estado del CBU' : 'Cargar CBU' }}</a>
+<main class="app-content" [class.cbu-fondo]="accesoRestringido() || esPantallaCbu()">
+  @if (comprobandoPerfil()) {
+    @if (perfil.errorSolicitud()) {
+      <div class="cbu-cargando">
+        <p role="alert">No pudimos comprobar el estado de tu cuenta.</p>
+        <button type="button" class="btn btn--primary cbu-accion" (click)="reintentarPerfil()">Reintentar</button>
       </div>
+    } @else {
+      <p class="cbu-cargando" role="status">Cargando tu cuenta…</p>
+    }
+  } @else if (cbuObligatorio() && !esPantallaCbu()) {
+    <section class="cbu-aviso" aria-labelledby="cbu-aviso-titulo">
+      <div class="cbu-ilustracion" aria-hidden="true">
+        <svg lucideLandmark class="cbu-banco"></svg>
+        <svg lucideHouse class="cbu-casa"></svg>
+        <span><svg lucideLockKeyhole [size]="32"></svg></span>
+      </div>
+      <div class="cbu-aviso-texto">
+        <h1 id="cbu-aviso-titulo">Validá tu CBU para continuar</h1>
+        <p>Para seguir usando DEPA y recibir tus pagos, necesitás cargar un CBU a tu nombre.</p>
+        <a class="btn btn--primary cbu-accion" routerLink="/mi-perfil/validar-cbu">
+          Validar CBU <svg lucideArrowRight [size]="26" aria-hidden="true"></svg>
+        </a>
+      </div>
+    </section>
+  } @else {
+    <div [class.cbu-formulario]="esPantallaCbu()">
+      <router-outlet />
+      @if (esPantallaCbu() && !cbuObligatorio()) {
+        <a routerLink="/" class="btn btn--primary cbu-accion">Continuar a DEPA</a>
+      }
     </div>
   }
-  <router-outlet />
 </main>
 
-@if (!esPantallaAuth()) {
+@if (!esPantallaAuth() && !esPantallaCbu() && !accesoRestringido()) {
   <app-footer />
   <app-chat-dock />
 }

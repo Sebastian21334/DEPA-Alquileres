@@ -31,7 +31,7 @@ export const anuncianteGuard: CanActivateFn = (route, state) => {
       if (solicitud?.estado === 'aprobada') {
         if (!route.data['requiereCbu'] || solicitud.cbu_ultimos_digitos) return true;
         toast.mostrar('Necesitás un CBU validado para publicar una propiedad.');
-        return router.createUrlTree(['/mi-perfil/anunciante']);
+        return router.createUrlTree(['/mi-perfil/validar-cbu']);
       }
       toast.mostrar('Para publicar una propiedad primero debés solicitar ser anunciante.');
       return router.createUrlTree(['/mi-perfil/anunciante']);

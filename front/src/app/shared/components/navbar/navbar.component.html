@@ -43,6 +43,12 @@
           @if (notificacionesAbiertas()) {
             <section id="notificaciones-pendientes" class="navbar__notification-panel" aria-label="Notificaciones pendientes">
               <h2>Notificaciones</h2>
+              @if (perfil.cbuEnRevision()) {
+                <a routerLink="/mi-perfil/validar-cbu" (click)="cerrarMenu()">
+                  <strong>CBU en revisión</strong>
+                  <small>Te avisaremos por correo cuando se valide tu CBU.</small>
+                </a>
+              }
               @for (item of actividadReembolsos.notificaciones(); track item.reembolsoId) {
                 <a routerLink="/reserva/resultado" [queryParams]="{ reserva_id: item.reservaId, reembolso: item.reembolsoId }"
                   (click)="cerrarMenu()">

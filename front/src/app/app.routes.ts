@@ -96,6 +96,13 @@ export const routes: Routes = [
     title: 'Publicá tu propiedad — DEPA',
   },
   {
+    path: 'mi-perfil/validar-cbu',
+    canActivate: [anuncianteGuard],
+    loadComponent: () =>
+      import('./shared/components/cbu-anunciante/cbu-anunciante.component').then((m) => m.CbuAnuncianteComponent),
+    title: 'Validar CBU - DEPA',
+  },
+  {
     path: 'mi-perfil/anunciante',
     canActivate: [authGuard],
     loadComponent: () =>

@@ -66,7 +66,7 @@ export class NavbarComponent {
   private readonly refrescoNotificaciones = new Subject<void>();
   protected readonly chatsNoLeidos = signal<ConversacionResumen[]>([]);
   protected readonly totalNotificaciones = computed(() =>
-    this.chatsNoLeidos().length + this.actividadReembolsos.notificaciones().length);
+    this.chatsNoLeidos().length + this.actividadReembolsos.notificaciones().length + Number(this.perfil.cbuEnRevision()));
   private readonly router = inject(Router);
 
   protected readonly etiquetaRol = etiquetaRol;
@@ -89,17 +89,11 @@ export class NavbarComponent {
   constructor() {
     const isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
-    // Al iniciar/cerrar sesión se refresca el estado de anunciante que decide
-    // qué accesos se ven. Solo en el navegador: en SSR no hay JWT.
-    effect(() => {
+    effect(onCleanup => {
       const usuario = this.auth.currentUser();
-      if (!isBrowser) return;
-      if (usuario) {
-        this.perfil.cargarSolicitud().subscribe();
-        this.perfil.getPerfil().subscribe({ error: () => undefined });
-      } else {
-        this.perfil.limpiar();
-      }
+      if (!isBrowser || !usuario) return;
+      const consulta = this.perfil.getPerfil().subscribe({ error: () => undefined });
+      onCleanup(() => consulta.unsubscribe());
     });
     effect(onCleanup => {
       const usuario = this.auth.currentUser()?.sub;
