@@ -32,6 +32,12 @@ export class AnunciantesRepository implements IAnunciantesRepository {
       .execute();
   }
 
+  async actualizarPausaActividades(idUsuario: number, pausadas: boolean, transaccion: EntityManager): Promise<boolean> {
+    const resultado = await transaccion.getRepository(Anunciante)
+      .update({ idUsuario, verificado: true }, { actividades_pausadas: pausadas });
+    return (resultado.affected ?? 0) > 0;
+  }
+
   async actualizarVerificacion(idUsuario: number, verificado: boolean, transaccion: EntityManager): Promise<void> {
     await transaccion.getRepository(Anunciante).update({ idUsuario }, { verificado });
   }

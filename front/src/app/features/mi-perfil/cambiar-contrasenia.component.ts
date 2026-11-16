@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { LucideLockKeyhole } from '@lucide/angular';
 import { AuthService } from '../../core/services/auth.service';
 import {
   contraseniasIgualesValidator,
@@ -10,14 +11,17 @@ import {
 @Component({
   selector: 'app-cambiar-contrasenia',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, LucideLockKeyhole],
   templateUrl: './cambiar-contrasenia.component.html',
   styles: `
     :host { display: block; }
-    .security-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-    h2 { margin: 0; }
-    .security-description { color: var(--color-text-muted); }
-    form { display: flex; flex-direction: column; gap: 1rem; max-width: 38rem; }
+    .account-setting-row, .account-setting-label { display: flex; align-items: center; gap: 0.75rem; }
+    .account-setting-row { justify-content: space-between; flex-wrap: wrap; min-height: 3.2rem; padding: 0.5rem 0.35rem; }
+    .account-setting-label { margin: 0; font-size: 1rem; font-weight: 550; }
+    .account-setting-label svg { flex: none; }
+    .security-description { margin: 0; color: var(--color-text-muted); line-height: 1.5; }
+    form { display: flex; flex-direction: column; gap: 1rem; max-width: 34rem; padding: 0.5rem 0 1.25rem; }
+    .acct-alert--success { margin-bottom: 0.75rem; }
   `,
 })
 export class CambiarContraseniaComponent {

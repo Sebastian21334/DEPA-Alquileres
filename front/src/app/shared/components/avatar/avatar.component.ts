@@ -23,8 +23,13 @@ import { Component, computed, input, linkedSignal } from '@angular/core';
 export class AvatarComponent {
   readonly foto = input<string | null | undefined>(null);
   readonly nombre = input<string | null | undefined>('');
+  readonly usarDosIniciales = input(false);
 
   // Se reinicia cuando cambia la foto, para reintentar con una URL nueva.
   protected readonly fallo = linkedSignal({ source: this.foto, computation: () => false });
-  protected readonly inicial = computed(() => (this.nombre()?.trim() || '?').charAt(0).toUpperCase());
+  protected readonly inicial = computed(() => {
+    const partes = (this.nombre()?.trim() || '?').split(/\s+/);
+    if (!this.usarDosIniciales() || partes.length === 1) return partes[0].charAt(0).toUpperCase();
+    return (partes[0].charAt(0) + partes[partes.length - 1].charAt(0)).toUpperCase();
+  });
 }

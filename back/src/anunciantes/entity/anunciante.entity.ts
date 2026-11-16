@@ -24,6 +24,9 @@ export class Anunciante {
   // Solo los anunciantes verificados pueden publicar o administrar imágenes.
   verificado: boolean;
 
+  @Column({ name: 'actividades_pausadas', type: 'boolean', default: false })
+  actividades_pausadas: boolean;
+
   // Único entre las cuentas activas, comparando solo los dígitos (índice
   // uq_anunciante_cuit_cuil_digitos de la migración 20261104). Al dar de baja la
   // cuenta queda en null para que la persona pueda volver a registrarlo (RN-37).

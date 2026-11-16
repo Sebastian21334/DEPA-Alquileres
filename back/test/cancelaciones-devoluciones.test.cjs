@@ -359,23 +359,31 @@ test('la solicitud admite exactamente dos días y exige aceptar los términos', 
   assert.equal((await cancelaciones.solicitar(reserva.id, dto, 1)).estado, 'PENDIENTE');
 });
 
-test('la consulta muestra los términos aunque el plazo haya vencido o el medio sea tarjeta', async () => {
-  const { reserva, pago } = await escenario(fechaEnDias(1));
+test('la consulta muestra los términos aunque el plazo haya vencido', async () => {
+  const { reserva } = await escenario(fechaEnDias(1));
   const dto = { motivo: 'Cambio de planes', aceptaTerminos: true };
   const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
   assert.equal(condiciones.politica.diasDevolucionParcial, 2);
   assert.match(condiciones.motivoBloqueo, /plazo venció/);
   await assert.rejects(cancelaciones.solicitar(reserva.id, dto, 1), /plazo venció/);
 
-  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaEnDias(2) });
-  for (const medio of ['visa', 'debvisa', null]) {
-    await source.getRepository(Pago).update(pago.id, { payment_method_id: medio });
-    const condicionesPago = await cancelaciones.consultarCondiciones(reserva.id, 1);
-    assert.match(condicionesPago.motivoBloqueo, /dinero en cuenta/);
-    await assert.rejects(cancelaciones.solicitar(reserva.id, dto, 1), /dinero en cuenta/);
-  }
   assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
 });
+
+for (const medio of ['visa', 'debvisa', null]) {
+  test(`permite cancelar sin reembolso con medio de pago ${medio}`, async () => {
+    const { reserva, pago } = await escenario(fechaEnDias(7));
+    await source.getRepository(Pago).update(pago.id, { payment_method_id: medio });
+    const condicionesPago = await cancelaciones.consultarCondiciones(reserva.id, 1);
+    assert.equal(condicionesPago.motivoBloqueo, null);
+    assert.equal(condicionesPago.admiteReembolso, false);
+    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+    const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+    assert.equal(resultado.reembolso, null);
+    assert.equal(await source.getRepository(Reembolso).count(), 0);
+    assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, true);
+  });
+}
 
 test('la devolución de una cancelación queda identificada por su solicitud', async () => {
   const { reserva } = await escenario();

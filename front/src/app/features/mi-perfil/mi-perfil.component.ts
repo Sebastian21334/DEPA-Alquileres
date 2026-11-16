@@ -5,11 +5,14 @@ import { forkJoin } from 'rxjs';
 import {
   LucideBadgeCheck,
   LucideCamera,
+  LucideCalendarDays,
   LucideClock,
-  LucideMail,
+  LucideExternalLink,
+  LucideHeart,
+  LucideLayers,
   LucidePencil,
-  LucidePhone,
-  LucideUser,
+  LucidePlus,
+  LucideTrash2,
 } from '@lucide/angular';
 import { PerfilService } from '../../core/services/perfil.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -35,11 +38,14 @@ const MAX_FOTO = 5 * 1024 * 1024;
     CambiarContraseniaComponent,
     LucideBadgeCheck,
     LucideCamera,
+    LucideCalendarDays,
     LucideClock,
-    LucideMail,
+    LucideExternalLink,
+    LucideHeart,
+    LucideLayers,
     LucidePencil,
-    LucidePhone,
-    LucideUser,
+    LucidePlus,
+    LucideTrash2,
   ],
   templateUrl: './mi-perfil.component.html',
   styleUrl: './mi-perfil.component.scss',
@@ -65,6 +71,9 @@ export class MiPerfilComponent {
   protected readonly mostrarConfirmacionBaja = signal(false);
   protected readonly eliminandoCuenta = signal(false);
   protected readonly errorBaja = signal('');
+  protected readonly confirmarPausa = signal(false);
+  protected readonly cambiandoPausa = signal(false);
+  protected readonly errorPausa = signal('');
 
   // Mismas reglas que ActualizarUsuarioDto (back/src/usuarios/dto/actualizar-usuario.dto.ts).
   protected readonly form = this.fb.nonNullable.group({
@@ -79,13 +88,6 @@ export class MiPerfilComponent {
   });
 
   protected readonly rol = computed(() => etiquetaRol(this.perfil()?.rol?.nombre));
-
-  /** Tipo de usuario tal como se muestra: rol + condición de anunciante. */
-  protected readonly tipoUsuario = computed(() => {
-    const s = this.solicitud();
-    if (s?.estado === 'aprobada') return `${this.rol()} · Anunciante (${s.anunciante?.tipoAnunciante?.nombre ?? 'verificado'})`;
-    return this.rol();
-  });
 
   constructor() {
     forkJoin({
@@ -185,6 +187,22 @@ export class MiPerfilComponent {
       error: (err: Error) => {
         this.errorFoto.set(err.message);
         this.subiendoFoto.set(false);
+      },
+    });
+  }
+
+  protected cambiarPausaActividades(pausadas: boolean): void {
+    if (this.cambiandoPausa()) return;
+    this.cambiandoPausa.set(true);
+    this.errorPausa.set('');
+    this.perfilService.cambiarPausaActividades(pausadas).subscribe({
+      next: () => {
+        this.confirmarPausa.set(false);
+        this.cambiandoPausa.set(false);
+      },
+      error: (err: Error) => {
+        this.errorPausa.set(err.message);
+        this.cambiandoPausa.set(false);
       },
     });
   }

@@ -68,6 +68,18 @@ export class UsuariosService {
     return usuario;
   }
 
+  async cambiarPausaActividades(idUsuario: number, pausadas: boolean): Promise<{ actividades_pausadas: boolean }> {
+    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+      const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion);
+      if (!usuario?.activa || usuario.bloqueado) {
+        throw new ForbiddenException('La cuenta debe estar habilitada');
+      }
+
+      await this.anunciantesService.cambiarPausaActividades(idUsuario, pausadas, transaccion);
+      return { actividades_pausadas: pausadas };
+    });
+  }
+
   async cambiarBloqueoAdministrativo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
     if (idUsuario === idOperador)
       throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');

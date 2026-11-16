@@ -30,6 +30,7 @@ import { UsuariosService } from '../service/usuarios.service';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
+import { CambiarPausaActividadesDto } from '../dto/cambiar-pausa-actividades.dto';
 import { CambiarRolDto } from '../dto/cambiar-rol.dto';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import { ResponderApelacionDto } from '../dto/responder-apelacion.dto';
@@ -81,6 +82,12 @@ export class UsuariosController {
   // Perfil propio: el id sale del JWT, así un usuario solo puede leer sus datos.
   obtenerPerfil(@Req() req: AuthenticatedRequest) {
     return this.usuariosService.obtenerPerfil(req.user.id);
+  }
+
+  @Patch('me/actividades')
+  @UseGuards(JwtAuthGuard)
+  cambiarPausaActividades(@Req() req: AuthenticatedRequest, @Body() dto: CambiarPausaActividadesDto) {
+    return this.usuariosService.cambiarPausaActividades(req.user.id, dto.actividades_pausadas);
   }
 
   @Post('me/foto')

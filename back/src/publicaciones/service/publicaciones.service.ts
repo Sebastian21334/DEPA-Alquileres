@@ -232,7 +232,7 @@ export class PublicacionesService {
     );
     // El dueño ve todas (para poder completarlas); la vista pública solo las que cumplen la regla.
     return publicaciones.filter((p) => !p.eliminada && this.cuentaAnuncianteHabilitada(p) &&
-      (!soloActivas || this.esVisible(p)))
+      (!soloActivas || (!p.anunciante?.actividades_pausadas && this.esVisible(p))))
       .map((publicacion) => this.prepararRespuesta(publicacion));
   }
 
