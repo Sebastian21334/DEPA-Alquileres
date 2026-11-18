@@ -389,6 +389,35 @@ test('reserva finalizada con liquidación resuelta: no se toca y suma sinAccion'
   assert.deepEqual(estado.liberadas, []);
 });
 
+test('reserva finalizada con resto pendiente tras una devolución parcial: pasa a EN_REVISION', async () => {
+  const reserva = crearReserva({
+    finalizada: true,
+    codigo_validado_en: new Date('2030-02-10T12:00:00Z'),
+    estado_liquidacion: 'DEVUELTO_PARCIAL_INQUILINO',
+  });
+  const { estado, servicio } = crearEscenario(reserva);
+
+  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(ANUNCIANTE, ADMIN, MOTIVO);
+
+  assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
+  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.equal(estado.reembolsos.length, 0);
+});
+
+for (const estadoLiquidacion of ['PENDIENTE_PAGO_PROPIETARIO', 'DEVUELTO_PARCIAL_INQUILINO']) {
+  test(`reserva cancelada con importe para el anunciante (${estadoLiquidacion}): pasa a EN_REVISION y no se devuelve`, async () => {
+    const reserva = crearReserva({ cancelada: true, estado_liquidacion: estadoLiquidacion });
+    const { estado, servicio } = crearEscenario(reserva);
+
+    const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(ANUNCIANTE, ADMIN, MOTIVO);
+
+    assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
+    assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+    assert.equal(estado.reembolsos.length, 0);
+    assert.deepEqual(estado.liberadas, []);
+  });
+}
+
 function crearEscenarioBloqueo({ bloqueado, rol = 'Anunciante' }) {
   const usuario = Object.assign(new Usuario(), {
     id: 3,

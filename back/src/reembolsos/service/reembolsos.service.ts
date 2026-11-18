@@ -43,11 +43,15 @@ export type CrearReembolsoDatos = {
 @Injectable()
 export class ReembolsosService {
   private get estadosActivos(): string[] {
+    return [...this.estadosEnCurso, this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')];
+  }
+
+  /** Devoluciones que todavía pueden mover dinero; un aprobado ya está descontado del pago. */
+  private get estadosEnCurso(): string[] {
     return [
       this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
       this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'),
       this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
-      this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
     ];
   }
 
@@ -113,7 +117,7 @@ export class ReembolsosService {
         );
     }
 
-    const reservado = await reembolsos.sumarImportesReservados(pago.id, [this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'), this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'), this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')]);
+    const reservado = await reembolsos.sumarImportesReservados(pago.id, this.estadosEnCurso);
     const saldo = this.pagos.saldoReembolsable(pago) - reservado;
     if (importe > saldo + TOLERANCIA_MONETARIA)
       throw new ConflictException(
@@ -182,9 +186,7 @@ export class ReembolsosService {
   }
 
   actividadInquilino(idUsuario: number) {
-    return this.reembolsos.actividadInquilino(idUsuario, this.estadosActivos.filter(estado =>
-      estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
-    ));
+    return this.reembolsos.actividadInquilino(idUsuario, this.estadosEnCurso);
   }
 
   listarConversaciones(idReserva: number, idInquilino: number) {
@@ -727,8 +729,13 @@ export class ReembolsosService {
     return repositorio.buscarPorOrigen(origen, referencia);
   }
 
-  async listarActivosPorReservas(idsReserva: number[]): Promise<Reembolso[]> {
-    return this.reembolsos.buscarPorReservasConEstados(idsReserva, this.estadosActivos);
+  async listarEnCursoPorReservas(idsReserva: number[]): Promise<Reembolso[]> {
+    return this.reembolsos.buscarPorReservasConEstados(idsReserva, this.estadosEnCurso);
+  }
+
+  async tieneDevolucionEnCurso(idReserva: number, transaccion?: EntityManager): Promise<boolean> {
+    const repositorio = transaccion ? this.reembolsos.enTransaccion(transaccion) : this.reembolsos;
+    return (await repositorio.buscarPorReservasConEstados([idReserva], this.estadosEnCurso)).length > 0;
   }
 
   private prepararRespuesta(reembolso: Reembolso): Reembolso {

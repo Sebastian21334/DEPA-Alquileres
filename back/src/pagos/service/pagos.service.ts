@@ -83,8 +83,13 @@ export class PagosService {
     return this.pagosRepo.buscarBloqueado(idPago, transaccion);
   }
 
+  /** Lo que la plataforma conserva del pago: se devuelve al inquilino o se liquida al anunciante. */
   saldoReembolsable(pago: Pago): number {
     return Math.max(0, Number(pago.amount) - Number(pago.amount_refunded ?? 0));
+  }
+
+  listarPorReservas(idsReserva: number[]): Promise<Pago[]> {
+    return this.pagosRepo.buscarPorReservas(idsReserva);
   }
 
   aplicarReembolso(pago: Pago, importe: number, resuelveContracargo: boolean, transaccion: EntityManager): Promise<Pago> {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, type DeepPartial, type EntityManager } from 'typeorm';
+import { In, Repository, type DeepPartial, type EntityManager } from 'typeorm';
 import { Pago } from '../entity/pago.entity';
 import { IPagosRepository } from './pagos.repository.interface';
 
@@ -46,6 +46,14 @@ export class PagosRepository implements IPagosRepository {
     return (transaccion?.getRepository(Pago) ?? this.pagos).findOne({
       where: { reserva: { id: idReserva } },
       relations: { reserva: incluirReserva },
+    });
+  }
+
+  buscarPorReservas(idsReserva: number[]): Promise<Pago[]> {
+    if (idsReserva.length === 0) return Promise.resolve([]);
+    return this.pagos.find({
+      where: { reserva: { id: In(idsReserva) } },
+      relations: { reserva: true },
     });
   }
 

@@ -673,17 +673,18 @@ export class ReservasService
   }
 
   /**
-   * Cancela una estadía pagada sin devolución: conserva el pago, deja la
-   * liquidación en revisión y libera el calendario. Participa de la transacción
-   * de quien coordina la decisión, para que un fallo revierta todo el conjunto.
+   * Cancela una estadía pagada sin devolución: conserva el pago, deja el
+   * importe pendiente de pago al anunciante y libera el calendario. Participa
+   * de la transacción de quien coordina la decisión, para que un fallo revierta
+   * todo el conjunto.
    */
   async cancelarConRetencionTotal(idReserva: number, actor: ActorCancelacion, motivo: string, transaccion: EntityManager): Promise<Reserva> {
     const reservas = this.reservaRepository.enTransaccion(transaccion);
     const reserva = await this.obtenerReserva(idReserva, transaccion);
     this.marcarCancelada(reserva, actor, motivo);
-    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
     reserva.observacion_liquidacion =
-      'Cancelación con retención total; liquidación pendiente de revisión';
+      'Cancelación sin devolución: el importe corresponde al anunciante';
     const guardada = await reservas.guardar(reserva);
     await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
     await this.disponibilidadService.liberarReserva(idReserva, transaccion);
@@ -757,7 +758,7 @@ export class ReservasService
       );
     }
   }
-  async conReservaBloqueada(id: number, operar: (reserva: Reserva, transaccion: EntityManager) => Promise<void>): Promise<Reserva> {
+  async conReservaBloqueada(id: number, operar: (reserva: Reserva, transaccion: EntityManager) => Promise<void>): Promise<ReservaRespuestaDto> {
     const guardada = await this.reservaRepository.conTransaccion(async (reservas, transaccion) => {
       const reserva = await this.obtenerReserva(id, transaccion);
       await operar(reserva, transaccion);
@@ -925,6 +926,22 @@ export class ReservasService
 
   liquidacionResuelta(reserva: Reserva): boolean {
     return this.liquidaciones.esLiquidacionResuelta(reserva.estado_liquidacion);
+  }
+
+  /** Ya no le queda importe al anunciante: se le pagó o se devolvió todo al inquilino. */
+  liquidacionCerradaParaAnunciante(reserva: Reserva): boolean {
+    return this.liquidaciones.esLiquidacionCerradaParaAnunciante(reserva.estado_liquidacion);
+  }
+
+  /**
+   * Lo que no se devolvió al inquilino es del anunciante. Se le paga cuando
+   * acreditó el ingreso o cuando la reserva se canceló, porque la estadía ya
+   * no ocurre y lo retenido le corresponde por la política de cancelación.
+   */
+  anuncianteHabilitadoParaCobrar(reserva: Reserva): boolean {
+    return this.pagoAprobado(reserva) &&
+      this.liquidaciones.admitePagoAlAnunciante(reserva.estado_liquidacion) &&
+      (this.codigoValidado(reserva) || reserva.cancelada);
   }
 
   codigoValidado(reserva: Reserva): boolean {

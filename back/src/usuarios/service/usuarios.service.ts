@@ -21,6 +21,7 @@ import sharp from 'sharp';
 import type { EntityManager } from 'typeorm';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
+import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import type { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { formatearNombreCompleto } from '../../common/utils/nombres';
@@ -47,7 +48,7 @@ type CrearUsuarioDatos = {
 export class UsuariosService {
   private readonly logger = new Logger(UsuariosService.name);
 
-  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService) {}
+  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService, private readonly liquidacionesService: LiquidacionesService) {}
 
   /** Busca un usuario por correo para validar duplicados o iniciar sesion. */
   async buscarPorEmail(email: string): Promise<Usuario | null> {
@@ -214,11 +215,8 @@ export class UsuariosService {
       {
         pagoPendiente: this.catalogosService.codigoEstado('PAGO_RESERVA', 'PENDIENTE'),
         pagoAprobado: this.catalogosService.codigoEstado('PAGO_RESERVA', 'APROBADO'),
-        liquidacionesResueltas: [
-          this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
-          this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
-          this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
-        ],
+        // Con una devolución parcial todavía queda pagarle el resto al anunciante.
+        liquidacionesResueltas: this.liquidacionesService.estadosCerradosParaAnunciante(),
         enRevision: this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
       },
     );

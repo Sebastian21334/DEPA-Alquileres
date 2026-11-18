@@ -517,7 +517,8 @@ test('si falla la liberación de fechas se revierte la aprobación y se puede re
   assert.equal(cancelada.cancelada, true);
   assert.equal(cancelada.cancelada_por, 'INQUILINO');
   const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
-  assert.equal(liquidacion.estado, 'EN_REVISION');
+  // Sin devolución, lo retenido corresponde al anunciante.
+  assert.equal(liquidacion.estado, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
 test('si falla la aprobación no queda una devolución sin decisión', async () => {
@@ -631,6 +632,128 @@ test('si falla la escritura de la liquidación se revierte la reserva y se puede
   const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
   assert.equal(Number(liquidacion.importe), 40);
   assert.equal(liquidacion.estado, 'DEVUELTO_PARCIAL_INQUILINO');
+});
+
+function operacionesLiquidacion() {
+  const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  return new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(),
+    { buscarCbuValidado: async () => '0010000700000000000017' },
+    new PagosService(new PagosRepository(source.getRepository(Pago))));
+}
+
+async function filaLiquidacion(operaciones, idReserva) {
+  return (await operaciones.listarLiquidacionesAdministracion()).find(fila => fila.id === idReserva);
+}
+
+async function cancelarSinDevolucion(reserva) {
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaEnDias(1) });
+  await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+}
+
+test('después de pagarle al inquilino una devolución parcial por reclamo, el resto se liquida al anunciante', async () => {
+  const { reserva, pago } = await escenario('2026-01-01');
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date() });
+  const operaciones = operacionesLiquidacion();
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1);
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 40 }, 3);
+  // Primero se le paga al inquilino en Reembolsos.
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+  const [pendiente] = await reembolsos.listarPorReserva(reserva.id);
+  await operacionesReembolso.registrarTransferencia(pendiente.id, 'trf-inquilino', 3);
+
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.equal(fila.estado_liquidacion, 'DEVUELTO_PARCIAL_INQUILINO');
+  assert.equal(fila.importe_a_liquidar, 60);
+  assert.equal(fila.moneda_liquidacion, 'ARS');
+  assert.equal(fila.habilitada_para_pago, true);
+
+  const pagada = await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'trf-anunciante' }, 3);
+  assert.equal(pagada.estado_liquidacion, 'PAGADO_PROPIETARIO');
+  assert.equal(pagada.habilitada_para_pago, false);
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(Number(liquidacion.importe), 60);
+  assert.deepEqual(liquidacion.pagos_anunciante.map(registro => registro.importe), [60]);
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), /ya fue resuelta/);
+});
+
+test('sin código validado ni cancelación, el resto espera y no se le puede pagar al anunciante', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  const operaciones = operacionesLiquidacion();
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1);
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 40 }, 3);
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.equal(fila.importe_a_liquidar, 60);
+  assert.equal(fila.habilitada_para_pago, false);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), /sin validar el código/);
+});
+
+test('en una cancelación con devolución parcial, lo retenido se liquida al anunciante', async () => {
+  const { reserva } = await escenario(fechaEnDias(2));
+  const operaciones = operacionesLiquidacion();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+  await operacionesReembolso.ejecutar(reembolso.id, 3);
+
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.equal(fila.cancelada, true);
+  assert.equal(fila.importe_a_liquidar, 50);
+  assert.equal(fila.habilitada_para_pago, true);
+  const pagada = await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'trf-anunciante' }, 3);
+  assert.equal(pagada.estado_liquidacion, 'PAGADO_PROPIETARIO');
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(Number(liquidacion.importe), 50);
+});
+
+test('en una cancelación sin devolución, todo el importe se liquida al anunciante', async () => {
+  const { reserva } = await escenario(fechaEnDias(2));
+  const operaciones = operacionesLiquidacion();
+  await cancelarSinDevolucion(reserva);
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.equal(fila.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal(fila.importe_a_liquidar, 100);
+  assert.equal(fila.habilitada_para_pago, true);
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3);
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(liquidacion.estado, 'PAGADO_PROPIETARIO');
+  assert.equal(Number(liquidacion.importe), 100);
+});
+
+test('una cancelada en revisión se puede cerrar para pagarle al anunciante, pero no vuelve a esperar el ingreso', async () => {
+  const { reserva } = await escenario(fechaEnDias(2));
+  const operaciones = operacionesLiquidacion();
+  await cancelarSinDevolucion(reserva);
+  // Congelada, por ejemplo, al bloquear al anunciante.
+  await source.query("UPDATE liquidacion SET estado = 'EN_REVISION' WHERE id_reserva = $1", [reserva.id]);
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, false);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), /en revisión/);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /circuito de ingreso/);
+
+  const reabierta = await operaciones.resolverLiquidacion(reserva.id, { estado: 'PENDIENTE_PAGO_PROPIETARIO', observacion: 'Revisión cerrada' }, 3);
+  assert.equal(reabierta.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal(reabierta.habilitada_para_pago, true);
+  const pagada = await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3);
+  assert.equal(pagada.estado_liquidacion, 'PAGADO_PROPIETARIO');
+});
+
+test('devolverle al inquilino lo que quedaba exige motivo y deriva el resto a Reembolsos', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date() });
+  const operaciones = operacionesLiquidacion();
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1);
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 40 }, 3);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /motivo/);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: '   ' }, 3), /motivo/);
+
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: 'Anunciante bloqueado por fraude' }, 3);
+  const ajuste = (await reembolsos.listarPorReserva(reserva.id)).find(item => item.origen === OrigenReembolso.AJUSTE_ADMIN);
+  assert.equal(Number(ajuste.importe), 60);
+  assert.equal(ajuste.estado, 'PENDIENTE');
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
 });
 
 for (const resultado of ['GANADA', 'PERDIDA']) {
@@ -869,6 +992,32 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
     }]);
     await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-repetido' }).expect(409);
+    // Lo que no se le devolvió al inquilino se liquida al anunciante: la cancelada sí, la que no acreditó el ingreso no.
+    const conResto = async (datos, clave) => {
+      const conDevolucion = await source.getRepository(Reserva).save({
+        monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: 1 },
+        fecha_inicio: '2099-03-01', fecha_fin: '2099-03-05', ...datos,
+      });
+      await source.getRepository(Pago).save({
+        reserva: conDevolucion, amount: 100, amount_refunded: 50, currency: 'ARS', status: 'approved', payment_id: `mp-${clave}`,
+        payment_method_id: 'account_money', external_reference: `reserva:${conDevolucion.id}`, idempotency_key: `pago-${clave}`,
+      });
+      await source.query("INSERT INTO liquidacion (id_reserva, estado, moneda) VALUES ($1, 'DEVUELTO_PARCIAL_INQUILINO', 'ARS')", [conDevolucion.id]);
+      return conDevolucion;
+    };
+    const cancelada = await conResto({ cancelada: true }, 'cancelada-resto');
+    const sinIngreso = await conResto({}, 'sin-ingreso-resto');
+    const { body: porLiquidar } = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
+    const filaCancelada = porLiquidar.find(fila => fila.id === cancelada.id);
+    assert.deepEqual([filaCancelada.importe_a_liquidar, filaCancelada.moneda_liquidacion, filaCancelada.habilitada_para_pago], [50, 'ARS', true]);
+    assert.equal(porLiquidar.find(fila => fila.id === sinIngreso.id).habilitada_para_pago, false);
+    const rutaCancelada = `/reservas/${cancelada.id}/liquidacion`;
+    await request(http).patch(rutaCancelada).set('Authorization', admin).send({ estado: 'DEVUELTO_INQUILINO' }).expect(400);
+    await request(http).patch(`/reservas/${sinIngreso.id}/liquidacion`).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO' }).expect(409);
+    const { body: liquidada } = await request(http).patch(rutaCancelada).set('Authorization', admin)
+      .send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-retenido' }).expect(200);
+    assert.equal(liquidada.estado_liquidacion, 'PAGADO_PROPIETARIO');
+    assert.equal(liquidada.importe_a_liquidar, 50);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);
     const disputa = await app.get(DisputasService).registrarContracargo({

@@ -100,7 +100,8 @@ export class ReservaBloqueoAnuncianteService {
     }
 
     const codigoValidado = this.reservasService.codigoValidado(reserva);
-    const liquidacionResuelta = this.reservasService.liquidacionResuelta(reserva);
+    // Lo pendiente para el anunciante (incluido el resto de una devolución parcial) se trata igual.
+    const liquidacionCerrada = this.reservasService.liquidacionCerradaParaAnunciante(reserva);
     const enRevision =
       this.reservasService.liquidacionEnRevision(reserva) ||
       reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO');
@@ -112,7 +113,7 @@ export class ReservaBloqueoAnuncianteService {
       this.reservasService.esEstadiaEnCurso(reserva) ||
       this.reservasService.esEstadiaFinalizada(reserva)
     ) {
-      if (liquidacionResuelta) return 'sinAccion';
+      if (liquidacionCerrada) return 'sinAccion';
       await this.congelarLiquidacion(reserva, motivo);
       return 'enRevision';
     }
@@ -126,7 +127,7 @@ export class ReservaBloqueoAnuncianteService {
     // Código validado fuera del período de estadía: no se cancela ni se
     // devuelve automáticamente porque hace falta revisar el ingreso.
     if (codigoValidado) {
-      if (liquidacionResuelta) return 'sinAccion';
+      if (liquidacionCerrada) return 'sinAccion';
       await this.congelarLiquidacion(reserva, motivo);
       return 'enRevision';
     }
@@ -166,7 +167,7 @@ export class ReservaBloqueoAnuncianteService {
 
     if (
       reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO') ||
-      liquidacionResuelta
+      liquidacionCerrada
     )
       return 'sinAccion';
 
@@ -190,7 +191,7 @@ export class ReservaBloqueoAnuncianteService {
     const fresca = await this.reservaRepository.buscarPorId(reserva.id);
     if (!fresca) return 'sinAccion';
     await this.liquidaciones.proyectarEnReserva(fresca);
-    if (this.reservasService.liquidacionResuelta(fresca)) return 'sinAccion';
+    if (this.reservasService.liquidacionCerradaParaAnunciante(fresca)) return 'sinAccion';
 
     if (
       this.reservasService.esEstadiaEnCurso(fresca) ||
@@ -398,7 +399,7 @@ export class ReservaBloqueoAnuncianteService {
         const actual = await reservaRepository.buscarPorId(idReserva);
         if (!actual) return 'sinAccion';
         await this.liquidaciones.proyectarEnReserva(actual, transaccion);
-        if (this.reservasService.liquidacionResuelta(actual)) return 'sinAccion';
+        if (this.reservasService.liquidacionCerradaParaAnunciante(actual)) return 'sinAccion';
         if (
           this.reservasService.esEstadiaEnCurso(actual) ||
           this.reservasService.esEstadiaFinalizada(actual)
@@ -475,7 +476,7 @@ export class ReservaBloqueoAnuncianteService {
         const actual = await reservaRepository.buscarPorId(reserva.id);
         if (!actual) return;
         await this.liquidaciones.proyectarEnReserva(actual, transaccion);
-        if (this.reservasService.liquidacionResuelta(actual)) return;
+        if (this.reservasService.liquidacionCerradaParaAnunciante(actual)) return;
         actual.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
         actual.observacion_liquidacion = this.observacionConMotivo(
           actual.observacion_liquidacion,

@@ -8,6 +8,7 @@ const { ConflictException } = require('@nestjs/common');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
 const { Anunciante } = require('../dist/anunciantes/entity/anunciante.entity');
 const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
+const { LiquidacionesService } = require('../dist/liquidaciones/service/liquidaciones.service');
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
 const { AnunciantesService, MENSAJE_CUIT_EN_USO } = require('../dist/anunciantes/service/anunciantes.service');
 const { AnunciantesRepository } = require('../dist/anunciantes/repository/anunciantes.repository');
@@ -114,7 +115,7 @@ function servicioUsuarios(db) {
   const repo = new UsuariosRepository({ manager: { transaction: (fn) => fn(manager) } });
   return new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     new PublicacionesService(new PublicacionesRepository()),
-    new AnunciantesService(new AnunciantesRepository()));
+    new AnunciantesService(new AnunciantesRepository()), new LiquidacionesService({}, catalogosDePrueba()));
 }
 
 const fila = (db, sql, id) => db.prepare(sql).get(id);
@@ -131,7 +132,7 @@ test('la baja de la cuenta mueve el email al histórico y lo libera', async () =
   };
   const servicio = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => false, desactivarPorBajaDeCuenta: async () => {} },
-    { archivarCuitPorBajaDeCuenta: async () => {} });
+    { archivarCuitPorBajaDeCuenta: async () => {} }, new LiquidacionesService({}, catalogosDePrueba()));
   await servicio.darDeBajaPropia(usuario.id);
   assert.equal(usuario.activa, false);
   assert.equal(usuario.email, null);

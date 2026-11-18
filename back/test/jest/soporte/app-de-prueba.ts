@@ -13,6 +13,8 @@ import { ANUNCIANTES_REPOSITORY } from '../../../src/anunciantes/repository/anun
 import { AnunciantesService } from '../../../src/anunciantes/service/anunciantes.service';
 import { Rol } from '../../../src/catalogos/entity/rol.entity';
 import { CatalogosService } from '../../../src/catalogos/service/catalogos.service';
+import { LIQUIDACION_REPOSITORY } from '../../../src/liquidaciones/repository/liquidacion.repository.interface';
+import { LiquidacionesService } from '../../../src/liquidaciones/service/liquidaciones.service';
 import { MAIL_SERVICE } from '../../../src/mail/mail.interface';
 import { PublicacionesController } from '../../../src/publicaciones/controller/publicaciones.controller';
 import { Publicacion } from '../../../src/publicaciones/entity/publicacion.entity';
@@ -237,7 +239,10 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
       AnunciantesService,
       PublicacionesService,
       BloqueoAnuncianteService,
+      LiquidacionesService,
       usuariosRepository,
+      // Los estados de liquidación no consultan la base.
+      { provide: LIQUIDACION_REPOSITORY, useValue: {} },
       { provide: PUBLICACIONES_REPOSITORY, useValue: publicaciones },
       {
         provide: ANUNCIANTES_REPOSITORY,
