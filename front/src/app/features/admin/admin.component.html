@@ -189,7 +189,7 @@
     <div class="panel__title">
       <div>
         <h2>Reservas por liquidar</h2>
-        <p>Registrá pagos a anunciantes con el código validado. Derivá a Reembolsos los casos que deben devolverse al inquilino.</p>
+        <p>Registrá el pago al anunciante de lo que no se le devolvió al inquilino. Las devoluciones en curso se resuelven antes en Reembolsos.</p>
       </div>
       <span class="counter">{{ settlements().length }}</span>
     </div>
@@ -202,13 +202,16 @@
         @for (settlement of settlements(); track settlement.id) {
           <article class="settlement-card">
             <div>
-              <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
-                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : 'Código validado' }}
+              <span class="status" [class.status--blocked]="!settlement.habilitada_para_pago">
+                {{ etiquetaLiquidacion(settlement) }}
               </span>
               <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
-              <p><strong>Importe:</strong> {{ montoLiquidacion(settlement) }}</p>
+              @if (tieneDevolucion(settlement)) {
+                <p><strong>Pagó el inquilino:</strong> {{ montoPagado(settlement) }}</p>
+              }
+              <p><strong>A liquidar al anunciante:</strong> {{ montoLiquidacion(settlement) }}</p>
               @if (settlement.cotizacion_dolar; as dolar) {
                 <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
                 <p>Cotización #{{ dolar.id }} · {{ dolar.proveedor }} · Publicada: {{ dolar.actualizada_fuente_en }} · Aceptada: {{ settlement.cotizacion_aceptada_en }}.</p>
@@ -218,12 +221,12 @@
               }
             </div>
             <div class="actions">
-              @if (settlement.estado_liquidacion === 'EN_REVISION' && !settlement.cancelada) {
+              @if (settlement.estado_liquidacion === 'EN_REVISION') {
                 <button type="button" class="button button--ghost" (click)="abrirResolucionLiquidacion(settlement, false)">Cerrar revisión del pago</button>
               }
               <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
-              @if (settlement.codigo_validado_en) {
-                <button type="button" class="button button--success" [disabled]="settlement.estado_liquidacion === 'EN_REVISION'" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+              @if (settlement.codigo_validado_en || settlement.cancelada) {
+                <button type="button" class="button button--success" [disabled]="!settlement.habilitada_para_pago" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
               }
             </div>
           </article>
@@ -339,21 +342,22 @@
         <p class="refund-meta">Reserva #{{ decision.reserva.id }} · {{ decision.reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</p>
         <p class="refund-help">
           @if (decision.devolver) {
-            El saldo se derivará a Reembolsos para devolverlo al inquilino según el medio de pago.
-          } @else if (decision.reserva.codigo_validado_en) {
-            La reserva quedará pendiente de pago al anunciante.
+            Lo que queda del pago ({{ montoLiquidacion(decision.reserva) }}) se derivará a Reembolsos para devolvérselo
+            al inquilino según el medio de pago. El anunciante no recibirá ese importe.
+          } @else if (estadoAlCerrarRevision(decision.reserva) === 'PENDIENTE_PAGO_PROPIETARIO') {
+            La reserva quedará pendiente de pago al anunciante por {{ montoLiquidacion(decision.reserva) }}.
           } @else {
             El pago seguirá retenido hasta que se valide el código de alojamiento.
           }
         </p>
-        <label for="settlement-decision-note">{{ decision.devolver ? 'Motivo (opcional)' : 'Conclusión de la revisión' }}</label>
+        <label for="settlement-decision-note">{{ decision.devolver ? 'Motivo de la devolución' : 'Conclusión de la revisión' }}</label>
         <textarea id="settlement-decision-note" name="motivoResolucion" [(ngModel)]="motivoResolucion"
-          rows="4" maxlength="500" [required]="!decision.devolver" [disabled]="resolucionCargando()" autofocus></textarea>
+          rows="4" maxlength="500" required [disabled]="resolucionCargando()" autofocus></textarea>
         @if (resolucionError()) { <p class="refund-error" role="alert">{{ resolucionError() }}</p> }
         <div class="block-actions">
           <button type="button" class="button button--ghost" [disabled]="resolucionCargando()" (click)="cerrarResolucionLiquidacion()">Volver</button>
           <button type="submit" class="button" [class.button--danger-outline]="decision.devolver" [class.button--success]="!decision.devolver"
-            [disabled]="resolucionCargando() || (!decision.devolver && !motivoResolucion.trim())">
+            [disabled]="resolucionCargando() || !motivoResolucion.trim()">
             {{ resolucionCargando() ? 'Guardando…' : decision.devolver ? 'Pasar a Reembolsos' : 'Guardar conclusión' }}
           </button>
         </div>
@@ -369,7 +373,10 @@
       @if (pagoAnuncianteSeleccionado(); as item) {
         <p class="refund-meta">Reserva #{{ item.id }} · {{ item.publicacion?.titulo ?? 'Publicación eliminada' }}</p>
         <p><strong>Anunciante</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
-        <p><strong>Importe</strong> {{ montoLiquidacion(item) }}</p>
+        <p><strong>Importe a transferir</strong> {{ montoLiquidacion(item) }}</p>
+        @if (tieneDevolucion(item)) {
+          <p class="refund-help">El inquilino pagó {{ montoPagado(item) }}; ya se le devolvió la diferencia.</p>
+        }
       }
       <p class="refund-help" id="advertiser-payment-help">Registrá una transferencia que ya realizaste. El anunciante podrá ver la referencia y la observación en Mis publicaciones.</p>
       @if (consultandoCbuParaPago()) {

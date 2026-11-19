@@ -3,9 +3,9 @@
 **Fecha:** 18 de noviembre de 2026.
 **Rama:** `fixes/liquidaciones_parciales_correctas`.
 
-Esta entrega corrige el backend para que, cuando al inquilino no se le devuelve
-todo lo que pagó, el resto se le pueda liquidar al anunciante. El frontend de esta
-corrección queda para la siguiente entrega.
+Esta entrega corrige el backend y el panel de administración para que, cuando al
+inquilino no se le devuelve todo lo que pagó, el resto se le pueda liquidar al
+anunciante.
 
 ## Resumen
 
@@ -123,6 +123,38 @@ que cualquier liquidación pendiente.
 La baja de cuenta usa `estadosCerradosParaAnunciante()` en lugar de su lista
 copiada. Un anunciante con un resto pendiente ya no puede darse de baja.
 
+## Cambios en el frontend
+
+El front no repite las reglas: usa lo que calcula el back.
+
+### `features/admin/admin.service.ts`
+
+`AdminSettlement` suma `importe_a_liquidar`, `moneda_liquidacion` y
+`habilitada_para_pago`.
+
+### Panel admin · Reservas por liquidar (`admin.component.ts` y `.html`)
+
+- **Etiqueta de la tarjeta:** «En revisión», «Devolución parcial · resto al
+  anunciante», «Cancelada · retención para el anunciante», «Código validado» o
+  «Falta validar el ingreso».
+- **Importes:** «A liquidar al anunciante» muestra el resto; si hubo devolución,
+  también «Pagó el inquilino». Antes se mostraba el total pagado.
+- **«Registrar pago al anunciante»:** aparece con el código validado o en
+  canceladas, y se habilita con `habilitada_para_pago`.
+- **«Cerrar revisión del pago»:** también en canceladas; en ese caso deja la
+  reserva pendiente de pago al anunciante.
+- **«Devolver al inquilino»:** el motivo es obligatorio y el diálogo indica el
+  importe que se deriva a Reembolsos.
+- **Diálogo de pago:** muestra el «Importe a transferir» y, si hubo devolución, lo
+  que pagó el inquilino.
+
+### Mis reservas (`mis-reservas.component.ts`)
+
+- Una cancelación sin devolución muestra «Cancelada sin devolución · pago
+  administrativo al anunciante pendiente» en lugar de «Ingreso confirmado».
+- Se agregaron las etiquetas que faltaban para `DEVUELTO_INQUILINO` y
+  `DEVUELTO_PARCIAL_INQUILINO`.
+
 ## Contrato HTTP
 
 | Endpoint | Cambio |
@@ -170,6 +202,7 @@ servicio de liquidaciones.
   - «el CUIT/CUIL se compara por dígitos, con o sin guiones»;
   - «el CUIT/CUIL de una cuenta dada de baja queda libre para una cuenta nueva».
 - `npm run test:jest`: 65 de 65.
+- Front: `npx ng build --configuration development` sin errores ni advertencias.
 - No se probó en la app real porque no hay base local.
 
 ## Compatibilidad y alcance
@@ -179,10 +212,6 @@ servicio de liquidaciones.
   listado con su resto pendiente.
 - Las cancelaciones al 0 % anteriores que quedaron `EN_REVISION` no se migran:
   se pueden resolver desde el panel cerrando la revisión.
-- **Pendiente (frontend, próxima entrega):** mostrar `importe_a_liquidar`,
-  habilitar «Registrar pago» con `habilitada_para_pago`, «Cerrar revisión» en
-  canceladas, motivo obligatorio al devolver y etiquetas de liquidación en Mis
-  reservas.
 - **Pendiente (acordado para el final):** después de pagarle al anunciante, una
   cancelación con 50 % deja de mostrarle al inquilino «Reembolsada parcialmente».
 - **Fuera de alcance:** devolución parcial sin código validado (T36), liquidación
