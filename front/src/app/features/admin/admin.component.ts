@@ -473,7 +473,7 @@ export class AdminComponent {
     const settlement = this.pagoAnuncianteSeleccionado();
     const referencia = this.referenciaPagoAnunciante.trim();
     const observacion = this.observacionPagoAnunciante.trim();
-    if (!settlement?.codigo_validado_en || !this.cbuParaPago() || settlement.estado_liquidacion === 'EN_REVISION' ||
+    if (!settlement?.habilitada_para_pago || !this.cbuParaPago() ||
         this.registrandoPagoAnunciante() || referencia.length > 150 || observacion.length > 500) return;
 
     this.errorPagoAnunciante.set('');
@@ -527,13 +527,13 @@ export class AdminComponent {
   protected confirmarResolucionLiquidacion(): void {
     const resolucion = this.resolucionLiquidacion();
     const motivo = this.motivoResolucion.trim();
-    if (!resolucion || (!resolucion.devolver && !motivo) || motivo.length > 500 || this.resolucionCargando()) return;
+    // Tanto devolver al inquilino como cerrar la revisión exigen dejar el motivo.
+    if (!resolucion || !motivo || motivo.length > 500 || this.resolucionCargando()) return;
     const { reserva, devolver } = resolucion;
-    const estado = devolver ? 'DEVUELTO_INQUILINO'
-      : reserva.codigo_validado_en ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
+    const estado = devolver ? 'DEVUELTO_INQUILINO' : this.estadoAlCerrarRevision(reserva);
     this.resolucionError.set('');
     this.resolucionCargando.set(true);
-    this.api.resolverLiquidacion(reserva.id, estado, undefined, motivo || 'Devolución solicitada desde liquidaciones.').pipe(
+    this.api.resolverLiquidacion(reserva.id, estado, undefined, motivo).pipe(
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.resolucionCargando.set(false)),
     ).subscribe({
@@ -757,11 +757,34 @@ export class AdminComponent {
     );
   }
 
+  /** Lo que se le transfiere al anunciante: lo pagado menos lo que ya se le devolvió al inquilino. */
   protected montoLiquidacion(settlement: AdminSettlement): string {
-    return Number(settlement.monto_pago).toLocaleString('es-AR', {
-      style: 'currency',
-      currency: settlement.moneda_contratada ?? 'ARS',
-    });
+    return this.formatearImporte(settlement.importe_a_liquidar, settlement.moneda_liquidacion);
+  }
+
+  protected montoPagado(settlement: AdminSettlement): string {
+    return this.formatearImporte(settlement.monto_pago, settlement.moneda_liquidacion);
+  }
+
+  /** Hubo una devolución al inquilino: el importe a liquidar es menor que lo pagado. */
+  protected tieneDevolucion(settlement: AdminSettlement): boolean {
+    return Number(settlement.importe_a_liquidar) < Number(settlement.monto_pago) - 0.009;
+  }
+
+  protected etiquetaLiquidacion(settlement: AdminSettlement): string {
+    if (settlement.estado_liquidacion === 'EN_REVISION') return 'En revisión';
+    if (!settlement.cancelada && !settlement.codigo_validado_en) return 'Falta validar el ingreso';
+    if (settlement.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO') return 'Devolución parcial · resto al anunciante';
+    return settlement.cancelada ? 'Cancelada · retención para el anunciante' : 'Código validado';
+  }
+
+  /** Al cerrar la revisión, una cancelada o con ingreso validado queda para pagarle al anunciante. */
+  protected estadoAlCerrarRevision(reserva: AdminSettlement): 'PENDIENTE_PAGO_PROPIETARIO' | 'RETENIDO' {
+    return reserva.codigo_validado_en || reserva.cancelada ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
+  }
+
+  private formatearImporte(importe: number, moneda?: string | null): string {
+    return Number(importe).toLocaleString('es-AR', { style: 'currency', currency: moneda || 'ARS' });
   }
 
   protected cargarBloqueados(): void {

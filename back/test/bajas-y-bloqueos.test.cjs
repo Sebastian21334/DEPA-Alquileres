@@ -6,6 +6,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { ConflictException, NotFoundException } = require('@nestjs/common');
 const { BloqueoAnuncianteService } = require('../dist/bloqueo-anunciante/service/bloqueo-anunciante.service');
 const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
+const { LiquidacionesService } = require('../dist/liquidaciones/service/liquidaciones.service');
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
 const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
 const { PublicacionesRepository } = require('../dist/publicaciones/repository/publicaciones.repository');
@@ -131,7 +132,7 @@ function servicioUsuarios(db) {
   });
   return new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     new PublicacionesService(new PublicacionesRepository()),
-    { archivarCuitPorBajaDeCuenta: async () => {} });
+    { archivarCuitPorBajaDeCuenta: async () => {} }, new LiquidacionesService({}, catalogosDePrueba()));
 }
 
 test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de publicaciones', async () => {
@@ -243,6 +244,12 @@ test('el historial cerrado no impide la baja del Inquilino', async () => {
   const respuesta = await servicioUsuarios(db).darDeBajaPropia(1);
   assert.match(respuesta.mensaje, /dada de baja/);
   assert.equal(activa(db, 1), false);
+});
+
+test('el resto pendiente de una devolución parcial impide la baja del Anunciante', async () => {
+  const db = base();
+  reserva(db, { finalizada: 1, estado_liquidacion: 'DEVUELTO_PARCIAL_INQUILINO' });
+  await rechazaBaja(db, 2, /como Anunciante: 1 liquidación\(es\) sin resolver/);
 });
 
 test('informa por separado los pendientes como Anunciante y como Inquilino', async () => {

@@ -82,7 +82,13 @@ export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
-export type AdminSettlement = Reserva;
+/** Reserva por liquidar: el back calcula el importe y si ya se le puede pagar al anunciante. */
+export type AdminSettlement = Reserva & {
+  /** Lo que pagó el inquilino menos lo que ya se le devolvió. */
+  importe_a_liquidar: number;
+  moneda_liquidacion: string;
+  habilitada_para_pago: boolean;
+};
 
 export interface AdminPagoLiquidacion {
   id: string;

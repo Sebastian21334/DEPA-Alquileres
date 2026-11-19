@@ -12,6 +12,7 @@ import { SeguridadModule } from '../seguridad/seguridad.module';
 import { MailModule } from '../mail/mail.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
+import { LiquidacionesModule } from '../liquidaciones/liquidaciones.module';
 
 @Module({
   // El controller expone únicamente operaciones administrativas de usuarios.
@@ -31,6 +32,7 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
     MailModule,
     AnunciantesModule,
     PublicacionesModule,
+    LiquidacionesModule,
   ],
 })
 export class UsuariosModule {}

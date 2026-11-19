@@ -486,12 +486,17 @@ export class MisReservasComponent {
   }
 
   protected estadoLiquidacion(reserva: Reserva): string {
-    const etiquetas: Partial<Record<Reserva['estado_liquidacion'], string>> = {
+    // Una cancelación sin devolución no tuvo ingreso: lo retenido se le liquida al anunciante.
+    if (reserva.cancelada && reserva.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO')
+      return 'Cancelada sin devolución · pago administrativo al anunciante pendiente';
+    const etiquetas: Record<Reserva['estado_liquidacion'], string> = {
       NO_APLICA: 'Sin liquidación',
       RETENIDO: 'Dinero retenido hasta el ingreso',
       PENDIENTE_PAGO_PROPIETARIO: 'Ingreso confirmado · pago administrativo pendiente',
       EN_REVISION: 'En revisión administrativa',
       PAGADO_PROPIETARIO: 'Pago al propietario registrado',
+      DEVUELTO_INQUILINO: 'Devuelto al inquilino',
+      DEVUELTO_PARCIAL_INQUILINO: 'Devolución parcial al inquilino · resto pendiente de pago al anunciante',
     };
     return etiquetas[reserva.estado_liquidacion] ?? 'Estado no disponible';
   }

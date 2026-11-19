@@ -32,7 +32,7 @@ export class LiquidacionesService {
 
   async listarParaAdministracion(): Promise<Reserva[]> {
     const filas = await this.liquidaciones.listarPorEstados([
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
+      ...this.estadosPendientesParaAnunciante(),
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
     ]);
     return filas.map(liquidacion => {
@@ -261,10 +261,36 @@ export class LiquidacionesService {
 
   esLiquidacionResuelta(estado: string): boolean {
     return [
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
+      ...this.estadosCerradosParaAnunciante(),
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
     ].some((codigo) => codigo === estado);
+  }
+
+  /**
+   * Lo que no se devuelve al inquilino corresponde al anunciante: después de
+   * una devolución parcial queda pendiente pagarle el resto.
+   */
+  estadosPendientesParaAnunciante(): string[] {
+    return [
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
+    ];
+  }
+
+  /** Sin importe pendiente para el anunciante: se le pagó o se devolvió todo al inquilino. */
+  estadosCerradosParaAnunciante(): string[] {
+    return [
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
+    ];
+  }
+
+  admitePagoAlAnunciante(estado: string): boolean {
+    return this.estadosPendientesParaAnunciante().includes(estado);
+  }
+
+  esLiquidacionCerradaParaAnunciante(estado: string): boolean {
+    return this.estadosCerradosParaAnunciante().includes(estado);
   }
 
   private importeInicial(reserva: Reserva): number | null {
