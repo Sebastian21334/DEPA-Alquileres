@@ -348,7 +348,7 @@ export class ReservasService
 
   /** Confirma la reserva únicamente después de verificar el pago con Mercado Pago. */
   async confirmarPago(id: number, fechaPago: Date): Promise<Reserva> {
-    const guardada = await this.reservaRepository.conTransaccion(
+    const { reserva: guardada, devolucionPendiente } = await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
@@ -356,8 +356,7 @@ export class ReservasService
         await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
 
         // Mercado Pago puede notificar el mismo pago más de una vez.
-        if (this.pagoAprobado(reserva)) return reserva;
-        if (this.liquidacionResuelta(reserva)) return reserva;
+        if (this.pagoAprobado(reserva) || this.liquidacionResuelta(reserva)) return { reserva };
 
         // Un anunciante bloqueado o inactivo no puede confirmar ni reactivar reservas.
         if (
@@ -376,11 +375,11 @@ export class ReservasService
             transaccion,
           );
           await this.disponibilidadService.liberarReserva(id, transaccion);
-          await this.reembolsosService.registrarPagoTardio(guardada, guardada.observacion_liquidacion!, transaccion);
+          const devolucionPendiente = await this.reembolsosService.registrarPagoTardio(guardada, guardada.observacion_liquidacion!, transaccion);
           this.logger.warn(
             `La reserva ${reserva.id} recibió un pago aprobado con el anunciante bloqueado o inactivo; requiere devolución`,
           );
-          return guardada;
+          return { reserva: guardada, devolucionPendiente };
         }
 
         // Una reserva cancelada por bloqueo no se reactiva con un pago tardío.
@@ -395,11 +394,11 @@ export class ReservasService
             guardada,
             transaccion,
           );
-          await this.reembolsosService.registrarPagoTardio(guardada, guardada.observacion_liquidacion!, transaccion);
+          const devolucionPendiente = await this.reembolsosService.registrarPagoTardio(guardada, guardada.observacion_liquidacion!, transaccion);
           this.logger.warn(
             `La reserva ${reserva.id} recibió un pago tardío tras una cancelación por bloqueo; requiere devolución`,
           );
-          return guardada;
+          return { reserva: guardada, devolucionPendiente };
         }
 
         if (reserva.cancelada) {
@@ -439,7 +438,7 @@ export class ReservasService
                 reactivada,
                 transaccion,
               );
-              return reactivada;
+              return { reserva: reactivada };
             }
           }
 
@@ -466,14 +465,14 @@ export class ReservasService
             enRevision,
             transaccion,
           );
-          await this.reembolsosService.registrarPagoTardio(enRevision, motivo, transaccion);
-          return enRevision;
+          const devolucionPendiente = await this.reembolsosService.registrarPagoTardio(enRevision, motivo, transaccion);
+          return { reserva: enRevision, devolucionPendiente };
         }
 
         this.registrarConfirmacionPago(reserva, fechaPago, generarCodigoAlojamiento());
         const aprobada = await reservaRepository.guardar(reserva);
         await this.liquidaciones.sincronizarDesdeReserva(aprobada, transaccion);
-        return aprobada;
+        return { reserva: aprobada };
       },
     );
 
@@ -481,20 +480,22 @@ export class ReservasService
     // no se presentan como una reserva confirmada.
     if (this.estaConfirmada(guardada)) {
       await this.notificacionesService.enviarConfirmacion(guardada);
+    } else if (devolucionPendiente) {
+      await this.notificacionesService.avisarCambio(guardada, ['inquilino', 'admin'], 'Pago recibido para una reserva sin confirmar', 'El pago se recibió, pero la reserva no pudo confirmarse. La devolución quedó pendiente de gestión.');
     }
     return this.prepararRespuesta(guardada);
   }
 
   /** Cierra una reserva cuyo pago falló o cuya preferencia no pudo crearse. */
   async rechazarPago(id: number, estado: string = this.catalogos.codigoEstado('PAGO_RESERVA', 'RECHAZADO'), actor?: ActorCancelacion, motivo?: string, causa?: CausaCancelacion): Promise<Reserva> {
-    const guardada = await this.reservaRepository.conTransaccion(
+    const resultado = await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
           throw new NotFoundException(`No se encontró la reserva ${id}`);
         await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
-        if (this.pagoAprobado(reserva)) return reserva;
-        if (reserva.cancelada && reserva.estado_pago === estado) return reserva;
+        if (this.pagoAprobado(reserva) || (reserva.cancelada && reserva.estado_pago === estado))
+          return { reserva, cambio: false };
 
         this.cerrarSinPago(reserva, estado, actor, motivo, causa);
         const guardada = await reservaRepository.guardar(reserva);
@@ -503,10 +504,12 @@ export class ReservasService
           transaccion,
         );
         await this.disponibilidadService.liberarReserva(id, transaccion);
-        return guardada;
+        return { reserva: guardada, cambio: true };
       },
     );
-    return this.prepararRespuesta(guardada);
+    if (resultado.cambio && causa === 'BLOQUEO_ANUNCIANTE')
+      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino'], 'Reserva cancelada por DEPA', 'La reserva pendiente de pago fue cancelada por DEPA.');
+    return this.prepararRespuesta(resultado.reserva);
   }
 
   /**
@@ -633,7 +636,7 @@ export class ReservasService
 
   /** El inquilino participante o el anunciante dueño pueden cancelar. */
   async cancelar(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
-    const guardada = await this.reservaRepository.conTransaccion(
+    const resultado = await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
         const reserva = await reservaRepository.buscarPorId(id);
         if (!reserva)
@@ -644,7 +647,7 @@ export class ReservasService
           throw new BadRequestException(
             'No se puede cancelar una reserva finalizada',
           );
-        if (reserva.cancelada) return reserva;
+        if (reserva.cancelada) return { reserva, cambio: false };
         if (this.pagoAprobado(reserva)) {
           throw new BadRequestException(
             'La reserva está pagada. Solicitá la cancelación con devolución desde el detalle de la reserva.',
@@ -666,10 +669,12 @@ export class ReservasService
           reserva.id,
           transaccion,
         );
-        return guardada;
+        return { reserva: guardada, cambio: true };
       },
     );
-    return this.prepararRespuesta(guardada);
+    if (resultado.cambio)
+      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino', 'anunciante'], 'Reserva cancelada', 'La reserva pendiente de pago fue cancelada.', idUsuarioQueOpera);
+    return this.prepararRespuesta(resultado.reserva);
   }
 
   /**
@@ -873,6 +878,7 @@ export class ReservasService
     );
     // El intento incorrecto debe persistir aunque la respuesta sea un error.
     if (resultado instanceof BadRequestException) throw resultado;
+    await this.notificacionesService.avisarCambio(resultado, ['inquilino'], 'Ingreso confirmado', 'El anunciante validó tu ingreso al alojamiento.');
     return this.prepararRespuesta(resultado);
   }
 

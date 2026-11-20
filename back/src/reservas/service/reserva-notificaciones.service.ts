@@ -14,11 +14,42 @@ import { nombreInquilinoReserva, normalizarFechaReserva } from './reservas.utils
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
+import { UsuariosService } from '../../usuarios/service/usuarios.service';
+
+type DestinoAviso = 'inquilino' | 'anunciante' | 'admin';
 
 @Injectable()
 export class ReservaNotificacionesService {
   private readonly logger = new Logger(ReservaNotificacionesService.name);
-  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService, private readonly catalogos: CatalogosService) {}
+  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService, private readonly catalogos: CatalogosService, private readonly usuariosService: UsuariosService) {}
+
+  async avisarCambio(reserva: Reserva, destinos: readonly DestinoAviso[], asunto: string, mensaje: string, excluirUsuario?: number): Promise<void> {
+    const participantes = { inquilino: reserva.usuario, anunciante: reserva.publicacion?.anunciante?.usuario };
+    await Promise.all(destinos.map(async (destino) => {
+      try {
+        const usuario = destino === 'admin' ? null : participantes[destino];
+        const correos = destino === 'admin' ? await this.usuariosService.emailsAdministradores()
+          : usuario?.email && !usuario.fecha_baja && usuario.id !== excluirUsuario ? [usuario.email] : [];
+        const resultados = await Promise.allSettled(
+          [...new Set(correos)].map((email) => this.mailService.enviarAvisoReserva(email, reserva.id, asunto, mensaje, destino)),
+        );
+        if (resultados.some((resultado) => resultado.status === 'rejected'))
+          this.logger.warn(`No se pudieron entregar todos los avisos a ${destino} para la reserva ${reserva.id}: ${asunto}`);
+      } catch {
+        this.logger.warn(`No se pudo preparar el aviso a ${destino} para la reserva ${reserva.id}: ${asunto}`);
+      }
+    }));
+  }
+
+  async avisarPagoNoAprobado(id: number): Promise<void> {
+    try {
+      const reserva = await this.reservaRepository.buscarPorId(id);
+      if (reserva && !reserva.cancelada && reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'))
+        await this.avisarCambio(reserva, ['inquilino'], 'Pago no aprobado', 'Mercado Pago no aprobó el intento. Consultá en DEPA si podés volver a pagar esta reserva.');
+    } catch {
+      this.logger.warn(`No se pudo preparar el aviso de pago no aprobado para la reserva ${id}`);
+    }
+  }
 
   async enviarReprogramacion(idCambio: number, idReserva: number): Promise<boolean> {
     try {

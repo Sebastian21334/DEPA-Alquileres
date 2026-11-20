@@ -56,6 +56,7 @@ import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.m
   ],
   exports: [
     ReservasService,
+    ReservaNotificacionesService,
     ReservaBloqueoAnuncianteService,
   ],
 })

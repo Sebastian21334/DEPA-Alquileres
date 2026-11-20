@@ -13,6 +13,7 @@ import sharp from 'sharp';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
+import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import {
@@ -41,7 +42,7 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 @Injectable()
 export class ReclamosService {
-  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService) {}
+  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
     const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
@@ -90,6 +91,7 @@ export class ReclamosService {
         resuelto_en: null,
       });
     });
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
     return this.prepararRespuesta(reclamo);
   }
 
@@ -182,6 +184,8 @@ export class ReclamosService {
       texto: dto.texto.trim(),
       visible_para: dto.visible_para ?? VisibilidadMensajeReclamo.TODOS,
     });
+    if (mensaje.visible_para === VisibilidadMensajeReclamo.TODOS)
+      await this.notificaciones?.avisarCambio(reclamo.reserva, esAdmin ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', idUsuario);
     mensaje.reclamo = this.prepararRespuesta(mensaje.reclamo);
     return mensaje;
   }
@@ -253,7 +257,10 @@ export class ReclamosService {
         referenciaInterna: referencia,
       }, transaccion);
     });
-    if (!resultado.reembolso) return this.prepararRespuesta(resultado.reclamo);
+    if (!resultado.reembolso) {
+      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto', 'La administración resolvió el reclamo sin devolución. Consultá el expediente en DEPA.');
+      return this.prepararRespuesta(resultado.reclamo);
+    }
     const reembolso = resultado.reembolso;
     if (reembolso.transferencia_manual && reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
       return this.prepararRespuesta(await this.obtener(id, idAdmin, true));
@@ -263,6 +270,8 @@ export class ReclamosService {
     const aplicado = await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
       this.aplicarResolucionReembolso(confirmado, transaccion),
     );
+    if (aplicado)
+      await this.notificaciones?.avisarCambio(aplicado.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La devolución quedó registrada y el reclamo se resolvió. Consultá el detalle en DEPA.');
     return this.prepararRespuesta(aplicado ?? await this.obtener(id, idAdmin, true));
   }
 

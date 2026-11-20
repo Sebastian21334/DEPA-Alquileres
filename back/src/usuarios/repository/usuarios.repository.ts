@@ -31,11 +31,12 @@ export class UsuariosRepository implements IUsuariosRepository {
     return this.repo.manager.transaction(operacion);
   }
 
-  buscarBloqueado(idUsuario: number, transaccion: EntityManager, incluirRol = false): Promise<Usuario | null> {
+  buscarBloqueado(idUsuario: number, transaccion: EntityManager, incluirRol = false, incluirCredenciales = false): Promise<Usuario | null> {
     const consulta = transaccion.getRepository(Usuario).createQueryBuilder('usuario')
       .where('usuario.id = :idUsuario', { idUsuario })
       .setLock('pessimistic_write', undefined, ['usuario']);
     if (incluirRol) consulta.leftJoinAndSelect('usuario.rol', 'rol');
+    if (incluirCredenciales) consulta.addSelect(['usuario.contrasenia', 'usuario.bloqueoDetalle']);
     return consulta.getOne();
   }
 

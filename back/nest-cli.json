@@ -8,6 +8,10 @@
       {
         "include": "models/**/*",
         "watchAssets": true
+      },
+      {
+        "include": "mail/presentation/assets/*.png",
+        "watchAssets": true
       }
     ]
   },

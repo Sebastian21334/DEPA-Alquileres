@@ -54,18 +54,23 @@ export class MailPlantilla {
   }
 
   boton(texto: string, enlace: string): string {
-    return `<a href="${this.escapar(enlace)}" style="display:inline-block;padding:13px 22px;border-radius:10px;background:#d94217;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700">${this.escapar(texto)}</a>`;
+    return `<a href="${this.escapar(enlace)}" style="display:inline-block;margin:4px 0;padding:14px 24px;border-radius:11px;background:#d93508;color:#ffffff;text-decoration:none;font-size:17px;font-weight:700;line-height:1.35">${this.escapar(texto)}</a>`;
   }
 
-  plantilla(preheader: string, html: string, titulo: string, logoUrl: string): string {
-    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${this.escapar(titulo)}</title></head><body style="margin:0;background:#f7f7f9;font-family:Arial,Helvetica,sans-serif;color:#101828">
+  plantilla(preheader: string, html: string, titulo: string, inicioUrl: string, icono: string): string {
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${this.escapar(titulo)}</title></head><body style="margin:0;background:#ccddf3;font-family:Arial,Helvetica,sans-serif;color:#101828">
       <span style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${this.escapar(preheader)}</span>
-      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:#f7f7f9"><tr><td align="center" style="padding:32px 12px">
-        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:620px;border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px">
-          <tr><td style="height:5px;background:#d94217;font-size:0;line-height:0">&nbsp;</td></tr>
-          <tr><td style="padding:24px 28px 20px;border-bottom:1px solid #e5e7eb"><a href="${this.escapar(new URL('/', logoUrl).toString())}" style="text-decoration:none"><img src="${this.escapar(logoUrl)}" alt="DEPA" width="150" style="display:block;width:150px;max-width:100%;height:auto;border:0;color:#0e47a1;font-size:24px;font-weight:800"></a><span style="display:block;margin-top:9px;color:#667085;font-size:12px">Alquileres simples, decisiones seguras</span></td></tr>
-          <tr><td style="padding:30px 28px 32px;font-size:15px;line-height:1.65"><h1 style="margin:0 0 20px;color:#101828;font-size:24px;line-height:1.3">${this.escapar(titulo)}</h1>${html}</td></tr>
-          <tr><td style="padding:20px 28px;background:#e8eefb;border-top:1px solid #d8e3f8;color:#0b3780;font-size:12px;line-height:1.6"><strong style="font-size:14px">DEPA</strong><br>Este correo se envió por una actividad asociada a tu cuenta. Nunca te pediremos contraseñas ni datos completos de tarjeta por correo.</td></tr>
+      <table role="presentation" cellpadding="0" cellspacing="0" bgcolor="#ccddf3" style="width:100%;border-collapse:collapse;background:#ccddf3"><tr><td align="center" style="padding:26px 12px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:742px;border-collapse:separate;border-spacing:0;border-radius:16px;box-shadow:0 10px 24px rgba(15,38,79,.2);text-align:left">
+          <tr><td bgcolor="#f6f9fd" style="padding:24px 36px;background-color:#f6f9fd;background-image:linear-gradient(153deg,transparent 38%,#c6dcf6 38%,#c6dcf6 53%,transparent 53%,transparent 68%,#d7e7f9 68%,#d7e7f9 80%,#bcd6f3 80%);background-repeat:no-repeat;background-position:right bottom;background-size:32% 100%;border-bottom:1px solid #bed5f5;border-radius:16px 16px 0 0">
+            <a href="${this.escapar(inicioUrl)}" style="display:inline-block;text-decoration:none"><img src="cid:logo-depa" alt="DEPA" width="208" style="display:block;width:208px;max-width:100%;height:auto;border:0;color:#0b3672;font-size:26px;font-weight:800"></a>
+          </td></tr>
+          <tr><td bgcolor="#ffffff" style="padding:30px 32px 36px;background:#ffffff;font-size:17px;line-height:1.55;overflow-wrap:anywhere">
+            <span aria-hidden="true" style="display:inline-block;width:60px;border-radius:12px;background:#dbe8fb;color:#092b70;font-family:Arial,Helvetica,sans-serif;font-size:30px;line-height:56px;text-align:center">${this.escapar(icono)}</span>
+            <h1 style="margin:12px 0 16px;color:#101828;font-size:32px;line-height:1.18">${this.escapar(titulo)}</h1>
+            ${html}
+          </td></tr>
+          <tr><td bgcolor="#e3edfb" style="padding:24px 32px 28px;background:#e3edfb;border-top:1px solid #c3d6f3;border-radius:0 0 16px 16px;color:#0a2968;font-size:15px;line-height:1.5"><strong style="font-size:20px">DEPA</strong><br>Nunca te pediremos contraseñas ni datos completos de tarjeta por correo.</td></tr>
         </table>
       </td></tr></table>
     </body></html>`;

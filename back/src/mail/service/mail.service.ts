@@ -19,7 +19,8 @@ export class MailService implements IMailService {
     this.frontendUrl = config
       .getOrThrow<string>('FRONTEND_URLS')
       .split(',')[0]
-      .trim();
+      .trim()
+      .replace(/\/+$/, '');
   }
 
   async enviarVerificacion(destinatario: string, token: string): Promise<void> {
@@ -64,8 +65,10 @@ export class MailService implements IMailService {
       'Restablecé tu contraseña de DEPA',
       `<p style="margin:0 0 16px">Recibimos una solicitud para cambiar la contraseña de tu cuenta.</p>
        ${this.plantillas.boton('Crear una contraseña nueva', link)}
-       <p style="margin:20px 0 0;color:#667085;font-size:13px">El enlace vence en 2 horas y solo puede usarse una vez. Si pedís uno nuevo, el anterior deja de funcionar. Si no solicitaste recuperar el acceso, podés ignorar este mensaje.</p>`,
+       <p style="margin:20px 0 12px">El enlace vence en 2 horas y solo puede usarse una vez. Si pedís uno nuevo, el anterior deja de funcionar.</p>
+       <p style="margin:0">Si no solicitaste este cambio, podés ignorar este mensaje.</p>`,
       'Usá este enlace seguro para recuperar el acceso a tu cuenta.',
+      { titulo: 'Restablecé tu contraseña', icono: '🔑' },
     );
   }
 
@@ -204,12 +207,33 @@ export class MailService implements IMailService {
     );
   }
 
-  private enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.'): Promise<void> {
-    const logoUrl = `${this.frontendUrl.replace(/\/+$/, '')}/images/Logo.png`;
+  enviarConfirmacionBaja(destinatario: string, token: string): Promise<void> {
+    const enlace = `${this.frontendUrl}/confirmar-baja#${encodeURIComponent(token)}`;
+    return this.enviar(
+      destinatario,
+      'Confirmá la baja de tu cuenta de DEPA',
+      `<p>Recibimos una solicitud para dar de baja tu cuenta. Abrí el enlace y confirmá la baja si querés continuar.</p>
+       ${this.plantillas.boton('Revisar y confirmar la baja', enlace)}
+       <p>El enlace vence en 30 minutos. Si no pediste la baja, podés ignorar este correo.</p>`,
+      'Tu cuenta sigue activa hasta que confirmes la baja.',
+    );
+  }
+
+  enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: 'inquilino' | 'anunciante' | 'admin'): Promise<void> {
+    const rutas = { inquilino: '/mis-reservas', anunciante: '/dashboard', admin: '/admin' };
+    return this.enviar(
+      destinatario,
+      asunto,
+      `<p>${this.plantillas.escapar(mensaje)}</p><p>Reserva #${this.plantillas.escapar(String(idReserva))}</p>${this.plantillas.boton('Abrir DEPA', this.frontendUrl + rutas[panel])}`,
+      mensaje,
+    );
+  }
+
+  private enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.', encabezado = { titulo: asunto, icono: '✉' }): Promise<void> {
     return this.correos.enviar({
       destinatario,
       asunto,
-      html: this.plantillas.plantilla(preheader, html, asunto, logoUrl),
+      html: this.plantillas.plantilla(preheader, html, encabezado.titulo, this.frontendUrl, encabezado.icono),
     });
   }
 }

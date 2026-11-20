@@ -119,10 +119,10 @@
 .profile-section > .acct-alert:first-of-type, .edit-form { margin-top: 0.75rem; }
 .edit-form { display: flex; flex-direction: column; gap: 1rem; }
 
-.advertiser { display: flex; flex-direction: column; gap: 0.65rem; }
-.advertiser h2, .advertiser p { margin: 0; }
-.advertiser .acct-actions { justify-content: flex-start; }
-.advertiser-activity {
+.cuenta-anunciante { display: flex; flex-direction: column; gap: 0.65rem; }
+.cuenta-anunciante h2, .cuenta-anunciante p { margin: 0; }
+.cuenta-anunciante .acct-actions { justify-content: flex-start; }
+.cuenta-anunciante__actividad {
   display: grid;
   justify-items: start;
   gap: 0.65rem;

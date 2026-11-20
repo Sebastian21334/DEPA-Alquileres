@@ -14,6 +14,7 @@ import {
 } from '../../reembolsos/entity/reembolso.entity';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
+import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { type Disputa, OrigenDisputa } from '../entity/disputa.entity';
 import { ResolverDisputaDto } from '../dto/resolver-disputa.dto';
@@ -24,7 +25,7 @@ import {
 
 @Injectable()
 export class DisputasService {
-  constructor(@Inject(DISPUTAS_REPOSITORY) private readonly disputas: IDisputasRepository, private readonly pagos: PagosService, private readonly reembolsos: ReembolsosService, private readonly reservasService: ReservasService, private readonly catalogos: CatalogosService) {}
+  constructor(@Inject(DISPUTAS_REPOSITORY) private readonly disputas: IDisputasRepository, private readonly pagos: PagosService, private readonly reembolsos: ReembolsosService, private readonly reservasService: ReservasService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
   /**
    * Registra el contracargo y congela la liquidación. No cancela la reserva
@@ -32,10 +33,10 @@ export class DisputasService {
    */
   async registrarContracargo(datos: { idReserva: number; idPago: number; chargebackId: string; importe: number; motivo?: string; pagoExterno?: DatosPagoExterno }): Promise<Disputa> {
     const estado = await this.catalogos.obtenerEstado('DISPUTA', 'ABIERTA');
-    return this.disputas.conTransaccion(async (disputas, transaccion) => {
+    const resultado = await this.disputas.conTransaccion(async (disputas, transaccion) => {
       const reserva = await this.reservasService.obtenerReserva(datos.idReserva, transaccion);
       const existente = await disputas.buscarPorContracargo(datos.chargebackId);
-      if (existente) return existente;
+      if (existente) return { disputa: existente, creada: false };
 
       const pago = await this.pagos.buscarPorId(datos.idPago, transaccion);
       const disputa = disputas.crear({
@@ -60,8 +61,11 @@ export class DisputasService {
       if (datos.pagoExterno) await this.pagos.registrarEstadoExterno(pago, datos.pagoExterno, transaccion);
       await this.pagos.marcarContracargo(pago.id, datos.chargebackId, transaccion);
       await this.reservasService.congelarPorContracargo(reserva, transaccion);
-      return disputas.guardar(disputa);
+      return { disputa: await disputas.guardar(disputa), creada: true };
     });
+    if (resultado.creada)
+      await this.notificaciones?.avisarCambio(resultado.disputa.reserva, ['admin', 'anunciante', 'inquilino'], 'Pago en revisión', 'Se abrió una disputa sobre el pago de la reserva. Consultá el estado en DEPA.');
+    return resultado.disputa;
   }
 
   async listarAdministracion() {
@@ -108,7 +112,10 @@ export class DisputasService {
       return { disputa: actual, reembolso };
     });
     const { reembolso } = resultado;
-    if (!reembolso) return this.respuestaAdministracion(resultado.disputa);
+    if (!reembolso) {
+      await this.notificaciones?.avisarCambio(resultado.disputa.reserva, ['inquilino', 'anunciante'], 'Disputa de pago resuelta', 'Se cerró la disputa y el pago volvió a quedar aprobado.');
+      return this.respuestaAdministracion(resultado.disputa);
+    }
     // El contracargo ya revirtió el dinero en Mercado Pago: se registra,
     // pero no se dispara un segundo reembolso automático.
     await this.reembolsos.registrarManual(
@@ -121,6 +128,8 @@ export class DisputasService {
     const aplicada = await this.reembolsos.aplicarConfirmado(reembolso.id, (confirmado, transaccion) =>
       this.aplicarResolucionReembolso(confirmado, transaccion, dto.observacion),
     );
+    if (aplicada)
+      await this.notificaciones?.avisarCambio(aplicada.reserva, ['inquilino', 'anunciante'], 'Disputa de pago resuelta', 'Se cerró la disputa y se registró la devolución asociada al contracargo.');
     return this.respuestaAdministracion(aplicada ?? (await this.disputas.buscarPorId(id))!);
   }
 

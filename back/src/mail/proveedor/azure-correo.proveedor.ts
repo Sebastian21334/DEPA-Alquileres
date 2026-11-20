@@ -1,12 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CLIENTE_CORREO } from './cliente-correo.interface';
 import type { ClienteCorreo } from './cliente-correo.interface';
-import { Correo, ICorreoRepository } from './correo.repository.interface';
+import { Correo, ICorreoRepository } from '../repository/correo.repository.interface';
 
 @Injectable()
-export class AzureCorreoRepository implements ICorreoRepository {
-  private readonly logger = new Logger(AzureCorreoRepository.name);
+export class AzureCorreoProveedor implements ICorreoRepository {
+  private readonly logger = new Logger(AzureCorreoProveedor.name);
+  private readonly logo = readFileSync(join(__dirname, '../presentation/assets/logo-depa.png'), 'base64');
   private readonly remitente: string;
 
   constructor(config: ConfigService, @Inject(CLIENTE_CORREO) private readonly client: ClienteCorreo) {
@@ -23,6 +26,12 @@ export class AzureCorreoRepository implements ICorreoRepository {
       recipients: {
         to: [{ address: correo.destinatario }],
       },
+      attachments: [{
+        name: 'logo-depa.png',
+        contentId: 'logo-depa',
+        contentType: 'image/png',
+        contentInBase64: this.logo,
+      }],
     };
     let ultimoError: unknown;
 

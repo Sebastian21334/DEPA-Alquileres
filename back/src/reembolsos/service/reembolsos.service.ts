@@ -191,14 +191,14 @@ export class ReembolsosService {
     return this.reembolsos.listarConversaciones(idReserva, idInquilino);
   }
 
-  async registrarPagoTardio(reserva: Reserva, motivo: string, transaccion: EntityManager): Promise<void> {
+  async registrarPagoTardio(reserva: Reserva, motivo: string, transaccion: EntityManager): Promise<boolean> {
     const pago = await this.buscarPagoPorReserva(reserva.id, transaccion);
-    if (!pago || pago.status !== 'approved') return;
+    if (!pago || pago.status !== 'approved') return false;
     const existentes = await this.listarPorReserva(reserva.id, transaccion);
-    if (existentes.some(reembolso => this.estadosActivos.includes(reembolso.estado))) return;
+    if (existentes.some(reembolso => this.estadosActivos.includes(reembolso.estado))) return false;
     const importe = this.saldoReembolsable(pago);
-    if (importe <= TOLERANCIA_MONETARIA) return;
-    await this.crearSolicitud({
+    if (importe <= TOLERANCIA_MONETARIA) return false;
+    const { creado } = await this.crearSolicitudConResultado({
       reserva, pago, importe, motivo,
       tipo: importe >= Number(pago.amount) - TOLERANCIA_MONETARIA ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL,
       origen: OrigenReembolso.PAGO_TARDIO,
@@ -206,6 +206,7 @@ export class ReembolsosService {
       idempotencyKey: `tardio:${pago.id}`,
       referenciaInterna: `tardio:${pago.id}`,
     }, transaccion);
+    return creado;
   }
 
   async recuperarConfirmacion(id: number, referencia: string, idActor: number): Promise<Reembolso> {
