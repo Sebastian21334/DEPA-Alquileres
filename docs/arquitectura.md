@@ -1,9 +1,10 @@
 # Arquitectura — DEPA Alquileres
 
-> Documento descriptivo de la arquitectura reconciliada del proyecto.
-> Rama `reconciliacion/refactor-usuario`, base `origin/main` más el port.
-> Revisión: 12/11/2026.
+> Documento descriptivo de la arquitectura real del proyecto, sobre `origin/main`.
+> Revisión: 20/11/2026.
+> **Norma operativa:** `AGENTS.md` de la raíz y los `AGENTS.md` de `back/` y `front/`.
 > No describe una arquitectura ideal: las desviaciones verificadas están en §9.
+> Si el código y este documento difieren, verificar el código y actualizar el documento.
 
 ## 1. Propósito y alcance
 
@@ -111,7 +112,7 @@ Cuando un servicio coordina una operación con otros módulos, abre la transacci
 
 Los servicios coordinan las transacciones llamando al repositorio. Las operaciones que cruzan módulos pasan el `EntityManager` por parámetro a servicios como `DisponibilidadService` o `PagosService`.
 
-**Desviación verificada:** no existe hoy un alias opaco `Transaccion`. El contrato expone `EntityManager` de TypeORM en las interfaces y cinco services lo importan como tipo: `anunciantes`, `pagos`, `usuarios`, `disponibilidad` y `publicaciones`. Se declara en §9.
+**Desviación verificada:** no existe hoy un alias opaco `Transaccion`. El contrato expone `EntityManager` de TypeORM en las interfaces y doce services lo importan como tipo: `anunciantes`, `cancelaciones`, `disponibilidad`, `disputas`, `liquidaciones`, `operaciones-reserva`, `pagos`, `publicaciones`, `reclamos`, `reembolsos`, `reservas` y `usuarios`. Se declara en §9.
 
 ## 6. Bloqueo de anunciante y reembolsos
 
@@ -189,16 +190,28 @@ La configuración y los errores de autenticación de Mercado Pago se validan en 
 
 La arquitectura real conserva estas desviaciones; no se presentan como patrón recomendado:
 
-- **Acceso cruzado desde `UsuariosRepository`:** consulta `Reserva` y `Pago` para calcular operaciones pendientes de una cuenta. Es una lectura de tablas de otros módulos desde un repositorio.
-- **Acceso cruzado desde `PublicacionesRepository`:** importa `Reserva` y la registra en `TypeOrmModule.forFeature` para calcular `cantidad_reservas`. La relación no está declarada en la entidad `Publicacion`.
-- **`UsuariosConsultaModule` exporta `USUARIOS_REPOSITORY`,** aunque sus consumidores actuales usan `UsuariosConsultaService` o el token dentro del mismo dominio. Es una API más amplia que la necesaria.
-- **`EntityManager` en services:** `anunciantes`, `pagos`, `usuarios`, `disponibilidad` y `publicaciones` importan el tipo de TypeORM. El diseño buscaba un tipo opaco `Transaccion`, que todavía no existe.
+- **`EntityManager` en services:** doce services importan el tipo de TypeORM: `anunciantes`, `cancelaciones`, `disponibilidad`, `disputas`, `liquidaciones`, `operaciones-reserva`, `pagos`, `publicaciones`, `reclamos`, `reembolsos`, `reservas` y `usuarios`. El diseño buscaba un tipo opaco `Transaccion`, que todavía no existe. No agregar casos nuevos.
+- **Acceso cruzado desde `UsuariosRepository`:** consulta `Reserva`, `Pago` y `Anunciante` para calcular operaciones pendientes y datos de cuenta. Es una lectura de tablas de otros módulos desde un repositorio.
+- **Acceso cruzado desde `PublicacionesRepository`:** importa `Reserva` y la registra en `TypeOrmModule.forFeature` para calcular `cantidad_reservas`; también usa constantes de `Modalidad`. La relación con `Reserva` no está declarada en la entidad `Publicacion`.
+- **Acceso cruzado desde `ReclamosRepository`:** importa `Usuario` para resolver la identidad visible del reclamo.
 - **Excepciones HTTP en adaptadores:** Face API lanza excepciones de Nest desde la capa de integración.
-- **`as never`:** `grep -RIn "as never" back/src` no devuelve coincidencias. La sustitución por referencias tipadas (`referenciaUsuario`) ya está aplicada.
+
+### 9.1. Deuda de frontend
+
+- **`HttpClient` en componentes:** `front/src/app/features/reserva-resultado/reserva-resultado.component.ts` y `front/src/app/shared/components/reembolso-chat/reembolso-chat.component.ts` hacen pedidos HTTP fuera de un service.
+- **`confirm()` nativo:** `front/src/app/features/admin/admin.component.ts` (tres usos) y `front/src/app/features/publication-detail/publication-detail.component.ts` (WhatsApp).
+- **`admin.component.ts` gigante:** concentra dashboard, usuarios, publicaciones, reembolsos y catálogos; es el principal riesgo de crecimiento desordenado.
+- **Duplicación:** el paginador y el formato de importes están repetidos en varias pantallas; deberían extraerse a `shared`.
+
+### 9.2. Verificado sin deuda
+
+- `grep -RIn "forwardRef" back/src` no devuelve coincidencias.
+- `grep -RIn "as never" back/src` no devuelve coincidencias.
+- Las entidades no tienen métodos, getters ni hooks de lógica al 20/11/2026.
 
 ## 10. Verificación
 
-Backend, desde `Proyect/back`:
+Backend, desde `back/`:
 
 ```sh
 npm run build
@@ -212,9 +225,9 @@ npm run test:jest          # requiere Node 24.9 o superior
 
 `package.json` define `test:bloqueo-anunciante` y `test:liquidaciones-entidad`, que compilan y luego ejecutan su archivo con `node --test`, igual que los demás scripts `test:*`.
 
-Resultado al 12/11/2026, con el módulo de cancelaciones: 181/181 pruebas `node:test` y 34/34 pruebas Jest.
+Resultado histórico al 12/11/2026, con el módulo de cancelaciones: 181/181 pruebas `node:test` y 34/34 pruebas Jest. Al 20/11/2026, la suite `test:condiciones-economicas` pasa 28/29 por un fallo preexistente del mock de `registrarPagoTardio`; verificar el estado vigente con los scripts actuales.
 
-Frontend, desde `Proyect/front`:
+Frontend, desde `front/`:
 
 ```sh
 npm run build
