@@ -18,6 +18,11 @@ type CampoPublicacion = keyof PublicacionFormulario['form']['controls'];
 const PATRON_TITULO_PUBLICACION =
   /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} ,:.]+(?<! )$/u;
 
+// Deben coincidir con back/src/publicaciones/dto/crear-publicacion.dto.ts.
+const PRECIO_MAXIMO = 99_999_999.99;
+const SUPERFICIE_MAXIMA = 99_999_999.99;
+const AMBIENTES_MAXIMOS = 50;
+
 // Formulario de una publicación, único para el alta (CrearPublicacionComponent) y la
 // edición (PublicationFormComponent). Cada pantalla lo declara en sus `providers`, así
 // que vive lo mismo que el componente. Las validaciones replican los DTO del back
@@ -49,12 +54,12 @@ export class PublicacionFormulario {
     idTipoPropiedad: [null as number | null, Validators.required],
     idModalidad: [null as number | null, Validators.required],
     idTipoMoneda: [null as number | null, Validators.required],
-    precio: [null as number | null, [Validators.required, Validators.min(1)]],
+    precio: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PRECIO_MAXIMO)]],
     idProvincia: [null as number | null, Validators.required],
     idCiudad: [null as number | null, Validators.required],
     direccion: ['', [Validators.required, Validators.maxLength(255)]],
-    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1)]],
-    superficie: [null as number | null, [Validators.required, Validators.min(1)]],
+    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(AMBIENTES_MAXIMOS)]],
+    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(SUPERFICIE_MAXIMA)]],
   });
 
   constructor() {
@@ -131,6 +136,12 @@ export class PublicacionFormulario {
   invalido(campo: CampoPublicacion): boolean {
     const control = this.form.controls[campo];
     return control.invalid && control.touched;
+  }
+
+  /** Permite mostrar un mensaje específico cuando el valor supera el máximo. */
+  excedeMaximo(campo: CampoPublicacion): boolean {
+    const control = this.form.controls[campo];
+    return control.hasError('max') && control.touched;
   }
 
   /** Arma el cuerpo de POST/PATCH /publicaciones. Requiere un formulario válido y la ubicación confirmada. */
