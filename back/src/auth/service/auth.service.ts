@@ -1,12 +1,13 @@
 import { UsuariosCredencialesService } from '../../usuarios/service/usuarios-credenciales.service';
 import {
   BadRequestException,
-  Injectable,
   ConflictException,
+  Injectable,
   ForbiddenException,
   HttpStatus,
   Inject,
   Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -15,10 +16,12 @@ import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
 import { CambiarContraseniaDto } from '../dto/cambiar-contrasenia.dto';
 import type { RestablecerContraseniaDto } from '../dto/restablecer-contrasenia.dto';
+import type { SolicitarReactivacionDto } from '../dto/solicitar-reactivacion.dto';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 
 const AUDIENCIA_BLOQUEO = 'depa:apelacion-bloqueo';
+const AUDIENCIA_REACTIVACION = 'depa:solicitar-reactivacion';
 
 @Injectable()
 export class AuthService {
@@ -27,20 +30,22 @@ export class AuthService {
   constructor(private readonly usuariosService: UsuariosService, private readonly credencialesService: UsuariosCredencialesService, private readonly jwtService: JwtService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService) {}
 
   /** Registra un usuario nuevo, genera el token de verificación y dispara el mail. */
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, origen?: string) {
     const email = dto.email.trim().toLowerCase();
 
-    const existe = await this.usuariosService.buscarPorEmail(email);
-    if (existe) {
-      throw new ConflictException('El email ya está registrado');
+    const token = await this.usuariosService.crear({ ...dto, email }, dto.crearCuentaNueva);
+    if (!token) {
+      const constanciaReactivacion = await this.jwtService.signAsync(
+        { correoReactivacion: email },
+        { audience: AUDIENCIA_REACTIVACION, algorithm: 'HS256', expiresIn: '15m' },
+      );
+      throw new ConflictException({
+        statusCode: HttpStatus.CONFLICT,
+        codigo: 'CUENTA_RECUPERABLE',
+        message: 'Podés recuperar tu cuenta anterior o crear una nueva con este email.',
+        constanciaReactivacion,
+      });
     }
-
-    const usuario = await this.usuariosService.crear({
-      ...dto,
-      email,
-    });
-
-    const token = await this.credencialesService.generarTokenVerificacion(usuario);
 
     // El alta de la cuenta ya quedó confirmada en la base (usuario + token de
     // verificación). Si el proveedor de mail falla o rate-limitea (Azure
@@ -49,18 +54,54 @@ export class AuthService {
     // hizo: solo el mail no salió, y el usuario puede pedir uno nuevo más
     // tarde. Se loguea para que quede auditado sin romper la respuesta.
     try {
-      await this.mailService.enviarVerificacion(email, token);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo enviar el mail de verificación a ${email}`,
-        error as Error,
-      );
+      await this.mailService.enviarVerificacion(email, token, origen);
+    } catch {
+      this.logger.error('No se pudo enviar el mail de verificación del alta');
     }
 
     return {
       mensaje:
         'Usuario registrado exitosamente, revisá tu email para verificar la cuenta',
     };
+  }
+
+  async solicitarReactivacion(dto: SolicitarReactivacionDto, origen?: string) {
+    const correo = dto.email.trim().toLowerCase();
+    const { constanciaReactivacion } = dto;
+    if (constanciaReactivacion) await this.validarConstanciaReactivacion(constanciaReactivacion, correo);
+
+    const token = await this.usuariosService.generarTokenReactivacion(correo);
+    if (!token) {
+      if (constanciaReactivacion) throw new ConflictException('La cuenta ya no está disponible para recuperar. Volvé al formulario.');
+    } else {
+      try {
+        await this.mailService.enviarReactivacion(correo, token, origen);
+        if (constanciaReactivacion) return { mensaje: 'Mail enviado' };
+      } catch {
+        this.logger.error('No se pudo enviar el enlace de reactivación');
+        if (constanciaReactivacion) {
+          throw new ServiceUnavailableException('No pudimos enviar el mail de recuperación. Volvé a intentarlo.');
+        }
+      }
+    }
+    return { mensaje: 'Si la cuenta se puede recuperar, vas a recibir un enlace por email.' };
+  }
+
+  private async validarConstanciaReactivacion(constancia: string, correo: string): Promise<void> {
+    try {
+      const payload = await this.jwtService.verifyAsync<{ correoReactivacion?: string }>(constancia, {
+        audience: AUDIENCIA_REACTIVACION, algorithms: ['HS256'],
+      });
+      if (payload.correoReactivacion === correo) return;
+    } catch {
+      // La constancia se emite al ofrecer la recuperación durante el registro.
+    }
+    throw new BadRequestException('Volvé al formulario para solicitar un enlace de recuperación.');
+  }
+
+  async confirmarReactivacion(token: string, contrasenia: string) {
+    await this.usuariosService.reactivarCuenta(token, contrasenia);
+    return { mensaje: 'Recuperaste tu cuenta. Ya podés iniciar sesión.' };
   }
 
   /** Verifica las credenciales y devuelve un JWT con la identidad y el rol. */
@@ -99,9 +140,13 @@ export class AuthService {
       });
     }
 
-    const payload = { sub: user.id, email: user.email, rol: user.rol?.nombre };
     return {
-      access_token: await this.jwtService.signAsync(payload),
+      access_token: await this.jwtService.signAsync({
+        sub: user.id,
+        email: user.email,
+        rol: user.rol?.nombre,
+        ...(user.version_sesion && { versionSesion: user.version_sesion }),
+      }),
     };
   }
 
@@ -131,7 +176,7 @@ export class AuthService {
   }
 
   /** Genera un token nuevo y reenvía el mail para una cuenta aún no verificada. */
-  async reenviarVerificacion(dto: LoginDto) {
+  async reenviarVerificacion(dto: LoginDto, origen?: string) {
     const email = dto.email.trim().toLowerCase();
     const user = await this.credencialesService.validarCredenciales(
       email,
@@ -146,9 +191,10 @@ export class AuthService {
       };
     }
 
-    const token = await this.credencialesService.generarTokenVerificacion(user);
+    const token = await this.credencialesService.generarTokenVerificacion(user.id, email);
+    if (!token) return { mensaje: 'Si tu cuenta necesita verificación, vas a recibir un nuevo email' };
     try {
-      await this.mailService.enviarVerificacion(email, token);
+      await this.mailService.enviarVerificacion(email, token, origen);
     } catch (error) {
       this.logger.error(
         `No se pudo reenviar el mail de verificación a ${email}`,

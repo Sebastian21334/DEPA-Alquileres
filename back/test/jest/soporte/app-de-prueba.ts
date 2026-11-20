@@ -1,4 +1,4 @@
-import { INestApplication, Module, ValidationPipe } from '@nestjs/common';
+import { forwardRef, INestApplication, Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
@@ -24,10 +24,9 @@ import { UbicacionService } from '../../../src/ubicacion/service/ubicacion.servi
 import { UsuariosController } from '../../../src/usuarios/controller/usuarios.controller';
 import { Usuario } from '../../../src/usuarios/entity/usuario.entity';
 import { USUARIOS_REPOSITORY } from '../../../src/usuarios/repository/usuarios.repository.interface';
-import { UsuariosConsultaService } from '../../../src/usuarios-consulta/service/usuarios-consulta.service';
 import { UsuariosCredencialesService } from '../../../src/usuarios/service/usuarios-credenciales.service';
 import { UsuariosService } from '../../../src/usuarios/service/usuarios.service';
-import { UsuariosConsultaModule } from '../../../src/usuarios-consulta/usuarios-consulta.module';
+import { UsuariosModule } from '../../../src/usuarios/usuarios.module';
 import type { EntityManager } from 'typeorm';
 
 /**
@@ -102,8 +101,18 @@ export class UsuariosEnMemoria {
     return this.sinContrasenia(this.buscar((u) => u.email === email));
   }
 
+  async buscarBajaRecuperable(email: string) {
+    return this.sinContrasenia(this.buscar((u) =>
+      u.email_historico === email && !u.activa && !u.bloqueado && u.baja_recuperable,
+    ));
+  }
+
   async buscarPorId(id: number) {
     return this.sinContrasenia(this.filas.get(id));
+  }
+
+  buscarParaSesion(id: number): Promise<Usuario | null> {
+    return this.buscarPorId(id);
   }
 
   async buscarParaLogin(email: string) {
@@ -116,8 +125,19 @@ export class UsuariosEnMemoria {
     return usuario ? copiar(usuario) : null;
   }
 
-  async buscarPorTokenVerificacion(token: string) {
-    return this.sinContrasenia(this.buscar((u) => u.token_verificacion === token));
+  async guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean> {
+    const usuario = this.filas.get(id);
+    if (!usuario?.activa || usuario.bloqueado || usuario.email !== email || usuario.email_verificado) return false;
+    usuario.token_verificacion = token;
+    return true;
+  }
+
+  async verificarCuenta(token: string): Promise<boolean> {
+    const usuario = this.buscar((u) => u.token_verificacion === token && u.activa && !u.email_verificado);
+    if (!usuario) return false;
+    usuario.email_verificado = true;
+    usuario.token_verificacion = null;
+    return true;
   }
 
   async contarUsuarios() {
@@ -210,33 +230,19 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
   const correo = new CorreoEnMemoria();
   const usuariosRepository = { provide: USUARIOS_REPOSITORY, useValue: usuarios };
 
-  @Module({
-    providers: [UsuariosConsultaService, usuariosRepository],
-    exports: [UsuariosConsultaService],
-  })
-  class UsuariosConsultaEnMemoriaModule {}
-
   const catalogos = {
     codigoEstado: (_ambito: string, codigo: string) => codigo,
     getRolPorNombre: async (nombre: string) => ROLES[nombre] ?? null,
     crearRol: async ({ nombre }: { nombre: string }) => ROLES[nombre],
   };
 
-  const modulo = await Test.createTestingModule({
-    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), SeguridadModule],
-    controllers: [
-      AuthController,
-      UsuariosController,
-      PublicacionesController,
-      BloqueoAnuncianteController,
-    ],
+  @Module({
+    imports: [forwardRef(() => SeguridadModule)],
     providers: [
-      AuthService,
       UsuariosService,
       UsuariosCredencialesService,
       AnunciantesService,
       PublicacionesService,
-      BloqueoAnuncianteService,
       usuariosRepository,
       { provide: PUBLICACIONES_REPOSITORY, useValue: publicaciones },
       {
@@ -247,6 +253,22 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
       { provide: UbicacionService, useValue: {} },
       { provide: MAIL_SERVICE, useValue: correo.servicio() },
       { provide: AlmacenamientoService, useValue: {} },
+    ],
+    exports: [UsuariosService, UsuariosCredencialesService, AnunciantesService, PublicacionesService, MAIL_SERVICE],
+  })
+  class UsuariosEnMemoriaModule {}
+
+  const modulo = await Test.createTestingModule({
+    imports: [ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }), SeguridadModule, UsuariosModule],
+    controllers: [
+      AuthController,
+      UsuariosController,
+      PublicacionesController,
+      BloqueoAnuncianteController,
+    ],
+    providers: [
+      AuthService,
+      BloqueoAnuncianteService,
       {
         provide: ReservaBloqueoAnuncianteService,
         useValue: {
@@ -262,8 +284,8 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
       },
     ],
   })
-    .overrideModule(UsuariosConsultaModule)
-    .useModule(UsuariosConsultaEnMemoriaModule)
+    .overrideModule(UsuariosModule)
+    .useModule(UsuariosEnMemoriaModule)
     .compile();
 
   const app = modulo.createNestApplication({ logger: false });

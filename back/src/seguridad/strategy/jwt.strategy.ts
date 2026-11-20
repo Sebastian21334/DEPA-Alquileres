@@ -17,7 +17,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  validate(payload: { sub?: unknown } | null) {
-    return this.seguridadService.validarSesion(payload?.sub);
+  validate(payload: { sub?: unknown; versionSesion?: unknown } | null) {
+    return this.seguridadService.validarSesion(payload?.sub, payload?.versionSesion);
   }
 }

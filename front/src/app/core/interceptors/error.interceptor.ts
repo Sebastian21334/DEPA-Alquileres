@@ -35,7 +35,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const codigo = error.error?.codigo;
       const tokenBloqueo = req.url.endsWith('/auth/login') && codigo === 'USUARIO_BLOQUEADO' &&
         typeof error.error?.tokenBloqueo === 'string' ? error.error.tokenBloqueo : undefined;
-      return throwError(() => new ApiError(error.status, mensaje, typeof codigo === 'string' ? codigo : undefined, tokenBloqueo));
+      const constanciaReactivacion = req.url.endsWith('/auth/register') && codigo === 'CUENTA_RECUPERABLE' &&
+        typeof error.error?.constanciaReactivacion === 'string' ? error.error.constanciaReactivacion : undefined;
+      return throwError(() => new ApiError(error.status, mensaje, typeof codigo === 'string' ? codigo : undefined, tokenBloqueo, constanciaReactivacion));
     }),
   );
 };

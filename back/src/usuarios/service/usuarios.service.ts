@@ -1,7 +1,7 @@
 import { UsuariosCredencialesService } from './usuarios-credenciales.service';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import {
   Injectable,
@@ -10,6 +10,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  HttpStatus,
   InternalServerErrorException,
   Logger,
   ServiceUnavailableException,
@@ -26,6 +27,7 @@ import { AnunciantesService } from '../../anunciantes/service/anunciantes.servic
 import type { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { formatearNombreCompleto } from '../../common/utils/nombres';
+import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.error';
 
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
@@ -38,6 +40,11 @@ const MARGEN_CHECKOUT_SIN_PAGO_MS = 24 * 60 * 60 * 1000;
 const AUDIENCIA_BAJA = 'confirmar-baja-propia';
 
 type ConfirmacionBaja = { usuarioId: number; huella: string; exp: number };
+const ENLACE_REACTIVACION_INVALIDO = {
+  statusCode: HttpStatus.BAD_REQUEST,
+  codigo: 'ENLACE_REACTIVACION_INVALIDO',
+  message: 'El enlace de recuperación es inválido, venció o ya fue utilizado.',
+};
 
 /** Datos admitidos por el alta; el rol y los secretos se asignan en el servicio. */
 type CrearUsuarioDatos = {
@@ -62,6 +69,11 @@ export class UsuariosService {
   /** Busca un usuario por su clave primaria. */
   async buscarPorId(id: number, transaccion?: EntityManager): Promise<Usuario | null> {
     return this.usuariosRepo.buscarPorId(id, transaccion);
+  }
+
+  /** Busca al usuario por ID con su rol y versión de sesión para validar el token. */
+  buscarParaSesion(idUsuario: number): Promise<Usuario | null> {
+    return this.usuariosRepo.buscarParaSesion(idUsuario);
   }
 
   async bloquearParaAltaAnunciante(idUsuario: number, transaccion: EntityManager): Promise<Usuario> {
@@ -144,7 +156,7 @@ export class UsuariosService {
     return this.usuarioSinSecretos(usuarioActualizado);
   }
 
-  async solicitarBajaPropia(idUsuario: number): Promise<{ mensaje: string }> {
+  async solicitarBajaPropia(idUsuario: number, origen?: string): Promise<{ mensaje: string }> {
     const { email, huella, esAnunciante } = await this.usuariosRepo.conTransaccion(async (transaccion) => {
       const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion, false, true);
       if (!usuario?.activa || usuario.bloqueado || !usuario.email || !usuario.email_verificado)
@@ -160,7 +172,7 @@ export class UsuariosService {
       audience: AUDIENCIA_BAJA, algorithm: 'HS256', expiresIn: '30m',
     });
     try {
-      await this.mailService.enviarConfirmacionBaja(email, token);
+      await this.mailService.enviarConfirmacionBaja(email, token, origen);
     } catch {
       this.logger.warn(`Falló el correo de confirmación de baja para el usuario ${idUsuario}`);
       throw new ServiceUnavailableException('No pudimos enviar el correo de confirmación. Volvé a intentarlo.');
@@ -186,8 +198,10 @@ export class UsuariosService {
   }
 
   private huellaBaja(usuario: Usuario): string {
+    const datos = [usuario.id, usuario.email, usuario.bloqueoDetalle?.id ?? null];
+    if (usuario.version_sesion) datos.push(usuario.version_sesion);
     return createHmac('sha256', usuario.contrasenia)
-      .update(JSON.stringify([usuario.id, usuario.email, usuario.bloqueoDetalle?.id ?? null]))
+      .update(JSON.stringify(datos))
       .digest('base64url');
   }
 
@@ -218,6 +232,7 @@ export class UsuariosService {
       // La baja lógica conserva el correo en el historial y libera el original.
       usuario.activa = false;
       usuario.fecha_baja = new Date();
+      usuario.baja_recuperable = !!confirmacion;
       if (usuario.email) {
         usuario.email_historico = usuario.email;
         usuario.email = null;
@@ -229,6 +244,44 @@ export class UsuariosService {
     });
 
     return { mensaje: 'Tu cuenta fue dada de baja correctamente' };
+  }
+
+  async generarTokenReactivacion(email: string): Promise<string | null> {
+    if (await this.usuariosRepo.buscarPorEmail(email)) return null;
+    const anterior = await this.usuariosRepo.buscarBajaRecuperable(email);
+    if (!anterior) return null;
+
+    const token = randomBytes(32).toString('hex');
+    const vence = new Date(Date.now() + 2 * 60 * 60 * 1000);
+    const guardado = await this.usuariosRepo.guardarTokenReactivacion(
+      anterior.id, email, createHash('sha256').update(token).digest('hex'), vence,
+    );
+    return guardado ? token : null;
+  }
+
+  async reactivarCuenta(token: string, contrasenia: string): Promise<void> {
+    const hashToken = createHash('sha256').update(token).digest('hex');
+    const candidato = await this.usuariosRepo.buscarPorTokenReactivacion(hashToken);
+    const email = candidato?.email_historico;
+    if (!candidato || !email) throw new BadRequestException(ENLACE_REACTIVACION_INVALIDO);
+    if (!(await this.credencialesService.coincideContrasenia(contrasenia, candidato.contrasenia))) {
+      throw new ForbiddenException('La contraseña anterior es incorrecta.');
+    }
+
+    try {
+      await this.usuariosRepo.conTransaccion(async (transaccion) => {
+        const reactivada = await this.usuariosRepo.reactivar(
+          candidato.id, email, candidato.contrasenia, hashToken, randomUUID(), transaccion,
+        );
+        if (!reactivada) throw new BadRequestException(ENLACE_REACTIVACION_INVALIDO);
+        await this.anunciantesService.restaurarCuitPorReactivacion(candidato.id, transaccion);
+      });
+    } catch (error) {
+      if (error instanceof ValorDuplicadoError) {
+        throw new ConflictException('El email ya está en uso en otra cuenta.');
+      }
+      throw error;
+    }
   }
 
   private async validarBajaEnCurso(idUsuario: number, transaccion: EntityManager): Promise<void> {
@@ -458,8 +511,15 @@ export class UsuariosService {
     };
   }
 
-  /** Hashea la contrasenia, asigna el rol inicial y persiste el usuario. */
-  async crear(datos: CrearUsuarioDatos): Promise<Usuario> {
+  /** Persiste el alta y su token de verificación. Devuelve null si falta elegir cómo continuar. */
+  async crear(datos: CrearUsuarioDatos, crearCuentaNueva = false): Promise<string | null> {
+    if (await this.usuariosRepo.buscarPorEmail(datos.email)) {
+      throw new ConflictException('El email ya está registrado');
+    }
+    if (!crearCuentaNueva && await this.usuariosRepo.buscarBajaRecuperable(datos.email)) {
+      return null;
+    }
+
     const contraseniaHash = await this.credencialesService.hashearContrasenia(
       datos.contrasenia,
     );
@@ -474,15 +534,25 @@ export class UsuariosService {
       throw new InternalServerErrorException(`Falta el rol inicial ${nombreRol}. Ejecutá npm run db:seed.`);
     }
 
+    const token = randomBytes(32).toString('hex');
     const nuevoUsuario = this.usuariosRepo.crear({
       nombre: datos.nombre,
       apellido: datos.apellido,
       email: datos.email,
       telefono: datos.telefono,
       contrasenia: contraseniaHash,
+      token_verificacion: token,
       rol,
     });
-    return this.usuariosRepo.guardar(nuevoUsuario);
+    try {
+      await this.usuariosRepo.guardar(nuevoUsuario);
+    } catch (error) {
+      if (error instanceof ValorDuplicadoError) {
+        throw new ConflictException('El email ya está registrado');
+      }
+      throw error;
+    }
+    return token;
   }
 
   /** Cambia el rol de un usuario, evitando escrituras innecesarias. */

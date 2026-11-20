@@ -7,6 +7,7 @@ export interface IAnunciantesRepository {
   crear(datos: Partial<Anunciante>): Anunciante;
   guardar(anunciante: Anunciante, transaccion?: EntityManager): Promise<Anunciante>;
   archivarCuit(idUsuario: number, transaccion: EntityManager): Promise<void>;
+  restaurarCuit(idUsuario: number, transaccion: EntityManager): Promise<void>;
   actualizarPausaActividades(idUsuario: number, pausadas: boolean, transaccion: EntityManager): Promise<boolean>;
   actualizarVerificacion(idUsuario: number, verificado: boolean, transaccion: EntityManager): Promise<void>;
   buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null>;

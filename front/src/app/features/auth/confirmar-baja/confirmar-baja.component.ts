@@ -10,12 +10,6 @@ import { PerfilService } from '../../../core/services/perfil.service';
   imports: [RouterLink],
   styleUrl: '../restablecer-contrasenia/restablecer-contrasenia.component.scss',
   styles: `
-    .auth.confirmar-baja {
-      min-height: 100dvh;
-      box-sizing: border-box;
-      padding: 1rem;
-    }
-
     .confirmar-baja__acciones {
       display: flex;
       flex-direction: column;
@@ -29,7 +23,7 @@ import { PerfilService } from '../../../core/services/perfil.service';
     }
   `,
   template: `
-    <section class="auth confirmar-baja">
+    <section class="auth auth--pantalla-completa">
       <div class="auth__card">
         <a routerLink="/" class="auth__brand" aria-label="Ir al inicio">
           <img src="/images/Logo.png" alt="DEPA" />
@@ -46,16 +40,16 @@ import { PerfilService } from '../../../core/services/perfil.service';
               Al confirmar, perderás el acceso a tu cuenta.
               @if (esAnunciante) {
                 Tus publicaciones dejarán de estar disponibles.
-              } @else {
-                Las reservas y los pagos que hayas registrado se conservarán como historial.
               }
+              Tus datos e historial se conservarán. Si volvés a registrarte con el mismo email,
+              podrás recuperar esta cuenta o crear una nueva.
             </p>
           }
         }
         <div class="confirmar-baja__acciones">
           @if (token && !mensaje()) {
             <button type="button" class="btn btn--primary confirmar-baja__confirmar" [disabled]="enviando()" (click)="confirmar()">
-              {{ enviando() ? 'Confirmando…' : 'Confirmar baja definitiva' }}
+              {{ enviando() ? 'Confirmando…' : 'Confirmar baja de cuenta' }}
             </button>
           }
           <a routerLink="/" [class.btn]="mensaje()" [class.btn--primary]="mensaje()">Volver al inicio</a>

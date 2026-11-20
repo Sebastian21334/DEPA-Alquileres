@@ -34,7 +34,7 @@ export class App {
     { requireSync: true },
   );
 
-  protected readonly esPantallaAuth = computed(() => ['/login', '/registro', '/confirmar-baja'].includes(this.ruta()));
+  protected readonly esPantallaAuth = computed(() => ['/login', '/registro', '/confirmar-baja', '/reactivar-cuenta'].includes(this.ruta()));
   protected readonly esPantallaCbu = computed(() => this.ruta() === '/mi-perfil/validar-cbu');
   private readonly verificarAcceso = computed(() => this.isBrowser && this.auth.isAuthenticated &&
     !this.esPantallaAuth() && this.ruta() !== '/cuenta-bloqueada');

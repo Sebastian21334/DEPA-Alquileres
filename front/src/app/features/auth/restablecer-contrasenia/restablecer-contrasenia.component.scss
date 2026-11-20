@@ -12,6 +12,12 @@
     var(--color-dark);
 }
 
+.auth--pantalla-completa {
+  min-height: 100dvh;
+  box-sizing: border-box;
+  padding: 1rem;
+}
+
 .auth__card {
   width: 100%;
   max-width: 420px;

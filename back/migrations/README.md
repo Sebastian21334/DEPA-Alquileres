@@ -242,3 +242,14 @@ versión del backend sobre una base existente. El comando aplica
 `20261116-pausa-actividades.sql` a la base de `DATABASE_URL` (entorno o
 `back/.env`). Es reejecutable. Las bases nuevas creadas con el esquema
 inicial ya incluyen la columna.
+
+# Recuperación de cuentas dadas de baja (T09)
+
+Desde `back`, ejecutá `npm run db:reactivacion-cuenta` antes de iniciar
+esta versión del backend. El comando aplica una migración reejecutable de
+`usuario` a la base configurada en `DATABASE_URL`.
+
+El registro ofrece recuperar la cuenta o crear una nueva con el mismo email
+cuando la baja se confirmó desde el perfil con esta versión. Las bajas
+anteriores conservan su historial y permiten reutilizar el email. El origen
+de esas bajas no quedó registrado en la base.

@@ -14,6 +14,9 @@ import type {
 import { digitosCuit } from '../../common/utils/cuit';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Pago } from '../../pagos/entity/pago.entity';
+import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
+
+const RESTRICCION_EMAIL_UNICO = 'UQ_2863682842e688ca198eb25c124';
 
 @Injectable()
 export class UsuariosRepository implements IUsuariosRepository {
@@ -24,7 +27,8 @@ export class UsuariosRepository implements IUsuariosRepository {
   }
 
   guardar(usuario: Usuario, transaccion?: EntityManager): Promise<Usuario> {
-    return (transaccion?.getRepository(Usuario) ?? this.repo).save(usuario);
+    const repo = transaccion?.getRepository(Usuario) ?? this.repo;
+    return guardarSinDuplicados(() => repo.save(usuario), [RESTRICCION_EMAIL_UNICO]);
   }
 
   conTransaccion<T>(operacion: (transaccion: EntityManager) => Promise<T>): Promise<T> {
@@ -36,7 +40,7 @@ export class UsuariosRepository implements IUsuariosRepository {
       .where('usuario.id = :idUsuario', { idUsuario })
       .setLock('pessimistic_write', undefined, ['usuario']);
     if (incluirRol) consulta.leftJoinAndSelect('usuario.rol', 'rol');
-    if (incluirCredenciales) consulta.addSelect(['usuario.contrasenia', 'usuario.bloqueoDetalle']);
+    if (incluirCredenciales) consulta.addSelect(['usuario.contrasenia', 'usuario.bloqueoDetalle', 'usuario.version_sesion']);
     return consulta.getOne();
   }
 
@@ -99,6 +103,53 @@ export class UsuariosRepository implements IUsuariosRepository {
     return this.repo.findOneBy({ email });
   }
 
+  buscarBajaRecuperable(email: string): Promise<Usuario | null> {
+    return this.repo.findOne({
+      select: { id: true },
+      where: { email_historico: email, activa: false, bloqueado: false, baja_recuperable: true },
+      order: { fecha_baja: 'DESC', id: 'DESC' },
+    });
+  }
+
+  buscarPorTokenReactivacion(token: string): Promise<Usuario | null> {
+    return this.repo.createQueryBuilder('u')
+      .select(['u.id', 'u.email_historico', 'u.contrasenia'])
+      .where('u.token_recuperacion = :token', { token })
+      .andWhere('u.token_recuperacion_expira > :ahora', { ahora: new Date() })
+      .andWhere('u.activa = false AND u.bloqueado = false AND u.baja_recuperable = true')
+      .getOne();
+  }
+
+  async guardarTokenReactivacion(id: number, email: string, token: string, expira: Date): Promise<boolean> {
+    const resultado = await this.repo.update(
+      { id, email_historico: email, activa: false, bloqueado: false, baja_recuperable: true },
+      { token_recuperacion: token, token_recuperacion_expira: expira },
+    );
+    return resultado.affected === 1;
+  }
+
+  async reactivar(id: number, email: string, hashActual: string, token: string, versionSesion: string, transaccion: EntityManager): Promise<boolean> {
+    const resultado = await guardarSinDuplicados(() => transaccion.createQueryBuilder()
+      .update(Usuario)
+      .set({
+        email,
+        email_verificado: true,
+        activa: true,
+        fecha_baja: null,
+        baja_recuperable: false,
+        version_sesion: versionSesion,
+        token_verificacion: null,
+        token_recuperacion: null,
+        token_recuperacion_expira: null,
+      })
+      .where('id_usuario = :id AND email IS NULL AND email_historico = :email', { id, email })
+      .andWhere('contrasenia = :hashActual AND token_recuperacion = :token', { hashActual, token })
+      .andWhere('token_recuperacion_expira > :ahora', { ahora: new Date() })
+      .andWhere('activa = false AND bloqueado = false AND baja_recuperable = true')
+      .execute(), [RESTRICCION_EMAIL_UNICO]);
+    return resultado.affected === 1;
+  }
+
   contarUsuarios(): Promise<number> {
     return this.repo.count();
   }
@@ -156,12 +207,20 @@ export class UsuariosRepository implements IUsuariosRepository {
     return (
       this.repo
         .createQueryBuilder('u')
-        .addSelect(['u.contrasenia', 'u.bloqueoDetalle'])
+        .addSelect(['u.contrasenia', 'u.bloqueoDetalle', 'u.version_sesion'])
         // El rol se necesita para autorizar la sesión y para incluirlo en el JWT.
         .leftJoinAndSelect('u.rol', 'rol')
         .where('u.email = :email', { email })
         .getOne()
     );
+  }
+
+  buscarParaSesion(id: number): Promise<Usuario | null> {
+    return this.repo.createQueryBuilder('u')
+      .addSelect('u.version_sesion')
+      .leftJoinAndSelect('u.rol', 'rol')
+      .where('u.id = :id', { id })
+      .getOne();
   }
 
   buscarConBloqueo(id: number, transaccion?: EntityManager): Promise<Usuario | null> {
@@ -182,10 +241,28 @@ export class UsuariosRepository implements IUsuariosRepository {
       .getRawMany<BloqueoAdministrativo>();
   }
 
-  buscarPorTokenVerificacion(token: string): Promise<Usuario | null> {
-    // No hace falta re-seleccionar token_verificacion: el service solo lo
-    // sobrescribe (a null) después de encontrarlo, nunca lee su valor.
-    return this.repo.findOne({ where: { token_verificacion: token } });
+  async guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean> {
+    const resultado = await this.repo.update(
+      { id, email, activa: true, bloqueado: false, email_verificado: false },
+      { token_verificacion: token },
+    );
+    return resultado.affected === 1;
+  }
+
+  async verificarCuenta(token: string): Promise<boolean> {
+    const resultado = await this.repo.update(
+      { token_verificacion: token, activa: true, email_verificado: false },
+      { email_verificado: true, token_verificacion: null },
+    );
+    return resultado.affected === 1;
+  }
+
+  async guardarTokenRecuperacion(id: number, email: string, token: string, expira: Date): Promise<boolean> {
+    const resultado = await this.repo.update(
+      { id, email, activa: true, bloqueado: false },
+      { token_recuperacion: token, token_recuperacion_expira: expira },
+    );
+    return resultado.affected === 1;
   }
 
   buscarPorTokenRecuperacion(token: string): Promise<Usuario | null> {
@@ -196,6 +273,7 @@ export class UsuariosRepository implements IUsuariosRepository {
       .createQueryBuilder('u')
       .addSelect(['u.token_recuperacion', 'u.token_recuperacion_expira'])
       .where('u.token_recuperacion = :token', { token })
+      .andWhere('u.activa = true')
       .getOne();
   }
 
@@ -213,7 +291,7 @@ export class UsuariosRepository implements IUsuariosRepository {
       .set({ contrasenia: nuevoHash, token_recuperacion: null, token_recuperacion_expira: null })
       .where('id_usuario = :id', { id })
       .andWhere('contrasenia = :hashActual', { hashActual })
-      .andWhere('bloqueado = false')
+      .andWhere('activa = true AND bloqueado = false')
       .execute();
     return resultado.affected === 1;
   }
@@ -225,7 +303,7 @@ export class UsuariosRepository implements IUsuariosRepository {
       .set({ contrasenia: nuevoHash, token_recuperacion: null, token_recuperacion_expira: null })
       .where('token_recuperacion = :token', { token })
       .andWhere('token_recuperacion_expira > :ahora', { ahora: new Date() })
-      .andWhere('bloqueado = false')
+      .andWhere('activa = true AND bloqueado = false')
       .execute();
     return resultado.affected === 1;
   }
