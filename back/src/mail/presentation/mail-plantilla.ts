@@ -54,17 +54,18 @@ export class MailPlantilla {
   }
 
   boton(texto: string, enlace: string): string {
-    return `<a href="${enlace}" style="display:inline-block;padding:12px 20px;border-radius:8px;background:#d94217;color:#ffffff;text-decoration:none;font-weight:700">${this.escapar(texto)}</a>`;
+    return `<a href="${this.escapar(enlace)}" style="display:inline-block;padding:13px 22px;border-radius:10px;background:#d94217;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700">${this.escapar(texto)}</a>`;
   }
 
-  plantilla(preheader: string, html: string): string {
-    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>DEPA</title></head><body style="margin:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#101828">
-      <span style="display:none;max-height:0;overflow:hidden;opacity:0">${this.escapar(preheader)}</span>
-      <table role="presentation" style="width:100%;border-collapse:collapse;background:#f3f4f6"><tr><td style="padding:28px 12px">
-        <table role="presentation" style="width:100%;max-width:620px;margin:0 auto;border-collapse:collapse;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 8px 28px rgba(16,24,40,.08)">
-          <tr><td style="padding:22px 28px;background:#101828;color:#ffffff"><strong style="font-size:25px;letter-spacing:.5px">DEPA</strong><span style="display:block;margin-top:4px;color:#cbd5e1;font-size:12px">Alquileres simples, decisiones seguras</span></td></tr>
-          <tr><td style="padding:28px;line-height:1.6">${html}</td></tr>
-          <tr><td style="padding:18px 28px;background:#f8fafc;color:#667085;font-size:12px;line-height:1.5">Este correo fue enviado por DEPA porque existe una actividad asociada a tu cuenta. Nunca te pediremos contraseñas ni datos completos de tarjeta por correo.</td></tr>
+  plantilla(preheader: string, html: string, titulo: string, logoUrl: string): string {
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${this.escapar(titulo)}</title></head><body style="margin:0;background:#f7f7f9;font-family:Arial,Helvetica,sans-serif;color:#101828">
+      <span style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${this.escapar(preheader)}</span>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:#f7f7f9"><tr><td align="center" style="padding:32px 12px">
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:620px;border-collapse:collapse;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px">
+          <tr><td style="height:5px;background:#d94217;font-size:0;line-height:0">&nbsp;</td></tr>
+          <tr><td style="padding:24px 28px 20px;border-bottom:1px solid #e5e7eb"><a href="${this.escapar(new URL('/', logoUrl).toString())}" style="text-decoration:none"><img src="${this.escapar(logoUrl)}" alt="DEPA" width="150" style="display:block;width:150px;max-width:100%;height:auto;border:0;color:#0e47a1;font-size:24px;font-weight:800"></a><span style="display:block;margin-top:9px;color:#667085;font-size:12px">Alquileres simples, decisiones seguras</span></td></tr>
+          <tr><td style="padding:30px 28px 32px;font-size:15px;line-height:1.65"><h1 style="margin:0 0 20px;color:#101828;font-size:24px;line-height:1.3">${this.escapar(titulo)}</h1>${html}</td></tr>
+          <tr><td style="padding:20px 28px;background:#e8eefb;border-top:1px solid #d8e3f8;color:#0b3780;font-size:12px;line-height:1.6"><strong style="font-size:14px">DEPA</strong><br>Este correo se envió por una actividad asociada a tu cuenta. Nunca te pediremos contraseñas ni datos completos de tarjeta por correo.</td></tr>
         </table>
       </td></tr></table>
     </body></html>`;

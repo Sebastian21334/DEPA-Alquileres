@@ -205,10 +205,11 @@ export class MailService implements IMailService {
   }
 
   private enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.'): Promise<void> {
+    const logoUrl = `${this.frontendUrl.replace(/\/+$/, '')}/images/Logo.png`;
     return this.correos.enviar({
       destinatario,
       asunto,
-      html: this.plantillas.plantilla(preheader, html),
+      html: this.plantillas.plantilla(preheader, html, asunto, logoUrl),
     });
   }
 }
