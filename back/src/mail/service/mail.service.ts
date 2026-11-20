@@ -14,17 +14,22 @@ import { MailPlantilla } from '../presentation/mail-plantilla';
 @Injectable()
 export class MailService implements IMailService {
   private readonly frontendUrl: string;
+  private readonly frontendUrls: readonly string[];
 
   constructor(@Inject(CORREO_REPOSITORY) private readonly correos: ICorreoRepository, private readonly plantillas: MailPlantilla, config: ConfigService) {
-    this.frontendUrl = config
+    this.frontendUrls = config
       .getOrThrow<string>('FRONTEND_URLS')
-      .split(',')[0]
-      .trim()
-      .replace(/\/+$/, '');
+      .split(',')
+      .map((url) => url.trim().replace(/\/+$/, ''));
+    this.frontendUrl = this.frontendUrls[0];
   }
 
-  async enviarVerificacion(destinatario: string, token: string): Promise<void> {
-    const link = `${this.frontendUrl}/verificar-cuenta?token=${token}`;
+  private frontendDeSolicitud(origen?: string): string {
+    return origen && this.frontendUrls.includes(origen) ? origen : this.frontendUrl;
+  }
+
+  async enviarVerificacion(destinatario: string, token: string, origen?: string): Promise<void> {
+    const link = `${this.frontendDeSolicitud(origen)}/verificar-cuenta?token=${token}`;
 
     await this.enviar(
       destinatario,
@@ -33,6 +38,18 @@ export class MailService implements IMailService {
        ${this.plantillas.boton('Verificar mi cuenta', link)}
        <p style="margin:20px 0 0;color:#667085;font-size:13px">Si no creaste una cuenta en DEPA, podés ignorar este mensaje con tranquilidad.</p>`,
       'Confirmá tu correo para comenzar a usar DEPA.',
+    );
+  }
+
+  enviarReactivacion(destinatario: string, token: string, origen?: string): Promise<void> {
+    const enlace = `${this.frontendDeSolicitud(origen)}/reactivar-cuenta#${encodeURIComponent(token)}`;
+    return this.enviar(
+      destinatario,
+      'Recuperá tu cuenta de DEPA',
+      `<p>Recibimos una solicitud para recuperar una cuenta dada de baja. Abrí el enlace e ingresá la contraseña que usabas en esa cuenta.</p>
+       ${this.plantillas.boton('Recuperar mi cuenta', enlace)}
+       <p>El enlace vence en 2 horas. Si no pediste recuperar la cuenta, podés ignorar este correo.</p>`,
+      'Confirmá que querés recuperar tu cuenta de DEPA.',
     );
   }
 
@@ -207,8 +224,8 @@ export class MailService implements IMailService {
     );
   }
 
-  enviarConfirmacionBaja(destinatario: string, token: string): Promise<void> {
-    const enlace = `${this.frontendUrl}/confirmar-baja#${encodeURIComponent(token)}`;
+  enviarConfirmacionBaja(destinatario: string, token: string, origen?: string): Promise<void> {
+    const enlace = `${this.frontendDeSolicitud(origen)}/confirmar-baja#${encodeURIComponent(token)}`;
     return this.enviar(
       destinatario,
       'Confirmá la baja de tu cuenta de DEPA',

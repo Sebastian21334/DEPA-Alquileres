@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Header,
+  Headers,
   Patch,
   Post,
   Param,
@@ -125,8 +126,8 @@ export class UsuariosController {
   @Post('me/baja')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)
-  solicitarBajaPropia(@Req() req: AuthenticatedRequest) {
-    return this.usuariosService.solicitarBajaPropia(req.user.id);
+  solicitarBajaPropia(@Req() req: AuthenticatedRequest, @Headers('origin') origen?: string) {
+    return this.usuariosService.solicitarBajaPropia(req.user.id, origen);
   }
 
   @Post('baja/confirmar')

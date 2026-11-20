@@ -20,6 +20,7 @@ export interface RegisterDto {
   email: string;
   telefono: string;
   contrasenia: string;
+  crearCuentaNueva?: boolean;
 }
 
 export interface LoginDto {
@@ -74,9 +75,17 @@ export class AuthService {
     return this.currentUser()?.rol === 'Administrador';
   }
 
-  /** POST /auth/register — crea la cuenta (siempre como Inquilino) y dispara el mail de verificación. */
+  /** Registra la cuenta y envía el correo de verificación. */
   register(dto: RegisterDto): Observable<MensajeResponse> {
     return this.http.post<MensajeResponse>(`${this.baseUrl}/register`, dto);
+  }
+
+  solicitarReactivacion(email: string, constanciaReactivacion: string): Observable<MensajeResponse> {
+    return this.http.post<MensajeResponse>(`${this.baseUrl}/reactivar-cuenta/solicitar`, { email, constanciaReactivacion });
+  }
+
+  confirmarReactivacion(token: string, contrasenia: string): Observable<MensajeResponse> {
+    return this.http.post<MensajeResponse>(`${this.baseUrl}/reactivar-cuenta/confirmar`, { token, contrasenia });
   }
 
   /** POST /auth/verificar-cuenta — consume el token del link recibido por mail. */

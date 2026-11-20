@@ -13,12 +13,8 @@ import { contraseniasIgualesValidator, MENSAJE_CONTRASENIA_SEGURA, passwordSegur
 // Propietario/Inmobiliaria es un flujo aparte (POST /anunciantes/solicitar,
 // fuera del alcance de este componente).
 //
-// Flujo (ver back/src/auth/service/auth.service.ts#register): al enviar el
-// formulario el backend crea la cuenta y dispara un mail con un link de
-// verificación (RN-2). La cuenta no puede usarse para iniciar sesión hasta
-// que ese link se consuma (ver verificar-cuenta.component.ts), así que acá
-// no redirigimos a /login: mostramos el mensaje de éxito del backend y un
-// aviso de que hay que revisar el correo.
+// Si el correo corresponde a una baja recuperable, el backend pide una
+// elección antes de crear una cuenta.
 @Component({
   selector: 'app-register',
   standalone: true,
@@ -34,9 +30,10 @@ export class RegisterComponent {
 
   protected readonly enviando = signal(false);
   protected readonly error = signal<string | null>(null);
-  /** RN-37: el email ya pertenece a otra cuenta vigente (409 del backend). */
   protected readonly errorEmail = signal<string | null>(null);
+  protected readonly cuentaRecuperable = signal<{ email: string; constancia: string } | null>(null);
   protected readonly mensajeExito = signal<string | null>(null);
+  protected readonly recuperacionEnviada = signal(false);
   protected readonly verContrasenia = signal(false);
   protected readonly verConfirmacion = signal(false);
 
@@ -44,7 +41,7 @@ export class RegisterComponent {
     {
       nombre: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
       apellido: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
-      email: ['', [Validators.required, Validators.email]],
+      email: ['', [Validators.required, Validators.email, Validators.maxLength(150)]],
       telefono: ['', [Validators.required, Validators.maxLength(20)]],
       contrasenia: ['', [Validators.required, passwordSeguraValidator()]],
       confirmarContrasenia: ['', [Validators.required]],
@@ -52,28 +49,44 @@ export class RegisterComponent {
     { validators: contraseniasIgualesValidator() },
   );
 
-  protected onSubmit(): void {
-    if (this.form.invalid || this.enviando()) {
+  protected onSubmit(crearCuentaNueva = false): void {
+    if (this.enviando() || (this.cuentaRecuperable() && !crearCuentaNueva)) return;
+    const emailIngresado = this.form.controls.email;
+    emailIngresado.setValue(emailIngresado.value.trim().toLowerCase());
+    if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
     }
 
-    this.enviando.set(true);
+    const { nombre, apellido, email, telefono, contrasenia } = this.form.getRawValue();
+    if (crearCuentaNueva && this.cuentaRecuperable()?.email !== email) return;
+
     this.error.set(null);
     this.errorEmail.set(null);
+    this.enviando.set(true);
 
-    const { confirmarContrasenia, ...dto } = this.form.getRawValue();
-    const email = dto.email.trim().toLowerCase();
-
-    this.authService.register({ ...dto, email }).subscribe({
+    this.authService.register({
+      nombre, apellido, email, telefono, contrasenia,
+      crearCuentaNueva,
+    }).subscribe({
       next: (res) => {
         this.enviando.set(false);
+        this.cuentaRecuperable.set(null);
         this.mensajeExito.set(res.mensaje);
         this.form.reset();
       },
       error: (err: Error) => {
         this.enviando.set(false);
         if (err instanceof ApiError && err.status === 409) {
+          if (err.codigo === 'CUENTA_RECUPERABLE') {
+            if (err.constanciaReactivacion) {
+              this.cuentaRecuperable.set({ email, constancia: err.constanciaReactivacion });
+            } else {
+              this.error.set('Volvé a cargar el registro para recuperar la cuenta.');
+            }
+            return;
+          }
+          this.volverAlFormulario();
           this.errorEmail.set('Ese email ya está registrado en otra cuenta. Iniciá sesión o usá otro.');
           this.toast.mostrar('El email ingresado ya está registrado en otra cuenta.');
           return;
@@ -81,5 +94,29 @@ export class RegisterComponent {
         this.error.set(err.message);
       },
     });
+  }
+
+  protected solicitarReactivacion(): void {
+    const cuenta = this.cuentaRecuperable();
+    if (!cuenta || this.enviando() || this.recuperacionEnviada()) return;
+
+    this.error.set(null);
+    this.enviando.set(true);
+    this.authService.solicitarReactivacion(cuenta.email, cuenta.constancia).subscribe({
+      next: () => {
+        this.recuperacionEnviada.set(true);
+        this.enviando.set(false);
+      },
+      error: (err: Error) => {
+        this.error.set(err.message);
+        this.enviando.set(false);
+      },
+    });
+  }
+
+  protected volverAlFormulario(): void {
+    this.cuentaRecuperable.set(null);
+    this.recuperacionEnviada.set(false);
+    this.error.set(null);
   }
 }

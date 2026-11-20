@@ -55,8 +55,7 @@ Frontend:
 | --- | --- | --- | --- |
 | Identidad y acceso | `auth` | Registro, login, verificación de correo y recuperación de contraseña. | — |
 | Identidad y acceso | `seguridad` | JWT, estrategia, guards de sesión y roles. | `JwtModule`, `PassportModule`, `JwtAuthGuard`, `RolesGuard` |
-| Identidad y acceso | `usuarios` | Perfil, baja lógica, bloqueo/habilitación y credenciales. | `UsuariosService`, `UsuariosCredencialesService` |
-| Identidad y acceso | `usuarios-consulta` | Lecturas de usuario y rol para seguridad y otros dominios. | `UsuariosConsultaService` |
+| Identidad y acceso | `usuarios` | Perfil, baja lógica, bloqueo/habilitación, credenciales y consulta de cuentas para validar sesiones. | `UsuariosService`, `UsuariosCredencialesService` |
 | Anunciantes | `anunciantes` | Alta, datos de contacto, CUIT y verificación del anunciante. | `AnunciantesService`, `AnuncianteGuard` |
 | Anunciantes | `verificacion-anunciante` | Solicitudes, prueba de vida, análisis facial y eliminación de documentos. | — |
 | Catálogo | `publicaciones` | Publicaciones, visibilidad, propiedad y activación. | `PublicacionesService` |
@@ -191,7 +190,7 @@ La arquitectura real conserva estas desviaciones; no se presentan como patrón r
 
 - **Acceso cruzado desde `UsuariosRepository`:** consulta `Reserva` y `Pago` para calcular operaciones pendientes de una cuenta. Es una lectura de tablas de otros módulos desde un repositorio.
 - **Acceso cruzado desde `PublicacionesRepository`:** importa `Reserva` y la registra en `TypeOrmModule.forFeature` para calcular `cantidad_reservas`. La relación no está declarada en la entidad `Publicacion`.
-- **`UsuariosConsultaModule` exporta `USUARIOS_REPOSITORY`,** aunque sus consumidores actuales usan `UsuariosConsultaService` o el token dentro del mismo dominio. Es una API más amplia que la necesaria.
+- **Dependencia circular entre Usuarios y Seguridad.** Usuarios usa los guards de Seguridad y Seguridad llama a `UsuariosService.buscarParaSesion`. Ambos módulos difieren sus referencias con `forwardRef`.
 - **`EntityManager` en services:** `anunciantes`, `pagos`, `usuarios`, `disponibilidad` y `publicaciones` importan el tipo de TypeORM. El diseño buscaba un tipo opaco `Transaccion`, que todavía no existe.
 - **Excepciones HTTP en adaptadores:** Face API lanza excepciones de Nest desde la capa de integración.
 - **`as never`:** `grep -RIn "as never" back/src` no devuelve coincidencias. La sustitución por referencias tipadas (`referenciaUsuario`) ya está aplicada.

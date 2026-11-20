@@ -43,7 +43,7 @@ test('F-04 conserva bloqueos anteriores y permite apelar únicamente el bloqueo 
   const bloqueo = new BloqueoAnuncianteService(usuarios, {}, mail);
   const jwt = new JwtService({ secret: 'clave-jwt-solo-para-pruebas' });
   const auth = new AuthService(usuarios, credenciales, jwt, mail);
-  const seguridad = new SeguridadService(repo);
+  const seguridad = new SeguridadService(usuarios);
   const login = { email: 'ana@example.invalid', contrasenia: 'clave-de-prueba' };
   const sesion = (await auth.login(login)).access_token;
   await bloqueo.cambiarBloqueo(1, true, 2, 'Motivo para Ana');

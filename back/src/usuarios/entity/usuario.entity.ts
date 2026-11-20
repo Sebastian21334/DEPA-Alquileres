@@ -67,6 +67,12 @@ export class Usuario {
   @Column({ name: 'fecha_baja', type: 'timestamptz', nullable: true })
   fecha_baja: Date | null;
 
+  @Column({ name: 'baja_recuperable', type: 'boolean', default: false, select: false })
+  baja_recuperable: boolean;
+
+  @Column({ name: 'version_sesion', type: 'uuid', nullable: true, select: false })
+  version_sesion: string | null;
+
   // Relación directa: Muchos usuarios pueden tener un mismo rol
   @ManyToOne(() => Rol, (rol) => rol.usuarios)
   @JoinColumn({ name: 'id_rol' })

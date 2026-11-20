@@ -1,6 +1,8 @@
 import {
+  IsBoolean,
   IsEmail,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MaxLength,
 } from 'class-validator';
@@ -26,4 +28,8 @@ export class RegisterDto extends ContraseniaSeguraDto {
   @IsNotEmpty()
   @MaxLength(20)
   telefono: string;
+
+  @IsOptional()
+  @IsBoolean()
+  crearCuentaNueva?: boolean;
 }

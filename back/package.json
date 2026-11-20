@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "db:reactivacion-cuenta": "node scripts/reactivacion-cuenta.cjs",
     "db:pausa-actividades": "node scripts/pausa-actividades.cjs",
     "db:cbu-anunciantes": "node scripts/cbu-anunciantes.cjs --aplicar",
     "db:apelaciones-bloqueo": "node scripts/apelaciones-bloqueo.cjs",

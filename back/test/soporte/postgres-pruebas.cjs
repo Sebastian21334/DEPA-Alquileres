@@ -44,6 +44,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
       '20261105-eliminacion-documentos.sql',
       '20261111-apelaciones-bloqueo.sql',
       '20261111-publicaciones-eliminadas.sql',
+      '20261120-reactivacion-cuenta.sql',
     ]) {
       await db.exec('SET search_path TO public');
       await db.exec(leerMigracion(nombre));
