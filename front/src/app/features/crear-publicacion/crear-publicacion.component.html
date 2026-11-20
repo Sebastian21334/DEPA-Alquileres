@@ -120,11 +120,14 @@
                 id="ambientes"
                 type="number"
                 min="1"
+                max="50"
                 step="1"
                 formControlName="cantidad_ambientes"
                 placeholder="Ej.: 2"
               />
-              @if (formulario.invalido('cantidad_ambientes')) {
+              @if (formulario.excedeMaximo('cantidad_ambientes')) {
+                <span class="acct-hint acct-hint--error">El máximo es 50 ambientes.</span>
+              } @else if (formulario.invalido('cantidad_ambientes')) {
                 <span class="acct-hint acct-hint--error">Mínimo 1 ambiente.</span>
               }
             </div>
@@ -134,11 +137,14 @@
                 id="superficie"
                 type="number"
                 min="1"
+                max="99999999.99"
                 step="0.01"
                 formControlName="superficie"
                 placeholder="Ej.: 45"
               />
-              @if (formulario.invalido('superficie')) {
+              @if (formulario.excedeMaximo('superficie')) {
+                <span class="acct-hint acct-hint--error">La superficie máxima es 99.999.999,99 m².</span>
+              } @else if (formulario.invalido('superficie')) {
                 <span class="acct-hint acct-hint--error">Ingresá la superficie.</span>
               }
             </div>
@@ -209,11 +215,14 @@
                 id="precio"
                 type="number"
                 min="1"
+                max="99999999.99"
                 step="0.01"
                 formControlName="precio"
                 placeholder="Ej.: 350000"
               />
-              @if (formulario.invalido('precio')) {
+              @if (formulario.excedeMaximo('precio')) {
+                <span class="acct-hint acct-hint--error">El precio máximo es 99.999.999,99.</span>
+              } @else if (formulario.invalido('precio')) {
                 <span class="acct-hint acct-hint--error">Ingresá un precio mayor a 0.</span>
               }
             </div>

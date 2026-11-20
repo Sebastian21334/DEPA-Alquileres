@@ -14,11 +14,17 @@ import {
   ValidateIf,
 } from 'class-validator';
 import {
+  AMBIENTES_MAXIMOS,
   LARGO_MAXIMO_TITULO,
   LARGO_MINIMO_TITULO,
+  MENSAJE_AMBIENTES_RANGO,
   MENSAJE_FORMATO_TITULO,
   MENSAJE_LARGO_TITULO,
+  MENSAJE_PRECIO_RANGO,
+  MENSAJE_SUPERFICIE_RANGO,
   PATRON_TITULO_PUBLICACION,
+  PRECIO_MAXIMO,
+  SUPERFICIE_MAXIMA,
 } from './crear-publicacion.dto';
 
 export class ActualizarPublicacionDto {
@@ -34,9 +40,10 @@ export class ActualizarPublicacionDto {
   @MaxLength(255)
   descripcion?: string;
 
-  @IsOptional()
+  @ValidateIf((_dto, precio: unknown) => precio !== undefined)
   @IsNumber()
   @IsPositive()
+  @Max(PRECIO_MAXIMO, { message: MENSAJE_PRECIO_RANGO })
   precio?: number;
 
   @IsOptional()
@@ -57,14 +64,16 @@ export class ActualizarPublicacionDto {
   @Max(180)
   longitud?: number;
 
-  @IsOptional()
+  @ValidateIf((_dto, cantidad: unknown) => cantidad !== undefined)
   @IsInt()
   @IsPositive()
+  @Max(AMBIENTES_MAXIMOS, { message: MENSAJE_AMBIENTES_RANGO })
   cantidad_ambientes?: number;
 
-  @IsOptional()
+  @ValidateIf((_dto, superficie: unknown) => superficie !== undefined)
   @IsNumber()
   @IsPositive()
+  @Max(SUPERFICIE_MAXIMA, { message: MENSAJE_SUPERFICIE_RANGO })
   superficie?: number;
 
   @IsOptional()
