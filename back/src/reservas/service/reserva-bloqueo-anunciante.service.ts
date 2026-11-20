@@ -13,6 +13,7 @@ import {
   type IReservaRepository,
 } from '../repository/reserva.repository.interface';
 import { ReservasService } from './reservas.service';
+import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 
@@ -47,6 +48,7 @@ export class ReservaBloqueoAnuncianteService {
     private readonly reembolsosService: ReembolsosService,
     private readonly reservasService: ReservasService,
     private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService,
+    private readonly notificaciones?: ReservaNotificacionesService,
   ) {}
 
   async cancelarReservasPorBloqueoAnunciante(
@@ -287,6 +289,9 @@ export class ReservaBloqueoAnuncianteService {
       return resultado;
     }
 
+    if (resultado === 'cancelada')
+      await this.notificaciones?.avisarCambio(fresca, ['inquilino'], 'Reserva cancelada por DEPA', 'La reserva fue cancelada y la devolución está en gestión. Podés seguirla desde DEPA.');
+
     const cobertura = await this.reembolsosService.coberturaDevolucion(
       reserva.id,
       pago,
@@ -344,9 +349,7 @@ export class ReservaBloqueoAnuncianteService {
     }
 
     if (devolucion.reembolso?.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) {
-      await this.reembolsosService.aplicarConfirmado(devolucion.reembolso.id, (reembolso, transaccion) =>
-        this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
-      );
+      await this.aplicarDevolucionYNotificar(devolucion.reembolso.id);
     }
 
     const errores: string[] = [];
@@ -356,9 +359,7 @@ export class ReservaBloqueoAnuncianteService {
         const ejecutado = await this.reembolsosService.ejecutar(pendiente.id, idAdmin);
         if (ejecutado.transferencia_manual) continue;
         if (ejecutado.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
-          await this.reembolsosService.aplicarConfirmado(ejecutado.id, (reembolso, transaccion) =>
-            this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
-          );
+          await this.aplicarDevolucionYNotificar(ejecutado.id);
         else errores.push(`Reembolso ${pendiente.id}: pendiente de confirmación`);
       } catch (error) {
         const mensaje =
@@ -371,6 +372,14 @@ export class ReservaBloqueoAnuncianteService {
         `La reserva ${reserva.id} se canceló, pero quedaron devoluciones sin ejecutar: ${errores.join('; ')}`,
       );
     return 'canceladasConDevolucion';
+  }
+
+  private async aplicarDevolucionYNotificar(id: number): Promise<void> {
+    const reserva = await this.reembolsosService.aplicarConfirmado(id, (reembolso, transaccion) =>
+      this.reservasService.aplicarEfectoReembolso(reembolso, transaccion),
+    );
+    if (reserva)
+      await this.notificaciones?.avisarCambio(reserva, ['inquilino'], 'Devolución registrada', 'La devolución de la reserva cancelada quedó registrada.');
   }
 
   private async estaCanceladaPorBloqueo(idReserva: number): Promise<boolean> {

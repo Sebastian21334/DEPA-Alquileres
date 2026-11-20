@@ -77,9 +77,12 @@ export class PerfilService {
       .pipe(tap((perfil) => this.usuario.set(perfil)));
   }
 
-  /** DELETE /usuarios/me — baja lógica de la cuenta autenticada. */
-  eliminarCuenta(): Observable<{ mensaje: string }> {
-    return this.http.delete<{ mensaje: string }>(`${this.api}/usuarios/me`);
+  solicitarBajaCuenta(): Observable<{ mensaje: string }> {
+    return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/me/baja`, {});
+  }
+
+  confirmarBajaCuenta(token: string): Observable<{ mensaje: string; usuarioId: number }> {
+    return this.http.post<{ mensaje: string; usuarioId: number }>(`${this.api}/usuarios/baja/confirmar`, { token });
   }
 
   /** POST /usuarios/me/foto (multipart, campo "foto"). */

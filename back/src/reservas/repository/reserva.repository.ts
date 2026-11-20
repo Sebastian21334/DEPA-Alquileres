@@ -14,9 +14,9 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.create(datos);
   }
 
-  async finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<void> {
+  async finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<number[]> {
     // PostgreSQL vuelve a comprobar las condiciones tras adquirir el bloqueo.
-    await this.repository.createQueryBuilder()
+    const resultado = await this.repository.createQueryBuilder()
       .update(Reserva)
       .set({ finalizada: true })
       .where('finalizada = false')
@@ -26,7 +26,9 @@ export class ReservaRepository implements IReservaRepository {
       .andWhere('fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL')
       .andWhere('fecha_inicio <= fecha_fin')
       .andWhere('fecha_fin < :hoy', { hoy })
+      .returning(['id'])
       .execute();
+    return (resultado.raw as { id: number }[]).map(({ id }) => id);
   }
 
   conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {

@@ -167,7 +167,7 @@ const activa = (db, id) => !!db.prepare('SELECT activa FROM usuario WHERE id = ?
 
 async function rechazaBaja(db, id, ...fragmentos) {
   const servicio = servicioUsuarios(db);
-  await assert.rejects(servicio.darDeBajaPropia(id), (error) => {
+  await assert.rejects(servicio.eliminar(id, 0), (error) => {
     assert.ok(error instanceof ConflictException);
     for (const fragmento of fragmentos) assert.match(error.message, fragmento);
     return true;
@@ -202,7 +202,7 @@ test('un pago iniciado en Mercado Pago bloquea la baja; un checkout abandonado n
   await rechazaBaja(db, 1, /como Inquilino: 1 pago\(s\) en proceso en Mercado Pago/);
 
   db.prepare("UPDATE pago SET status = 'rejected' WHERE id = ?").run(idPago);
-  await servicioUsuarios(db).darDeBajaPropia(1);
+  await servicioUsuarios(db).eliminar(1, 0);
   assert.equal(activa(db, 1), false);
 });
 
@@ -221,7 +221,7 @@ test('un checkout abandonado en una publicación no bloquea para siempre la baja
   await rechazaBaja(db, 2, /como Anunciante: 1 pago\(s\) sin conciliar con Mercado Pago/);
 
   db.prepare('UPDATE pago SET created_at = ? WHERE id = ?').run(HACE_DOS_DIAS(), idPago);
-  await servicioUsuarios(db).darDeBajaPropia(2);
+  await servicioUsuarios(db).eliminar(2, 0);
   assert.equal(activa(db, 2), false);
   assert.equal(db.prepare('SELECT activa FROM publicacion WHERE id = 10').get().activa, 0);
 });
@@ -240,7 +240,7 @@ test('el historial cerrado no impide la baja del Inquilino', async () => {
   reserva(db, { estado_pago: 'CANCELADO', cancelada: 1, estado_liquidacion: 'NO_APLICA', fecha_inicio: FUTURO, fecha_fin: FUTURO });
   // Estadía pasada sin código validado: la liquidación la resuelve el Administrador.
   reserva(db, { estado_liquidacion: 'RETENIDO' });
-  const respuesta = await servicioUsuarios(db).darDeBajaPropia(1);
+  const respuesta = await servicioUsuarios(db).eliminar(1, 0);
   assert.match(respuesta.mensaje, /dada de baja/);
   assert.equal(activa(db, 1), false);
 });

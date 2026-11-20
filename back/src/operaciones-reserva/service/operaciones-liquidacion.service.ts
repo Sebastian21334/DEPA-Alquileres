@@ -14,6 +14,7 @@ import {
 } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { ReservasService } from '../../reservas/service/reservas.service';
+import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 
@@ -21,7 +22,7 @@ import type { EntityManager } from 'typeorm';
 
 @Injectable()
 export class OperacionesLiquidacionService {
-  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService, private readonly anunciantes: AnunciantesService) {}
+  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService, private readonly anunciantes: AnunciantesService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
   async listarLiquidacionesAdministracion(): Promise<Reserva[]> {
     const reservas = await this.liquidaciones.listarParaAdministracion();
@@ -60,7 +61,7 @@ export class OperacionesLiquidacionService {
       );
     }
 
-    return this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
+    const reserva = await this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
       this.validarResolucion(actual, dto);
       const registraPago = dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
       const idAnunciante = actual.publicacion?.anunciante?.idUsuario;
@@ -87,6 +88,9 @@ export class OperacionesLiquidacionService {
       if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'))
         actual.intentos_codigo = 0;
     });
+    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
+      await this.notificaciones?.avisarCambio(reserva, ['anunciante'], 'Pago al anunciante registrado', 'La administración registró el pago de tu liquidación. Podés consultar el detalle en DEPA.');
+    return reserva;
   }
 
   private async derivarReembolso(reserva: Reserva, dto: ResolverLiquidacionDto, idAdmin: number, transaccion: EntityManager): Promise<void> {

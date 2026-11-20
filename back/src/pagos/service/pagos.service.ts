@@ -54,7 +54,7 @@ export class PagosService {
       throw new BadRequestException('La moneda del pago no coincide con la reserva');
   }
 
-  async registrarEstadoExterno(pago: Pago, datos: DatosPagoExterno, transaccion?: EntityManager): Promise<void> {
+  async registrarEstadoExterno(pago: Pago, datos: DatosPagoExterno, transaccion?: EntityManager): Promise<boolean> {
     this.validarDatosExternos(pago, datos);
     const cambios = {
       payment_id: String(datos.id),
@@ -64,11 +64,12 @@ export class PagosService {
       approved_at: datos.date_approved ? new Date(datos.date_approved) : null,
     };
     if (cambios.status === 'rejected' || cambios.status === 'cancelled') {
-      if (!await this.pagosRepo.actualizarIntentoFallido(pago.id, cambios)) return;
+      if (!await this.pagosRepo.actualizarIntentoFallido(pago.id, cambios)) return false;
     } else {
       await this.pagosRepo.actualizar(pago.id, cambios, transaccion);
     }
     Object.assign(pago, cambios);
+    return true;
   }
 
   buscarPorReferencia(referencia: string): Promise<Pago | null> {

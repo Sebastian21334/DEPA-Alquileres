@@ -1,7 +1,8 @@
 import { UsuariosCredencialesService } from './usuarios-credenciales.service';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
+import { JwtService } from '@nestjs/jwt';
 import {
   Injectable,
   ConflictException,
@@ -11,6 +12,7 @@ import {
   ForbiddenException,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
 import type { IUsuariosRepository, ParticipacionEnReserva } from '../repository/usuarios.repository.interface';
@@ -33,6 +35,9 @@ import { MAIL_SERVICE } from '../../mail/mail.interface';
  * baja: cubre los 15 minutos de la preferencia y notificaciones demoradas.
  */
 const MARGEN_CHECKOUT_SIN_PAGO_MS = 24 * 60 * 60 * 1000;
+const AUDIENCIA_BAJA = 'confirmar-baja-propia';
+
+type ConfirmacionBaja = { usuarioId: number; huella: string; exp: number };
 
 /** Datos admitidos por el alta; el rol y los secretos se asignan en el servicio. */
 type CrearUsuarioDatos = {
@@ -47,7 +52,7 @@ type CrearUsuarioDatos = {
 export class UsuariosService {
   private readonly logger = new Logger(UsuariosService.name);
 
-  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService) {}
+  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService, private readonly jwtService: JwtService) {}
 
   /** Busca un usuario por correo para validar duplicados o iniciar sesion. */
   async buscarPorEmail(email: string): Promise<Usuario | null> {
@@ -139,9 +144,51 @@ export class UsuariosService {
     return this.usuarioSinSecretos(usuarioActualizado);
   }
 
-  /** Da de baja la cuenta autenticada sin borrar publicaciones ni historial. */
-  darDeBajaPropia(idUsuario: number) {
-    return this.darDeBajaCuenta(idUsuario);
+  async solicitarBajaPropia(idUsuario: number): Promise<{ mensaje: string }> {
+    const { email, huella, esAnunciante } = await this.usuariosRepo.conTransaccion(async (transaccion) => {
+      const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion, false, true);
+      if (!usuario?.activa || usuario.bloqueado || !usuario.email || !usuario.email_verificado)
+        throw new ForbiddenException('Necesitás una cuenta habilitada y un correo verificado para solicitar la baja');
+
+      await this.validarBajaEnCurso(idUsuario, transaccion);
+      const anunciante = await this.anunciantesService.buscarPorUsuario(idUsuario, transaccion);
+      return { email: usuario.email, huella: this.huellaBaja(usuario), esAnunciante: anunciante?.verificado === true };
+    });
+
+    // El identificador usa un campo propio para que el enlace nunca sirva para iniciar sesión.
+    const token = await this.jwtService.signAsync({ usuarioId: idUsuario, huella, esAnunciante }, {
+      audience: AUDIENCIA_BAJA, algorithm: 'HS256', expiresIn: '30m',
+    });
+    try {
+      await this.mailService.enviarConfirmacionBaja(email, token);
+    } catch {
+      this.logger.warn(`Falló el correo de confirmación de baja para el usuario ${idUsuario}`);
+      throw new ServiceUnavailableException('No pudimos enviar el correo de confirmación. Volvé a intentarlo.');
+    }
+    return { mensaje: 'Te enviamos un enlace de confirmación. Tu cuenta sigue activa.' };
+  }
+
+  async confirmarBajaPropia(token: string): Promise<{ mensaje: string; usuarioId: number }> {
+    let confirmacion: ConfirmacionBaja;
+    try {
+      confirmacion = await this.jwtService.verifyAsync<ConfirmacionBaja>(token, {
+        audience: AUDIENCIA_BAJA, algorithms: ['HS256'],
+      });
+    } catch {
+      throw new BadRequestException('El enlace de baja es inválido, venció o ya fue utilizado');
+    }
+    if (!Number.isInteger(confirmacion.usuarioId) || confirmacion.usuarioId < 1 ||
+        confirmacion.usuarioId > 2_147_483_647 || !Number.isInteger(confirmacion.exp) || typeof confirmacion.huella !== 'string')
+      throw new BadRequestException('El enlace de baja es inválido, venció o ya fue utilizado');
+
+    const resultado = await this.darDeBajaCuenta(confirmacion.usuarioId, confirmacion);
+    return { ...resultado, usuarioId: confirmacion.usuarioId };
+  }
+
+  private huellaBaja(usuario: Usuario): string {
+    return createHmac('sha256', usuario.contrasenia)
+      .update(JSON.stringify([usuario.id, usuario.email, usuario.bloqueoDetalle?.id ?? null]))
+      .digest('base64url');
   }
 
   /** El panel administrativo aplica la misma baja lógica; no borra relaciones. */
@@ -154,16 +201,16 @@ export class UsuariosService {
     return this.darDeBajaCuenta(idUsuario);
   }
 
-  private async darDeBajaCuenta(idUsuario: number) {
+  private async darDeBajaCuenta(idUsuario: number, confirmacion?: ConfirmacionBaja) {
     await this.usuariosRepo.conTransaccion(async (transaccion) => {
-      const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion);
+      const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion, false, !!confirmacion);
+      if (confirmacion && (!usuario?.activa || usuario.bloqueado || !usuario.email || !usuario.email_verificado ||
+        confirmacion.exp * 1_000 <= Date.now() || this.huellaBaja(usuario) !== confirmacion.huella))
+        throw new BadRequestException('El enlace de baja es inválido, venció o ya fue utilizado');
       if (!usuario) throw new NotFoundException('Usuario no encontrado');
       if (!usuario.activa) throw new ConflictException('La cuenta ya está inactiva');
 
-      // Comparte el bloqueo de publicaciones con el calendario de reservas.
-      const tienePublicaciones = await this.publicacionesService
-        .bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
-      await this.validarOperacionesResueltas(transaccion, idUsuario, tienePublicaciones);
+      await this.validarBajaEnCurso(idUsuario, transaccion);
 
       await this.publicacionesService.desactivarPorBajaDeCuenta(idUsuario, transaccion);
       await this.anunciantesService.archivarCuitPorBajaDeCuenta(idUsuario, transaccion);
@@ -182,6 +229,13 @@ export class UsuariosService {
     });
 
     return { mensaje: 'Tu cuenta fue dada de baja correctamente' };
+  }
+
+  private async validarBajaEnCurso(idUsuario: number, transaccion: EntityManager): Promise<void> {
+    // Comparte el bloqueo de publicaciones con el calendario de reservas.
+    const tienePublicaciones = await this.publicacionesService
+      .bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
+    await this.validarOperacionesResueltas(transaccion, idUsuario, tienePublicaciones);
   }
 
   private async validarOperacionesResueltas(transaccion: EntityManager, idUsuario: number, tienePublicaciones: boolean): Promise<void> {
@@ -370,7 +424,7 @@ export class UsuariosService {
   async emailsAdministradores(): Promise<string[]> {
     const usuarios = await this.usuariosRepo.listarTodos();
     return usuarios
-      .filter((usuario) => usuario.rol?.nombre === 'Administrador')
+      .filter((usuario) => usuario.rol?.nombre === 'Administrador' && usuario.activa && !usuario.bloqueado && !usuario.fecha_baja)
       .map((usuario) => usuario.email)
       .filter((email): email is string => !!email);
   }

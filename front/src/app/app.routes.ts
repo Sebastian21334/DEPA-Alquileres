@@ -163,6 +163,12 @@ export const routes: Routes = [
     title: 'Verificar cuenta — DEPA',
   },
   {
+    path: 'confirmar-baja',
+    loadComponent: () =>
+      import('./features/auth/confirmar-baja/confirmar-baja.component').then((m) => m.ConfirmarBajaComponent),
+    title: 'Confirmar baja de cuenta — DEPA',
+  },
+  {
     path: 'recuperar-contrasenia',
     loadComponent: () =>
       import('./features/auth/recuperar-contrasenia/recuperar-contrasenia.component').then(

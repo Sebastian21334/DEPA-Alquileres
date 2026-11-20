@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { MailService } from './service/mail.service';
 import { MAIL_SERVICE } from './mail.interface';
 import { MailPlantilla } from './presentation/mail-plantilla';
-import { AzureCorreoRepository } from './repository/azure-correo.repository';
+import { AzureCorreoProveedor } from './proveedor/azure-correo.proveedor';
 import { CORREO_REPOSITORY } from './repository/correo.repository.interface';
-import { CLIENTE_CORREO } from './repository/cliente-correo.interface';
+import { CLIENTE_CORREO } from './proveedor/cliente-correo.interface';
 import { EmailClient } from '@azure/communication-email';
 import { ConfigService } from '@nestjs/config';
 
@@ -18,8 +18,8 @@ import { ConfigService } from '@nestjs/config';
     },
     MailService,
     MailPlantilla,
-    AzureCorreoRepository,
-    { provide: CORREO_REPOSITORY, useExisting: AzureCorreoRepository },
+    AzureCorreoProveedor,
+    { provide: CORREO_REPOSITORY, useExisting: AzureCorreoProveedor },
     { provide: MAIL_SERVICE, useExisting: MailService },
   ],
   exports: [MAIL_SERVICE],

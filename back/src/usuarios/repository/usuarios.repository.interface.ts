@@ -24,7 +24,7 @@ export interface IUsuariosRepository {
   crear(datos: Partial<Usuario>): Usuario;
   guardar(usuario: Usuario, transaccion?: EntityManager): Promise<Usuario>;
   conTransaccion<T>(operacion: (transaccion: EntityManager) => Promise<T>): Promise<T>;
-  buscarBloqueado(idUsuario: number, transaccion: EntityManager, incluirRol?: boolean): Promise<Usuario | null>;
+  buscarBloqueado(idUsuario: number, transaccion: EntityManager, incluirRol?: boolean, incluirCredenciales?: boolean): Promise<Usuario | null>;
   contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager, estados: { pagoPendiente: string; pagoAprobado: string; liquidacionesResueltas: string[]; enRevision: string }): Promise<OperacionesPendientesCuenta>;
   buscarPorEmail(email: string): Promise<Usuario | null>;
   contarUsuarios(): Promise<number>;

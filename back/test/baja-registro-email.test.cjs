@@ -13,13 +13,13 @@ const request = require('supertest');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 const { AuthModule } = require('../dist/auth/auth.module');
 const { MAIL_SERVICE } = require('../dist/mail/mail.interface');
-const { CLIENTE_CORREO } = require('../dist/mail/repository/cliente-correo.interface');
+const { CLIENTE_CORREO } = require('../dist/mail/proveedor/cliente-correo.interface');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
 const { Rol } = require('../dist/catalogos/entity/rol.entity');
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { Pago } = require('../dist/pagos/entity/pago.entity');
 
-let base, source, app, admin;
+let base, source, app, admin, fallaEnvioBaja;
 const enviados = [];
 const datos = {
   nombre: 'Inquilino', apellido: 'Prueba', telefono: '3515550123',
@@ -30,6 +30,8 @@ const usuarios = () => source.getRepository(Usuario);
 const tokenCorreo = () => enviados.at(-1).token;
 const registrar = () => request(servidor()).post('/auth/register').send(datos).expect(201);
 const verificar = token => request(servidor()).post('/auth/verificar-cuenta').send({ token });
+const solicitarBaja = sesion => request(servidor()).post('/usuarios/me/baja').set('Authorization', `Bearer ${sesion}`);
+const confirmarBaja = token => request(servidor()).post('/usuarios/baja/confirmar').send({ token });
 const login = () => request(servidor()).post('/auth/login')
   .send({ email: datos.email, contrasenia: datos.contrasenia });
 
@@ -57,6 +59,10 @@ before(async () => {
     .overrideProvider(CLIENTE_CORREO).useValue({})
     .overrideProvider(MAIL_SERVICE).useValue({
       enviarVerificacion: async (email, token) => enviados.push({ email, token }),
+      enviarConfirmacionBaja: async (email, token) => {
+        if (fallaEnvioBaja) throw new Error('Correo no disponible');
+        enviados.push({ email, token });
+      },
     })
     .compile();
   app = modulo.createNestApplication({ logger: false });
@@ -67,6 +73,7 @@ before(async () => {
 beforeEach(async () => {
   await source.query('TRUNCATE usuario RESTART IDENTITY CASCADE');
   enviados.length = 0;
+  fallaEnvioBaja = false;
   const rolAdministrador = await source.getRepository(Rol).findOneByOrFail({ nombre: 'Administrador' });
   admin = await usuarios().save({
     nombre: 'Admin', apellido: 'Prueba', email: 'admin@example.com',
@@ -108,9 +115,24 @@ for (const via of ['propia', 'administrativa']) {
         });
       }
 
-      const tokenBaja = via === 'propia' ? sesionAnterior : app.get(JwtService).sign({ sub: admin.id });
-      await request(servidor()).delete(via === 'propia' ? '/usuarios/me' : `/usuarios/${anterior.id}`)
-        .set('Authorization', `Bearer ${tokenBaja}`).expect(200);
+      if (via === 'propia') {
+        await request(servidor()).delete('/usuarios/me').set('Authorization', `Bearer ${sesionAnterior}`).expect(403);
+        await solicitarBaja(sesionAnterior).expect(201);
+        assert.equal(enviados.at(-1).email, datos.email);
+        const enlace = tokenCorreo();
+        assert.equal(app.get(JwtService).decode(enlace).esAnunciante, false);
+        await request(servidor()).get('/usuarios/me').set('Authorization', `Bearer ${enlace}`).expect(401);
+        await request(servidor()).get('/usuarios/me').set('Authorization', `Bearer ${sesionAnterior}`).expect(200);
+        await request(servidor()).get('/usuarios/baja/confirmar').expect(404);
+        await confirmarBaja(sesionAnterior).expect(400);
+        assert.equal((await usuarios().findOneByOrFail({ id: anterior.id })).activa, true);
+        await confirmarBaja(enlace).expect(201);
+        await confirmarBaja(enlace).expect(400);
+      } else {
+        const sesionAdmin = app.get(JwtService).sign({ sub: admin.id });
+        await request(servidor()).delete(`/usuarios/${anterior.id}`)
+          .set('Authorization', `Bearer ${sesionAdmin}`).expect(200);
+      }
 
       const baja = await usuarios().createQueryBuilder('u')
         .addSelect(['u.token_verificacion', 'u.token_recuperacion', 'u.token_recuperacion_expira'])
@@ -162,6 +184,49 @@ test('un enlace sin consumir de una cuenta dada de baja no verifica la nueva cue
   assert.equal((await usuarios().findOneByOrFail({ email: datos.email })).email_verificado, false);
   await verificar(tokenNuevo).expect(201);
   await login().expect(201);
+});
+
+test('el enlace distingue a un anunciante verificado aunque tenga rol de administrador', async () => {
+  await source.query('INSERT INTO anunciante (id_usuario, numero_contacto, verificado) VALUES ($1, $2, true)', [admin.id, '123']);
+  await solicitarBaja(app.get(JwtService).sign({ sub: admin.id })).expect(201);
+  assert.equal(app.get(JwtService).decode(tokenCorreo()).esAnunciante, true);
+});
+
+test('el enlace de baja vence y pierde vigencia al cambiar la contraseña', async () => {
+  await registrar();
+  await verificar(tokenCorreo()).expect(201);
+  const usuario = await usuarios().findOneByOrFail({ email: datos.email });
+  const sesion = (await login().expect(201)).body.access_token;
+  await request(servidor()).post('/usuarios/me/baja').expect(401);
+  await solicitarBaja(sesion).expect(201);
+  const enlace = tokenCorreo();
+  const jwt = app.get(JwtService);
+  const { usuarioId, huella, aud } = jwt.decode(enlace);
+  const vencido = jwt.sign({ usuarioId, huella }, { audience: aud, expiresIn: -1 });
+  await confirmarBaja(vencido).expect(400);
+  await usuarios().update(usuario.id, { contrasenia: 'hash-distinto-para-invalidar-el-enlace' });
+  await confirmarBaja(enlace).expect(400);
+  assert.equal((await usuarios().findOneByOrFail({ id: usuario.id })).activa, true);
+});
+
+test('si falla el correo o aparecen operaciones pendientes, la cuenta sigue activa', async () => {
+  await registrar();
+  await verificar(tokenCorreo()).expect(201);
+  const usuario = await usuarios().findOneByOrFail({ email: datos.email });
+  const sesion = (await login().expect(201)).body.access_token;
+  fallaEnvioBaja = true;
+  await solicitarBaja(sesion).expect(503);
+  assert.equal((await usuarios().findOneByOrFail({ id: usuario.id })).activa, true);
+
+  fallaEnvioBaja = false;
+  await solicitarBaja(sesion).expect(201);
+  const enlace = tokenCorreo();
+  await source.getRepository(Reserva).save({
+    usuario, monto_pago: 100, estado_pago: 'PENDIENTE',
+    fecha_inicio: '2099-01-01', fecha_fin: '2099-01-02',
+  });
+  await confirmarBaja(enlace).expect(409);
+  assert.equal((await usuarios().findOneByOrFail({ id: usuario.id })).activa, true);
 });
 
 test('la migración libera también el mail de cuentas dadas de baja antes de este cambio', async () => {

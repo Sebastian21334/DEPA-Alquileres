@@ -32,6 +32,7 @@ import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { CambiarPausaActividadesDto } from '../dto/cambiar-pausa-actividades.dto';
 import { CambiarRolDto } from '../dto/cambiar-rol.dto';
+import { ConfirmarBajaDto } from '../dto/confirmar-baja.dto';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import { ResponderApelacionDto } from '../dto/responder-apelacion.dto';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
@@ -121,10 +122,17 @@ export class UsuariosController {
     return this.usuariosService.eliminarFoto(req.user.id);
   }
 
-  @Delete('me')
+  @Post('me/baja')
+  @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)
-  darDeBajaPropia(@Req() req: AuthenticatedRequest) {
-    return this.usuariosService.darDeBajaPropia(req.user.id);
+  solicitarBajaPropia(@Req() req: AuthenticatedRequest) {
+    return this.usuariosService.solicitarBajaPropia(req.user.id);
+  }
+
+  @Post('baja/confirmar')
+  @Header('Cache-Control', 'no-store')
+  confirmarBajaPropia(@Body() dto: ConfirmarBajaDto) {
+    return this.usuariosService.confirmarBajaPropia(dto.token);
   }
 
   @Patch(':id')

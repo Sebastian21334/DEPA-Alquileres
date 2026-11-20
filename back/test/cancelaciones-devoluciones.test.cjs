@@ -65,7 +65,7 @@ beforeEach(async () => {
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   disponibilidad = { liberarReserva: async () => {} };
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
-  reservas = new ReservasService({}, repositorio, disponibilidad, {}, {}, {}, reembolsos, estadoReserva,
+  reservas = new ReservasService({}, repositorio, disponibilidad, {}, {}, { avisarCambio: async () => {} }, reembolsos, estadoReserva,
     liquidaciones, catalogosDePrueba());
   repositorioCancelaciones = new CancelacionesRepository(source.getRepository(SolicitudCancelacion));
   cancelaciones = new CancelacionesService(repositorioCancelaciones, reservas, reembolsos, catalogosDePrueba());
@@ -559,6 +559,8 @@ test('rechazar o dejar vencer una solicitud no cancela la reserva ni crea devolu
 });
 
 test('las notas internas de reclamos solo se entregan al administrador', async () => {
+  const avisos = [];
+  reclamos.notificaciones = { avisarCambio: async (...args) => avisos.push(args) };
   const { reserva } = await escenario();
   const reclamo = await source.getRepository(Reclamo).save({
     reserva, inquilino: { id: 1 }, anunciante: { id: 2 }, categoria: 'OTRO', descripcion: 'Reclamo de prueba',
@@ -571,6 +573,12 @@ test('las notas internas de reclamos solo se entregan al administrador', async (
   assert.equal((await reclamos.listarMios(2))[0].mensajes.length, 1);
   assert.equal((await reclamos.obtener(reclamo.id, 3, true)).mensajes.length, 2);
   await assert.rejects(reclamos.obtener(reclamo.id, 4, false), /No formás parte/);
+  await reclamos.enviarMensaje(reclamo.id, { texto: 'Otra nota privada', visible_para: 'ADMIN' }, 3, true);
+  assert.equal(avisos.length, 0);
+  await reclamos.enviarMensaje(reclamo.id, { texto: 'Respuesta pública' }, 3, true);
+  assert.equal(avisos.length, 1);
+  assert.deepEqual(avisos[0][1], ['inquilino', 'anunciante']);
+  assert.doesNotMatch(avisos[0][3], /Respuesta pública/);
 });
 
 for (const [dias, porcentaje] of [[7, 100], [2, 50], [1, 0]]) {
@@ -739,7 +747,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
   const { DisputasService } = require('../dist/disputas/service/disputas.service');
   const { MercadoPagoAdapter } = require('../dist/mercado-pago/proveedor/mercado-pago.adapter');
   const { Estado } = require('../dist/catalogos/entity/estado.entity');
-  const { CLIENTE_CORREO } = require('../dist/mail/repository/cliente-correo.interface');
+  const { CLIENTE_CORREO } = require('../dist/mail/proveedor/cliente-correo.interface');
   const { PROVEEDOR_DOLAR } = require('../dist/cotizaciones/proveedor/proveedor-dolar.interface');
   const { createHmac } = require('node:crypto');
   const firmaPruebas = 'secreto-webhook-exclusivo-pruebas';
@@ -751,13 +759,17 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     if (!ajustes[clave]) throw new Error(`Configuración de prueba ausente: ${clave}`);
     return ajustes[clave];
   } };
+  const correos = [];
   const modulo = await Test.createTestingModule({ imports: [
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
     TypeOrmModule.forRoot(source.options), AuthModule, OperacionesReservaModule, CancelacionesModule, ReclamosModule,
   ] })
     .overrideProvider(DataSource).useValue(source)
     .overrideProvider(ConfigService).useValue(config)
-    .overrideProvider(CLIENTE_CORREO).useValue({})
+    .overrideProvider(CLIENTE_CORREO).useValue({ beginSend: async (mensaje) => {
+      correos.push(mensaje);
+      return { pollUntilDone: async () => ({ status: 'Succeeded' }) };
+    } })
     .overrideProvider(PROVEEDOR_DOLAR).useValue({ consultar: async () => ({ venta: 1200, compra: 1180, actualizadaEn: new Date(), proveedor: 'prueba' }) })
     .compile();
   const app = modulo.createNestApplication({ logger: false });
@@ -777,7 +789,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const tenant = `Bearer ${token(1)}`, admin = `Bearer ${token(3)}`, ajeno = `Bearer ${token(4)}`;
     const { reserva, pago } = await escenario();
     cobro.external_reference = `reserva:${reserva.id}`;
-    await source.getRepository(Pago).update(pago.id, { external_reference: cobro.external_reference, payment_id: '123' });
+    await source.getRepository(Pago).update(pago.id, { external_reference: cobro.external_reference, payment_id: '123', status: 'pending' });
     await source.getRepository(Reserva).update(reserva.id, {
       estado_pago: 'PENDIENTE',
       email_confirmacion_inquilino_enviado: true, email_nueva_reserva_anunciante_enviado: true,
@@ -802,6 +814,13 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       .set('x-signature', firma).set('x-request-id', requestId).send({ type: 'payment', data: { id: 123 } });
     await webhook('124', `ts=${ts},v1=${hash}`).expect(401);
     assert.equal(consultarPago.mock.callCount(), 0);
+    cobro.status = 'rejected';
+    cobro.status_detail = 'cc_rejected_other_reason';
+    await webhook('123', `ts=${ts},v1=${hash}`).expect(201, { received: true });
+    await webhook('123', `ts=${ts},v1=${hash}`).expect(201, { received: true });
+    assert.equal(correos.filter(({ content }) => content.subject === 'Pago no aprobado').length, 1);
+    cobro.status = 'approved';
+    cobro.status_detail = 'accredited';
     await webhook('123', `ts=${ts},v1=${hash}`).expect(201, { received: true });
     const primeraConfirmacion = await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
     assert.equal(primeraConfirmacion.estado_pago, 'APROBADO');
@@ -840,6 +859,10 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const { body: validada } = await request(http).patch(validarUrl).set('Authorization', anunciante).send({ codigo: acceso.codigo }).expect(200);
     assert.equal(validada.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
     assert.equal(Object.hasOwn(validada, 'codigo_alojamiento'), false);
+    const avisosIngreso = correos.filter(({ content }) => content.subject === 'Ingreso confirmado');
+    assert.equal(avisosIngreso.length, 1);
+    assert.match(avisosIngreso[0].content.html, /src="cid:logo-depa"/);
+    assert.equal(avisosIngreso[0].content.html.includes(acceso.codigo), false);
     const lista = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
     assert.equal(lista.body.find(fila => fila.id === ingreso.id).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
     const detalle = await request(http).get(`/reservas/${ingreso.id}`).set('Authorization', tenant).expect(200);
@@ -869,6 +892,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
     }]);
     await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-repetido' }).expect(409);
+    assert.equal(correos.filter(({ content }) => content.subject === 'Pago al anunciante registrado').length, 1);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);
     const disputa = await app.get(DisputasService).registrarContracargo({
@@ -909,6 +933,10 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.equal(Object.hasOwn(solicitud.body, 'ambitoEstado'), false);
     assert.equal(solicitud.body.reserva.id, reserva.id);
     assert.equal(solicitud.body.reserva.estado_estadia, 'CONFIRMADA');
+    const avisosCancelacion = () => correos.filter(({ content }) => content.subject === 'Nueva solicitud de cancelación')
+      .map(({ recipients }) => recipients.to[0].address).sort();
+    const admins = ['usuario3@example.invalid', 'usuario4@example.invalid'];
+    assert.deepEqual(avisosCancelacion(), admins);
     await request(http).get(`/reservas/${reserva.id}/cancelacion`).set('Authorization', ajeno).expect(403);
     const activa = await request(http).get(`/reservas/${reserva.id}/cancelacion`)
       .set('Authorization', tenant).expect(200);
@@ -932,6 +960,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const reintento = await request(http).post(`/reservas/${reserva.id}/cancelacion`)
       .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
     assert.equal(reintento.body.id, solicitud.body.id);
+    assert.deepEqual(avisosCancelacion(), admins);
     await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
       .set('Authorization', admin).send({ decision: 'APROBADA' }).expect(409);
     assert.equal((await source.query('SELECT disponible FROM fecha WHERE id_reserva=$1', [reserva.id]))[0].disponible, false);
@@ -946,6 +975,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const final = await request(http).get(`/reservas/${reserva.id}`).set('Authorization', tenant).expect(200);
     assert.equal(final.body.cancelada, true);
     assert.equal(final.body.estado_pago, 'REEMBOLSADO');
+    assert.equal(correos.filter(({ content }) => content.subject === 'Reserva cancelada y devolución registrada').length, 2);
     const [dia] = await source.query("SELECT disponible,id_reserva FROM fecha WHERE fecha='2099-01-10'");
     assert.equal(dia.disponible, true);
     assert.equal(dia.id_reserva, null);
