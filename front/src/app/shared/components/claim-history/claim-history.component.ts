@@ -21,6 +21,9 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
       </span>
     </header>
     <p class="meta">{{ categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    @if (item.reserva?.monto_pago; as monto) {
+      <p class="meta">Importe de la reserva: <strong class="amount">{{ monto | currency:(item.reserva?.moneda_contratada || 'ARS') }}</strong></p>
+    }
     @if (administracion()) {
       <div class="claim-context">
         @for (parte of participantes(); track parte.rol) {
@@ -84,6 +87,7 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
     h3, p { margin: 0; }
     h3 { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
     .meta { color: #526475; font-size: .84rem; }
+    .amount { color: #101d36; }
     .status { background: #fff1d8; color: #74470a; padding: .25rem .65rem; border-radius: 1rem; font-size: .8rem; font-weight: 700; }
     .status--resolved, .resolution { background: #edf6f2; color: #205c46; }
     .body { white-space: pre-wrap; overflow-wrap: anywhere; }
