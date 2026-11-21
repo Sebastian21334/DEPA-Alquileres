@@ -13,16 +13,15 @@ import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { NombresUbicacion } from '../components/selector-ubicacion/selector-ubicacion.component';
 import { UbicacionConfirmada } from '../components/location-picker/location-picker.component';
 import { decimalesValidator } from '../validators/decimales.validator';
+import { formatearEntero, formatearImporte } from '../utils/formato-numero';
+import { PUBLICACION_LIMITES } from './publicacion-limites.generated';
 
 type CampoPublicacion = keyof PublicacionFormulario['form']['controls'];
 
 const PATRON_TITULO_PUBLICACION =
   /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} ,:.]+(?<! )$/u;
 
-// Deben coincidir con back/src/publicaciones/dto/crear-publicacion.dto.ts.
-const PRECIO_MAXIMO = 99_999_999.99;
-const SUPERFICIE_MAXIMA = 10_000;
-const AMBIENTES_MAXIMOS = 10;
+// Los límites se generan desde contratos/publicacion.json; no editar a mano.
 
 // Formulario de una publicación, único para el alta (CrearPublicacionComponent) y la
 // edición (PublicationFormComponent). Cada pantalla lo declara en sus `providers`, así
@@ -49,18 +48,23 @@ export class PublicacionFormulario {
     admiteReservasPorFecha(this.modalidades().find((item) => item.id === this.idModalidad())),
   );
 
+  readonly limites = PUBLICACION_LIMITES;
+  readonly precioMaximoTexto = formatearImporte(PUBLICACION_LIMITES.precioMaximo);
+  readonly superficieMaximaTexto = formatearEntero(PUBLICACION_LIMITES.superficieMaxima);
+  readonly ambientesMaximosTexto = String(PUBLICACION_LIMITES.ambientesMaximos);
+
   readonly form = inject(FormBuilder).nonNullable.group({
     titulo: ['', [Validators.required, Validators.minLength(15), Validators.maxLength(255), Validators.pattern(PATRON_TITULO_PUBLICACION)]],
     descripcion: ['', [Validators.required, Validators.maxLength(255)]],
     idTipoPropiedad: [null as number | null, Validators.required],
     idModalidad: [null as number | null, Validators.required],
     idTipoMoneda: [null as number | null, Validators.required],
-    precio: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PRECIO_MAXIMO), decimalesValidator(2)]],
+    precio: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PUBLICACION_LIMITES.precioMaximo), decimalesValidator(2)]],
     idProvincia: [null as number | null, Validators.required],
     idCiudad: [null as number | null, Validators.required],
     direccion: ['', [Validators.required, Validators.maxLength(255)]],
-    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(AMBIENTES_MAXIMOS), decimalesValidator(0)]],
-    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(SUPERFICIE_MAXIMA), decimalesValidator(2)]],
+    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PUBLICACION_LIMITES.ambientesMaximos), decimalesValidator(0)]],
+    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PUBLICACION_LIMITES.superficieMaxima), decimalesValidator(2)]],
   });
 
   constructor() {
