@@ -33,8 +33,10 @@ DEPA es una aplicación de alquileres. El repositorio contiene dos aplicaciones:
 ### Raíz
 
 ```bash
-npm start        # inicia back y front juntos
-npm run dev      # alias de npm start
+npm start                   # inicia back y front juntos
+npm run dev                 # alias de npm start
+npm run contratos:generar   # regenera límites desde contratos/publicacion.json
+npm run contratos:verificar # falla si los generados están desactualizados
 ```
 
 Requiere `back/node_modules` y `front/node_modules`. Para detener ambos: `Ctrl+C`.
@@ -127,7 +129,15 @@ controller → service → repository → entity
 
 La **entidad anémica es una decisión explícita** del proyecto. No agregar comportamiento de dominio a las entidades.
 
-### 4.4 Reglas anti-espagueti
+### 4.4 Contratos generados
+
+- Los límites de publicación viven en `contratos/publicacion.json`: precio máximo, superficie máxima y ambientes máximos.
+- Para cambiarlos, editar ese JSON y ejecutar `npm run contratos:generar`.
+- No editar a mano `*.generated.ts`; se sobrescriben.
+- Antes de cerrar un cambio de límites, ejecutar `npm run contratos:verificar`.
+- El contrato contiene solo datos; el formato de los mensajes se resuelve en cada capa.
+
+### 4.5 Reglas anti-espagueti
 
 - No agregar lógica de negocio en controllers, entidades ni componentes.
 - No agregar `EntityManager` a services nuevos; la deuda existente se corrige solo en el flujo tocado y si es local y de bajo riesgo.
