@@ -19,7 +19,7 @@ import type { ActorCancelacion, Reserva } from '../../reservas/entity/reserva.en
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
-import type { CondicionesCancelacionDto, DevolucionCancelacionDto } from '../dto/condiciones-cancelacion.dto';
+import type { CondicionesCancelacionDto, DevolucionCancelacionDto, SolicitudCancelacionAdministracionDto } from '../dto/condiciones-cancelacion.dto';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
@@ -165,9 +165,22 @@ export class CancelacionesService {
       throw new ConflictException('La reserva ya tiene una devolución por cancelación en curso');
   }
 
-  async listarPendientes(): Promise<SolicitudCancelacion[]> {
+  async listarPendientes(): Promise<SolicitudCancelacionAdministracionDto[]> {
     const solicitudes = await this.cancelaciones.listarPorEstado(this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'));
-    return solicitudes.map((solicitud) => this.prepararRespuesta(solicitud));
+    return Promise.all(solicitudes.map(async (solicitud) => {
+      const reserva = solicitud.reserva;
+      const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id);
+      let devolucion: DevolucionCancelacionDto | null = null;
+      if (pago) {
+        const politica = await this.politicaAplicable(this.cancelaciones, reserva);
+        const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+        devolucion = {
+          ...this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica, pago.amount),
+          moneda: pago.currency,
+        };
+      }
+      return { ...this.prepararRespuesta(solicitud), devolucion };
+    }));
   }
 
   /**

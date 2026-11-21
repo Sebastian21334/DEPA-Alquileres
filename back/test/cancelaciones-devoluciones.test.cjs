@@ -401,10 +401,42 @@ test('T41: no aprueba un importe que exceda el saldo disponible ni deja una devo
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
 });
 
+for (const caso of [
+  { fecha: '2099-01-03', actor: 1, porcentaje: 100, importe: 75.35, moneda: 'ARS' },
+  { fecha: '2099-01-08', actor: 1, porcentaje: 50, importe: 37.68, moneda: 'ARS' },
+  { fecha: '2099-01-09', actor: 1, porcentaje: 0, importe: 0, moneda: 'ARS' },
+  { fecha: '2099-01-10', actor: 2, porcentaje: 100, importe: 75.35, moneda: 'USD' },
+]) {
+  test(`la lista administrativa muestra ${caso.porcentaje} % (${caso.moneda}) según la fecha y el autor de la solicitud`, async () => {
+    const { reserva, pago } = await escenario();
+    await source.getRepository(Pago).update(pago.id, { amount: 75.35, currency: caso.moneda });
+    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, caso.actor);
+    await source.getRepository(SolicitudCancelacion).update(solicitud.id, { creada_en: new Date(`${caso.fecha}T15:00:00Z`) });
+    const [pendiente] = await cancelaciones.listarPendientes();
+    assert.equal(pendiente.id, solicitud.id);
+    assert.equal(pendiente.devolucion.fechaSolicitud, caso.fecha);
+    assert.equal(pendiente.devolucion.porcentaje, caso.porcentaje);
+    assert.equal(pendiente.devolucion.importe, caso.importe);
+    assert.equal(pendiente.devolucion.moneda, caso.moneda);
+    assert.equal(pendiente.reserva.estado_estadia, 'CONFIRMADA');
+    assert.equal(await source.getRepository(Reembolso).count(), 0);
+    const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+    if (caso.porcentaje === 0) assert.equal(reembolso, null);
+    else {
+      assert.equal(Number(reembolso.importe), pendiente.devolucion.importe);
+      assert.equal(reembolso.moneda, pendiente.devolucion.moneda);
+    }
+    assert.deepEqual(await cancelaciones.listarPendientes(), []);
+  });
+}
+
 test('T41: sin pago registrado no aprueba una devolución ni reemplaza su importe por cero', async () => {
   const { reserva, pago } = await escenario();
   await source.getRepository(Pago).delete(pago.id);
   const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const [pendiente] = await cancelaciones.listarPendientes();
+  assert.equal(pendiente.id, solicitud.id);
+  assert.equal(pendiente.devolucion, null);
   await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /no tiene un pago registrado/);
   assert.equal((await solicitudActual(solicitud.id)).estado, 'PENDIENTE');
   assert.equal(await source.getRepository(Reembolso).count(), 0);
@@ -1271,6 +1303,8 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       .set('Authorization', admin).expect(200);
     assert.deepEqual(pendientes.body.map(({ id }) => id), [solicitud.body.id]);
     assert.equal(pendientes.body[0].reserva.estado_estadia, 'CONFIRMADA');
+    assert.equal(pendientes.body[0].devolucion.importe, 100);
+    assert.equal(pendientes.body[0].devolucion.moneda, 'ARS');
     await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
       .set('Authorization', tenant).send({ decision: 'APROBADA' }).expect(403);
     await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
@@ -1439,6 +1473,11 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
         .send({ motivo: 'Cambio de planes', aceptaTerminos: true, importe: 1 }).expect(400);
       const enviadaCentavos = await request(http).post(rutaCentavos).set('Authorization', tenant)
         .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
+      const listaCentavos = await request(http).get('/reservas/cancelaciones/administracion')
+        .set('Authorization', admin).expect(200);
+      assert.equal(listaCentavos.body.length, 1);
+      assert.equal(listaCentavos.body[0].id, enviadaCentavos.body.id);
+      assert.deepEqual(listaCentavos.body[0].devolucion, prevista.body.devolucion);
       const resueltaCentavos = await request(http).patch(`${rutaCentavos}/${enviadaCentavos.body.id}`).set('Authorization', admin)
         .send({ decision: 'APROBADA' }).expect(200);
       if (esperado > 0) {

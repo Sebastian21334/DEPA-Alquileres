@@ -253,11 +253,17 @@
               <p><strong>Inquilino:</strong> {{ solicitud.reserva?.usuario?.nombre }} {{ solicitud.reserva?.usuario?.apellido }}</p>
               <p><strong>Publicación:</strong> {{ solicitud.reserva?.publicacion?.titulo ?? '—' }}</p>
               <p><strong>Fechas:</strong> {{ solicitud.reserva?.fecha_inicio }} — {{ solicitud.reserva?.fecha_fin }}</p>
-              <p><strong>Importe:</strong> {{ solicitud.reserva?.monto_pago | currency: (solicitud.reserva?.moneda_contratada ?? 'ARS') }}</p>
+              <p><strong>Total de la reserva:</strong> {{ solicitud.reserva?.monto_pago | currency: (solicitud.reserva?.moneda_contratada ?? 'ARS') }}</p>
+              @if (solicitud.devolucion; as devolucion) {
+                <p class="cancellation-refund"><strong>Monto a devolver al inquilino:</strong> {{ devolucion.importe | currency: devolucion.moneda : 'code' : '1.2-2' }} ({{ devolucion.porcentaje }} %)</p>
+                @if (devolucion.porcentaje === 0) { <p class="settlement-note">La cancelación se aprobará sin devolución.</p> }
+              } @else {
+                <p class="refund-error">No se puede calcular la devolución: falta el pago registrado.</p>
+              }
               <p class="settlement-note">{{ solicitud.motivo }}</p>
             </div>
             <div class="actions">
-              <button type="button" class="button button--success" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="abrirAprobacionCancelacion(solicitud)">Aprobar</button>
+              <button type="button" class="button button--success" [disabled]="!solicitud.devolucion || busy() === 'cancellation-' + solicitud.id" (click)="abrirAprobacionCancelacion(solicitud)">Aprobar</button>
               <button type="button" class="button button--danger-outline" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="rechazarCancelacion(solicitud)">Rechazar</button>
             </div>
           </article>
@@ -404,6 +410,18 @@
       <h2 id="cancellation-approval-title">Aprobar cancelación</h2>
       @if (solicitudPorAprobar(); as solicitud) {
         <p class="refund-meta">Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '-' }}</p>
+        @if (solicitud.devolucion; as devolucion) {
+          <div class="cancellation-refund cancellation-refund--summary">
+            <p>Monto a devolver al inquilino</p>
+            <strong>{{ devolucion.importe | currency: devolucion.moneda : 'code' : '1.2-2' }} ({{ devolucion.porcentaje }} %)</strong>
+            <p>Calculado a la fecha de solicitud: {{ devolucion.fechaSolicitud | date: 'dd/MM/yyyy' : 'UTC' }}.</p>
+          </div>
+          @if (devolucion.porcentaje === 0) {
+            <p>La reserva se cancelará sin devolución al inquilino.</p>
+          } @else {
+            <p>Al confirmar se generará una devolución pendiente de gestión en Reembolsos.</p>
+          }
+        }
       }
       <label for="cancellation-approval-note">Observación de la aprobación <span class="muted">(opcional)</span></label>
       <textarea id="cancellation-approval-note" name="observacionAprobacion" [(ngModel)]="observacionAprobacion"
@@ -413,7 +431,7 @@
       @if (errorAprobacion()) { <p class="refund-error" role="alert">{{ errorAprobacion() }}</p> }
       <div class="block-actions">
         <button type="button" class="button button--ghost" [disabled]="aprobandoCancelacion()" (click)="cerrarAprobacionCancelacion()">Volver</button>
-        <button type="submit" class="button button--success" [disabled]="aprobandoCancelacion()">
+        <button type="submit" class="button button--success" [disabled]="aprobandoCancelacion() || !solicitudPorAprobar()?.devolucion">
           {{ aprobandoCancelacion() ? 'Aprobando…' : 'Confirmar aprobación' }}
         </button>
       </div>

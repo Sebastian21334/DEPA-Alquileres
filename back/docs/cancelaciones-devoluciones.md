@@ -37,6 +37,13 @@ devuelve ARS 37,68. Se conserva el control del saldo disponible de Reembolsos,
 incluidas las devoluciones ya confirmadas o reservadas. Las devoluciones anteriores
 no se modifican automáticamente.
 
+La lista administrativa de solicitudes pendientes incluye `devolucion` con el
+importe, la moneda, el porcentaje y la fecha de solicitud usados en ese mismo
+cálculo. El panel muestra esos datos en cada solicitud y antes de confirmar su
+aprobación. Un 0 % se muestra con importe cero y una aclaración de que no habrá
+devolución; si falta el pago, se informa que el importe no está disponible y se
+deshabilita la aprobación en el panel. Consultar la lista no genera reembolsos.
+
 | Situación al enviar la solicitud | Devolución |
 |---|---|
 | Inquilino cancela con 7 días o más de anticipación | 100 % |
