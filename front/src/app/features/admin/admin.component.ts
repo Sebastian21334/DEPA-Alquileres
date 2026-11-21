@@ -744,10 +744,25 @@ export class AdminComponent {
         const resuelto = value as Reclamo;
         this.claims.update((items) => items.map((item) => item.id === reclamo.id ? { ...item, ...resuelto, reserva: item.reserva } : item));
         this.gestionReclamo.set(null);
+        this.toast.mostrar(this.avisoResolucion(reclamo, resuelto), 'exito');
         this.reload();
       },
-      resolucion === 'SIN_DEVOLUCION' ? 'Reclamo resuelto.' : 'Decisión registrada. Consultá el estado en Reembolsos.',
+      null,
     );
+  }
+
+  private avisoResolucion(reclamo: Reclamo, resuelto: Reclamo): string {
+    if (resuelto.resolucion === 'SIN_DEVOLUCION') return 'Reclamo resuelto a favor del anunciante, sin devolución.';
+    const tipo = resuelto.resolucion === 'DEVOLUCION_TOTAL' ? 'total' : 'parcial';
+    const importe = resuelto.importe_reembolso ? ` de ${this.montoReclamo(reclamo, resuelto.importe_reembolso)}` : '';
+    return `Reclamo resuelto con devolución ${tipo}${importe}. La devolución sigue en Reembolsos.`;
+  }
+
+  /** Lleva al reembolso del reclamo; si ya no está en la lista, abre la sección igual. */
+  protected verReembolsoReclamo(reclamo: Reclamo): void {
+    const reembolso = this.refunds().find((item) =>
+      item.origen === 'RECLAMO' && item.referencia_interna === `rec:${reclamo.id}`);
+    this.openSection('reembolsos', reembolso?.id);
   }
 
   /** Lo que pagó el inquilino; el back controla el saldo exacto descontando devoluciones previas. */

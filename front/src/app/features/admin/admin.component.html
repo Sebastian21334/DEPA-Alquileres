@@ -515,7 +515,8 @@
     <div class="settlement-list">
       @for (claim of claims(); track claim.id) {
         <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
-          <app-claim-history [reclamo]="claim" [administracion]="true" (verArchivo)="verEvidencia(claim, $event)">
+          <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
+            (verArchivo)="verEvidencia(claim, $event)" (verReembolso)="verReembolsoReclamo(claim)">
             @if (gestionReclamo()?.id === claim.id && gestionReclamo()?.accion === 'mensaje') {
               <app-conversation-composer [(texto)]="textoReclamo" etiqueta="Mensaje para el inquilino y el anunciante"
                 [deshabilitado]="!!busy()" (enviar)="responderReclamo(claim)" />
