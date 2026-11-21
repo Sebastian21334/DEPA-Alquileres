@@ -28,13 +28,13 @@
     </div>
   </section>
 
-  <form class="catalog-search" (ngSubmit)="buscarTexto()" role="search">
+  <form class="catalog-search" [formGroup]="searchForm" (ngSubmit)="buscarTexto($event)" role="search">
     <label for="catalog-search">Buscar publicaciones</label>
     <div class="catalog-search__field">
       <input
         id="catalog-search"
         type="search"
-        [formControl]="busqueda"
+        formControlName="busqueda"
         placeholder="Título, descripción, ciudad, provincia, modalidad..."
         autocomplete="off"
       />
