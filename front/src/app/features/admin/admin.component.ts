@@ -733,6 +733,10 @@ export class AdminComponent {
       this.toast.mostrar('Indicá un importe parcial válido.', 'error');
       return;
     }
+    if (resolucion === 'DEVOLUCION_PARCIAL' && this.parcialCubreElTotal(reclamo)) {
+      this.toast.mostrar('La devolución parcial tiene que ser menor que lo que pagó el inquilino. Para devolver todo elegí «Devolución total».', 'error');
+      return;
+    }
     this.run(
       `claim-${reclamo.id}`,
       () => this.api.resolverReclamo(reclamo.id, resolucion, importe ?? undefined, observacion),
@@ -744,6 +748,22 @@ export class AdminComponent {
       },
       resolucion === 'SIN_DEVOLUCION' ? 'Reclamo resuelto.' : 'Decisión registrada. Consultá el estado en Reembolsos.',
     );
+  }
+
+  /** Lo que pagó el inquilino; el back controla el saldo exacto descontando devoluciones previas. */
+  protected totalPagadoReclamo(reclamo: Reclamo): number | null {
+    const total = Number(reclamo.reserva?.monto_pago);
+    return Number.isFinite(total) && total > 0 ? total : null;
+  }
+
+  /** Un parcial por todo lo pagado es una devolución total: se pide elegir esa opción. */
+  protected parcialCubreElTotal(reclamo: Reclamo): boolean {
+    const total = this.totalPagadoReclamo(reclamo);
+    return total != null && this.importeReclamo != null && Number(this.importeReclamo) >= total - 0.009;
+  }
+
+  protected montoReclamo(reclamo: Reclamo, importe: number): string {
+    return Number(importe).toLocaleString('es-AR', { style: 'currency', currency: reclamo.reserva?.moneda_contratada || 'ARS' });
   }
 
   protected nombreInquilino(settlement: AdminSettlement): string {
