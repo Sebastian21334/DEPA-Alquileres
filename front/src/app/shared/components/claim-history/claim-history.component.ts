@@ -21,6 +21,27 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
       </span>
     </header>
     <p class="meta">{{ categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    @if (item.reserva?.monto_pago; as monto) {
+      <p class="meta">Importe de la reserva: <strong class="amount">{{ monto | currency:(item.reserva?.moneda_contratada || 'ARS') }}</strong></p>
+    }
+    @if (item.resolucion) {
+      <div class="resolution" role="status">
+        <p class="resolution__title">Reclamo resuelto</p>
+        @if (item.resolucion === 'SIN_DEVOLUCION') {
+          <p>A favor del anunciante: sin devolución al inquilino.</p>
+        } @else {
+          <p>
+            A favor del inquilino: {{ resoluciones[item.resolucion].toLowerCase() }}
+            @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.reserva?.moneda_contratada || 'ARS') }}</span>}.
+            {{ administracion() ? 'La devolución se gestiona en Reembolsos.' : 'La devolución se sigue desde el detalle de la reserva.' }}
+          </p>
+        }
+        @if (item.resuelto_en) { <p class="meta">Resuelto el {{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</p> }
+        @if (mostrarVerReembolso() && item.resolucion !== 'SIN_DEVOLUCION') {
+          <button type="button" class="resolution__action" (click)="verReembolso.emit(item)">Ver reembolso</button>
+        }
+      </div>
+    }
     @if (administracion()) {
       <div class="claim-context">
         @for (parte of participantes(); track parte.rol) {
@@ -70,13 +91,6 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
     <app-conversation-panel titulo="Conversación del reclamo" [mensajes]="mensajes()">
       <ng-content />
     </app-conversation-panel>
-    @if (item.resolucion) {
-      <div class="resolution">
-        <strong>{{ resoluciones[item.resolucion] }}</strong>
-        @if (item.importe_reembolso) { · {{ item.importe_reembolso | currency:'ARS' }} }
-        @if (item.resuelto_en) { <p class="meta">{{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</p> }
-      </div>
-    }
   `,
   styles: `
     :host { display: grid; gap: .6rem; min-width: 0; }
@@ -84,12 +98,19 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
     h3, p { margin: 0; }
     h3 { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
     .meta { color: #526475; font-size: .84rem; }
+    .amount { color: #101d36; }
     .status { background: #fff1d8; color: #74470a; padding: .25rem .65rem; border-radius: 1rem; font-size: .8rem; font-weight: 700; }
     .status--resolved, .resolution { background: #edf6f2; color: #205c46; }
     .body { white-space: pre-wrap; overflow-wrap: anywhere; }
     .attachments { display: flex; flex-wrap: wrap; gap: .45rem; }
     .attachments button { max-width: 100%; overflow-wrap: anywhere; padding: .4rem .65rem; border: 1px solid #d9e3ea; border-radius: .45rem; background: #fff; color: #204b66; cursor: pointer; }
-    .resolution { padding: .75rem; border-radius: .6rem; }
+    .resolution { display: grid; gap: .3rem; justify-items: start; padding: .75rem .9rem; border-radius: .6rem; border: 1px solid #b9dccb; }
+    .resolution__title { font-weight: 800; }
+    .resolution__action {
+      margin-top: .25rem; padding: .45rem .8rem; border: 1px solid #205c46; border-radius: .45rem;
+      background: #fff; color: #205c46; font-weight: 700; cursor: pointer;
+    }
+    .resolution__action:hover, .resolution__action:focus-visible { background: #205c46; color: #fff; }
     :host(.administracion) { color: #101d36; gap: .75rem; }
     :host(.administracion) h3 { margin-top: .2rem; font-size: 1.45rem; }
     .context-card, .claim-description .body {
@@ -135,6 +156,9 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
 export class ClaimHistoryComponent {
   readonly reclamo = input.required<Reclamo>();
   readonly administracion = input(false);
+  /** Cada pantalla decide a dónde lleva el reembolso; este componente solo lo ofrece si hubo devolución. */
+  readonly mostrarVerReembolso = input(false);
+  readonly verReembolso = output<Reclamo>();
   protected readonly participantes = computed(() => [
     { rol: 'Anunciante', usuario: this.reclamo().anunciante },
     { rol: 'Inquilino', usuario: this.reclamo().inquilino },
