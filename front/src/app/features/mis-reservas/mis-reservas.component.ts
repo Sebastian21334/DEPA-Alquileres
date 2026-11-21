@@ -70,6 +70,7 @@ export class MisReservasComponent {
   private consultaCancelacion?: Subscription;
   private accionCancelacion?: HTMLButtonElement;
   protected readonly reservaACancelar = signal<Reserva | null>(null);
+  protected readonly cancelacionComoAnunciante = signal(false);
   protected readonly estadoCancelacion = signal<'consultando' | 'formulario' | 'pendiente' | 'aprobada' | 'error'>('consultando');
   protected readonly motivoCancelacion = signal('');
   protected readonly condicionesCancelacion = signal<CondicionesCancelacion | null>(null);
@@ -185,25 +186,26 @@ export class MisReservasComponent {
     });
   }
 
-  protected puedeSolicitarCancelacion(reserva: Reserva): boolean {
+  protected puedeSolicitarCancelacion(reserva: Reserva, recibida = false): boolean {
     return (
       reserva.estado_pago === 'APROBADO' &&
       !reserva.cancelada &&
       !reserva.finalizada &&
-      !!reserva.fecha_inicio && reserva.fecha_inicio > this.hoy() &&
-      ['CONFIRMADA', 'PENDIENTE_INGRESO'].includes(reserva.estado_estadia) &&
+      !!reserva.fecha_inicio && (recibida || reserva.fecha_inicio > this.hoy()) &&
+      (recibida || ['CONFIRMADA', 'PENDIENTE_INGRESO'].includes(reserva.estado_estadia)) &&
       !reserva.codigo_validado_en &&
-      reserva.estado_liquidacion !== 'EN_REVISION' &&
+      (recibida || reserva.estado_liquidacion !== 'EN_REVISION') &&
       reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' &&
       reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO' &&
       reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO'
     );
   }
 
-  protected solicitarCancelacion(reserva: Reserva, accion: HTMLButtonElement): void {
-    if (this.ocupada() !== null || !this.puedeSolicitarCancelacion(reserva)) return;
+  protected solicitarCancelacion(reserva: Reserva, accion: HTMLButtonElement, recibida = false): void {
+    if (this.ocupada() !== null || !this.puedeSolicitarCancelacion(reserva, recibida)) return;
     this.accionCancelacion = accion;
     this.reservaACancelar.set(reserva);
+    this.cancelacionComoAnunciante.set(recibida);
     this.motivoCancelacion.set('');
     this.aceptaTerminosCancelacion.set(false);
     this.estadoCancelacion.set('consultando');

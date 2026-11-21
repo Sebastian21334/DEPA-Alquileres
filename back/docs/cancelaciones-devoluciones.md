@@ -5,17 +5,22 @@
 La cancelación de una reserva **pendiente de pago** es inmediata y no genera
 devolución. Las fechas se liberan al cancelar.
 
-La cancelación de una reserva **pagada** antes del inicio requiere una solicitud
+La cancelación de una reserva **pagada** requiere una solicitud
 y una decisión administrativa. La reserva no se cancela hasta que el reembolso
 quede registrado cuando corresponde una devolución. El inquilino puede
 enviar el pedido hasta el día anterior al ingreso, inclusive. Si faltan menos
 de 2 días calendario, se muestra una advertencia de devolución del 0 % y debe
 aceptar los términos, que aclaran que no recibirá una devolución. Desde la
-fecha de ingreso no se permite solicitar la cancelación, aunque no se haya
+fecha de ingreso el inquilino no puede solicitar la cancelación, aunque no se haya
 validado el código de alojamiento. Se puede solicitar con cualquier medio
 de pago admitido para reservar. Si el pago se hizo con tarjeta u otro medio
 distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por
 transferencia con administración.
+
+El anunciante puede solicitarla en cualquier momento mientras el código de
+ingreso no esté validado, incluso el día del ingreso o después, con devolución
+del 100 % al inquilino. Que el código ya esté generado no impide solicitarla.
+Se conservan los controles de reserva pagada y vigente y de liquidación sin resolver.
 
 Los siguientes porcentajes se calculan con la fecha de envío de la solicitud,
 en días calendario de Argentina. Una aprobación posterior no reduce el porcentaje.
@@ -30,18 +35,22 @@ versión aplicable a la fecha del pago. No cambia el esquema de la base.
 | Inquilino cancela entre 2 y 6 días antes | 50 % |
 | Inquilino cancela el día anterior al ingreso | 0 %, con advertencia antes de enviar |
 | Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | Conserva el porcentaje del día de solicitud |
-| Anunciante o Administrador cancela antes del inicio | 100 % |
-| La estadía ya comenzó o terminó | No se cancela; solo reclamo |
+| Anunciante cancela antes de validar el código, independientemente de la fecha de ingreso | 100 % |
+| Administrador cancela antes del inicio | Según la política contratada para otros actores |
+| El inquilino solicita desde la fecha de ingreso | No se cancela; solo reclamo |
+| Código de ingreso ya validado | No admite nuevas solicitudes de cancelación |
 
 Con devolución del 0 %, la aprobación cancela la reserva, conserva el pago y
 libera las fechas, sin generar un registro de reembolso. La solicitud,
 la cancelación y la liquidación se actualizan en la misma transacción.
-El plazo actual del anunciante se conserva para el siguiente punto del paquete.
 
-Si el Administrador intenta resolverla en la fecha de ingreso o después,
-el sistema marca la solicitud como `VENCIDA`.
-Después del inicio no se admite cancelación con devolución automática: el
-Inquilino debe abrir un reclamo.
+Una solicitud del anunciante no vence por llegar la fecha de ingreso. Si el
+código se valida antes de resolverla, la solicitud queda `VENCIDA`, sin crear
+una devolución, y se informa el motivo. La aprobación y la validación del código
+bloquean la misma reserva: si se aprueba primero, no se permite validar el código
+mientras la devolución esté activa. Al confirmar el reembolso se cancela la
+reserva y se libera el calendario, incluso si la fecha de ingreso ya pasó.
+Para el inquilino se conserva el vencimiento al llegar la fecha de ingreso.
 
 ### Módulo de cancelaciones
 

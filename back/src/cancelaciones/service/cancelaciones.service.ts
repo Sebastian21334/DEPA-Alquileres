@@ -30,7 +30,7 @@ import {
 } from '../repository/cancelaciones.repository.interface';
 
 type ResultadoResolucion =
-  | { vencida: true; reserva: Reserva; idSolicitante?: number }
+  | { vencida: true; reserva: Reserva; motivo: string; idSolicitante?: number }
   | { vencida: false; reserva: Reserva; solicitud: SolicitudCancelacion; reembolso: Reembolso | null };
 
 /**
@@ -55,9 +55,10 @@ export class CancelacionesService {
 
       const creadaEn = new Date();
       const hoy = fechaArgentina(creadaEn);
-      this.validarReserva(reserva, hoy);
-      const politica = await this.politicaAplicable(cancelaciones, reserva);
       const actor = this.actorDeCancelacion(reserva, idUsuario);
+      const impedimento = this.impedimentoReserva(reserva, hoy, actor);
+      if (impedimento) throw impedimento;
+      const politica = await this.politicaAplicable(cancelaciones, reserva);
       const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor);
       if (motivoBloqueo) throw new BadRequestException(motivoBloqueo);
       await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
@@ -78,27 +79,28 @@ export class CancelacionesService {
     return this.prepararRespuesta(resultado.solicitud);
   }
 
-  private validarReserva(reserva: Reserva, hoy: string): void {
+  private impedimentoReserva(reserva: Reserva, hoy: string, actor: ActorCancelacion): BadRequestException | ConflictException | null {
     if (!this.reservas.pagoAprobado(reserva))
-      throw new BadRequestException(
+      return new BadRequestException(
         'La reserva no está pagada. Usá la cancelación inmediata de la reserva pendiente.',
       );
     if (reserva.cancelada)
-      throw new ConflictException('La reserva ya está cancelada');
+      return new ConflictException('La reserva ya está cancelada');
     if (reserva.finalizada)
-      throw new BadRequestException(
+      return new BadRequestException(
         'La reserva ya finalizó. Solo podés abrir un reclamo.',
       );
-    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
-      throw new BadRequestException(
+    if (!reserva.fecha_inicio || (actor !== 'ANUNCIANTE' && reserva.fecha_inicio <= hoy))
+      return new BadRequestException(
         'La estadía ya comenzó. Para una devolución después del inicio, abrí un reclamo.',
       );
     if (this.reservas.codigoValidado(reserva))
-      throw new BadRequestException(
+      return new BadRequestException(
         'No se puede cancelar una reserva con ingreso ya validado',
       );
     if (this.reservas.liquidacionResuelta(reserva))
-      throw new ConflictException('La liquidación de la reserva ya está resuelta');
+      return new ConflictException('La liquidación de la reserva ya está resuelta');
+    return null;
   }
 
   async consultarActiva(idReserva: number, idUsuario: number): Promise<SolicitudCancelacion | null> {
@@ -114,7 +116,7 @@ export class CancelacionesService {
     const hoy = fechaArgentina();
     const fechaSolicitud = solicitud ? fechaArgentina(solicitud.creada_en) : hoy;
     const actor = this.actorDeCancelacion(reserva, solicitud ? solicitud.solicitante?.id : idUsuario);
-    const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor);
+    const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor) ?? this.impedimentoReserva(reserva, hoy, actor)?.message ?? null;
     const devolucion = pago && (!motivoBloqueo || solicitud)
       ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica), moneda: pago.currency }
       : null;
@@ -132,6 +134,7 @@ export class CancelacionesService {
   }
 
   private bloqueoPorPlazo(reserva: Reserva, hoy: string, politica: PoliticaCancelacion, actor: ActorCancelacion): string | null {
+    if (actor === 'ANUNCIANTE') return null;
     if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
       return 'Desde la fecha de ingreso no se puede solicitar la cancelación. Para una devolución, abrí un reclamo.';
     if (actor === 'INQUILINO') return null;
@@ -183,7 +186,7 @@ export class CancelacionesService {
 
     await this.notificarResolucion(resultado);
     if (resultado.vencida)
-      throw new ConflictException('La estadía ya comenzó; la solicitud quedó vencida');
+      throw new ConflictException(`${resultado.motivo}; la solicitud quedó vencida`);
 
     return {
       solicitud: this.prepararRespuesta(resultado.solicitud),
@@ -204,12 +207,16 @@ export class CancelacionesService {
     solicitud.decidida_por = referenciaUsuario(idAdmin);
     solicitud.decidida_en = new Date();
 
-    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy) {
+    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+    const motivoVencimiento = this.reservas.codigoValidado(reserva)
+      ? 'El código de ingreso fue validado antes de resolver la solicitud'
+      : !reserva.fecha_inicio || (actor !== 'ANUNCIANTE' && reserva.fecha_inicio <= hoy)
+        ? 'La estadía comenzó antes de resolver la solicitud' : null;
+    if (motivoVencimiento) {
       solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'VENCIDA');
-      solicitud.observacion =
-        'La estadía comenzó antes de resolver la solicitud';
+      solicitud.observacion = motivoVencimiento;
       await cancelaciones.guardar(solicitud);
-      return { vencida: true, reserva, idSolicitante: solicitud.solicitante?.id };
+      return { vencida: true, reserva, motivo: motivoVencimiento, idSolicitante: solicitud.solicitante?.id };
     }
 
     solicitud.observacion = dto.observacion?.trim() || null;
@@ -224,11 +231,12 @@ export class CancelacionesService {
   }
 
   private async aprobarSolicitud(reserva: Reserva, solicitud: SolicitudCancelacion, hoy: string, idAdmin: number, cancelaciones: ICancelacionesRepository, transaccion: EntityManager): Promise<ResultadoResolucion> {
-    this.validarReserva(reserva, hoy);
+    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+    const impedimento = this.impedimentoReserva(reserva, hoy, actor);
+    if (impedimento) throw impedimento;
     await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
     const politica = await this.politicaAplicable(cancelaciones, reserva);
 
-    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
     const { porcentaje, importe } = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica);
     solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA');
 
@@ -269,7 +277,7 @@ export class CancelacionesService {
     const solicitante = destinatario === 'ANUNCIANTE' ? ['anunciante'] as const
       : destinatario === 'INQUILINO' ? ['inquilino'] as const : [] as const;
     if (resultado.vencida) {
-      await this.notificaciones?.avisarCambio(resultado.reserva, solicitante, 'Solicitud de cancelación vencida', 'La solicitud venció porque la estadía ya comenzó.');
+      await this.notificaciones?.avisarCambio(resultado.reserva, solicitante, 'Solicitud de cancelación vencida', `${resultado.motivo}. Consultá el detalle en DEPA.`);
       return;
     }
     if (resultado.solicitud.estado === this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'RECHAZADA'))
@@ -285,7 +293,7 @@ export class CancelacionesService {
     return `can:${idSolicitud}`;
   }
 
-  /** Política: el Anunciante/Administrador solo devuelve antes del inicio. */
+  /** El actor se obtiene de los participantes de la reserva, nunca del cliente. */
   private actorDeCancelacion(reserva: Reserva, idSolicitante?: number): ActorCancelacion {
     if (idSolicitante && this.reservas.esDelInquilino(reserva, idSolicitante))
       return 'INQUILINO';
@@ -295,6 +303,7 @@ export class CancelacionesService {
   }
 
   private porcentajeDevolucion(reserva: Reserva, actor: ActorCancelacion, hoy: string, politica: PoliticaCancelacion): number {
+    if (actor === 'ANUNCIANTE') return 100;
     if (actor !== 'INQUILINO') return politica.porcentajeOtrosActores;
     const dias = this.diasHastaIngreso(reserva, hoy);
     if (dias >= politica.diasDevolucionTotal) return politica.porcentajeTotal;

@@ -438,12 +438,88 @@ test('desde la medianoche argentina del ingreso se bloquea al inquilino aunque n
   assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
 });
 
-test('el cambio de plazo del inquilino conserva por ahora el plazo del anunciante', async () => {
-  const { reserva } = await escenario(fechaEnDias(1));
+for (const dias of [7, 1, 0, -1]) {
+  test(`el anunciante puede cancelar con ingreso en ${dias} días y devuelve el 100 % antes de validar el código`, async () => {
+    const { reserva } = await escenario(fechaEnDias(dias));
+    await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
+    const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 2);
+    assert.equal(condiciones.motivoBloqueo, null);
+    assert.equal(condiciones.advertencia, null);
+    assert.equal(condiciones.devolucion.porcentaje, 100);
+    assert.equal(condiciones.devolucion.importe, 100);
+    let liberaciones = 0;
+    disponibilidad.liberarReserva = async () => { liberaciones += 1; };
+    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+    const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+    assert.equal(resultado.solicitud.estado, 'APROBADA');
+    assert.equal(Number(resultado.reembolso.importe), 100);
+    assert.equal(resultado.reembolso.tipo, 'TOTAL');
+    assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, false);
+    await operacionesReembolso.ejecutar(resultado.reembolso.id, 3);
+    const actual = await reservas.obtenerReserva(reserva.id);
+    assert.equal(actual.cancelada, true);
+    assert.equal(actual.estado_pago, 'REEMBOLSADO');
+    assert.equal(liberaciones, 1, 'también se libera el calendario después de la fecha de ingreso');
+  });
+}
+
+test('el anunciante conserva la cancelación sin código cuando pasaron las fechas de la estadía', async () => {
+  const { reserva } = await escenario(fechaEnDias(-10));
+  await source.getRepository(Reserva).update(reserva.id, { fecha_fin: fechaEnDias(-1) });
+  assert.equal((await reservas.buscarPorId(reserva.id, 2)).estado_estadia, 'INGRESO_NO_VERIFICADO');
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'No se concretó el ingreso', aceptaTerminos: true }, 2);
+  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(Number(resultado.reembolso.importe), 100);
+});
+
+test('una solicitud del anunciante no vence al llegar la fecha de ingreso', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  const { reserva } = await escenario();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  t.mock.timers.setTime(new Date('2099-01-11T15:00:00Z').getTime());
+  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(resultado.solicitud.estado, 'APROBADA');
+  assert.equal(Number(resultado.reembolso.importe), 100);
+});
+
+test('el código validado impide nuevas solicitudes del anunciante y vence una pendiente', async () => {
+  const { reserva } = await escenario(fechaEnDias(0));
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
+  await reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2);
   const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 2);
-  assert.match(condiciones.motivoBloqueo, /plazo venció/);
-  assert.equal(condiciones.advertencia, null);
-  await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 2), { status: 400 });
+  assert.match(condiciones.motivoBloqueo, /ingreso ya validado/);
+  await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /código de ingreso fue validado.*quedó vencida/);
+  assert.equal((await solicitudActual(solicitud.id)).estado, 'VENCIDA');
+  await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'Segundo pedido de cancelación', aceptaTerminos: true }, 2), { status: 400 });
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, false);
+});
+
+test('una cancelación del anunciante aprobada impide validar el código mientras se gestiona el reembolso', async () => {
+  const { reserva } = await escenario(fechaEnDias(0));
+  await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  await assert.rejects(reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2), /cancelación aprobada/);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).codigo_validado_en, null);
+});
+
+test('si falla liberar el calendario después del ingreso, se reintenta sin duplicar la devolución del anunciante', async () => {
+  const { reserva } = await escenario(fechaEnDias(-1));
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  let movimientos = 0;
+  pasarela.reembolsar = async () => { movimientos += 1; return { id: 'devolucion-anunciante', status: 'approved', amount: 100 }; };
+  disponibilidad.liberarReserva = async () => { throw new Error('Fallo de calendario después del ingreso'); };
+  await assert.rejects(operacionesReembolso.ejecutar(reembolso.id, 3), /Fallo de calendario/);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, false);
+  assert.equal((await reembolsos.buscar(reembolso.id)).aplicado_en, null);
+  disponibilidad.liberarReserva = async () => {};
+  const aplicado = await operacionesReembolso.aplicarReembolsoConfirmado(reembolso.id);
+  assert.equal(aplicado.reserva.cancelada, true);
+  assert.ok(aplicado.reembolso.aplicado_en);
+  assert.equal(movimientos, 1);
 });
 
 for (const medio of ['visa', 'debvisa', null]) {
@@ -1102,5 +1178,58 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       assert.match(rechazoInicio.body.message, /estadía ya comenzó/);
       assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
     }
+
+    // T39: el anunciante devuelve el total antes, durante y después de la fecha de ingreso.
+    for (const dias of [1, 0, -1]) {
+      await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+      const { reserva: delAnunciante, pago: pagoDelAnunciante } = await escenario(fechaEnDias(dias));
+      await source.getRepository(Pago).update(pagoDelAnunciante.id, { payment_id: '123' });
+      await source.getRepository(Reserva).update(delAnunciante.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
+      await source.query('INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva) VALUES ($1,false,1,$2)', [delAnunciante.fecha_inicio, delAnunciante.id]);
+      const rutaAnunciante = `/reservas/${delAnunciante.id}/cancelacion`;
+      await request(http).get(`${rutaAnunciante}/condiciones`).set('Authorization', ajeno).expect(403);
+      await request(http).post(rutaAnunciante).set('Authorization', ajeno)
+        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(403);
+      await request(http).post(rutaAnunciante).set('Authorization', anunciante)
+        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, actor: 'ANUNCIANTE' }).expect(400);
+      const condicionesAnunciante = await request(http).get(`${rutaAnunciante}/condiciones`).set('Authorization', anunciante).expect(200);
+      assert.equal(condicionesAnunciante.body.motivoBloqueo, null);
+      assert.equal(condicionesAnunciante.body.devolucion.porcentaje, 100);
+      assert.equal(condicionesAnunciante.body.devolucion.importe, 100);
+      const enviadaAnunciante = await request(http).post(rutaAnunciante).set('Authorization', anunciante)
+        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(201);
+      assert.equal(enviadaAnunciante.body.solicitante.id, 2);
+      const resueltaAnunciante = await request(http).patch(`${rutaAnunciante}/${enviadaAnunciante.body.id}`).set('Authorization', admin)
+        .send({ decision: 'APROBADA' }).expect(200);
+      assert.equal(Number(resueltaAnunciante.body.reembolso.importe), 100);
+      assert.equal(resueltaAnunciante.body.reembolso.tipo, 'TOTAL');
+      await request(http).patch(`/reservas/${delAnunciante.id}/validar-codigo`).set('Authorization', anunciante)
+        .send({ codigo: '12345678' }).expect(409);
+      await request(http).patch(`/reservas/reembolsos/${resueltaAnunciante.body.reembolso.id}/ejecutar`).set('Authorization', admin).send({}).expect(200);
+      const detalleAnunciante = await request(http).get(`/reservas/${delAnunciante.id}`).set('Authorization', tenant).expect(200);
+      assert.equal(detalleAnunciante.body.cancelada, true);
+      assert.equal(detalleAnunciante.body.estado_pago, 'REEMBOLSADO');
+      const [calendarioAnunciante] = await source.query('SELECT disponible,id_reserva FROM fecha WHERE fecha=$1', [delAnunciante.fecha_inicio]);
+      assert.deepEqual(calendarioAnunciante, { disponible: true, id_reserva: null });
+    }
+
+    await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+    const { reserva: ingresoValidado } = await escenario(fechaEnDias(0));
+    await source.getRepository(Reserva).update(ingresoValidado.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
+    const rutaValidada = `/reservas/${ingresoValidado.id}/cancelacion`;
+    const solicitudAntesDelCodigo = await request(http).post(rutaValidada).set('Authorization', anunciante)
+      .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(201);
+    await request(http).patch(`/reservas/${ingresoValidado.id}/validar-codigo`).set('Authorization', anunciante)
+      .send({ codigo: '12345678' }).expect(200);
+    const vencidaPorCodigo = await request(http).patch(`${rutaValidada}/${solicitudAntesDelCodigo.body.id}`).set('Authorization', admin)
+      .send({ decision: 'APROBADA' }).expect(409);
+    assert.match(vencidaPorCodigo.body.message, /código de ingreso fue validado/);
+    assert.equal((await solicitudActual(solicitudAntesDelCodigo.body.id)).estado, 'VENCIDA');
+    await request(http).post(rutaValidada).set('Authorization', anunciante)
+      .send({ motivo: 'Segundo pedido de cancelación', aceptaTerminos: true }).expect(400);
+    const bloqueadaPorCodigo = await request(http).get(`${rutaValidada}/condiciones`).set('Authorization', anunciante).expect(200);
+    assert.match(bloqueadaPorCodigo.body.motivoBloqueo, /ingreso ya validado/);
+    assert.equal(bloqueadaPorCodigo.body.devolucion, null);
+    assert.equal(await source.getRepository(Reembolso).count(), 0);
   } finally { await app.close(); }
 });
