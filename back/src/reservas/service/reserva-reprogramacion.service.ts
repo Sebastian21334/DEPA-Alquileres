@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { nombreInquilinoReserva } from './reservas.utils';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { diasDeAntelacion, fechaArgentina } from '../../common/utils/fechas';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { Reserva } from '../entity/reserva.entity';
@@ -111,7 +112,7 @@ export class ReservaReprogramacionService {
             'La reserva requiere revisar sus condiciones originales antes de reprogramar. Contactá a soporte.',
           );
         }
-        if (Math.abs(montoPago - importeContratado) > 0.009) {
+        if (Math.abs(montoPago - importeContratado) > TOLERANCIA_MONETARIA) {
           throw new ConflictException(
             'El importe registrado no coincide con el contratado. Contactá a soporte antes de reprogramar.',
           );
