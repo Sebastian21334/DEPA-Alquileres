@@ -707,8 +707,8 @@ export class ReservasService
     if (!pago) throw new NotFoundException('La reserva no tiene un pago registrado');
     const importeDevuelto = Number(pago.amount_refunded);
     const esTotal = Number(pago.amount) - importeDevuelto <= TOLERANCIA_MONETARIA;
-    const puedeLiberarFechas = !!reserva.fecha_inicio && reserva.fecha_inicio > fechaArgentina() &&
-      !this.codigoValidado(reserva);
+    const puedeLiberarFechas = !!reserva.fecha_inicio && !this.codigoValidado(reserva) &&
+      (reserva.fecha_inicio > fechaArgentina() || reembolso.origen === OrigenReembolso.CANCELACION);
     const ajusteAdmin = reembolso.origen === OrigenReembolso.AJUSTE_ADMIN;
     const resolucionAdmin = ajusteAdmin && reembolso.referencia_interna === `liq:${reserva.id}`;
     const reversionSinPago = esTotal && !this.pagoAprobado(reserva) &&
