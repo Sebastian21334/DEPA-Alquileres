@@ -7,6 +7,9 @@ import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../core/interceptors/api-error';
 import { contraseniasIgualesValidator, MENSAJE_CONTRASENIA_SEGURA, passwordSeguraValidator } from '../../../shared/validators/password.validators';
 
+const FORMATO_NOMBRE = /^\p{L}[\p{L}\p{M}]*(?: +\p{L}[\p{L}\p{M}]*)*$/u;
+const FORMATO_TELEFONO = /^\+?(?:[0-9]-?){0,14}[0-9]$/;
+
 // RF1 (alta de usuario) + caso de uso "Crear Cuenta" (ID 1 del documento):
 // el registro siempre crea un usuario tipo Inquilino (back/src/usuarios/service
 // /usuarios.service.ts asigna el rol automáticamente); convertirse en
@@ -39,19 +42,39 @@ export class RegisterComponent {
 
   protected readonly form = this.fb.nonNullable.group(
     {
-      nombre: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
-      apellido: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
+      nombre: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100), Validators.pattern(FORMATO_NOMBRE)]],
+      apellido: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100), Validators.pattern(FORMATO_NOMBRE)]],
       email: ['', [Validators.required, Validators.email, Validators.maxLength(150)]],
-      telefono: ['', [Validators.required, Validators.maxLength(20)]],
+      telefono: ['', [Validators.required, Validators.maxLength(20), Validators.pattern(FORMATO_TELEFONO)]],
       contrasenia: ['', [Validators.required, passwordSeguraValidator()]],
       confirmarContrasenia: ['', [Validators.required]],
     },
     { validators: contraseniasIgualesValidator() },
   );
 
+  protected filtrarCampo(evento: Event, campo: 'nombre' | 'apellido' | 'telefono'): void {
+    if ((evento as InputEvent).isComposing) return;
+
+    const entrada = evento.target as HTMLInputElement;
+    const { value, selectionStart, selectionEnd } = entrada;
+    const caracteresInvalidos = campo === 'telefono' ? /[^0-9+-]/g : /[^\p{L}\p{M} ]/gu;
+    const valor = value.replace(caracteresInvalidos, '');
+    if (valor === value) return;
+
+    this.form.controls[campo].setValue(valor);
+    if (selectionStart !== null && selectionEnd !== null) {
+      entrada.setSelectionRange(
+        value.slice(0, selectionStart).replace(caracteresInvalidos, '').length,
+        value.slice(0, selectionEnd).replace(caracteresInvalidos, '').length,
+      );
+    }
+  }
+
   protected onSubmit(crearCuentaNueva = false): void {
     if (this.enviando() || (this.cuentaRecuperable() && !crearCuentaNueva)) return;
-    const emailIngresado = this.form.controls.email;
+    const { nombre: nombreIngresado, apellido: apellidoIngresado, email: emailIngresado } = this.form.controls;
+    nombreIngresado.setValue(nombreIngresado.value.trim());
+    apellidoIngresado.setValue(apellidoIngresado.value.trim());
     emailIngresado.setValue(emailIngresado.value.trim().toLowerCase());
     if (this.form.invalid) {
       this.form.markAllAsTouched();

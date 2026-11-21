@@ -232,8 +232,10 @@
           <div>
             <span class="eyebrow">Comunicación de la reserva</span>
             <h2>Contactá a {{ nombreContacto() }}</h2>
-            @if (contactoSuspendido()) {
-              <p>El contacto está suspendido porque la cuenta no está disponible. Tu reserva conserva su estado; para asistencia, reclamos o gestiones pendientes, contactá a soporte.</p>
+            @if (accesoLimitado()) {
+              <p>Para responder en una conversación existente, abrí Mis chats desde el menú.</p>
+            } @else if (contactoSuspendido()) {
+              <p>La cuenta tiene restricciones de contacto. Si ya tenían una conversación, podés consultarla en Mis chats. Para otras gestiones, contactá a soporte.</p>
             } @else {
               <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
             }

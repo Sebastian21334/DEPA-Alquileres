@@ -1,41 +1,80 @@
-<main class="blocked-page">
+<div class="blocked-page">
   <section class="blocked-card" aria-labelledby="blocked-title">
-    <h1 id="blocked-title">Tu cuenta está bloqueada</h1>
-    @if (error()) {
-      <p class="blocked-error" role="alert">{{ error() }}</p>
-    }
-    @if (bloqueo(); as detalle) {
-      <div class="blocked-reason">
-        <h2>Motivo del bloqueo</h2>
+    @let detalle = bloqueo();
+
+    <header class="blocked-header">
+      <span class="blocked-icon" aria-hidden="true">
+        <svg lucideLockKeyhole [size]="30"></svg>
+      </span>
+      <h1 id="blocked-title">{{ accesoLimitado() ? 'Tu cuenta tiene acceso limitado' : 'Tu cuenta está bloqueada' }}</h1>
+    </header>
+
+    @if (detalle) {
+      <section class="blocked-reason" aria-labelledby="blocked-reason-title">
+        <h2 id="blocked-reason-title">Motivo del bloqueo</h2>
         <p>{{ detalle.motivo || 'El motivo de este bloqueo no está registrado.' }}</p>
         @if (detalle.fecha) {
-          <small>Registrado el {{ detalle.fecha | date: 'dd/MM/yyyy' }}</small>
+          <p class="blocked-date">
+            <svg lucideCalendar [size]="18" aria-hidden="true"></svg>
+            <span>Registrado el <time [attr.datetime]="detalle.fecha">{{ detalle.fecha | date: 'dd/MM/yyyy' }}</time></span>
+          </p>
         }
-      </div>
-      @if (detalle.apelacion) {
-        <app-conversation-panel titulo="Apelación del bloqueo" [mensajes]="mensajesApelacion(detalle, 'Vos', true)">
+      </section>
+
+      <section class="appeal" aria-labelledby="appeal-title">
+        @if (detalle.apelacion) {
+          <h2 id="appeal-title">Apelación del bloqueo</h2>
+          <p class="appeal-status" role="status">
+            <svg lucideMessageCircle [size]="23" aria-hidden="true"></svg>
+            {{ detalle.respuesta ? 'Administración respondió tu apelación.' : 'Tu apelación está pendiente de respuesta.' }}
+          </p>
+          <app-conversation-panel [mensajes]="mensajesApelacion(detalle, 'Vos', true)" />
           @if (!detalle.respuesta) {
-            <p role="status">Tu apelación está pendiente de respuesta.</p>
-            <button type="button" class="acct-btn acct-btn--ghost" (click)="consultar()" [disabled]="ocupado()">Actualizar estado</button>
+            <button type="button" class="retry-button" (click)="consultar()" [disabled]="ocupado()">Actualizar estado</button>
           }
-        </app-conversation-panel>
-      } @else {
-        <app-conversation-panel titulo="Apelar el bloqueo" subtitulo="Contanos por qué querés que revisemos tu cuenta."
-          [mensajes]="[]" vacio="Todavía no enviaste una apelación.">
-          <app-conversation-composer [(texto)]="texto" etiqueta="Motivo de tu apelación"
-            [limite]="2000" [deshabilitado]="ocupado()" (enviar)="apelar()" />
-        </app-conversation-panel>
-        @if (error()) {
-          <button type="button" class="acct-btn acct-btn--ghost" (click)="consultar()" [disabled]="ocupado()">Actualizar estado</button>
+        } @else {
+          <div class="appeal-heading">
+            <h2 id="appeal-title">Apelar el bloqueo</h2>
+            <p>Contanos por qué querés que revisemos tu cuenta.</p>
+          </div>
+          <p class="appeal-status">
+            <svg lucideMessageCircle [size]="23" aria-hidden="true"></svg>
+            Todavía no enviaste una apelación.
+          </p>
+          <form id="blocked-appeal-form" [attr.aria-busy]="ocupado()" (ngSubmit)="apelar()">
+            <label for="appeal-message">Tu mensaje</label>
+            <textarea id="appeal-message" name="mensaje" [(ngModel)]="texto" rows="4" maxlength="2000"
+              required [disabled]="ocupado()" placeholder="Escribí un mensaje…"
+              (keydown.enter)="apelarConEnter($event)"></textarea>
+          </form>
+          @if (error()) {
+            <button type="button" class="retry-button" (click)="consultar()" [disabled]="ocupado()">Actualizar estado</button>
+          }
         }
-      }
+      </section>
     } @else if (ocupado()) {
       <p role="status">Cargando el detalle del bloqueo…</p>
     } @else if (accesoVigente()) {
-      <button type="button" class="acct-btn acct-btn--ghost" (click)="consultar()">Reintentar</button>
+      <button type="button" class="retry-button" (click)="consultar()">Reintentar</button>
     } @else if (!error()) {
       <p>Ingresá con tu correo y contraseña para consultar el motivo o apelar.</p>
     }
-    <a class="back-link" routerLink="/login">Volver al inicio de sesión</a>
+
+    @if (error()) {
+      <p class="blocked-error" role="alert">{{ error() }}</p>
+    }
+
+    <footer class="blocked-actions">
+      <a class="back-link" [routerLink]="accesoLimitado() ? '/mis-reservas' : '/login'">
+        <svg lucideArrowLeft [size]="21" aria-hidden="true"></svg>
+        {{ accesoLimitado() ? 'Volver a mis reservas' : 'Volver al inicio de sesión' }}
+      </a>
+      @if (detalle && !detalle.apelacion) {
+        <button class="submit-appeal" type="submit" form="blocked-appeal-form" [disabled]="!puedeApelar">
+          <svg lucideSend [size]="22" aria-hidden="true"></svg>
+          Enviar apelación
+        </button>
+      }
+    </footer>
   </section>
-</main>
+</div>

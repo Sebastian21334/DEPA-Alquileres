@@ -1,467 +1,169 @@
-const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
-const { catalogosDePrueba, reservasDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
-const { test } = require('node:test');
 const assert = require('node:assert/strict');
-
-const { Pago } = require('../dist/pagos/entity/pago.entity');
-const {
-  OrigenReembolso,
-  Reembolso,
-  TipoReembolso,
-} = require('../dist/reembolsos/entity/reembolso.entity');
-const { Reserva } = require('../dist/reservas/entity/reserva.entity');
-const MOTIVO_CANCELACION_BLOQUEO = 'Bloqueo de cuenta del anunciante';
-const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
-const {
-  ReservaBloqueoAnuncianteService,
-} = require('../dist/reservas/service/reserva-bloqueo-anunciante.service');
-const {
-  BloqueoAnuncianteService,
-} = require('../dist/bloqueo-anunciante/service/bloqueo-anunciante.service');
+const { test } = require('node:test');
+const bcrypt = require('bcrypt');
+const { Module } = require('@nestjs/common');
+const { ConfigService } = require('@nestjs/config');
+const { NestFactory } = require('@nestjs/core');
+const { JwtService } = require('@nestjs/jwt');
+const { PassportModule } = require('@nestjs/passport');
+const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
+const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
+const { AuthController } = require('../dist/auth/controller/auth.controller');
+const { AuthService } = require('../dist/auth/service/auth.service');
+const { Anunciante } = require('../dist/anunciantes/entity/anunciante.entity');
+const { AnunciantesRepository } = require('../dist/anunciantes/repository/anunciantes.repository');
+const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
+const { BloqueoAnuncianteService } = require('../dist/bloqueo-anunciante/service/bloqueo-anunciante.service');
+const { PagosController } = require('../dist/operaciones-reserva/controller/pagos.controller');
+const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
+const { PresupuestosService } = require('../dist/operaciones-reserva/service/presupuestos.service');
+const { Publicacion } = require('../dist/publicaciones/entity/publicacion.entity');
+const { PublicacionesRepository } = require('../dist/publicaciones/repository/publicaciones.repository');
+const { PublicacionesService } = require('../dist/publicaciones/service/publicaciones.service');
+const { ReclamosController } = require('../dist/reclamos/controller/reclamos.controller');
+const { ReclamosService } = require('../dist/reclamos/service/reclamos.service');
+const { SeguridadService } = require('../dist/seguridad/service/seguridad.service');
+const { JwtStrategy } = require('../dist/seguridad/strategy/jwt.strategy');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
+const { UsuariosController } = require('../dist/usuarios/controller/usuarios.controller');
+const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
+const { UsuariosCredencialesService } = require('../dist/usuarios/service/usuarios-credenciales.service');
+const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
 
-const ANUNCIANTE = 99;
-const ADMIN = 1;
-const MOTIVO = 'Incumplimiento de las condiciones';
-const IMPORTE = 10000;
-const INICIO = '2030-02-10';
-const FIN = '2030-02-12';
+test('el bloqueo usa el perfil y las operaciones propias sin otorgar privilegios administrativos', async (t) => {
+  const base = await crearPostgresPruebas();
+  t.after(() => base.cerrar());
+  const { db, source } = base;
+  const contrasenia = 'clave-de-prueba';
+  const hash = await bcrypt.hash(contrasenia, 4);
+  await db.exec("INSERT INTO rol (id_rol,nombre) VALUES (1,'Inquilino'),(3,'Administrador')");
+  await db.query(`
+    INSERT INTO usuario (id_usuario,nombre,apellido,email,telefono,contrasenia,email_verificado,id_rol)
+    SELECT id,'Prueba','Integración','usuario' || id || '@example.invalid','123',$1,true,
+           CASE WHEN id IN (2,3) THEN 3 ELSE 1 END
+    FROM generate_series(1,5) AS id`, [hash]);
+  await db.exec(`
+    INSERT INTO anunciante (id_usuario,numero_contacto,verificado)
+      VALUES (2,'123',true), (4,'123',true), (5,'123',false);
+    INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante)
+      VALUES (10,'Publicación de prueba','Integración',CURRENT_DATE,100,'Dirección',1,30,2),
+             (11,'Publicación de inquilino verificado','Integración',CURRENT_DATE,100,'Dirección',1,30,4),
+             (12,'Publicación de perfil sin verificar','Integración',CURRENT_DATE,100,'Dirección',1,30,5);
+    INSERT INTO reserva (id_reserva,id_usuario,id_publicacion,estado_pago,monto_pago)
+      VALUES (20,1,10,'PENDIENTE',100), (21,4,10,'PENDIENTE',100),
+             (22,3,11,'PENDIENTE',100), (23,3,12,'PENDIENTE',100);
+    INSERT INTO reclamo_reserva (id_reserva,id_inquilino,id_anunciante,categoria,descripcion)
+      VALUES (23,3,5,'OTRO','Reclamo de perfil sin verificar');`);
+  const avisos = [];
+  const mail = { enviarCambioBloqueo: async (...datos) => avisos.push(datos) };
+  const repo = new UsuariosRepository(source.getRepository(Usuario));
+  const catalogos = catalogosDePrueba();
+  const publicaciones = new PublicacionesService(new PublicacionesRepository(source.getRepository(Publicacion)), catalogos);
+  const credenciales = new UsuariosCredencialesService(repo, {});
+  const anunciantes = new AnunciantesService(new AnunciantesRepository(source.getRepository(Anunciante)));
+  const usuarios = new UsuariosService(repo, catalogos, credenciales, mail, {}, publicaciones, anunciantes);
+  const bloqueo = new BloqueoAnuncianteService(usuarios, mail);
+  const secreto = 'clave-local-de-bloqueo-para-pruebas';
+  const jwt = new JwtService({ secret: secreto, signOptions: { expiresIn: 300 } });
+  const auth = new AuthService(usuarios, credenciales, jwt, mail);
+  const login = (id) => ({ email: `usuario${id}@example.invalid`, contrasenia });
 
-function crearReserva(datos = {}) {
-  return Object.assign(new Reserva(), {
-    id: 1,
-    cancelada: false,
-    finalizada: false,
-    fecha_cancelacion: null,
-    motivo_cancelacion: null,
-    cancelada_por: null,
-    estado_pago: 'APROBADO',
-    estado_liquidacion: 'RETENIDO',
-    codigo_validado_en: null,
-    intentos_codigo: 0,
-    observacion_liquidacion: null,
-    fecha_resolucion_liquidacion: null,
-    fecha_inicio: INICIO,
-    fecha_fin: FIN,
-    publicacion: { id: 10, anunciante: { idUsuario: ANUNCIANTE } },
-    ...datos,
+  class AplicacionPrueba {}
+  Module({
+    imports: [PassportModule.register({ defaultStrategy: 'jwt' })],
+    controllers: [AuthController, PagosController, ReclamosController, UsuariosController],
+    providers: [
+      JwtStrategy, SeguridadService,
+      { provide: AuthService, useValue: auth },
+      { provide: UsuariosService, useValue: usuarios },
+      { provide: ConfigService, useValue: { getOrThrow: () => secreto } },
+      { provide: OperacionesPagoService, useValue: { consultarEstado: (id) => ({ id }), crearCheckout: () => ({ creado: true }) } },
+      { provide: PresupuestosService, useValue: {} },
+      { provide: ReclamosService, useValue: { obtener: (_id, _usuario, esAdmin) => ({ esAdmin }) } },
+    ],
+  })(AplicacionPrueba);
+  const app = await NestFactory.create(AplicacionPrueba, { logger: false, abortOnError: false });
+  t.after(() => app.close());
+  await app.listen(0, '127.0.0.1');
+  const url = await app.getUrl();
+  const solicitar = (token, ruta, body) => fetch(`${url}/${ruta}`, {
+    method: body ? 'POST' : 'GET',
+    headers: { Authorization: `Bearer ${token}`, ...(body && { 'Content-Type': 'application/json' }) },
+    ...(body && { body: JSON.stringify(body) }),
   });
-}
+  const detalleAnterior = { id: 'bloqueo-de-prueba-anterior', administradorId: 3, motivo: 'Motivo original',
+    fecha: new Date().toISOString(), apelacion: { texto: 'Ya apelé este bloqueo', fecha: new Date().toISOString() } };
+  const sesiones = [];
+  for (const id of [1, 2, 4]) {
+    const sesionAnterior = (await auth.login(login(id))).access_token;
+    if (id === 2) {
+      assert.equal((await solicitar(sesionAnterior, 'usuarios/administracion/bloqueados')).status, 200);
+      await db.query('UPDATE usuario SET bloqueado = true, bloqueo_detalle = $1 WHERE id_usuario = 2', [detalleAnterior]);
+    } else {
+      assert.equal((await bloqueo.cambiarBloqueo(id, true, 3, 'Motivo de prueba')).accesoLimitado, true);
+    }
+    const estado = await solicitar(sesionAnterior, 'auth/sesion');
+    assert.deepEqual(await estado.json(), { accesoLimitado: true, anuncianteVerificado: id !== 1, rol: null });
+    const nuevaSesion = (await auth.login(login(id))).access_token;
+    const datosSesion = jwt.decode(nuevaSesion);
+    assert.equal(datosSesion.accesoLimitado, true);
+    assert.equal(datosSesion.anuncianteVerificado, id !== 1);
+    assert.equal(datosSesion.rol, undefined);
+    sesiones.push({ id, nuevaSesion });
+    assert.equal((await solicitar(sesionAnterior, 'pagos/reservas/20/estado')).status, 200);
+    const checkout = await solicitar(sesionAnterior, 'pagos/checkout', {});
+    assert.equal(checkout.status, 403);
+    assert.equal((await checkout.json()).codigo, 'ACCESO_LIMITADO');
+    if (id === 2) {
+      assert.equal((await solicitar(sesionAnterior, 'usuarios/administracion/bloqueados')).status, 403);
+      const reclamo = await solicitar(sesionAnterior, 'reclamos/1');
+      assert.deepEqual(await reclamo.json(), { esAdmin: false });
+      assert.equal((await repo.buscarParaSesion(id)).rol.nombre, 'Administrador');
+      assert.deepEqual((await repo.buscarConBloqueo(id)).bloqueoDetalle, { ...detalleAnterior, accesoLimitado: true });
+      const apelacion = await solicitar(nuevaSesion, 'auth/bloqueo/actual');
+      assert.equal((await apelacion.json()).apelacion.texto, detalleAnterior.apelacion.texto);
+    } else {
+      const apelacion = await solicitar(nuevaSesion, 'auth/bloqueo/actual', { texto: 'Solicito una revisión' });
+      assert.equal(apelacion.status, 201);
+      assert.equal((await apelacion.json()).apelacion.texto, 'Solicito una revisión');
+    }
+  }
+  assert.equal(avisos.length, 2);
+  assert.ok(avisos.every((aviso) => aviso[3] === true));
+  assert.equal((await db.query('SELECT estado_pago FROM reserva WHERE id_reserva = 20')).rows[0].estado_pago, 'PENDIENTE');
+  assert.equal((await bloqueo.cambiarBloqueo(5, true, 3, 'Perfil sin verificar')).accesoLimitado, false);
+  await assert.rejects(auth.login(login(5)), { status: 403 });
 
-function resumenEsperado(cambios = {}) {
-  return {
-    canceladasPendientes: 0,
-    canceladasConDevolucion: 0,
-    enRevision: 0,
-    sinAccion: 0,
-    fallidas: 0,
-    detalles: [],
-    ...cambios,
-  };
-}
+  await db.exec(`
+    UPDATE reserva SET estado_pago = 'CANCELADO', cancelada = true WHERE id_reserva IN (20,22);
+    INSERT INTO reclamo_reserva (id_reserva,id_inquilino,id_anunciante,categoria,descripcion)
+      VALUES (20,1,2,'OTRO','Pendiente de revisión');`);
+  assert.equal((await solicitar(sesiones[0].nuevaSesion, 'auth/sesion')).status, 200);
+  assert.equal((await solicitar(sesiones[2].nuevaSesion, 'auth/sesion')).status, 200);
+  await db.exec(`
+    UPDATE reclamo_reserva SET estado = 'CERRADO' WHERE id_reserva = 20;
+    UPDATE reserva SET estado_pago = 'CANCELADO', cancelada = true WHERE id_reserva = 21;`);
 
-/**
- * Escenario con dobles en memoria. No hay TypeORM ni base de datos:
- * el repositorio simula transacciones ejecutando la operación sobre sí mismo.
- */
-function crearEscenario(reserva, reservas = [reserva]) {
-  const estado = {
-    guardadas: [],
-    liberadas: [],
-    aplicados: [],
-    rechazadas: [],
-    compensados: [],
-    reembolsos: [],
-    siguienteReembolso: 1,
-  };
-  const pago = Object.assign(new Pago(), {
-    id: 555,
-    reserva,
-    payment_id: 'mp-123',
-    amount: IMPORTE,
-    currency: 'ARS',
-  });
-
-  const reservaRepository = {
-    conTransaccion: async (operacion) => operacion(reservaRepository, {}),
-    buscarPorAnunciante: async (idAnunciante) =>
-      reservas.filter(
-        (actual) =>
-          actual.publicacion?.anunciante?.idUsuario === idAnunciante,
-      ),
-    buscarPorId: async (id) =>
-      reservas.find((actual) => actual.id === id) ?? null,
-    guardar: async (actual) => {
-      estado.guardadas.push(actual.id);
-      return actual;
-    },
-  };
-
-  const reembolsosService = {
-    async listarPorReserva(idReserva) {
-      return estado.reembolsos.filter(
-        (reembolso) => reembolso.reserva.id === idReserva,
-      );
-    },
-    async buscarPagoPorReserva(idReserva) {
-      return pago.reserva.id === idReserva ? pago : null;
-    },
-    saldoReembolsable(pagoConsultado) {
-      const aprobado = estado.reembolsos
-        .filter(
-          (reembolso) =>
-            reembolso.pago === pagoConsultado &&
-            reembolso.estado === 'APROBADO',
-        )
-        .reduce((total, reembolso) => total + Number(reembolso.importe), 0);
-      return Number(pagoConsultado.amount) - aprobado;
-    },
-    async crearSolicitudConResultado(datos) {
-      const reembolso = Object.assign(new Reembolso(), {
-        id: estado.siguienteReembolso++,
-        reserva: datos.reserva,
-        pago: datos.pago,
-        tipo: datos.tipo,
-        origen: datos.origen,
-        importe: datos.importe,
-        moneda: datos.pago.currency,
-        estado: 'PENDIENTE',
-        motivo: datos.motivo,
-        referencia_interna: null,
-        referencia_externa: null,
-        id_externo: null,
-        idempotency_key: datos.idempotencyKey ?? 'clave-de-prueba',
-        resuelto_en: null,
-        error_detalle: null,
-      });
-      estado.reembolsos.push(reembolso);
-      return { reembolso, creado: true };
-    },
-    async ejecutar(id) {
-      const reembolso = estado.reembolsos.find(
-        (actual) => actual.id === id,
-      );
-      reembolso.estado = 'APROBADO';
-      reembolso.resuelto_en = new Date();
-      return reembolso;
-    },
-    async compensar(id) {
-      const reembolso = estado.reembolsos.find(
-        (actual) => actual.id === id,
-      );
-      if (!reembolso) return false;
-      if (
-        reembolso.estado === 'RECHAZADO' ||
-        reembolso.estado === 'CANCELADO'
-      )
-        return true;
-      if (
-        reembolso.estado !== 'PENDIENTE' &&
-        reembolso.estado !== 'FALLIDO'
-      )
-        return false;
-      reembolso.estado = 'CANCELADO';
-      estado.compensados.push(id);
+  for (const { id, nuevaSesion } of sesiones) {
+    assert.equal((await solicitar(nuevaSesion, 'auth/sesion')).status, 401);
+    assert.equal((await repo.buscarConBloqueo(id)).bloqueoDetalle.accesoLimitado, false);
+    await assert.rejects(auth.login(login(id)), (error) => {
+      const respuesta = error.getResponse();
+      assert.equal(respuesta.codigo, 'USUARIO_BLOQUEADO');
+      assert.ok(respuesta.tokenBloqueo);
+      sesiones.find((sesion) => sesion.id === id).tokenBloqueo = respuesta.tokenBloqueo;
       return true;
-    },
-    esTotal(reembolso) {
-      return (
-        reembolso.tipo === TipoReembolso.TOTAL ||
-        reembolso.tipo === TipoReembolso.CONTRACARGO
-      );
-    },
-  };
-
-  const disponibilidadService = {
-    liberarReserva: async (id) => {
-      estado.liberadas.push(id);
-    },
-  };
-
-  const reservasService = {
-    rechazarPago: async (id, estadoPago, actor, motivo, causa) => {
-      const actual = reservas.find((reservaActual) => reservaActual.id === id);
-      actual.estado_pago = estadoPago;
-      actual.estado_liquidacion = 'NO_APLICA';
-      actual.cancelada = true;
-      actual.fecha_cancelacion = new Date();
-      actual.cancelada_por = actor;
-      actual.motivo_cancelacion = motivo;
-      actual.causa_cancelacion = causa;
-      estado.rechazadas.push({ id, estadoPago, actor, motivo });
-      return actual;
-    },
-  };
-
-  const aplicacion = {
-    aplicarReembolsoConfirmado: async (id) => {
-      estado.aplicados.push(id);
-    },
-  };
-
-  const devolucion = new ReembolsosService(undefined, undefined, undefined, undefined, catalogosDePrueba());
-  for (const metodo of ['coberturaDevolucion', 'asegurarDevolucion', 'calcularCobertura']) reembolsosService[metodo] = devolucion[metodo];
-  reembolsosService.catalogos = catalogosDePrueba();
-  reembolsosService.aplicarConfirmado = aplicacion.aplicarReembolsoConfirmado;
-  const servicio = new ReservaBloqueoAnuncianteService(
-    reservaRepository,
-    disponibilidadService,
-    reembolsosService,
-    Object.assign(reservasDePrueba(), reservasService),
-    { proyectarEnReserva: async reserva => reserva, proyectarListado: async reservas => reservas, sincronizarDesdeReserva: async () => ({}) }, catalogosDePrueba(),
-  );
-
-  return { estado, pago, servicio };
-}
-
-test('reserva PENDIENTE sin código: se cancela y suma canceladasPendientes', async () => {
-  const reserva = crearReserva({
-    estado_pago: 'PENDIENTE',
-    estado_liquidacion: 'NO_APLICA',
-  });
-  const { estado, servicio } = crearEscenario(reserva);
-
-  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(
-    ANUNCIANTE,
-    ADMIN,
-    MOTIVO,
-  );
-
-  assert.deepEqual(resumen, resumenEsperado({ canceladasPendientes: 1 }));
-  assert.equal(reserva.cancelada, true);
-  assert.equal(reserva.estado_pago, 'CANCELADO');
-  assert.equal(reserva.cancelada_por, 'ADMINISTRADOR');
-  assert.equal(reserva.causa_cancelacion, 'BLOQUEO_ANUNCIANTE');
-  assert.ok(
-    reserva.motivo_cancelacion.startsWith(MOTIVO_CANCELACION_BLOQUEO),
-  );
-  assert.equal(estado.rechazadas.length, 1);
-  assert.equal(estado.rechazadas[0].estadoPago, 'CANCELADO');
-  assert.equal(estado.rechazadas[0].actor, 'ADMINISTRADOR');
-  assert.equal(estado.reembolsos.length, 0);
-  assert.deepEqual(estado.liberadas, []);
-});
-
-test('reserva APROBADA sin código y fechas futuras: devuelve, cancela, libera y aplica', async () => {
-  const reserva = crearReserva();
-  const { estado, servicio } = crearEscenario(reserva);
-
-  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(
-    ANUNCIANTE,
-    ADMIN,
-    MOTIVO,
-  );
-
-  assert.deepEqual(
-    resumen,
-    resumenEsperado({ canceladasConDevolucion: 1 }),
-  );
-  assert.equal(reserva.cancelada, true);
-  assert.equal(reserva.cancelada_por, 'ADMINISTRADOR');
-  assert.equal(reserva.causa_cancelacion, 'BLOQUEO_ANUNCIANTE');
-  assert.ok(
-    reserva.motivo_cancelacion.startsWith(MOTIVO_CANCELACION_BLOQUEO),
-  );
-  assert.deepEqual(estado.liberadas, [reserva.id]);
-  assert.equal(estado.reembolsos.length, 1);
-
-  const devolucion = estado.reembolsos[0];
-  assert.equal(devolucion.estado, 'APROBADO');
-  assert.equal(devolucion.origen, OrigenReembolso.CANCELACION);
-  assert.equal(devolucion.tipo, TipoReembolso.TOTAL);
-  assert.equal(Number(devolucion.importe), IMPORTE);
-  assert.ok(devolucion.motivo.startsWith(MOTIVO_CANCELACION_BLOQUEO));
-  assert.deepEqual(estado.aplicados, [devolucion.id]);
-  assert.deepEqual(estado.compensados, []);
-});
-
-test('reserva APROBADA con código validado: pasa a EN_REVISION sin cancelar ni devolver', async () => {
-  const reserva = crearReserva({
-    codigo_validado_en: new Date('2030-02-11T15:00:00Z'),
-  });
-  const { estado, servicio } = crearEscenario(reserva);
-
-  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(
-    ANUNCIANTE,
-    ADMIN,
-    MOTIVO,
-  );
-
-  assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
-  assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
-  assert.ok(
-    reserva.observacion_liquidacion.startsWith(
-      MOTIVO_CANCELACION_BLOQUEO,
-    ),
-  );
-  assert.equal(estado.rechazadas.length, 0);
-  assert.equal(estado.reembolsos.length, 0);
-  assert.deepEqual(estado.liberadas, []);
-  assert.deepEqual(estado.compensados, []);
-});
-
-test('reserva con liquidación EN_REVISION: pasa a EN_REVISION y no se cancela', async () => {
-  const reserva = crearReserva({
-    estado_liquidacion: 'EN_REVISION',
-  });
-  const { estado, servicio } = crearEscenario(reserva);
-
-  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(
-    ANUNCIANTE,
-    ADMIN,
-    MOTIVO,
-  );
-
-  assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
-  assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
-  assert.ok(
-    reserva.observacion_liquidacion.startsWith(
-      MOTIVO_CANCELACION_BLOQUEO,
-    ),
-  );
-  assert.equal(estado.rechazadas.length, 0);
-  assert.equal(estado.reembolsos.length, 0);
-  assert.deepEqual(estado.liberadas, []);
-});
-
-test('reserva con pago en CONTRACARGO: pasa a EN_REVISION y conserva el estado de pago', async () => {
-  const reserva = crearReserva({
-    estado_pago: 'CONTRACARGO',
-  });
-  const { estado, servicio } = crearEscenario(reserva);
-
-  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(
-    ANUNCIANTE,
-    ADMIN,
-    MOTIVO,
-  );
-
-  assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
-  assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_pago, 'CONTRACARGO');
-  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
-  assert.equal(estado.rechazadas.length, 0);
-  assert.equal(estado.reembolsos.length, 0);
-});
-
-test('reserva finalizada con liquidación pendiente: pasa a EN_REVISION y no devuelve', async () => {
-  const reserva = crearReserva({ finalizada: true });
-  const { estado, servicio } = crearEscenario(reserva);
-
-  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(
-    ANUNCIANTE,
-    ADMIN,
-    MOTIVO,
-  );
-
-  assert.deepEqual(resumen, resumenEsperado({ enRevision: 1 }));
-  assert.equal(reserva.cancelada, false);
-  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
-  assert.equal(estado.rechazadas.length, 0);
-  assert.equal(estado.reembolsos.length, 0);
-  assert.deepEqual(estado.liberadas, []);
-});
-
-test('reserva finalizada con liquidación resuelta: no se toca y suma sinAccion', async () => {
-  const reserva = crearReserva({
-    finalizada: true,
-    estado_liquidacion: 'PAGADO_PROPIETARIO',
-  });
-  const { estado, servicio } = crearEscenario(reserva);
-
-  const resumen = await servicio.cancelarReservasPorBloqueoAnunciante(
-    ANUNCIANTE,
-    ADMIN,
-    MOTIVO,
-  );
-
-  assert.deepEqual(resumen, resumenEsperado({ sinAccion: 1 }));
-  assert.equal(reserva.cancelada, false);
-  assert.equal(
-    reserva.estado_liquidacion,
-    'PAGADO_PROPIETARIO',
-  );
-  assert.deepEqual(estado.guardadas, []);
-  assert.equal(estado.reembolsos.length, 0);
-  assert.deepEqual(estado.liberadas, []);
-});
-
-function crearEscenarioBloqueo({ bloqueado, rol = 'Anunciante' }) {
-  const usuario = Object.assign(new Usuario(), {
-    id: 3,
-    activa: true,
-    bloqueado: !bloqueado,
-    rol: { nombre: rol },
-  });
-  const llamadas = { cambiarBloqueo: [], cancelarReservas: [] };
-  const repo = {
-    conTransaccion: (operacion) => operacion({}),
-    buscarBloqueado: async (id) => (id === usuario.id ? usuario : null),
-    guardar: async (actual) => llamadas.cambiarBloqueo.push([
-      actual.id, actual.bloqueado, actual.bloqueoDetalle?.administradorId, actual.bloqueoDetalle?.motivo,
-    ]),
-  };
-  const bloqueo = {
-    cancelarReservasPorBloqueoAnunciante: async (...argumentos) => {
-      llamadas.cancelarReservas.push(argumentos);
-      return resumenEsperado({ canceladasPendientes: 1 });
-    },
-  };
-
-  return {
-    llamadas,
-    servicio: new BloqueoAnuncianteService(new UsuariosService(repo, {}, {}, {}, {}, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {}), bloqueo, {}),
-  };
-}
-
-test('bloqueo de un Anunciante: cambia el bloqueo y resuelve sus reservas', async () => {
-  const { llamadas, servicio } = crearEscenarioBloqueo({ bloqueado: true });
-
-  const resultado = await servicio.cambiarBloqueo(3, true, ADMIN, MOTIVO);
-
-  assert.deepEqual(llamadas.cambiarBloqueo, [[3, true, ADMIN, MOTIVO]]);
-  assert.deepEqual(llamadas.cancelarReservas, [[3, ADMIN, MOTIVO]]);
-  assert.equal(resultado.mensaje, 'Usuario bloqueado correctamente');
-  assert.deepEqual(
-    resultado.reservas,
-    resumenEsperado({ canceladasPendientes: 1 }),
-  );
-});
-
-test('desbloqueo de un Anunciante: cambia el bloqueo y no toca reservas', async () => {
-  const { llamadas, servicio } = crearEscenarioBloqueo({ bloqueado: false });
-
-  const resultado = await servicio.cambiarBloqueo(3, false, ADMIN, MOTIVO);
-
-  assert.deepEqual(llamadas.cambiarBloqueo, [[3, false, undefined, undefined]]);
-  assert.deepEqual(llamadas.cancelarReservas, []);
-  assert.deepEqual(resultado, {
-    mensaje: 'Usuario habilitado correctamente',
-  });
-});
-
-test('repetir el bloqueo permite retomar reservas sin cambiar el motivo original', async () => {
-  const { llamadas, servicio } = crearEscenarioBloqueo({ bloqueado: true });
-  await servicio.cambiarBloqueo(3, true, ADMIN, MOTIVO);
-  await servicio.cambiarBloqueo(3, true, ADMIN + 1, 'Otro motivo');
-  assert.deepEqual(llamadas.cambiarBloqueo, [[3, true, ADMIN, MOTIVO]]);
-  assert.deepEqual(llamadas.cancelarReservas, [[3, ADMIN, MOTIVO], [3, ADMIN, MOTIVO]]);
-});
-
-test('bloqueo de una cuenta que no es Anunciante: no resuelve reservas', async () => {
-  const { llamadas, servicio } = crearEscenarioBloqueo({
-    bloqueado: true,
-    rol: 'Inquilino',
-  });
-
-  const resultado = await servicio.cambiarBloqueo(3, true, ADMIN, MOTIVO);
-
-  assert.deepEqual(llamadas.cambiarBloqueo, [[3, true, ADMIN, MOTIVO]]);
-  assert.deepEqual(llamadas.cancelarReservas, []);
-  assert.deepEqual(resultado, {
-    mensaje: 'Usuario bloqueado correctamente',
-  });
+    });
+  }
+  for (const { id, tokenBloqueo } of sesiones) {
+    assert.equal((await auth.consultarBloqueo(tokenBloqueo)).apelacion.texto,
+      id === 2 ? detalleAnterior.apelacion.texto : 'Solicito una revisión');
+    await assert.rejects(auth.apelarBloqueo(tokenBloqueo, 'Duplicada'), { status: 409 });
+  }
+  await db.exec("UPDATE reserva SET estado_pago = 'PENDIENTE', cancelada = false WHERE id_reserva = 20");
+  await assert.rejects(auth.login(login(2)), { status: 403 });
+  await bloqueo.cambiarBloqueo(2, false, 3);
+  const habilitada = await solicitar(sesiones[1].nuevaSesion, 'usuarios/administracion/bloqueados');
+  assert.equal(habilitada.status, 200);
 });

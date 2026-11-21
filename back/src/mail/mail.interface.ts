@@ -52,7 +52,7 @@ export interface IMailService {
   enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number): Promise<void>;
   enviarSolicitudAnunciante(destinatario: string): Promise<void>;
   enviarSolicitudParaRevision(destinatarios: string[], nombreSolicitante: string, emailSolicitante: string): Promise<void>;
-  enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string): Promise<void>;
+  enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string, accesoLimitado?: boolean): Promise<void>;
 }
 
 export const MAIL_SERVICE = 'MAIL_SERVICE';

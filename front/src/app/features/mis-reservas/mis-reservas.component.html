@@ -302,7 +302,9 @@
           </button>
           <div class="booking-menu" [id]="menuId" popover #menu>
             @if (reserva.publicacion) {
-              <a [routerLink]="['/publicaciones', reserva.publicacion.id]" (click)="menu.hidePopover()"><svg lucideExternalLink [size]="16" aria-hidden="true"></svg>Ver publicación</a>
+              @if (!accesoLimitado()) {
+                <a [routerLink]="['/publicaciones', reserva.publicacion.id]" (click)="menu.hidePopover()"><svg lucideExternalLink [size]="16" aria-hidden="true"></svg>Ver publicación</a>
+              }
             }
             @if (cambiarFechas) {
               <a routerLink="/reserva/resultado" [queryParams]="{ reserva_id: reserva.id, reprogramar: 1 }" (click)="menu.hidePopover()"><svg lucideCalendar [size]="16" aria-hidden="true"></svg>Cambiar fechas</a>

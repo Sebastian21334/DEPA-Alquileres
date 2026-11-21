@@ -59,6 +59,7 @@ import { AvatarComponent } from '../avatar/avatar.component';
 })
 export class NavbarComponent {
   protected readonly auth = inject(AuthService);
+  protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   protected readonly perfil = inject(PerfilService);
   private readonly chat = inject(ChatService);
   protected readonly actividadReembolsos = inject(ActividadReembolsosService);

@@ -810,11 +810,11 @@ export class AdminComponent {
     this.bloqueando.set(true);
     this.bloqueoError.set('');
     this.api.cambiarBloqueo(usuario.id, true, motivo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
+      next: ({ accesoLimitado }) => {
         this.bloqueando.set(false);
         this.cerrarBloqueo();
         this.actualizarBloqueoUsuario(usuario.id, true);
-        this.toast.mostrar('Usuario bloqueado.', 'exito');
+        this.toast.mostrar(accesoLimitado ? 'Usuario bloqueado con acceso a operaciones pendientes.' : 'Usuario bloqueado.', 'exito');
       },
       error: (error: Error) => {
         this.bloqueando.set(false);

@@ -43,6 +43,7 @@ export interface AdminBloqueo {
     motivo: string | null;
     administradorId: number | null;
     fecha: string | null;
+    accesoLimitado?: boolean;
     apelacion?: { texto: string; fecha: string };
     respuesta?: { texto: string; fecha: string; administradorId: number };
   };
@@ -234,7 +235,9 @@ export class AdminService {
     });
   }
   cambiarBloqueo(id: number, bloquear: boolean, motivo?: string) {
-    return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo });
+    return this.http.patch<{ mensaje: string; accesoLimitado: boolean }>(
+      `${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo },
+    );
   }
 
   listarBloqueados() {
