@@ -1,24 +1,224 @@
-.blocked-page { min-height: 70vh; padding: clamp(24px, 6vw, 72px) 16px; background: var(--color-bg); }
+.blocked-page {
+  min-height: 70vh;
+  padding: clamp(24px, 4vw, 48px) clamp(14px, 3.35vw, 28px);
+  background: radial-gradient(ellipse at top, #eaf0f6, #f2f5f9 75%);
+  color: #0d1525;
+}
+
 .blocked-card {
   display: grid;
-  justify-items: start;
-  gap: 16px;
-  max-width: 640px;
+  gap: 22px;
+  width: min(100%, 676px);
   margin-inline: auto;
-  padding: clamp(20px, 5vw, 36px);
+  padding: clamp(18px, 4.2vw, 30px);
   background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  box-shadow: var(--shadow-card);
+  border: 1px solid #cbd5e3;
+  border-radius: 22px;
 }
-h1, h2, p { margin: 0; }
-h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 800; }
-h2 { font-size: 1.08rem; font-weight: 700; }
-p { white-space: pre-wrap; overflow-wrap: anywhere; }
-.blocked-reason { width: 100%; padding: 16px; border-radius: 10px; background: var(--color-bg); }
-.blocked-reason p { margin-block: 8px; }
-.blocked-error { color: #a02621; }
-form { display: grid; gap: 10px; width: 100%; }
-form button { justify-self: start; }
-textarea { width: 100%; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; font: inherit; resize: vertical; }
-.back-link { color: var(--color-primary); font-weight: 700; text-decoration: underline; }
+
+h1, h2, p {
+  margin: 0;
+}
+
+.blocked-header {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.blocked-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #ffe3d3;
+}
+
+h1 {
+  font-size: clamp(1.65rem, 5vw, 2.25rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.blocked-reason {
+  display: grid;
+  gap: 7px;
+  padding: 14px 17px 16px;
+  background: #fdf5e7;
+  border: 1px solid #f0d5aa;
+  border-radius: 10px;
+}
+
+.blocked-reason h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.blocked-reason p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.blocked-date {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #4f5c6b;
+  font-size: 0.925rem;
+}
+
+.blocked-date svg, .appeal-status svg {
+  flex: none;
+}
+
+.appeal {
+  display: grid;
+  gap: 15px;
+  min-width: 0;
+}
+
+.appeal h2 {
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.appeal-heading p {
+  margin-top: 4px;
+  color: #474f60;
+}
+
+.appeal-status {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #e4eefc;
+  color: #243247;
+}
+
+.appeal-status svg {
+  color: #15458e;
+}
+
+form {
+  display: grid;
+  gap: 8px;
+}
+
+label {
+  font-weight: 750;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: 106px;
+  padding: 10px 14px;
+  border: 1px solid #9aa9c1;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+textarea::placeholder {
+  color: #59667d;
+}
+
+.blocked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+.back-link, .submit-appeal {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.back-link, .retry-button {
+  color: #0b3d91;
+  font-weight: 650;
+}
+
+.back-link {
+  text-decoration: none;
+}
+
+.back-link:hover, .retry-button:hover {
+  text-decoration: underline;
+}
+
+.retry-button {
+  justify-self: start;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.submit-appeal {
+  justify-content: center;
+  padding: 9px 24px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #064fce;
+  color: #fff;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.submit-appeal:hover:not(:disabled) {
+  background: #0641a9;
+}
+
+.submit-appeal:disabled {
+  background: #426cae;
+  cursor: default;
+}
+
+.retry-button:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+:is(a, button, textarea):focus-visible {
+  outline: 2px solid #0755cb;
+  outline-offset: 3px;
+}
+
+.blocked-error {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fff0ed;
+  color: #9a2720;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+  .blocked-card {
+    gap: 18px;
+    border-radius: 16px;
+  }
+
+  .blocked-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .back-link {
+    min-height: 36px;
+  }
+}

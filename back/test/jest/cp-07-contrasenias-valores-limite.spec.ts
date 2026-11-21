@@ -14,9 +14,9 @@ import request from 'supertest';
 import { AppDePrueba, crearAppDePrueba } from './soporte/app-de-prueba';
 
 const DATA = {
-  usuario1: { nombre: 'Tester_NuevoLD1', apellido: 'Prueba', email: 'leandro.prueba1@gmail.com', telefono: '6942067' },
-  usuario2: { nombre: 'Tester_NuevoLD2', apellido: 'Prueba', email: 'leandro.prueba2@gmail.com', telefono: '6942067' },
-  usuario3: { nombre: 'Tester_NuevoLD3', apellido: 'Prueba', email: 'leandro.prueba3@gmail.com', telefono: '6942067' },
+  usuario1: { nombre: 'Ana', apellido: 'Prueba', email: 'leandro.prueba1@gmail.com', telefono: '6942067' },
+  usuario2: { nombre: 'Bruno', apellido: 'Prueba', email: 'leandro.prueba2@gmail.com', telefono: '6942067' },
+  usuario3: { nombre: 'Cecilia', apellido: 'Prueba', email: 'leandro.prueba3@gmail.com', telefono: '6942067' },
   contrasenia1: 'Depa2026!xy',
   contrasenia2: 'Depa2026!xyz',
   contrasenia3: 'DepaAlquileres2026!SeminarioIntegradorUTNVillaMaria2026#ReservaSegura$Ok',

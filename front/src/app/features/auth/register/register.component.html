@@ -45,17 +45,23 @@
         <div class="auth__row">
           <div class="auth__field">
             <label for="nombre">Nombre</label>
-            <input id="nombre" type="text" formControlName="nombre" autocomplete="given-name" />
+            <input id="nombre" type="text" formControlName="nombre" autocomplete="given-name" maxlength="100"
+              (input)="filtrarCampo($event, 'nombre')" (compositionend)="filtrarCampo($event, 'nombre')"
+              [attr.aria-invalid]="form.controls.nombre.touched && form.controls.nombre.invalid || null"
+              [attr.aria-describedby]="form.controls.nombre.touched && form.controls.nombre.invalid ? 'nombre-ayuda' : null" />
             @if (form.controls.nombre.invalid && form.controls.nombre.touched) {
-              <span class="auth__hint auth__hint--error">Ingresá tu nombre (mínimo 2 caracteres).</span>
+              <span id="nombre-ayuda" class="auth__hint auth__hint--error">Ingresá tu nombre con letras y espacios (mínimo 2 caracteres).</span>
             }
           </div>
 
           <div class="auth__field">
             <label for="apellido">Apellido</label>
-            <input id="apellido" type="text" formControlName="apellido" autocomplete="family-name" />
+            <input id="apellido" type="text" formControlName="apellido" autocomplete="family-name" maxlength="100"
+              (input)="filtrarCampo($event, 'apellido')" (compositionend)="filtrarCampo($event, 'apellido')"
+              [attr.aria-invalid]="form.controls.apellido.touched && form.controls.apellido.invalid || null"
+              [attr.aria-describedby]="form.controls.apellido.touched && form.controls.apellido.invalid ? 'apellido-ayuda' : null" />
             @if (form.controls.apellido.invalid && form.controls.apellido.touched) {
-              <span class="auth__hint auth__hint--error">Ingresá tu apellido (mínimo 2 caracteres).</span>
+              <span id="apellido-ayuda" class="auth__hint auth__hint--error">Ingresá tu apellido con letras y espacios (mínimo 2 caracteres).</span>
             }
           </div>
         </div>
@@ -74,9 +80,13 @@
 
         <div class="auth__field">
           <label for="telefono">Teléfono</label>
-          <input id="telefono" type="tel" formControlName="telefono" autocomplete="tel" />
+          <input id="telefono" type="tel" formControlName="telefono" autocomplete="tel" maxlength="20"
+            (input)="filtrarCampo($event, 'telefono')" aria-describedby="telefono-ayuda"
+            [attr.aria-invalid]="form.controls.telefono.touched && form.controls.telefono.invalid || null" />
           @if (form.controls.telefono.invalid && form.controls.telefono.touched) {
-            <span class="auth__hint auth__hint--error">Ingresá un teléfono de contacto.</span>
+            <span id="telefono-ayuda" class="auth__hint auth__hint--error">Ingresá hasta 15 dígitos. Podés usar + al inicio y guiones entre números.</span>
+          } @else {
+            <span id="telefono-ayuda" class="auth__hint">Por ejemplo, +54-9-351-555-0123.</span>
           }
         </div>
 

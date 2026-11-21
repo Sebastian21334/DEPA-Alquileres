@@ -112,18 +112,18 @@ Los servicios coordinan las transacciones llamando al repositorio. Las operacion
 
 **Desviación verificada:** no existe hoy un alias opaco `Transaccion`. El contrato expone `EntityManager` de TypeORM en las interfaces y cinco services lo importan como tipo: `anunciantes`, `pagos`, `usuarios`, `disponibilidad` y `publicaciones`. Se declara en §9.
 
-## 6. Bloqueo de anunciante y reembolsos
+## 6. Bloqueo de cuentas y conciliación de reembolsos
 
 Flujo de composición:
 
 1. `BloqueoAnuncianteController` conserva las rutas `PATCH /usuarios/:id/bloquear` y `/habilitar`.
-2. `BloqueoAnuncianteService` delega el cambio de cuenta en `UsuariosService`. Si la cuenta es `Anunciante` y queda bloqueada, llama a `ReservaBloqueoAnuncianteService`.
-3. `ReservaBloqueoAnuncianteService` recorre las reservas del anunciante y decide: cancelar pendientes, devolver y cancelar, congelar en revisión o no actuar. Devuelve un resumen con canceladas, devueltas, en revisión, sin acción y fallidas.
-4. `ReembolsosService` calcula la cobertura del pago, registra el reembolso faltante y controla la aplicación de cada confirmación. `ReservasService` registra los efectos sobre la estadía.
+2. `BloqueoAnuncianteService` delega el cambio de cuenta en `UsuariosService`. El estado de la cuenta y el acceso limitado se guardan dentro de la misma transacción. La creación de reservas y el bloqueo coordinan el acceso a las filas del inquilino y la publicación para determinar qué operaciones ya existían.
+3. `SeguridadService` comprueba si quedan operaciones pendientes al validar una sesión limitada. Cuando se terminan, `UsuariosService` retira el acceso y conserva la apelación. `JwtAuthGuard` limita el acceso a las rutas autorizadas para atender operaciones existentes.
+4. Los pagos, reclamos y reembolsos previos siguen a cargo de sus servicios. Las devoluciones por bloqueos anteriores conservan sus registros y su conciliación.
 
 Idempotencia y compensación:
 
-- La clave base es `blq:<idAnunciante>:<idReserva>`; las coberturas parciales agregan `:c1`, `:c2`, y los reintentos `:r1:<sello>`.
+- Las devoluciones ya registradas por el flujo anterior de bloqueo conservan sus claves `blq:`.
 - `crearSolicitudConResultado` busca la clave antes y dentro de la transacción. Si dos solicitudes compiten, devuelve el registro ganador.
 - Si la reserva no se cancela después de crear el reembolso, se llama a `ReembolsosService.compensar`. Solo se compensan `PENDIENTE` o `FALLIDO`; un `FALLIDO` se consulta en Mercado Pago antes de rechazarlo. Nunca se toca un `APROBADO`.
 - La reserva se cancela y libera en una transacción propia. Los avisos y la ejecución de la pasarela quedan fuera de esa transacción.

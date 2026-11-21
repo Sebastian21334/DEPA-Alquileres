@@ -193,12 +193,15 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string): Promise<void> {
+  async enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string, accesoLimitado = false): Promise<void> {
     const motivoSeguro = motivo
       ? `<p>Motivo: ${this.plantillas.escapar(motivo)}</p>`
       : '';
+    const avisoPendientes = accesoLimitado
+      ? '<p>Podés iniciar sesión para resolver tus operaciones pendientes. Al terminarlas, tu acceso quedará limitado a consultar y apelar el bloqueo.</p>'
+      : '';
     const contenido = bloqueado
-      ? `<p>Tu cuenta fue bloqueada.</p>${motivoSeguro}<p>Ingresá con tus credenciales para consultar el bloqueo o presentar una apelación.</p>`
+      ? `<p>Tu cuenta fue bloqueada.</p>${motivoSeguro}${avisoPendientes}<p>Ingresá con tus credenciales para consultar el bloqueo o presentar una apelación.</p>`
       : '<p>Tu cuenta fue habilitada nuevamente. Ya podés iniciar sesión.</p>';
     await this.enviar(
       destinatario,

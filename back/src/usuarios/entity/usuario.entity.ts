@@ -13,6 +13,8 @@ export interface DetalleBloqueo {
   motivo: string | null;
   administradorId: number | null;
   fecha: string | null;
+  // Los bloqueos anteriores pueden omitir el campo. false indica un cierre definitivo.
+  accesoLimitado?: boolean;
   apelacion?: { texto: string; fecha: string };
   respuesta?: { texto: string; fecha: string; administradorId: number };
 }

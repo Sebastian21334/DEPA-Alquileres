@@ -103,7 +103,7 @@ export class UsuariosService {
 
     const motivoNormalizado = motivo?.trim();
     return this.usuariosRepo.conTransaccion(async (transaccion) => {
-      const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion, true);
+      const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion);
       if (!usuario) throw new NotFoundException('Usuario no encontrado');
       if (!usuario.activa)
         throw new ConflictException('La cuenta fue dada de baja: no se puede bloquear ni habilitar');
@@ -112,17 +112,65 @@ export class UsuariosService {
       await this.publicacionesService.bloquearPublicacionesParaCambioDeCuenta(idUsuario, transaccion);
       usuario.bloqueado = bloqueado;
       if (bloqueado) {
+        const accesoLimitado = await this.evaluarPendientesDeBloqueo(idUsuario, transaccion);
         usuario.bloqueoDetalle = {
           id: randomUUID(),
           motivo: motivoNormalizado || null,
           administradorId: idOperador,
           fecha: new Date().toISOString(),
+          accesoLimitado: accesoLimitado !== null,
         };
       }
       await this.usuariosRepo.guardar(usuario, transaccion);
       return { usuario, cambio: true };
     });
 
+  }
+
+  async verificarAccesoLimitado(usuario: Usuario): Promise<{ anuncianteVerificado: boolean } | null> {
+    const detalle = usuario.bloqueoDetalle;
+    if (!usuario.activa || !usuario.bloqueado || !detalle || detalle.accesoLimitado === false) return null;
+
+    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+      const vigente = await this.usuariosRepo.buscarConBloqueo(usuario.id, transaccion);
+      if (!vigente?.activa || !vigente.bloqueado || vigente.bloqueoDetalle?.id !== detalle.id ||
+          vigente.bloqueoDetalle.accesoLimitado === false) return null;
+
+      const accesoLimitado = await this.evaluarPendientesDeBloqueo(vigente.id, transaccion);
+      const permiteAcceso = accesoLimitado !== null;
+      if (vigente.bloqueoDetalle.accesoLimitado !== permiteAcceso) {
+        vigente.bloqueoDetalle.accesoLimitado = permiteAcceso;
+        await this.usuariosRepo.guardar(vigente, transaccion);
+      }
+      return accesoLimitado;
+    });
+  }
+
+  async consultarAccesoPendiente(idUsuario: number, transaccion: EntityManager): Promise<boolean> {
+    const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion, false);
+    if (!usuario?.activa || !usuario.bloqueado || !usuario.bloqueoDetalle) return false;
+    return usuario.bloqueoDetalle.accesoLimitado ??
+      (await this.evaluarPendientesDeBloqueo(idUsuario, transaccion) !== null);
+  }
+
+  async puedeContinuarConversaciones(usuario: Usuario, transaccion?: EntityManager): Promise<boolean> {
+    if (!usuario.activa) return false;
+    if (!usuario.bloqueado) return true;
+    if (!transaccion) {
+      const vigente = await this.usuariosRepo.buscarConBloqueo(usuario.id);
+      return Boolean(vigente?.activa && (!vigente.bloqueado || await this.verificarAccesoLimitado(vigente)));
+    }
+    const vigente = await this.usuariosRepo.buscarConBloqueo(usuario.id, transaccion, false);
+    return Boolean(vigente?.activa && (!vigente.bloqueado ||
+      (vigente.bloqueoDetalle && vigente.bloqueoDetalle.accesoLimitado !== false &&
+        await this.evaluarPendientesDeBloqueo(usuario.id, transaccion))));
+  }
+
+  async validarCuentaParaNuevaReserva(idUsuario: number, transaccion: EntityManager): Promise<void> {
+    const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion);
+    if (!usuario?.activa || usuario.bloqueado) {
+      throw new ForbiddenException('La cuenta no puede iniciar nuevas reservas');
+    }
   }
 
   nombreCompleto(usuario: Usuario): string {
@@ -292,6 +340,17 @@ export class UsuariosService {
   }
 
   private async validarOperacionesResueltas(transaccion: EntityManager, idUsuario: number, tienePublicaciones: boolean): Promise<void> {
+    const pendientes = await this.obtenerOperacionesPendientes(idUsuario, tienePublicaciones, transaccion);
+    if (pendientes.length) {
+      throw new ConflictException(
+        'No se puede dar de baja la cuenta porque tiene operaciones sin resolver ' +
+        `(${pendientes.join('; ')}). ` +
+        'Primero resolvé las reservas, los pagos, las liquidaciones y los reclamos pendientes.',
+      );
+    }
+  }
+
+  private async obtenerOperacionesPendientes(idUsuario: number, tienePublicaciones: boolean, transaccion: EntityManager): Promise<string[]> {
     const pendientes: string[] = [];
     if (tienePublicaciones) {
       const anunciante = await this.pendientesCuenta(idUsuario, 'Anunciante', transaccion);
@@ -300,13 +359,28 @@ export class UsuariosService {
     const inquilino = await this.pendientesCuenta(idUsuario, 'Inquilino', transaccion);
     if (inquilino.length) pendientes.push(`como Inquilino: ${inquilino.join(', ')}`);
 
-    if (pendientes.length) {
-      throw new ConflictException(
-        'No se puede dar de baja la cuenta porque tiene operaciones sin resolver ' +
-        `(${pendientes.join('; ')}). ` +
-        'Primero resolvé las reservas, los pagos, las liquidaciones y los reclamos pendientes.',
-      );
+    return pendientes;
+  }
+
+  private async evaluarPendientesDeBloqueo(idUsuario: number, transaccion: EntityManager): Promise<{ anuncianteVerificado: boolean } | null> {
+    const perfil = await this.anunciantesService.buscarPorUsuario(idUsuario, transaccion);
+    const anuncianteVerificado = perfil?.verificado === true;
+    if ((await this.obtenerOperacionesPendientes(idUsuario, anuncianteVerificado, transaccion)).length > 0) {
+      return { anuncianteVerificado };
     }
+    const tramitesPendientes = await this.usuariosRepo.tieneTramitesPendientes(idUsuario, anuncianteVerificado, transaccion, {
+      reclamos: [
+        this.catalogosService.codigoEstado('RECLAMO', 'ABIERTO'),
+        this.catalogosService.codigoEstado('RECLAMO', 'EN_REVISION'),
+      ],
+      cancelacion: this.catalogosService.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'),
+      reembolsos: [
+        this.catalogosService.codigoEstado('REEMBOLSO', 'PENDIENTE'),
+        this.catalogosService.codigoEstado('REEMBOLSO', 'FALLIDO'),
+      ],
+      reembolsoAprobado: this.catalogosService.codigoEstado('REEMBOLSO', 'APROBADO'),
+    });
+    return tramitesPendientes ? { anuncianteVerificado } : null;
   }
 
   private async pendientesCuenta(idUsuario: number, participacion: ParticipacionEnReserva, transaccion: EntityManager): Promise<string[]> {
@@ -347,8 +421,9 @@ export class UsuariosService {
     return this.usuariosRepo.listarBloqueados();
   }
 
-  private bloqueoVigente(usuario: Usuario | null, idBloqueo: string): DetalleBloqueo {
-    if (!usuario?.activa || !usuario.bloqueado || usuario.bloqueoDetalle?.id !== idBloqueo) {
+  private bloqueoVigente(usuario: Usuario | null, idBloqueo?: string): DetalleBloqueo {
+    if (!usuario?.activa || !usuario.bloqueado || !usuario.bloqueoDetalle ||
+        (idBloqueo === undefined ? !usuario.bloqueoDetalle.accesoLimitado : usuario.bloqueoDetalle.id !== idBloqueo)) {
       throw new ForbiddenException('El bloqueo ya no está vigente. Volvé a ingresar.');
     }
     return usuario.bloqueoDetalle;
@@ -360,12 +435,12 @@ export class UsuariosService {
       respuesta: respuesta ? { texto: respuesta.texto, fecha: respuesta.fecha } : null };
   }
 
-  async consultarBloqueo(idUsuario: number, idBloqueo: string) {
+  async consultarBloqueo(idUsuario: number, idBloqueo?: string) {
     const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario);
     return this.vistaBloqueo(this.bloqueoVigente(usuario, idBloqueo));
   }
 
-  async apelarBloqueo(idUsuario: number, idBloqueo: string, texto: string) {
+  async apelarBloqueo(idUsuario: number, idBloqueo: string | undefined, texto: string) {
     return this.usuariosRepo.conTransaccion(async (transaccion) => {
       const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion);
       const detalle = this.bloqueoVigente(usuario, idBloqueo);

@@ -7,9 +7,15 @@ export class ConsultarBloqueoDto {
   token!: string;
 }
 
-export class ApelacionBloqueoDto extends ConsultarBloqueoDto {
+export class TextoApelacionBloqueoDto {
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString()
   @Length(1, 2000)
   texto!: string;
+}
+
+export class ApelacionBloqueoDto extends TextoApelacionBloqueoDto {
+  @IsString()
+  @Length(1, 2048)
+  token!: string;
 }

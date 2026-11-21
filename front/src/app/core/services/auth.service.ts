@@ -10,7 +10,15 @@ interface JwtPayload {
   sub: number;
   email: string;
   rol?: string;
+  accesoLimitado?: boolean;
+  anuncianteVerificado?: boolean;
   exp: number;
+}
+
+interface EstadoSesion {
+  accesoLimitado: boolean;
+  anuncianteVerificado: boolean;
+  rol?: string | null;
 }
 
 // DTOs alineados con back/src/auth/dto/register.dto.ts y login.dto.ts.
@@ -72,7 +80,23 @@ export class AuthService {
   }
 
   get isAdmin(): boolean {
-    return this.currentUser()?.rol === 'Administrador';
+    const usuario = this.currentUser();
+    return !!usuario && !usuario.accesoLimitado && usuario.rol === 'Administrador';
+  }
+
+  actualizarEstadoSesion(estado: EstadoSesion): void {
+    this.currentUser.update((usuario) => {
+      if (!usuario) return usuario;
+      const rol = estado.rol === undefined ? usuario.rol : estado.rol ?? undefined;
+      if (Boolean(usuario.accesoLimitado) === estado.accesoLimitado &&
+          Boolean(usuario.anuncianteVerificado) === estado.anuncianteVerificado && usuario.rol === rol) return usuario;
+      return { ...usuario, ...estado, rol };
+    });
+  }
+
+  consultarSesion(): Observable<EstadoSesion> {
+    return this.http.get<EstadoSesion>(`${this.baseUrl}/sesion`)
+      .pipe(tap((estado) => this.actualizarEstadoSesion(estado)));
   }
 
   /** Registra la cuenta y envía el correo de verificación. */
@@ -129,12 +153,16 @@ export class AuthService {
       .pipe(tap((res) => this.guardarSesion(res.access_token)));
   }
 
-  consultarBloqueo(token: string): Observable<VistaBloqueo> {
-    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/consultar`, { token });
+  consultarBloqueo(token: string | null): Observable<VistaBloqueo> {
+    return token
+      ? this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/consultar`, { token })
+      : this.http.get<VistaBloqueo>(`${this.baseUrl}/bloqueo/actual`);
   }
 
-  apelarBloqueo(token: string, texto: string): Observable<VistaBloqueo> {
-    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/apelar`, { token, texto });
+  apelarBloqueo(token: string | null, texto: string): Observable<VistaBloqueo> {
+    return token
+      ? this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/apelar`, { token, texto })
+      : this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/actual`, { texto });
   }
 
   /** POST /auth/reenviar-verificacion — solicita un nuevo mail para una cuenta pendiente. */

@@ -114,7 +114,10 @@ export class AuthService {
       true,
     );
 
-    if (user.bloqueado) {
+    const accesoLimitado = user.bloqueado && user.bloqueoDetalle
+      ? await this.usuariosService.verificarAccesoLimitado(user)
+      : null;
+    if (user.bloqueado && !accesoLimitado) {
       const bloqueoId = user.bloqueoDetalle?.id;
       const tokenBloqueo = bloqueoId && await this.jwtService.signAsync(
         { usuarioBloqueadoId: user.id, bloqueoId },
@@ -144,10 +147,19 @@ export class AuthService {
       access_token: await this.jwtService.signAsync({
         sub: user.id,
         email: user.email,
-        rol: user.rol?.nombre,
+        rol: accesoLimitado ? undefined : user.rol?.nombre,
+        ...(accesoLimitado && { accesoLimitado: true, ...accesoLimitado }),
         ...(user.version_sesion && { versionSesion: user.version_sesion }),
       }),
     };
+  }
+
+  async consultarBloqueoActual(idUsuario: number) {
+    return this.usuariosService.consultarBloqueo(idUsuario);
+  }
+
+  async apelarBloqueoActual(idUsuario: number, texto: string) {
+    return this.usuariosService.apelarBloqueo(idUsuario, undefined, texto);
   }
 
   private async verificarTokenBloqueo(token: string) {

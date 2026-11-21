@@ -234,7 +234,8 @@
           @if (errorAccionReclamo()) { <p class="claim-error" role="alert">{{ errorAccionReclamo() }}</p> }
           @for (reclamo of reclamos(); track reclamo.id) {
             <article class="acct-card reservation claim-card">
-              <app-claim-history [reclamo]="reclamo" (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)">
+              <app-claim-history [reclamo]="reclamo" [mostrarVerReembolso]="esInquilinoDelReclamo(reclamo)"
+                (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)" (verReembolso)="verReembolsoReclamo(reclamo)">
                 @if (reclamo.estado !== 'CERRADO') {
                   @if (respuestaReclamo() === reclamo.id) {
                     <app-conversation-composer [(texto)]="textoRespuesta" etiqueta="Mensaje para el reclamo"
@@ -328,7 +329,9 @@
           </button>
           <div class="booking-menu" [id]="menuId" popover #menu>
             @if (reserva.publicacion) {
-              <a [routerLink]="['/publicaciones', reserva.publicacion.id]" (click)="menu.hidePopover()"><svg lucideExternalLink [size]="16" aria-hidden="true"></svg>Ver publicación</a>
+              @if (!accesoLimitado()) {
+                <a [routerLink]="['/publicaciones', reserva.publicacion.id]" (click)="menu.hidePopover()"><svg lucideExternalLink [size]="16" aria-hidden="true"></svg>Ver publicación</a>
+              }
             }
             @if (cambiarFechas) {
               <a routerLink="/reserva/resultado" [queryParams]="{ reserva_id: reserva.id, reprogramar: 1 }" (click)="menu.hidePopover()"><svg lucideCalendar [size]="16" aria-hidden="true"></svg>Cambiar fechas</a>

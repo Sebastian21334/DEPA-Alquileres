@@ -8,12 +8,16 @@ import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import type {
   IUsuariosRepository,
   BloqueoAdministrativo,
+  EstadosTramitesPendientes,
   OperacionesPendientesCuenta,
   ParticipacionEnReserva,
 } from './usuarios.repository.interface';
 import { digitosCuit } from '../../common/utils/cuit';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 import { Pago } from '../../pagos/entity/pago.entity';
+import { Reclamo } from '../../reclamos/entity/reclamo.entity';
+import { Reembolso } from '../../reembolsos/entity/reembolso.entity';
+import { SolicitudCancelacion } from '../../cancelaciones/entity/solicitud-cancelacion.entity';
 import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
 
 const RESTRICCION_EMAIL_UNICO = 'UQ_2863682842e688ca198eb25c124';
@@ -101,6 +105,26 @@ export class UsuariosRepository implements IUsuariosRepository {
 
   buscarPorEmail(email: string): Promise<Usuario | null> {
     return this.repo.findOneBy({ email });
+  }
+
+  tieneTramitesPendientes(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: EstadosTramitesPendientes): Promise<boolean> {
+    const reservas = transaccion.getRepository(Reserva).createQueryBuilder('reserva');
+    if (anuncianteVerificado) {
+      reservas.leftJoin('reserva.publicacion', 'publicacion')
+        .where('(reserva.id_usuario = :idUsuario OR publicacion.id_anunciante = :idUsuario)', { idUsuario });
+    } else {
+      reservas.where('reserva.id_usuario = :idUsuario', { idUsuario });
+    }
+    const reclamos = reservas.subQuery().select('1').from(Reclamo, 'reclamo')
+      .where('reclamo.id_reserva = reserva.id').andWhere('reclamo.estado IN (:...reclamos)').getQuery();
+    const cancelaciones = reservas.subQuery().select('1').from(SolicitudCancelacion, 'solicitud')
+      .where('solicitud.id_reserva = reserva.id').andWhere('solicitud.estado = :cancelacion').getQuery();
+    const reembolsos = reservas.subQuery().select('1').from(Reembolso, 'reembolso')
+      .where('reembolso.id_reserva = reserva.id')
+      .andWhere('(reembolso.estado IN (:...reembolsos) OR (reembolso.estado = :reembolsoAprobado AND reembolso.aplicado_en IS NULL))')
+      .getQuery();
+    return reservas.andWhere(`(EXISTS ${reclamos} OR EXISTS ${cancelaciones} OR EXISTS ${reembolsos})`, { ...estados })
+      .getExists();
   }
 
   buscarBajaRecuperable(email: string): Promise<Usuario | null> {
@@ -217,16 +241,17 @@ export class UsuariosRepository implements IUsuariosRepository {
 
   buscarParaSesion(id: number): Promise<Usuario | null> {
     return this.repo.createQueryBuilder('u')
-      .addSelect('u.version_sesion')
+      .addSelect(['u.version_sesion', 'u.bloqueoDetalle'])
       .leftJoinAndSelect('u.rol', 'rol')
       .where('u.id = :id', { id })
       .getOne();
   }
 
-  buscarConBloqueo(id: number, transaccion?: EntityManager): Promise<Usuario | null> {
+  buscarConBloqueo(id: number, transaccion?: EntityManager, bloquear = true): Promise<Usuario | null> {
     const consulta = (transaccion?.getRepository(Usuario) ?? this.repo)
-      .createQueryBuilder('u').addSelect('u.bloqueoDetalle').where('u.id = :id', { id });
-    if (transaccion) consulta.setLock('pessimistic_write');
+      .createQueryBuilder('u').addSelect('u.bloqueoDetalle').leftJoinAndSelect('u.rol', 'rol')
+      .where('u.id = :id', { id });
+    if (transaccion && bloquear) consulta.setLock('pessimistic_write', undefined, ['u']);
     return consulta.getOne();
   }
 

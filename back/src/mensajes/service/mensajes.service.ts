@@ -97,10 +97,16 @@ export class MensajesService {
           'No podés enviarle mensajes a esta cuenta porque fue dada de baja',
         );
       }
-      if (destinatario.bloqueado || !remitente?.activa || remitente.bloqueado) {
-        throw new ConflictException(
-          'El contacto está suspendido porque una cuenta está bloqueada o inactiva. Para reservas anteriores, contactá a soporte.',
-        );
+      if (!remitente?.activa) {
+        throw new ConflictException('El contacto está suspendido porque la cuenta está inactiva.');
+      }
+      if (destinatario.bloqueado || remitente.bloqueado) {
+        const hayConversacion = await mensajes.existeConversacion(publicacion.id, remitente.id, destinatario.id);
+        if (!hayConversacion ||
+            (remitente.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(remitente, transaccion)) ||
+            (destinatario.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(destinatario, transaccion))) {
+          throw new ConflictException('La cuenta bloqueada solo puede responder en conversaciones existentes mientras tenga operaciones pendientes.');
+        }
       }
 
       const mensaje = mensajes.crear({
@@ -162,7 +168,12 @@ export class MensajesService {
       throw new ForbiddenException('No formás parte de esta conversación');
     }
 
-    return mensajes.map((mensaje) => this.prepararRespuesta(mensaje));
+    const { origenUsuario, destinoUsuario, publicacion } = mensajes[0];
+    const contactoSuspendido = publicacion.eliminada ||
+      (!origenUsuario.activa || !destinoUsuario.activa) ||
+      (origenUsuario.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(origenUsuario)) ||
+      (destinoUsuario.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(destinoUsuario));
+    return mensajes.map((mensaje) => ({ ...this.prepararRespuesta(mensaje), contactoSuspendido }));
   }
 
   /**

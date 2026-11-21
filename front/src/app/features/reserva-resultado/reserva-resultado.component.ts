@@ -58,6 +58,7 @@ export class ReservaResultadoComponent {
   protected readonly avisoReprogramacion = signal('');
 
   protected readonly reserva = computed(() => this.resumen()?.reserva ?? null);
+  protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   protected readonly pago = computed(() => this.resumen()?.pago ?? null);
   protected readonly esInquilino = computed(
     () => this.reserva()?.usuario?.id === Number(this.auth.currentUser()?.sub),
@@ -89,12 +90,13 @@ export class ReservaResultadoComponent {
   protected readonly contactoDisponible = computed(() => {
     const reserva = this.reserva();
     return (
-      !this.contactoSuspendido() && reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
+      !this.accesoLimitado() && !this.contactoSuspendido() &&
+      reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
     );
   });
   protected readonly whatsappUrl = computed(() => {
     const reserva = this.reserva();
-    if (!reserva || this.contactoSuspendido()) return null;
+    if (!reserva || this.accesoLimitado() || this.contactoSuspendido()) return null;
     const telefono = this.esInquilino()
       ? (reserva.publicacion?.anunciante?.numero_contacto ??
         reserva.publicacion?.anunciante?.usuario?.telefono)

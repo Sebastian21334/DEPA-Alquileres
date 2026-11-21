@@ -36,6 +36,9 @@ export class LoginComponent {
     if (this.route.snapshot.queryParamMap.get('sesionExpirada') === '1') {
       this.error.set('Tu sesión venció. Ingresá nuevamente para continuar.');
     }
+    if (this.route.snapshot.queryParamMap.get('bloqueoTotal') === '1') {
+      this.error.set('Finalizó el acceso a tus operaciones pendientes. Ingresá para consultar o apelar el bloqueo.');
+    }
   }
 
   protected onSubmit(): void {
@@ -55,6 +58,12 @@ export class LoginComponent {
       next: () => {
         this.enviando.set(false);
         const destino = this.route.snapshot.queryParamMap.get('returnUrl');
+        if (this.authService.currentUser()?.accesoLimitado) {
+          const ruta = destino?.split(/[?#]/)[0];
+          const seguirReserva = ruta === '/mis-reservas' || ruta === '/reserva/resultado';
+          void this.router.navigateByUrl(seguirReserva && destino ? destino : '/mis-reservas');
+          return;
+        }
         this.router.navigateByUrl(destino?.startsWith('/') ? destino : '/');
       },
       error: (err: ApiError) => {

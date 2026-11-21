@@ -233,6 +233,7 @@ export class ReservasService
 
     const guardada = await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
+        await this.usuariosService.validarCuentaParaNuevaReserva(idUsuario, transaccion);
         await this.publicacionesService.bloquearParaModificacion(dto.id_publicacion, transaccion);
         const actual = await this.publicacionesService.buscarCondicionesDeReserva(
           dto.id_publicacion,
@@ -358,10 +359,13 @@ export class ReservasService
         // Mercado Pago puede notificar el mismo pago más de una vez.
         if (this.pagoAprobado(reserva) || this.liquidacionResuelta(reserva)) return { reserva };
 
-        // Un anunciante bloqueado o inactivo no puede confirmar ni reactivar reservas.
+        // Los pagos de reservas anteriores siguen su curso durante el acceso limitado.
+        const anunciante = reserva.publicacion?.anunciante;
         if (
           reserva.publicacion &&
-          !this.publicacionesService.cuentaAnuncianteHabilitada(reserva.publicacion)
+          !this.publicacionesService.cuentaAnuncianteHabilitada(reserva.publicacion) &&
+          !(anunciante?.usuario?.activa && anunciante.usuario.bloqueado &&
+            await this.usuariosService.consultarAccesoPendiente(anunciante.idUsuario, transaccion))
         ) {
           this.cerrarSinPago(reserva, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'));
           this.registrarPagoParaRevision(

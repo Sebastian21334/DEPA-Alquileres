@@ -12,6 +12,13 @@ export interface OperacionesPendientesCuenta {
   pagosSinConciliar: number;
 }
 
+export interface EstadosTramitesPendientes {
+  reclamos: string[];
+  cancelacion: string;
+  reembolsos: string[];
+  reembolsoAprobado: string;
+}
+
 export const USUARIOS_REPOSITORY = 'USUARIOS_REPOSITORY';
 
 export interface BloqueoAdministrativo {
@@ -26,6 +33,7 @@ export interface IUsuariosRepository {
   conTransaccion<T>(operacion: (transaccion: EntityManager) => Promise<T>): Promise<T>;
   buscarBloqueado(idUsuario: number, transaccion: EntityManager, incluirRol?: boolean, incluirCredenciales?: boolean): Promise<Usuario | null>;
   contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager, estados: { pagoPendiente: string; pagoAprobado: string; liquidacionesResueltas: string[]; enRevision: string }): Promise<OperacionesPendientesCuenta>;
+  tieneTramitesPendientes(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: EstadosTramitesPendientes): Promise<boolean>;
   buscarPorEmail(email: string): Promise<Usuario | null>;
   buscarBajaRecuperable(email: string): Promise<Usuario | null>;
   buscarPorTokenReactivacion(token: string): Promise<Usuario | null>;
@@ -37,7 +45,7 @@ export interface IUsuariosRepository {
   buscarPorId(id: number, transaccion?: EntityManager): Promise<Usuario | null>;
   buscarParaLogin(email: string): Promise<Usuario | null>;
   buscarParaSesion(id: number): Promise<Usuario | null>;
-  buscarConBloqueo(id: number, transaccion?: EntityManager): Promise<Usuario | null>;
+  buscarConBloqueo(id: number, transaccion?: EntityManager, bloquear?: boolean): Promise<Usuario | null>;
   listarBloqueados(): Promise<BloqueoAdministrativo[]>;
   guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean>;
   verificarCuenta(token: string): Promise<boolean>;
