@@ -107,6 +107,36 @@ after(async () => {
   finally { if (base) await base.cerrar(); }
 });
 
+test('el registro rechaza nombres o teléfonos inválidos antes de crear la cuenta', async () => {
+  for (const cambios of [
+    { nombre: 'José2' },
+    { apellido: 'Muñoz_Ávila' },
+    { nombre: '   ' },
+    { telefono: '+54-351-ABC' },
+    { telefono: '54+351-555' },
+    { telefono: '351--555' },
+    { telefono: '+1234567890123456' },
+    { telefono: '+1-2-3-456-789-012345' },
+  ]) {
+    const respuesta = await registro(cambios).expect(400);
+    const campo = Object.keys(cambios)[0];
+    assert.ok(respuesta.body.message.some(mensaje => mensaje.toLowerCase().includes(
+      campo === 'telefono' ? 'teléfono' : campo,
+    )));
+  }
+  assert.equal(await usuarios().findOneBy({ email: datos.email }), null);
+  assert.equal(enviados.length, 0);
+});
+
+test('el registro acepta nombres con acentos y un teléfono con 15 dígitos y 20 caracteres', async () => {
+  const datosValidos = { nombre: 'José María', apellido: 'Muñoz de Ávila', telefono: '+12-345-678-901-2345' };
+  await registro(datosValidos).expect(201);
+  const cuenta = await usuarios().findOneByOrFail({ email: datos.email });
+  assert.equal(cuenta.nombre, datosValidos.nombre);
+  assert.equal(cuenta.apellido, datosValidos.apellido);
+  assert.equal(cuenta.telefono, datosValidos.telefono);
+});
+
 for (const via of ['propia', 'administrativa']) {
   for (const conHistorial of [false, true]) {
     test(`baja ${via}, ${conHistorial ? 'con reservas terminadas' : 'sin reservas'}: conserva historial y permite registro, verificación y login con el mismo mail`, async () => {

@@ -239,7 +239,7 @@ test('el acceso opcional permite anónimos y valida tokens antes de confiar en e
   assert.equal(await guard.canActivate(context), true);
   const validar = t.mock.method(JwtAuthGuard.prototype, 'canActivate', () => { throw new Error('Token inválido'); });
   request.headers.authorization = 'Bearer invalido';
-  assert.throws(() => guard.canActivate(context), /Token inválido/);
+  await assert.rejects(guard.canActivate(context), /Token inválido/);
   assert.equal(validar.mock.callCount(), 1);
 });
 

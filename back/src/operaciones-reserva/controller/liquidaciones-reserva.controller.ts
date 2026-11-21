@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Header, Param, ParseIntPipe, Patch, Req, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
@@ -24,6 +24,7 @@ export class LiquidacionesReservaController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get('liquidaciones/publicacion/:id')
   listarPagosDelAnunciante(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.liquidacionesService.listarPagosDelAnunciante(req.user.id, id);

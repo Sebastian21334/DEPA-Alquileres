@@ -50,6 +50,7 @@
       <form class="block-form" (ngSubmit)="confirmarBloqueo()">
         <h2 id="block-dialog-title">Bloquear a {{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</h2>
         <p>El usuario verá este motivo al intentar iniciar sesión y podrá apelar el bloqueo.</p>
+        <p>Si tiene operaciones pendientes, solo podrá entrar para resolverlas y apelar. Al terminarlas, se aplicará el bloqueo total.</p>
         <label for="block-reason">Motivo del bloqueo</label>
         <textarea id="block-reason" name="motivoBloqueo" [(ngModel)]="motivoBloqueo"
           placeholder="Explicá por qué se bloquea esta cuenta" rows="5" maxlength="500" required autofocus></textarea>
@@ -839,6 +840,9 @@
               <p><strong>Fecha del bloqueo</strong> {{ bloqueo.detalle.fecha | date: 'dd/MM/yyyy' }}</p>
             }
             <p><strong>Motivo</strong> {{ bloqueo.detalle.motivo || 'Sin registro' }}</p>
+            @if (bloqueo.detalle.accesoLimitado) {
+              <p>Acceso limitado a operaciones pendientes y apelación.</p>
+            }
             @if (bloqueo.detalle.apelacion) {
               <app-conversation-panel titulo="Apelación del bloqueo"
                 [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">

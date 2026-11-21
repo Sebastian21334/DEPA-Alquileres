@@ -28,7 +28,7 @@ const TIPOS_FOTO = [
   'image/heif',
 ];
 import { UsuariosService } from '../service/usuarios.service';
-import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { CambiarPausaActividadesDto } from '../dto/cambiar-pausa-actividades.dto';
@@ -79,6 +79,7 @@ export class UsuariosController {
     return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto);
   }
 
+  @PermitirAccesoLimitado()
   @Get('me')
   @UseGuards(JwtAuthGuard)
   // Perfil propio: el id sale del JWT, así un usuario solo puede leer sus datos.

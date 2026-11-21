@@ -11,7 +11,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { CrearCheckoutDto } from '../dto/crear-checkout.dto';
 import { ReconciliarPagoDto } from '../dto/reconciliar-pago.dto';
 import { OperacionesPagoService } from '../service/operaciones-pago.service';
@@ -37,24 +37,28 @@ export class PagosController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Post('reconciliar')
   reconciliarPago(@Body() dto: ReconciliarPagoDto, @Req() req: AuthenticatedRequest) {
     return this.operaciones.reconciliarPago(dto.payment_id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Post('reservas/:id/reintentar')
   reintentarCheckout(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.operaciones.reintentarCheckout(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get('reservas/:id/estado')
   consultarEstado(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.operaciones.consultarEstado(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get('reservas/:id/resumen')
   consultarResumen(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.operaciones.consultarResumen(id, req.user.id);

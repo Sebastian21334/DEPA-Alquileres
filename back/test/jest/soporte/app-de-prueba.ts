@@ -18,7 +18,6 @@ import { PublicacionesController } from '../../../src/publicaciones/controller/p
 import { Publicacion } from '../../../src/publicaciones/entity/publicacion.entity';
 import { PUBLICACIONES_REPOSITORY } from '../../../src/publicaciones/repository/publicaciones.repository.interface';
 import { PublicacionesService } from '../../../src/publicaciones/service/publicaciones.service';
-import { ReservaBloqueoAnuncianteService } from '../../../src/reservas/service/reserva-bloqueo-anunciante.service';
 import { SeguridadModule } from '../../../src/seguridad/seguridad.module';
 import { UbicacionService } from '../../../src/ubicacion/service/ubicacion.service';
 import { UsuariosController } from '../../../src/usuarios/controller/usuarios.controller';
@@ -59,6 +58,18 @@ export class UsuariosEnMemoria {
 
   buscarBloqueado(id: number): Promise<Usuario | null> {
     return this.buscarPorId(id);
+  }
+
+  buscarConBloqueo(id: number): Promise<Usuario | null> {
+    return this.buscarPorId(id);
+  }
+
+  async contarOperacionesPendientes() {
+    return { reservasPendientes: 0, estadiasVigentes: 0, liquidacionesPendientes: 0, pagosSinConciliar: 0 };
+  }
+
+  async tieneTramitesPendientes(): Promise<boolean> {
+    return false;
   }
   readonly filas = new Map<number, Usuario>();
   private ultimoId = 0;
@@ -269,19 +280,6 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
     providers: [
       AuthService,
       BloqueoAnuncianteService,
-      {
-        provide: ReservaBloqueoAnuncianteService,
-        useValue: {
-          cancelarReservasPorBloqueoAnunciante: async () => ({
-            canceladasPendientes: 0,
-            canceladasConDevolucion: 0,
-            enRevision: 0,
-            sinAccion: 0,
-            fallidas: 0,
-            detalles: [],
-          }),
-        },
-      },
     ],
   })
     .overrideModule(UsuariosModule)
