@@ -15,14 +15,13 @@ rango propio. La operación cambia reserva y calendario en una sola transacción
   resuelta (`PAGADO_PROPIETARIO` o `DEVUELTO_INQUILINO`).
 - La publicación debe existir. Se permite reprogramar aunque esté inactiva,
   porque la reserva ya fue confirmada; las fechas nuevas deben seguir disponibles.
-- El nuevo inicio no puede ser anterior a hoy y el nuevo fin no puede ser anterior
-  al inicio.
+- El nuevo inicio debe ser al menos 6 días corridos después de hoy. Con menos
+  antelación solo se puede cancelar. El nuevo fin no puede ser anterior al inicio.
 - Deben existir condiciones económicas verificables: precio unitario, importe,
   monto pagado y moneda contratada. Si falta alguna o el monto no coincide con el
   importe contratado, se rechaza y se solicita revisión.
 - No se limita la cantidad de reprogramaciones: cada una debe cumplir las mismas
-  condiciones. Tampoco se exige una anticipación mínima adicional; el límite es
-  el inicio de la estadía.
+  condiciones, incluida la antelación mínima de 6 días corridos.
 
 La reprogramación conserva el total pagado, la tarifa y la moneda contratadas.
 Nunca toma el precio actual de la publicación ni genera cobros o devoluciones.
