@@ -12,6 +12,7 @@ import {
 import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { NombresUbicacion } from '../components/selector-ubicacion/selector-ubicacion.component';
 import { UbicacionConfirmada } from '../components/location-picker/location-picker.component';
+import { enteroValidator } from '../validators/entero.validator';
 
 type CampoPublicacion = keyof PublicacionFormulario['form']['controls'];
 
@@ -20,7 +21,7 @@ const PATRON_TITULO_PUBLICACION =
 
 // Deben coincidir con back/src/publicaciones/dto/crear-publicacion.dto.ts.
 const PRECIO_MAXIMO = 99_999_999.99;
-const SUPERFICIE_MAXIMA = 99_999_999.99;
+const SUPERFICIE_MAXIMA = 10_000;
 const AMBIENTES_MAXIMOS = 50;
 
 // Formulario de una publicación, único para el alta (CrearPublicacionComponent) y la
@@ -58,8 +59,8 @@ export class PublicacionFormulario {
     idProvincia: [null as number | null, Validators.required],
     idCiudad: [null as number | null, Validators.required],
     direccion: ['', [Validators.required, Validators.maxLength(255)]],
-    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(AMBIENTES_MAXIMOS)]],
-    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(SUPERFICIE_MAXIMA)]],
+    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(AMBIENTES_MAXIMOS), enteroValidator]],
+    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(SUPERFICIE_MAXIMA), enteroValidator]],
   });
 
   constructor() {
@@ -142,6 +143,12 @@ export class PublicacionFormulario {
   excedeMaximo(campo: CampoPublicacion): boolean {
     const control = this.form.controls[campo];
     return control.hasError('max') && control.touched;
+  }
+
+  /** Permite mostrar un mensaje específico cuando el valor no es entero. */
+  noEsEntero(campo: CampoPublicacion): boolean {
+    const control = this.form.controls[campo];
+    return control.hasError('entero') && control.touched;
   }
 
   /** Arma el cuerpo de POST/PATCH /publicaciones. Requiere un formulario válido y la ubicación confirmada. */

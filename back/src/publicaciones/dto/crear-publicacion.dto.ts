@@ -21,12 +21,12 @@ export const MENSAJE_LARGO_TITULO = `El título debe tener entre ${LARGO_MINIMO_
 
 // Topes alineados con las columnas: numeric(10,2) para precio/superficie e integer para ambientes.
 export const PRECIO_MAXIMO = 99_999_999.99;
-export const SUPERFICIE_MAXIMA = 99_999_999.99;
+export const SUPERFICIE_MAXIMA = 10_000;
 export const AMBIENTES_MAXIMOS = 50;
 export const MENSAJE_PRECIO_RANGO =
   'El precio debe ser un número entre 1 y 99.999.999,99.';
 export const MENSAJE_SUPERFICIE_RANGO =
-  'La superficie debe ser un número entre 1 y 99.999.999,99 m².';
+  'La superficie debe ser un número entre 1 y 10.000 m².';
 export const MENSAJE_AMBIENTES_RANGO =
   'La cantidad de ambientes debe ser un entero entre 1 y 50.';
 
@@ -66,7 +66,7 @@ export class CrearPublicacionDto {
   @Max(AMBIENTES_MAXIMOS, { message: MENSAJE_AMBIENTES_RANGO })
   cantidad_ambientes: number;
 
-  @IsNumber()
+  @IsInt()
   @IsPositive()
   @Max(SUPERFICIE_MAXIMA, { message: MENSAJE_SUPERFICIE_RANGO })
   superficie: number;
