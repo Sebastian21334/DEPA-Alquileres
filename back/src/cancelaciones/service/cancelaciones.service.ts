@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { fechaArgentina } from '../../common/utils/fechas';
+import { decimalEntero, importeTexto } from '../../common/utils/importes';
 import {
   OrigenReembolso,
   Reembolso,
@@ -118,7 +119,7 @@ export class CancelacionesService {
     const actor = this.actorDeCancelacion(reserva, solicitud ? solicitud.solicitante?.id : idUsuario);
     const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor) ?? this.impedimentoReserva(reserva, hoy, actor)?.message ?? null;
     const devolucion = pago && (!motivoBloqueo || solicitud)
-      ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica), moneda: pago.currency }
+      ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica, pago.amount), moneda: pago.currency }
       : null;
     return {
       solicitud,
@@ -237,12 +238,10 @@ export class CancelacionesService {
     await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
     const politica = await this.politicaAplicable(cancelaciones, reserva);
 
-    const { porcentaje, importe } = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica);
+    const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
+    const { porcentaje, importe } = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica, pago?.amount ?? null);
     solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA');
 
-    const pago = importe > 0 ? await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion) : null;
-    if (importe > 0 && !pago)
-      throw new ConflictException('La reserva no tiene un pago registrado');
     if (importe > 0 && pago) {
       // El reembolso y la aprobación se confirman juntos: no queda una
       // solicitud aprobada sin registro económico ni un registro sin decisión.
@@ -311,13 +310,18 @@ export class CancelacionesService {
     return politica.porcentajeFueraDePlazo;
   }
 
-  private calcularDevolucion(reserva: Reserva, actor: ActorCancelacion, fechaSolicitud: string, politica: PoliticaCancelacion): Omit<DevolucionCancelacionDto, 'moneda'> {
+  private calcularDevolucion(reserva: Reserva, actor: ActorCancelacion, fechaSolicitud: string, politica: PoliticaCancelacion, importePagado: number | string | null): Omit<DevolucionCancelacionDto, 'moneda'> {
     const porcentaje = this.porcentajeDevolucion(reserva, actor, fechaSolicitud, politica);
+    if (importePagado == null && porcentaje > 0)
+      throw new ConflictException('La reserva no tiene un pago registrado');
+    const centavosPagados = decimalEntero(importePagado ?? 0, 2);
+    // Redondea una sola vez, al centavo más cercano; medio centavo se redondea hacia arriba.
+    const centavosDevolucion = (centavosPagados * BigInt(porcentaje) + 50n) / 100n;
     return {
       fechaSolicitud,
       diasAnticipacion: this.diasHastaIngreso(reserva, fechaSolicitud),
       porcentaje,
-      importe: this.redondear((Number(reserva.monto_pago) * porcentaje) / 100),
+      importe: Number(importeTexto(centavosDevolucion)),
     };
   }
 
@@ -326,10 +330,6 @@ export class CancelacionesService {
     const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
     const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
     return (inicio - ahora) / 86_400_000;
-  }
-
-  private redondear(valor: number): number {
-    return Math.round((valor + Number.EPSILON) * 100) / 100;
   }
 
   private prepararRespuesta(solicitud: SolicitudCancelacion): SolicitudCancelacion {

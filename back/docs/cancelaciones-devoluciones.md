@@ -29,6 +29,14 @@ si se aprueba. El servidor registra `creada_en` y usa esa fecha al resolver;
 el cliente no puede elegir la fecha ni el importe. La política sigue siendo la
 versión aplicable a la fecha del pago. No cambia el esquema de la base.
 
+El importe se calcula sobre `pago.amount`, en la moneda del pago registrado.
+No se usa el monto de la reserva ni se vuelve a convertir el precio de la
+publicación. La vista previa y la aprobación comparten este cálculo. Se trabaja
+con centavos enteros y se redondea una sola vez: por ejemplo, el 50 % de ARS 75,35
+devuelve ARS 37,68. Se conserva el control del saldo disponible de Reembolsos,
+incluidas las devoluciones ya confirmadas o reservadas. Las devoluciones anteriores
+no se modifican automáticamente.
+
 | Situación al enviar la solicitud | Devolución |
 |---|---|
 | Inquilino cancela con 7 días o más de anticipación | 100 % |

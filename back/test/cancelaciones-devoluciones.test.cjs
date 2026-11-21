@@ -343,6 +343,74 @@ function repositorioInterceptado(interceptar) {
 const fechaEnDias = dias => require('../dist/common/utils/fechas').fechaArgentina(new Date(Date.now() + dias * 86400000));
 const solicitudActual = id => source.getRepository(SolicitudCancelacion).findOneByOrFail({ id });
 
+for (const caso of [
+  { nombre: 'total sobre el pago aunque la reserva tenga un monto menor', dias: 7, actor: 1, reserva: 100, pago: 375.35, porcentaje: 100, esperado: 375.35 },
+  { nombre: 'total sobre el pago aunque la reserva tenga un monto mayor', dias: 7, actor: 1, reserva: 1000, pago: 75.35, porcentaje: 100, esperado: 75.35 },
+  { nombre: 'parcial sobre el pago registrado', dias: 2, actor: 1, reserva: 100, pago: 75.35, porcentaje: 50, esperado: 37.68 },
+  { nombre: 'parcial con redondeo exacto de medio centavo', dias: 2, actor: 1, reserva: 75.35, pago: 75.35, porcentaje: 50, esperado: 37.68 },
+  { nombre: 'parcial en el importe máximo admitido', dias: 2, actor: 1, reserva: 99999999.99, pago: 99999999.99, porcentaje: 50, esperado: 50000000 },
+  { nombre: 'del anunciante por todo lo efectivamente pagado', dias: 0, actor: 2, reserva: 100, pago: 375.35, porcentaje: 100, esperado: 375.35 },
+]) {
+  test(`T41: devolución ${caso.nombre}`, async () => {
+    const { reserva, pago } = await escenario(fechaEnDias(caso.dias));
+    await source.getRepository(Reserva).update(reserva.id, { monto_pago: caso.reserva });
+    await source.getRepository(Pago).update(pago.id, { amount: caso.pago });
+    const condiciones = await cancelaciones.consultarCondiciones(reserva.id, caso.actor);
+    assert.equal(condiciones.devolucion.porcentaje, caso.porcentaje);
+    assert.equal(condiciones.devolucion.importe, caso.esperado);
+    assert.equal(condiciones.devolucion.moneda, 'ARS');
+    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, caso.actor);
+    const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+    assert.equal(Number(reembolso.importe), caso.esperado);
+    assert.equal(reembolso.moneda, 'ARS');
+    const guardado = await source.getRepository(Reembolso).findOneByOrFail({ id: reembolso.id });
+    assert.equal(Number(guardado.importe), condiciones.devolucion.importe);
+    pasarela.reembolsar = async (idPago, importe, _clave, total) => {
+      assert.equal(idPago, pago.payment_id);
+      assert.equal(importe, caso.esperado);
+      assert.equal(total, caso.esperado === caso.pago);
+      return { id: 'devolucion-t41', status: 'approved', amount: importe };
+    };
+    await operacionesReembolso.ejecutar(reembolso.id, 3);
+    assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), caso.esperado);
+  });
+}
+
+test('T41: una publicación en dólares se devuelve en la moneda y el importe del pago, sin otra conversión', async () => {
+  const { reserva, pago } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, {
+    monto_pago: 50, importe_origen: 50, moneda_origen: 'USD', importe_contratado: 60000, moneda_contratada: 'ARS',
+  });
+  await source.getRepository(Pago).update(pago.id, { amount: 60000, currency: 'ARS' });
+  const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
+  assert.deepEqual([condiciones.devolucion.importe, condiciones.devolucion.moneda], [60000, 'ARS']);
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(Number(reembolso.importe), 60000);
+  assert.equal(reembolso.moneda, 'ARS');
+});
+
+test('T41: no aprueba un importe que exceda el saldo disponible ni deja una devolución duplicada', async () => {
+  const { reserva, pago, crearReembolso } = await escenario();
+  await source.getRepository(Pago).update(pago.id, { amount: 75.35 });
+  await crearReembolso({ origen: OrigenReembolso.AJUSTE_ADMIN, tipo: TipoReembolso.PARCIAL, importe: 40 });
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /saldo reembolsable/);
+  assert.equal((await solicitudActual(solicitud.id)).estado, 'PENDIENTE');
+  assert.equal(await source.getRepository(Reembolso).count(), 1);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
+});
+
+test('T41: sin pago registrado no aprueba una devolución ni reemplaza su importe por cero', async () => {
+  const { reserva, pago } = await escenario();
+  await source.getRepository(Pago).delete(pago.id);
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /no tiene un pago registrado/);
+  assert.equal((await solicitudActual(solicitud.id)).estado, 'PENDIENTE');
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, false);
+});
+
 for (const [fechaSolicitud, fechaAprobacion, porcentaje, dias] of [
   ['2099-01-04T01:00:00Z', '2099-01-05T15:00:00Z', 100, 7],
   ['2099-01-04T03:00:00Z', '2099-01-09T15:00:00Z', 50, 6],
@@ -1356,5 +1424,38 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.match(bloqueadaPorCodigo.body.motivoBloqueo, /ingreso ya validado/);
     assert.equal(bloqueadaPorCodigo.body.devolucion, null);
     assert.equal(await source.getRepository(Reembolso).count(), 0);
+
+    // T41: el contrato HTTP muestra y devuelve el importe del pago, también con centavos.
+    for (const [dias, esperado] of [[7, 75.35], [2, 37.68], [1, 0]]) {
+      await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+      const { reserva: conCentavos, pago: pagoConCentavos } = await escenario(fechaEnDias(dias));
+      await source.getRepository(Pago).update(pagoConCentavos.id, { amount: 75.35, payment_id: '123' });
+      const rutaCentavos = `/reservas/${conCentavos.id}/cancelacion`;
+      await request(http).get(`${rutaCentavos}/condiciones`).set('Authorization', ajeno).expect(403);
+      const prevista = await request(http).get(`${rutaCentavos}/condiciones`).set('Authorization', tenant).expect(200);
+      assert.equal(prevista.body.devolucion.importe, esperado);
+      assert.equal(prevista.body.devolucion.moneda, 'ARS');
+      await request(http).post(rutaCentavos).set('Authorization', tenant)
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true, importe: 1 }).expect(400);
+      const enviadaCentavos = await request(http).post(rutaCentavos).set('Authorization', tenant)
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
+      const resueltaCentavos = await request(http).patch(`${rutaCentavos}/${enviadaCentavos.body.id}`).set('Authorization', admin)
+        .send({ decision: 'APROBADA' }).expect(200);
+      if (esperado > 0) {
+        assert.equal(Number(resueltaCentavos.body.reembolso.importe), esperado);
+        assert.equal(resueltaCentavos.body.reembolso.moneda, prevista.body.devolucion.moneda);
+        reembolsar.mock.mockImplementation(async (paymentId, importe) => {
+          assert.equal(importe, esperado);
+          return { id: 456, status: 'approved', amount: importe, payment_id: paymentId };
+        });
+        await request(http).patch(`/reservas/reembolsos/${resueltaCentavos.body.reembolso.id}/ejecutar`)
+          .set('Authorization', admin).send({}).expect(200);
+      } else {
+        assert.equal(resueltaCentavos.body.reembolso, null);
+        assert.equal(await source.getRepository(Reembolso).count(), 0);
+      }
+      const pagoFinal = await source.getRepository(Pago).findOneByOrFail({ id: pagoConCentavos.id });
+      assert.equal(Number(pagoFinal.amount_refunded), esperado);
+    }
   } finally { await app.close(); }
 });
