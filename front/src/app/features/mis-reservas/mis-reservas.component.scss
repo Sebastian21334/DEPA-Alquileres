@@ -172,6 +172,9 @@
 .cancellation-dialog label span, .cancellation-error { color: #a52e17; }
 .cancellation-dialog textarea { box-sizing: border-box; width: 100%; padding: .7rem .8rem; border: 1px solid #9da6b5; border-radius: 9px; font: inherit; color: inherit; resize: vertical; }
 .cancellation-dialog small { color: var(--color-text-muted); }
+.cancellation-refund { margin-bottom: 1.2rem; padding: 1rem; border: 1px solid #b9d7c0; border-radius: 10px; background: #edf7ef; color: #174d2a; overflow-wrap: anywhere; }
+.cancellation-refund strong { font-size: 1.1rem; }
+.cancellation-refund p { margin: .5rem 0 0; font-size: .9rem; }
 .cancellation-info { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem; margin-top: 1rem; border-radius: 10px; background: #e1efff; color: #123664; }
 .cancellation-info svg { flex: none; }
 .cancellation-info p { margin: 0; }

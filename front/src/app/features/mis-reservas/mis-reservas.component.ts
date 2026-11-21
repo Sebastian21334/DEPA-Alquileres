@@ -1,5 +1,5 @@
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
-import { NgTemplateOutlet } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
 import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -26,7 +26,7 @@ import { ActividadReembolsosService } from '../../core/services/actividad-reembo
   selector: 'app-mis-reservas',
   standalone: true,
   imports: [
-    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, NgTemplateOutlet,
+    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, NgTemplateOutlet, DatePipe,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
   ],
@@ -257,6 +257,7 @@ export class MisReservasComponent {
             this.estadoCancelacion.set('pendiente');
             this.toast.mostrar('La solicitud de cancelación está en revisión.', 'exito');
           }
+          this.consultarCancelacion();
         },
         error: (err: ApiError) => this.errorCancelacion.set(err.message),
       });

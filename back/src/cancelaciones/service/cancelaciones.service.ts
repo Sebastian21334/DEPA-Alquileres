@@ -18,6 +18,7 @@ import type { ActorCancelacion, Reserva } from '../../reservas/entity/reserva.en
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
+import type { CondicionesCancelacionDto, DevolucionCancelacionDto } from '../dto/condiciones-cancelacion.dto';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
@@ -52,7 +53,8 @@ export class CancelacionesService {
       const activa = await this.buscarEnCurso(cancelaciones, reserva, transaccion);
       if (activa) return { solicitud: activa, creada: false };
 
-      const hoy = fechaArgentina();
+      const creadaEn = new Date();
+      const hoy = fechaArgentina(creadaEn);
       this.validarReserva(reserva, hoy);
       const politica = await this.politicaAplicable(cancelaciones, reserva);
       const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica);
@@ -66,6 +68,7 @@ export class CancelacionesService {
         decidida_por: null,
         decidida_en: null,
         observacion: null,
+        creada_en: creadaEn,
       });
       return { solicitud: await cancelaciones.guardar(solicitud), creada: true };
     });
@@ -102,17 +105,21 @@ export class CancelacionesService {
     return this.buscarEnCurso(this.cancelaciones, reserva);
   }
 
-  async consultarCondiciones(idReserva: number, idUsuario: number) {
+  async consultarCondiciones(idReserva: number, idUsuario: number): Promise<CondicionesCancelacionDto> {
     const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
     const solicitud = await this.buscarEnCurso(this.cancelaciones, reserva);
     const politica = await this.politicaAplicable(this.cancelaciones, reserva);
     const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id);
+    const hoy = fechaArgentina();
+    const fechaSolicitud = solicitud ? fechaArgentina(solicitud.creada_en) : hoy;
+    const actor = this.actorDeCancelacion(reserva, solicitud ? solicitud.solicitante?.id : idUsuario);
     return {
       solicitud,
       politica,
-      motivoBloqueo: this.bloqueoPorPlazo(reserva, fechaArgentina(), politica),
+      motivoBloqueo: this.bloqueoPorPlazo(reserva, hoy, politica),
       admiteReembolso: pago != null,
       devolucionPorTransferencia: pago != null && pago.payment_method_id !== 'account_money',
+      devolucion: pago ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica), moneda: pago.currency } : null,
     };
   }
 
@@ -149,8 +156,9 @@ export class CancelacionesService {
   }
 
   /**
-   * Resuelve el pedido. Si se aprueba, calcula la devolución con la política
-   * vigente y crea el reembolso. Las fechas se liberan recién cuando el
+   * Resuelve el pedido. Si se aprueba, calcula la devolución a la fecha de
+   * solicitud con la política contratada y crea el reembolso.
+   * Las fechas se liberan cuando el
    * reembolso queda aprobado (o de inmediato si el porcentaje es 0).
    *
    * La decisión y sus efectos locales comparten una transacción con la
@@ -210,10 +218,7 @@ export class CancelacionesService {
     const politica = await this.politicaAplicable(cancelaciones, reserva);
 
     const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
-    const porcentaje = this.porcentajeDevolucion(reserva, actor, hoy, politica);
-    const importe = this.redondear(
-      (Number(reserva.monto_pago) * porcentaje) / 100,
-    );
+    const { porcentaje, importe } = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica);
     solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA');
 
     const pago = importe > 0 ? await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion) : null;
@@ -284,6 +289,16 @@ export class CancelacionesService {
     if (dias >= politica.diasDevolucionTotal) return politica.porcentajeTotal;
     if (dias >= politica.diasDevolucionParcial) return politica.porcentajeParcial;
     return politica.porcentajeFueraDePlazo;
+  }
+
+  private calcularDevolucion(reserva: Reserva, actor: ActorCancelacion, fechaSolicitud: string, politica: PoliticaCancelacion): Omit<DevolucionCancelacionDto, 'moneda'> {
+    const porcentaje = this.porcentajeDevolucion(reserva, actor, fechaSolicitud, politica);
+    return {
+      fechaSolicitud,
+      diasAnticipacion: this.diasHastaIngreso(reserva, fechaSolicitud),
+      porcentaje,
+      importe: this.redondear((Number(reserva.monto_pago) * porcentaje) / 100),
+    };
   }
 
   private diasHastaIngreso(reserva: Reserva, hoy: string): number {

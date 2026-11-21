@@ -5,6 +5,7 @@ const { PGlite } = require('@electric-sql/pglite');
 const { DataSource } = require('typeorm');
 const { cargarDatosBase } = require('../../scripts/seed.cjs');
 const tiposPg = require('pg').types;
+const { prepareValue } = require('pg/lib/utils');
 
 // Mantiene el SQL y la hidratación de TypeORM/pg, sin conexiones ni datos reales.
 async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito = true, aplicacionReembolsos = true } = {}) {
@@ -12,7 +13,9 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     1082: tiposPg.getTypeParser(1082),
     1114: tiposPg.getTypeParser(1114),
   } });
-  const query = (sql, parametros = []) => db.query(sql, parametros)
+  // Usa la misma serialización de pg: PGlite convierte Date a UTC y desplaza
+  // los timestamp sin zona al hidratarlos en un sistema con horario argentino.
+  const query = (sql, parametros = []) => db.query(sql, parametros.map(valor => prepareValue(valor)))
     .then((r) => ({ ...r, rowCount: r.affectedRows ?? r.rows.length }));
   class Pool extends EventEmitter {
     connect(callback) {
