@@ -71,7 +71,7 @@ export class ActualizarPublicacionDto {
   cantidad_ambientes?: number;
 
   @ValidateIf((_dto, superficie: unknown) => superficie !== undefined)
-  @IsNumber()
+  @IsInt()
   @IsPositive()
   @Max(SUPERFICIE_MAXIMA, { message: MENSAJE_SUPERFICIE_RANGO })
   superficie?: number;
