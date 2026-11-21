@@ -100,7 +100,8 @@ async function escenario(fechaInicio = '2099-01-10') {
 
 async function cancelacionConFaltante(recibido = 30) {
   const { reserva, pago } = await escenario();
-  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'credit_card' });
+  // Pago histórico sin el medio confirmado: conserva la gestión por transferencia.
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: null });
   const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   await source.getRepository(SolicitudCancelacion).update(solicitud.id, { creada_en: new Date('2099-01-08T15:00:00Z') });
   const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
@@ -773,7 +774,7 @@ test('si falla liberar el calendario después del ingreso, se reintenta sin dupl
   assert.equal(movimientos, 1);
 });
 
-for (const medio of ['visa', 'debvisa', null]) {
+for (const medio of [null]) {
   test(`deriva a transferencia el reembolso por cancelación con medio ${medio}`, async () => {
     const { reserva, pago } = await escenario(fechaEnDias(7));
     await source.getRepository(Pago).update(pago.id, { payment_method_id: medio });
@@ -788,6 +789,98 @@ for (const medio of ['visa', 'debvisa', null]) {
     assert.equal(await source.getRepository(Reembolso).count(), 1);
   });
 }
+
+for (const medio of ['account_money', 'visa', 'master', 'amex', 'debvisa']) {
+  for (const parcial of [false, true]) {
+    test(`T45: ${medio} devuelve ${parcial ? '37,68 parcialmente' : '100 en total'} por la misma API, una sola vez`, async () => {
+      const { reserva, pago } = await escenario(fechaEnDias(parcial ? 2 : 7));
+      await source.getRepository(Pago).update(pago.id, { payment_method_id: medio, amount: parcial ? 75.35 : 100 });
+      const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
+      assert.equal(condiciones.devolucionPorTransferencia, false);
+      const importeEsperado = parcial ? 37.68 : 100;
+      assert.equal(condiciones.devolucion.importe, importeEsperado);
+      const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+      const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+      assert.equal(reembolso.transferencia_manual, false);
+      assert.equal(reembolso.estado, 'PENDIENTE');
+      await assert.rejects(operacionesReembolso.registrarTransferencia(reembolso.id, 'no-corresponde', 3), /no está habilitado para transferencia/);
+      const llamadas = [];
+      pasarela.reembolsar = async (...args) => {
+        llamadas.push(args);
+        return { id: 'devolucion-simulada', status: 'approved', amount: importeEsperado, payment_id: pago.payment_id };
+      };
+      const aplicado = await operacionesReembolso.ejecutar(reembolso.id, 3);
+      await operacionesReembolso.ejecutar(reembolso.id, 3);
+      assert.deepEqual(llamadas, [[pago.payment_id, importeEsperado, `can:${solicitud.id}`, !parcial]]);
+      assert.equal(aplicado.reembolso.estado, 'APROBADO');
+      assert.ok(aplicado.reembolso.aplicado_en);
+      assert.equal(aplicado.reserva.cancelada, true);
+      assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), importeEsperado);
+      assert.equal(await source.getRepository(Reembolso).count(), 1);
+    });
+  }
+}
+
+test('T45: un rechazo definitivo con tarjeta habilita la transferencia sin crear otra devolución', async () => {
+  const { reserva, pago, crearReembolso } = await escenario();
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  const reembolso = await crearReembolso();
+  let intentos = 0;
+  pasarela.reembolsar = async () => { intentos += 1; return { status: 'rejected' }; };
+  const rechazado = await operacionesReembolso.ejecutar(reembolso.id, 3);
+  assert.equal(rechazado.reembolso.transferencia_manual, true);
+  assert.equal(rechazado.reembolso.estado, 'PENDIENTE');
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
+  assert.equal((await reembolsos.conversar(reembolso.id, { id: 1 }, 0)).abierta, true);
+  await operacionesReembolso.registrarTransferencia(reembolso.id, 'comprobante-tarjeta', 3);
+  await operacionesReembolso.registrarTransferencia(reembolso.id, 'comprobante-tarjeta', 3);
+  assert.equal(intentos, 1);
+  assert.equal(await source.getRepository(Reembolso).count(), 1);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, true);
+});
+
+test('T45: un timeout con tarjeta conserva la vía automática y reintenta con la misma clave', async () => {
+  const { pago, crearReembolso } = await escenario();
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'master' });
+  const reembolso = await crearReembolso();
+  const claves = [];
+  pasarela.reembolsar = async (_id, importe, clave) => {
+    claves.push(clave);
+    if (claves.length === 1) throw new Error('timeout simulado');
+    return { id: 'tarjeta-reintento', status: 'approved', amount: importe, payment_id: pago.payment_id };
+  };
+  await assert.rejects(operacionesReembolso.ejecutar(reembolso.id, 3), /timeout simulado/);
+  const incierto = await reembolsos.buscar(reembolso.id);
+  assert.equal(incierto.estado, 'FALLIDO');
+  assert.equal(incierto.transferencia_manual, false);
+  await assert.rejects(operacionesReembolso.registrarTransferencia(reembolso.id, 'no-duplicar', 3), /no está habilitado para transferencia/);
+  await source.getRepository(Reembolso).update(reembolso.id, { conciliar_en: new Date(Date.now() - 1000) });
+  await operacionesReembolso.ejecutar(reembolso.id, 3);
+  assert.deepEqual(claves, [reembolso.idempotency_key, reembolso.idempotency_key]);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
+});
+
+test('T45: una respuesta simulada con otro importe no confirma la devolución de la tarjeta', async () => {
+  const { pago, crearReembolso } = await escenario();
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  const reembolso = await crearReembolso();
+  pasarela.reembolsar = async () => ({ id: 'importe-incorrecto', status: 'approved', amount: 99, payment_id: pago.payment_id });
+  await assert.rejects(operacionesReembolso.ejecutar(reembolso.id, 3), /no coincide con la solicitud/);
+  assert.equal((await reembolsos.buscar(reembolso.id)).estado, 'FALLIDO');
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
+});
+
+test('T45: el complemento del reclamo de una tarjeta devuelve solo el faltante por la API', async () => {
+  const { reserva, pago } = await cancelacionConFaltante();
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  const reclamo = await reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1);
+  const importes = [];
+  pasarela.reembolsar = async (_id, importe) => { importes.push(importe); return { id: 'complemento-tarjeta', status: 'approved', amount: importe }; };
+  await reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_TOTAL' }, 3);
+  assert.deepEqual(importes, [20]);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 50);
+  assert.equal((await reclamos.consultarFaltanteCancelacion(reserva.id, 1)).devolucion.faltante, 0);
+});
 
 test('la devolución de una cancelación queda identificada por su solicitud', async () => {
   const { reserva } = await escenario();
@@ -1037,7 +1130,7 @@ async function reclamoAbierto(reserva) {
 
 test('la devolución total por transferencia deja el reclamo resuelto al decidir y el reembolso pendiente', async () => {
   const { reserva, pago } = await escenario('2026-01-01');
-  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: null });
   const { servicio, avisos } = reclamosConAvisos();
   const reclamo = await reclamoAbierto(reserva);
 
@@ -1114,6 +1207,7 @@ test('un reclamo con la devolución pedida antes de este cambio se completa al c
     motivo: `Reclamo #${reclamo.id}: decisión previa`, idSolicitadoPor: 3,
     idempotencyKey: `rec:${reclamo.id}`, referenciaInterna: `rec:${reclamo.id}`,
   });
+  await source.getRepository(Reembolso).update(anterior.id, { transferencia_manual: true });
   await operacionesReembolso.registrarTransferencia(anterior.id, 'trf-previa', 3);
   const completo = await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id });
   assert.deepEqual([completo.estado, completo.resolucion, Number(completo.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_PARCIAL', 30]);
@@ -1498,7 +1592,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     });
     await source.getRepository(Pago).save({
       reserva: conReclamo, amount: 100, currency: 'ARS', status: 'approved', payment_id: 'mp-reclamo-api',
-      payment_method_id: 'visa', external_reference: `reserva:${conReclamo.id}`, idempotency_key: 'pago-reclamo-api',
+      payment_method_id: null, external_reference: `reserva:${conReclamo.id}`, idempotency_key: 'pago-reclamo-api',
     });
     const { body: abierto } = await request(http).post('/reclamos').set('Authorization', tenant)
       .send({ id_reserva: conReclamo.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }).expect(201);
@@ -1670,5 +1764,42 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const complementoHttp = await reembolsos.buscarPorOrigen('RECLAMO', `rec:${creadoFaltante.body.id}`);
     assert.equal(Number(complementoHttp.importe), 20);
     assert.equal(await source.getRepository(Reembolso).count(), 2);
+    for (const medio of ['visa', 'debvisa']) {
+      await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+      const { reserva: conTarjeta, pago: pagoTarjeta } = await escenario(fechaEnDias(2));
+      await source.getRepository(Pago).update(pagoTarjeta.id, { payment_method_id: medio, amount: 75.35, payment_id: '123' });
+      const rutaTarjeta = `/reservas/${conTarjeta.id}/cancelacion`;
+      const condicionesTarjeta = await request(http).get(`${rutaTarjeta}/condiciones`).set('Authorization', tenant).expect(200);
+      assert.equal(condicionesTarjeta.body.devolucionPorTransferencia, false);
+      assert.equal(condicionesTarjeta.body.devolucion.importe, 37.68);
+      const enviadaTarjeta = await request(http).post(rutaTarjeta).set('Authorization', tenant)
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
+      const resueltaTarjeta = await request(http).patch(`${rutaTarjeta}/${enviadaTarjeta.body.id}`).set('Authorization', admin)
+        .send({ decision: 'APROBADA' }).expect(200);
+      const devolucionTarjeta = resueltaTarjeta.body.reembolso;
+      assert.equal(devolucionTarjeta.transferencia_manual, false);
+      const listaTarjeta = await request(http).get('/reembolsos/administracion').set('Authorization', admin).expect(200);
+      assert.equal(listaTarjeta.body[0].transferencia_manual, false);
+      assert.equal(listaTarjeta.body[0].pago.payment_method_id, medio);
+      const rutaEjecutarTarjeta = `/reservas/reembolsos/${devolucionTarjeta.id}/ejecutar`;
+      await request(http).patch(rutaEjecutarTarjeta).send({}).expect(401);
+      await request(http).patch(rutaEjecutarTarjeta).set('Authorization', tenant).send({}).expect(403);
+      await request(http).patch(`/reservas/reembolsos/${devolucionTarjeta.id}/transferencia`).set('Authorization', admin)
+        .send({ referencia: 'no-corresponde' }).expect(409);
+      reembolsar.mock.mockImplementation(async (paymentId, importe, clave, total) => {
+        assert.deepEqual([paymentId, importe, clave, total], ['123', 37.68, `can:${enviadaTarjeta.body.id}`, false]);
+        return { id: 789, status: 'approved', amount: importe, payment_id: paymentId };
+      });
+      const intentosAntes = reembolsar.mock.callCount();
+      const devueltaTarjeta = await request(http).patch(rutaEjecutarTarjeta).set('Authorization', admin)
+        .send({ importe: 1 }).expect(200);
+      assert.equal(devueltaTarjeta.body.reembolso.estado, 'APROBADO');
+      assert.ok(devueltaTarjeta.body.reembolso.aplicado_en);
+      await request(http).patch(rutaEjecutarTarjeta).set('Authorization', admin).send({}).expect(200);
+      assert.equal(reembolsar.mock.callCount(), intentosAntes + 1);
+      const pagoFinalTarjeta = await source.getRepository(Pago).findOneByOrFail({ id: pagoTarjeta.id });
+      assert.equal(Number(pagoFinalTarjeta.amount_refunded), 37.68);
+      assert.equal((await reservas.obtenerReserva(conTarjeta.id)).cancelada, true);
+    }
   } finally { await app.close(); }
 });

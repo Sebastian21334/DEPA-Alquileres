@@ -107,6 +107,19 @@ El módulo no decide la política, no cancela reservas y no libera fechas.
 
 ### Ejecución
 
+- Los pagos con medio confirmado por Mercado Pago, incluidas tarjetas (por
+  ejemplo `visa`, `master`, `amex` o `debvisa`) y dinero en cuenta
+  (`account_money`), usan el mismo circuito de devolución por API. Las pruebas
+  simulan las respuestas del proveedor: no existe una aprobación ficticia en
+  producción ni se configura un modo demo.
+- Si falta el medio del pago, se mantiene la gestión por transferencia. Los
+  reembolsos que ya tenían `transferencia_manual=true` conservan esa vía. Un
+  rechazo definitivo de la pasarela habilita la transferencia en el mismo
+  registro; un timeout conserva el resultado incierto y la misma clave de
+  idempotencia para conciliar o reintentar, sin habilitar otra devolución manual.
+- La consulta de condiciones informa la misma vía que usará el nuevo reembolso.
+  No se vuelve a convertir el importe ni se altera la política de cancelación.
+
 - El administrador solicita la devolución con `PATCH /reservas/reembolsos/:id/ejecutar`.
   Se reembolsa el pago original por Mercado Pago con la clave de idempotencia
   persistida. Si ya hay un identificador externo, la conciliación consulta el

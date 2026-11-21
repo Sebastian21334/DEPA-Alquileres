@@ -129,7 +129,7 @@ export class CancelacionesService {
         ? `Faltan menos de ${politica.diasDevolucionParcial} días para el ingreso. Si se aprueba la cancelación, no recibirás devolución del importe pagado (0 %).`
         : null,
       admiteReembolso: pago != null,
-      devolucionPorTransferencia: pago != null && pago.payment_method_id !== 'account_money',
+      devolucionPorTransferencia: pago != null && this.reembolsos.requiereTransferencia(pago),
       devolucion,
     };
   }
