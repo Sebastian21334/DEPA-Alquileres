@@ -57,6 +57,9 @@ export class ExplorarPublicacionesComponent {
   protected readonly modalidades = signal<Modalidad[]>([]);
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
   protected readonly busqueda = this.fb.nonNullable.control('');
+  protected readonly searchForm = this.fb.group({
+    busqueda: this.busqueda,
+  });
   protected readonly form = this.fb.nonNullable.group({
     idModalidad: null as number | null,
     idProvincia: null as number | null,
@@ -97,7 +100,8 @@ export class ExplorarPublicacionesComponent {
     });
   }
 
-  protected buscarTexto(): void {
+  protected buscarTexto(evento?: Event): void {
+    evento?.preventDefault();
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
