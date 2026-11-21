@@ -12,7 +12,7 @@ import {
 import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { NombresUbicacion } from '../components/selector-ubicacion/selector-ubicacion.component';
 import { UbicacionConfirmada } from '../components/location-picker/location-picker.component';
-import { enteroValidator } from '../validators/entero.validator';
+import { decimalesValidator } from '../validators/decimales.validator';
 
 type CampoPublicacion = keyof PublicacionFormulario['form']['controls'];
 
@@ -55,12 +55,12 @@ export class PublicacionFormulario {
     idTipoPropiedad: [null as number | null, Validators.required],
     idModalidad: [null as number | null, Validators.required],
     idTipoMoneda: [null as number | null, Validators.required],
-    precio: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PRECIO_MAXIMO)]],
+    precio: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PRECIO_MAXIMO), decimalesValidator(2)]],
     idProvincia: [null as number | null, Validators.required],
     idCiudad: [null as number | null, Validators.required],
     direccion: ['', [Validators.required, Validators.maxLength(255)]],
-    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(AMBIENTES_MAXIMOS), enteroValidator]],
-    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(SUPERFICIE_MAXIMA), enteroValidator]],
+    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(AMBIENTES_MAXIMOS), decimalesValidator(0)]],
+    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(SUPERFICIE_MAXIMA), decimalesValidator(2)]],
   });
 
   constructor() {
@@ -145,10 +145,10 @@ export class PublicacionFormulario {
     return control.hasError('max') && control.touched;
   }
 
-  /** Permite mostrar un mensaje específico cuando el valor no es entero. */
-  noEsEntero(campo: CampoPublicacion): boolean {
+  /** Permite mostrar un mensaje específico cuando el valor supera los decimales permitidos. */
+  excedeDecimales(campo: CampoPublicacion): boolean {
     const control = this.form.controls[campo];
-    return control.hasError('entero') && control.touched;
+    return control.hasError('decimales') && control.touched;
   }
 
   /** Arma el cuerpo de POST/PATCH /publicaciones. Requiere un formulario válido y la ubicación confirmada. */
