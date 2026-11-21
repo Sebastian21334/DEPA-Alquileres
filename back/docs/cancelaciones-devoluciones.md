@@ -11,17 +11,21 @@ quede registrado cuando corresponde una devolución. El solicitante puede
 enviar el pedido hasta 2 días calendario antes del ingreso, inclusive, y debe
 aceptar los términos de cancelación. Se puede solicitar con cualquier medio
 de pago admitido para reservar. Si el pago se hizo con tarjeta u otro medio
-distinto de dinero en cuenta de Mercado Pago, la aprobación cancela la
-reserva y libera las fechas sin generar un reembolso.
+distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por
+transferencia con administración.
 
-Los siguientes porcentajes se calculan al aprobar la solicitud y se aplican
-solo a pagos con dinero en cuenta de Mercado Pago.
+Los siguientes porcentajes se calculan con la fecha de envío de la solicitud,
+en días calendario de Argentina. Una aprobación posterior no reduce el porcentaje.
+El modal muestra antes de enviar el porcentaje, el importe y la moneda de la devolución
+si se aprueba. El servidor registra `creada_en` y usa esa fecha al resolver;
+el cliente no puede elegir la fecha ni el importe. La política sigue siendo la
+versión aplicable a la fecha del pago. No cambia el esquema de la base.
 
-| Situación al aprobar la solicitud | Devolución |
+| Situación al enviar la solicitud | Devolución |
 |---|---|
 | Inquilino cancela con 7 días o más de anticipación | 100 % |
 | Inquilino cancela entre 2 y 6 días antes | 50 % |
-| Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | 0 % |
+| Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | Conserva el porcentaje del día de solicitud |
 | Anunciante o Administrador cancela antes del inicio | 100 % |
 | La estadía ya comenzó o terminó | No se cancela; solo reclamo |
 

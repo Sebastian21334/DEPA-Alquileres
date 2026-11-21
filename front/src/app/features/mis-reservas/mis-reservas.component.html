@@ -34,6 +34,14 @@
         </div>
         <form (ngSubmit)="enviarCancelacion()" [attr.aria-busy]="enviandoCancelacion()">
           @let bloqueo = condicionesCancelacion()?.motivoBloqueo;
+          @if (condicionesCancelacion()?.devolucion; as devolucion) {
+            <div class="cancellation-refund" role="status">
+              <strong>Devolución si se aprueba: {{ devolucion.moneda }} {{ monto(devolucion.importe, devolucion.moneda) }} ({{ devolucion.porcentaje }} %)</strong>
+              <p>Calculada con la fecha de {{ condicionesCancelacion()?.solicitud ? 'tu solicitud' : 'hoy' }}:
+                {{ devolucion.fechaSolicitud | date:'dd/MM/yyyy':'UTC' }}, {{ devolucion.diasAnticipacion }} días antes del ingreso.</p>
+              <p>El porcentaje se determina al enviar la solicitud. La demora en aprobarla no lo reduce.</p>
+            </div>
+          }
           @if (estadoCancelacion() === 'formulario') {
             @if (bloqueo) {
               <p class="cancellation-error" role="status">{{ bloqueo }}</p>
@@ -70,9 +78,9 @@
               <summary>Términos y condiciones de cancelación</summary>
               <ul>
                 <li>Podés solicitar la cancelación hasta {{ politica.diasDevolucionParcial }} días antes del ingreso, inclusive. Se cuentan días calendario de Argentina.</li>
-                <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Los porcentajes de devolución indicados a continuación solo se aplican a pagos con dinero en cuenta de Mercado Pago. Los pagos con tarjeta de débito, crédito u otros medios se cancelan sin devolución.</li>
-                <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al momento de la aprobación.</li>
-                <li>Si al aprobar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
+                <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Si el pago fue con tarjeta u otro medio distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por transferencia con administración.</li>
+                <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al enviar la solicitud.</li>
+                <li>Si al solicitar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
                 <li>Si la cancelación la solicita el anunciante o el administrador, la política prevé una devolución del {{ politica.porcentajeOtrosActores }} % si se aprueba antes del ingreso.</li>
               </ul>
             </details>

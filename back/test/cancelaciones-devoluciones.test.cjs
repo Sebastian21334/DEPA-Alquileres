@@ -55,7 +55,8 @@ before(async () => {
 beforeEach(async () => {
   await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
   pasarela = { reembolsar: async (_id, importe) => ({ id: 'mp-refund-1', status: 'approved', amount: importe }) };
-  const estadoReserva = new ReservaEstadoService(new PublicacionesService({}, catalogosDePrueba()), catalogosDePrueba());
+  const publicaciones = new PublicacionesService({}, catalogosDePrueba());
+  const estadoReserva = new ReservaEstadoService(publicaciones, catalogosDePrueba());
   reembolsos = new ReembolsosService(
     new ReembolsosRepository(source.getRepository(Reembolso)),
     pasarela,
@@ -65,7 +66,7 @@ beforeEach(async () => {
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   disponibilidad = { liberarReserva: async () => {} };
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
-  reservas = new ReservasService({}, repositorio, disponibilidad, {}, {}, { avisarCambio: async () => {} }, reembolsos, estadoReserva,
+  reservas = new ReservasService({}, repositorio, disponibilidad, {}, publicaciones, { avisarCambio: async () => {} }, reembolsos, estadoReserva,
     liquidaciones, catalogosDePrueba());
   repositorioCancelaciones = new CancelacionesRepository(source.getRepository(SolicitudCancelacion));
   cancelaciones = new CancelacionesService(repositorioCancelaciones, reservas, reembolsos, catalogosDePrueba());
@@ -341,6 +342,47 @@ function repositorioInterceptado(interceptar) {
 
 const fechaEnDias = dias => require('../dist/common/utils/fechas').fechaArgentina(new Date(Date.now() + dias * 86400000));
 const solicitudActual = id => source.getRepository(SolicitudCancelacion).findOneByOrFail({ id });
+
+for (const [fechaSolicitud, fechaAprobacion, porcentaje, dias] of [
+  ['2099-01-04T01:00:00Z', '2099-01-05T15:00:00Z', 100, 7],
+  ['2099-01-04T03:00:00Z', '2099-01-09T15:00:00Z', 50, 6],
+  ['2099-01-08T15:00:00Z', '2099-01-09T15:00:00Z', 50, 2],
+]) {
+  test(`la devolución conserva el ${porcentaje} % solicitado ${dias} días antes aunque se apruebe después`, async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: new Date(fechaSolicitud) });
+    const { reserva } = await escenario();
+    const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
+    assert.deepEqual(condiciones.devolucion, {
+      fechaSolicitud: fechaSolicitud === '2099-01-04T01:00:00Z' ? '2099-01-03' : fechaSolicitud.slice(0, 10),
+      diasAnticipacion: dias, porcentaje, importe: porcentaje, moneda: 'ARS',
+    });
+    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+    assert.equal(solicitud.creada_en.toISOString(), fechaSolicitud.replace('Z', '.000Z'));
+    t.mock.timers.setTime(new Date(fechaAprobacion).getTime());
+    const pendiente = await cancelaciones.consultarCondiciones(reserva.id, 1);
+    assert.deepEqual(pendiente.devolucion, condiciones.devolucion);
+    const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+    assert.equal(Number(resultado.reembolso.importe), condiciones.devolucion.importe);
+    assert.equal(resultado.reembolso.tipo, porcentaje === 100 ? 'TOTAL' : 'PARCIAL');
+  });
+}
+
+test('la vista previa usa el actor solicitante y redondea el importe en la moneda del pago', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-08T15:00:00Z') });
+  const { reserva, pago } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { monto_pago: 100.01 });
+  await source.getRepository(Pago).update(pago.id, { amount: 100.01 });
+  const inquilino = await cancelaciones.consultarCondiciones(reserva.id, 1);
+  assert.equal(inquilino.devolucion.importe, 50.01);
+  const anunciante = await cancelaciones.consultarCondiciones(reserva.id, 2);
+  assert.equal(anunciante.devolucion.porcentaje, 100);
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const consultaDelAnunciante = await cancelaciones.consultarCondiciones(reserva.id, 2);
+  assert.equal(consultaDelAnunciante.solicitud.id, solicitud.id);
+  assert.deepEqual(consultaDelAnunciante.devolucion, inquilino.devolucion);
+  const aprobada = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(Number(aprobada.reembolso.importe), 50.01);
+});
 
 test('la solicitud admite exactamente dos días y exige aceptar los términos', async () => {
   const { ValidationPipe } = require('@nestjs/common');
@@ -921,10 +963,19 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       .set('Authorization', tenant).expect(200);
     assert.equal(sinSolicitud.text, '');
     const rutaCondiciones = `/reservas/${reserva.id}/cancelacion/condiciones`;
+    await request(http).get(rutaCondiciones).expect(401);
     await request(http).get(rutaCondiciones).set('Authorization', ajeno).expect(403);
     const { body: condiciones } = await request(http).get(rutaCondiciones).set('Authorization', tenant).expect(200);
     assert.equal(condiciones.motivoBloqueo, null);
     assert.equal(condiciones.politica.diasDevolucionParcial, 2);
+    assert.equal(condiciones.devolucion.porcentaje, 100);
+    assert.equal(condiciones.devolucion.importe, 100);
+    assert.equal(condiciones.devolucion.moneda, 'ARS');
+    assert.match(condiciones.devolucion.fechaSolicitud, /^\d{4}-\d{2}-\d{2}$/);
+    for (const extra of [{ fechaSolicitud: '2090-01-01' }, { importe: 999 }, { porcentaje: 100 }]) {
+      await request(http).post(`/reservas/${reserva.id}/cancelacion`)
+        .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...extra }).expect(400);
+    }
     await request(http).post(`/reservas/${reserva.id}/cancelacion`)
       .set('Authorization', tenant).send({ motivo: 'Cambio de planes' }).expect(400);
     const solicitud = await request(http).post(`/reservas/${reserva.id}/cancelacion`)
@@ -933,6 +984,8 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.equal(Object.hasOwn(solicitud.body, 'ambitoEstado'), false);
     assert.equal(solicitud.body.reserva.id, reserva.id);
     assert.equal(solicitud.body.reserva.estado_estadia, 'CONFIRMADA');
+    const enviadas = await request(http).get(rutaCondiciones).set('Authorization', tenant).expect(200);
+    assert.deepEqual(enviadas.body.devolucion, condiciones.devolucion);
     const avisosCancelacion = () => correos.filter(({ content }) => content.subject === 'Nueva solicitud de cancelación')
       .map(({ recipients }) => recipients.to[0].address).sort();
     const admins = ['usuario3@example.invalid', 'usuario4@example.invalid'];

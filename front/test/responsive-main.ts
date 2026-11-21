@@ -169,12 +169,20 @@ const page = <T>(datos: T[]) => ({
   totalPaginas: 1,
   totalRegistros: datos.length,
 });
+// Cancelaciones de prueba: el envío solo modifica este mapa en memoria.
+const cancelaciones = new Map<number, { id: number; estado: string; motivo: string; creada_en: string }>();
 const interceptor: HttpInterceptorFn = (req) => {
   const url = new URL(req.url, location.origin);
   const p = url.pathname.replace(/^\/api/, '');
   let body;
   if (req.method !== 'GET') {
     if (p.endsWith('/visualizacion')) body = { visualizaciones: 126 };
+    else if (location.pathname === '/mis-reservas' && /^\/reservas\/\d+\/cancelacion$/.test(p) && req.method === 'POST') {
+      const id = Number(p.split('/')[2]);
+      const datos = req.body as { motivo: string };
+      body = cancelaciones.get(id) ?? { id, estado: 'PENDIENTE', motivo: datos.motivo, creada_en: new Date().toISOString() };
+      cancelaciones.set(id, body);
+    }
     else if (location.pathname === '/mis-publicaciones' && /^\/publicaciones\/\d+\/restaurar$/.test(p) && req.method === 'PATCH') {
       const pub = publicaciones.find(pub => pub.id === Number(p.split('/')[2]))!;
       Object.assign(pub, { eliminada: false, activa: false });
@@ -264,6 +272,16 @@ const interceptor: HttpInterceptorFn = (req) => {
       validado_en: null,
       estado_liquidacion: 'RETENIDO',
     };
+  else if (/^\/reservas\/\d+\/cancelacion\/condiciones$/.test(p)) {
+    const id = Number(p.split('/')[2]);
+    body = {
+      solicitud: cancelaciones.get(id) ?? null,
+      motivoBloqueo: null, admiteReembolso: true, devolucionPorTransferencia: false,
+      politica: { diasDevolucionTotal: 7, diasDevolucionParcial: 2, porcentajeTotal: 100, porcentajeParcial: 50, porcentajeFueraDePlazo: 0, porcentajeOtrosActores: 100 },
+      devolucion: { fechaSolicitud: fecha(0), diasAnticipacion: 10 + id - 1, porcentaje: 100, importe: 175000, moneda: 'ARS' },
+    };
+  }
+  else if (p.endsWith('/reembolsos')) body = [];
   else if (p.startsWith('/reservas/')) body = reservas;
   else if (p === '/mensajes')
     body = [
