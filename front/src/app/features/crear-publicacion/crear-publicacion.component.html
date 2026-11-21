@@ -120,7 +120,7 @@
                 id="ambientes"
                 type="number"
                 min="1"
-                max="50"
+                max="10"
                 step="1"
                 inputmode="numeric"
                 appSoloNumeros="0"
@@ -128,7 +128,7 @@
                 placeholder="Ej.: 2"
               />
               @if (formulario.excedeMaximo('cantidad_ambientes')) {
-                <span class="acct-hint acct-hint--error">El máximo es 50 ambientes.</span>
+                <span class="acct-hint acct-hint--error">El máximo es 10 ambientes.</span>
               } @else if (formulario.excedeDecimales('cantidad_ambientes')) {
                 <span class="acct-hint acct-hint--error">Ingresá una cantidad entera de ambientes.</span>
               } @else if (formulario.invalido('cantidad_ambientes')) {

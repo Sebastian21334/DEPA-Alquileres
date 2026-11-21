@@ -125,9 +125,9 @@
         />
         <div class="field">
           <label for="rooms">Ambientes *</label
-          ><input id="rooms" type="number" min="1" max="50" step="1" inputmode="numeric" appSoloNumeros="0" formControlName="cantidad_ambientes" />
+          ><input id="rooms" type="number" min="1" max="10" step="1" inputmode="numeric" appSoloNumeros="0" formControlName="cantidad_ambientes" />
           @if (formulario.excedeMaximo('cantidad_ambientes')) {
-            <small>El máximo es 50 ambientes.</small>
+            <small>El máximo es 10 ambientes.</small>
           } @else if (formulario.excedeDecimales('cantidad_ambientes')) {
             <small>Ingresá una cantidad entera de ambientes.</small>
           } @else if (formulario.invalido('cantidad_ambientes')) {

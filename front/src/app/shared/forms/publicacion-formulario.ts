@@ -22,7 +22,7 @@ const PATRON_TITULO_PUBLICACION =
 // Deben coincidir con back/src/publicaciones/dto/crear-publicacion.dto.ts.
 const PRECIO_MAXIMO = 99_999_999.99;
 const SUPERFICIE_MAXIMA = 10_000;
-const AMBIENTES_MAXIMOS = 50;
+const AMBIENTES_MAXIMOS = 10;
 
 // Formulario de una publicación, único para el alta (CrearPublicacionComponent) y la
 // edición (PublicationFormComponent). Cada pantalla lo declara en sus `providers`, así
