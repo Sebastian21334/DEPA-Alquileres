@@ -1,5 +1,5 @@
 import type { Reserva } from '../services/reservation.service';
-import { rentalDays } from './rental-dates';
+import { DIAS_MINIMOS_REPROGRAMACION, diasDeAntelacion, rentalDays } from './rental-dates';
 
 export type EstadoEstadia =
   | 'PENDIENTE_PAGO'
@@ -60,6 +60,7 @@ export function puedeReprogramar(reserva: Reserva): boolean {
     !['EN_REVISION', 'PAGADO_PROPIETARIO', 'DEVUELTO_INQUILINO', 'DEVUELTO_PARCIAL_INQUILINO']
       .includes(reserva.estado_liquidacion) &&
     !!reserva.publicacion &&
+    diasDeAntelacion(reserva.fecha_inicio) >= DIAS_MINIMOS_REPROGRAMACION &&
     rentalDays(reserva.fecha_inicio, reserva.fecha_fin) > 0 &&
     Number(reserva.precio_unitario_contratado) > 0 &&
     Number(reserva.importe_contratado) > 0 &&
