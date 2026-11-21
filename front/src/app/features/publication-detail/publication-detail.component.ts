@@ -28,6 +28,7 @@ import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import {
+  DIAS_MINIMOS_REPROGRAMACION,
   RentalDateRange,
   isRentalRangeAvailable,
   rentalDays,
@@ -116,6 +117,7 @@ export class PublicationDetailComponent {
   protected readonly esTemporaria = computed(() =>
     admiteReservasPorFecha(this.publication()?.modalidad),
   );
+  protected readonly diasMinimosReprogramacion = DIAS_MINIMOS_REPROGRAMACION;
   protected readonly advertiserName = computed(() => {
     const user = this.publication()?.anunciante?.usuario;
     return user ? `${user.nombre} ${user.apellido}`.trim() : 'Anunciante';

@@ -85,6 +85,7 @@ h2 { margin: 0 0 14px; font-size: 1.05rem; font-weight: 800; }
 .section-heading h2 { margin: 4px 0 0; font-size: 1.25rem; }
 .section-heading p { max-width: 280px; margin: 0; color: var(--color-text-muted); font-size: .8rem; }
 .calendar-empty { margin: 10px 0 0; padding: 10px 12px; border-radius: 7px; color: #854d0e; background: #fef9c3; font-size: .8rem; }
+.calendar-note { margin: 10px 0 0; color: var(--color-text-muted); font-size: .78rem; line-height: 1.4; }
 .booking-card { position: sticky; top: 20px; padding: 22px; border: 1px solid #d8dee8; border-radius: 14px; background: #fff; box-shadow: var(--shadow-card); }
 .booking-card__price { display: flex; align-items: baseline; gap: 7px; margin-bottom: 18px; }
 .booking-card__price strong { font-size: 1.7rem; }

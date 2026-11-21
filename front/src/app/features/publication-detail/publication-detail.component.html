@@ -188,6 +188,7 @@
           <div class="booking-calendar">
             <div class="section-heading"><div><span>Disponibilidad</span><h2>Elegí las fechas de tu alquiler</h2></div></div>
             <app-availability-calendar [dates]="availability()" [loading]="availabilityLoading()" [selectedStart]="selectedStart()" [selectedEnd]="selectedEnd()" (rangeChange)="selectBookingDate($event)" />
+            <p class="calendar-note">La reprogramación de fechas solo estará disponible con {{ diasMinimosReprogramacion }} días o más de antelación al inicio de la reserva.</p>
             @if (!availabilityLoading() && !availability().length && !bookingError()) { <p class="calendar-empty">El anunciante todavía no cargó días disponibles para esta propiedad.</p> }
           </div>
           <aside class="booking-card">
