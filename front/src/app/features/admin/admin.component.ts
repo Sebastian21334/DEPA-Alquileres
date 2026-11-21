@@ -561,6 +561,7 @@ export class AdminComponent {
   }
 
   protected abrirAprobacionCancelacion(solicitud: AdminCancellationRequest): void {
+    if (!solicitud.devolucion) return;
     this.solicitudPorAprobar.set(solicitud);
     this.observacionAprobacion = '';
     this.errorAprobacion.set('');
@@ -577,7 +578,7 @@ export class AdminComponent {
   protected confirmarAprobacionCancelacion(): void {
     const solicitud = this.solicitudPorAprobar();
     const observacion = this.observacionAprobacion.trim();
-    if (!solicitud || this.aprobandoCancelacion() || observacion.length > 500) return;
+    if (!solicitud?.devolucion || this.aprobandoCancelacion() || observacion.length > 500) return;
 
     this.errorAprobacion.set('');
     this.aprobandoCancelacion.set(true);

@@ -38,6 +38,7 @@ const auth = {
     return rol === 'Administrador';
   },
   token: null,
+  consultarSesion() { return of({ activa: true, bloqueado: false, accesoLimitado: false }); },
   logout() {
     this.currentUser.set(null);
   },
@@ -177,12 +178,36 @@ const page = <T>(datos: T[]) => ({
 });
 // Cancelaciones de prueba: el envío solo modifica este mapa en memoria.
 const cancelaciones = new Map<number, { id: number; estado: string; motivo: string; creada_en: string }>();
+const solicitudesCancelacionAdmin = [100, 50, 0, null].map((porcentaje, i) => ({
+  id: i + 1,
+  motivo: 'Cambio de planes para la estadía.',
+  estado: 'PENDIENTE',
+  creada_en: new Date().toISOString(),
+  reserva: { ...reservas[i], monto_pago: 75.35 },
+  devolucion: porcentaje === null ? null : {
+    fechaSolicitud: fecha(0), diasAnticipacion: porcentaje === 100 ? 7 : porcentaje === 50 ? 2 : 1,
+    porcentaje, importe: porcentaje === 100 ? 75.35 : porcentaje === 50 ? 37.68 : 0, moneda: 'ARS',
+  },
+}));
 const interceptor: HttpInterceptorFn = (req) => {
   const url = new URL(req.url, location.origin);
   const p = url.pathname.replace(/^\/api/, '');
   let body;
   if (req.method !== 'GET') {
     if (p.endsWith('/visualizacion')) body = { visualizaciones: 126 };
+    else if (/^\/reservas\/\d+\/cancelacion\/\d+$/.test(p) && req.method === 'PATCH') {
+      const id = Number(p.split('/').pop());
+      const indice = solicitudesCancelacionAdmin.findIndex(solicitud => solicitud.id === id);
+      const solicitud = solicitudesCancelacionAdmin[indice];
+      if (!solicitud) return throwError(() => new HttpErrorResponse({ status: 404 }));
+      const datos = req.body as { decision: string };
+      solicitudesCancelacionAdmin.splice(indice, 1);
+      body = { solicitud: { ...solicitud, estado: datos.decision }, reembolso: datos.decision === 'APROBADA' && solicitud.devolucion?.importe
+        ? { id, tipo: solicitud.devolucion.porcentaje === 100 ? 'TOTAL' : 'PARCIAL', origen: 'CANCELACION',
+          importe: solicitud.devolucion.importe, moneda: solicitud.devolucion.moneda, estado: 'PENDIENTE',
+          creado_en: new Date().toISOString(), motivo: solicitud.motivo, reserva: solicitud.reserva }
+        : null };
+    }
     else if (location.pathname === '/mis-reservas' && /^\/reservas\/\d+\/cancelacion$/.test(p) && req.method === 'POST') {
       const id = Number(p.split('/')[2]);
       const datos = req.body as { motivo: string };
@@ -231,6 +256,7 @@ const interceptor: HttpInterceptorFn = (req) => {
   else if (p === '/usuarios/administracion')
     body = page([user, { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true }]);
   else if (p === '/publicaciones/administracion') body = page(publicaciones);
+  else if (p === '/reservas/cancelaciones/administracion') body = [...solicitudesCancelacionAdmin];
   else if (p === '/publicaciones/mias') body = publicaciones.map(pub => ({ ...pub }));
   else if (p.startsWith('/publicaciones/anunciante/')) {
     const requestedCount = Number(params.get('publicacionesPerfil') ?? publicaciones.length);

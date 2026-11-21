@@ -40,6 +40,9 @@
   color: #146c43;
 }
 .cancellation-approval-dialog h2 { font-size: 1.35rem; font-weight: 700; }
+.cancellation-refund { color: #146c43; overflow-wrap: anywhere; }
+.cancellation-refund--summary { padding: 12px; border-radius: 8px; background: #e6f6ee; }
+.cancellation-refund--summary strong { display: block; margin-block: 4px; font-size: 1.25rem; }
 .cancellation-approval-dialog textarea:focus-visible { outline: 2px solid #146c43; outline-offset: 2px; }
 .blocked-users { display: grid; gap: 12px; padding: 16px; }
 .blocked-user { display: grid; justify-items: start; gap: 10px; padding: 16px; border: 1px solid #dfe6ea; border-radius: 10px; }
