@@ -110,6 +110,8 @@ export interface AdminReembolso {
   estado: 'PENDIENTE' | 'EN_PROCESO' | 'APROBADO' | 'RECHAZADO' | 'FALLIDO' | 'CANCELADO';
   motivo: string;
   creado_en: string;
+  /** Origen interno del reembolso; en los reclamos es `rec:<id del reclamo>`. */
+  referencia_interna?: string | null;
   referencia_externa?: string | null;
   resuelto_en?: string | null;
   resuelto_por?: { nombre?: string; apellido?: string } | null;

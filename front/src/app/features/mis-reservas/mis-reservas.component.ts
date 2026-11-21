@@ -22,6 +22,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -42,6 +43,7 @@ export class MisReservasComponent {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
   private consultaReservas?: Subscription;
   protected readonly estadiaActiva = estadiaActiva;
@@ -539,6 +541,16 @@ export class MisReservasComponent {
 
   protected detalleReserva(reserva: Reserva): { reserva_id: number } {
     return { reserva_id: reserva.id };
+  }
+
+  /** La devolución la sigue el inquilino; el anunciante no gestiona reembolsos. */
+  protected esInquilinoDelReclamo(reclamo: Reclamo): boolean {
+    return reclamo.inquilino?.id === Number(this.auth.currentUser()?.sub);
+  }
+
+  /** El estado y el chat de la devolución están en el detalle de la reserva. */
+  protected verReembolsoReclamo(reclamo: Reclamo): void {
+    if (reclamo.reserva?.id) void this.router.navigate(['/reserva/resultado'], { queryParams: { reserva_id: reclamo.reserva.id } });
   }
 
   private iniciarOperacion(id: number): void {

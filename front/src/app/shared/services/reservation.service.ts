@@ -177,6 +177,8 @@ export interface Reclamo {
   id: number;
   reserva?: {
     id: number;
+    monto_pago?: number | string;
+    moneda_contratada?: string | null;
     publicacion?: { id?: number; titulo?: string; imagenes?: { url: string }[] } | null;
   } | null;
   anunciante?: ParticipanteReclamo | null;
