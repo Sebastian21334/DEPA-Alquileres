@@ -13,6 +13,7 @@ export interface CondicionesCancelacionDto {
   solicitud: SolicitudCancelacion | null;
   politica: PoliticaCancelacion;
   motivoBloqueo: string | null;
+  advertencia: string | null;
   admiteReembolso: boolean;
   devolucionPorTransferencia: boolean;
   devolucion: DevolucionCancelacionDto | null;

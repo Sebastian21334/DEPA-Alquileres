@@ -7,9 +7,12 @@ devolución. Las fechas se liberan al cancelar.
 
 La cancelación de una reserva **pagada** antes del inicio requiere una solicitud
 y una decisión administrativa. La reserva no se cancela hasta que el reembolso
-quede registrado cuando corresponde una devolución. El solicitante puede
-enviar el pedido hasta 2 días calendario antes del ingreso, inclusive, y debe
-aceptar los términos de cancelación. Se puede solicitar con cualquier medio
+quede registrado cuando corresponde una devolución. El inquilino puede
+enviar el pedido hasta el día anterior al ingreso, inclusive. Si faltan menos
+de 2 días calendario, se muestra una advertencia de devolución del 0 % y debe
+aceptar los términos, que aclaran que no recibirá una devolución. Desde la
+fecha de ingreso no se permite solicitar la cancelación, aunque no se haya
+validado el código de alojamiento. Se puede solicitar con cualquier medio
 de pago admitido para reservar. Si el pago se hizo con tarjeta u otro medio
 distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por
 transferencia con administración.
@@ -25,9 +28,15 @@ versión aplicable a la fecha del pago. No cambia el esquema de la base.
 |---|---|
 | Inquilino cancela con 7 días o más de anticipación | 100 % |
 | Inquilino cancela entre 2 y 6 días antes | 50 % |
+| Inquilino cancela el día anterior al ingreso | 0 %, con advertencia antes de enviar |
 | Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | Conserva el porcentaje del día de solicitud |
 | Anunciante o Administrador cancela antes del inicio | 100 % |
 | La estadía ya comenzó o terminó | No se cancela; solo reclamo |
+
+Con devolución del 0 %, la aprobación cancela la reserva, conserva el pago y
+libera las fechas, sin generar un registro de reembolso. La solicitud,
+la cancelación y la liquidación se actualizan en la misma transacción.
+El plazo actual del anunciante se conserva para el siguiente punto del paquete.
 
 Si el Administrador intenta resolverla en la fecha de ingreso o después,
 el sistema marca la solicitud como `VENCIDA`.

@@ -35,11 +35,17 @@
         <form (ngSubmit)="enviarCancelacion()" [attr.aria-busy]="enviandoCancelacion()">
           @let bloqueo = condicionesCancelacion()?.motivoBloqueo;
           @if (condicionesCancelacion()?.devolucion; as devolucion) {
-            <div class="cancellation-refund" role="status">
+            <div class="cancellation-refund" [class.cancellation-refund--warning]="devolucion.porcentaje === 0" role="status">
               <strong>Devolución si se aprueba: {{ devolucion.moneda }} {{ monto(devolucion.importe, devolucion.moneda) }} ({{ devolucion.porcentaje }} %)</strong>
               <p>Calculada con la fecha de {{ condicionesCancelacion()?.solicitud ? 'tu solicitud' : 'hoy' }}:
-                {{ devolucion.fechaSolicitud | date:'dd/MM/yyyy':'UTC' }}, {{ devolucion.diasAnticipacion }} días antes del ingreso.</p>
+                {{ devolucion.fechaSolicitud | date:'dd/MM/yyyy':'UTC' }}, {{ devolucion.diasAnticipacion }} {{ devolucion.diasAnticipacion === 1 ? 'día' : 'días' }} antes del ingreso.</p>
               <p>El porcentaje se determina al enviar la solicitud. La demora en aprobarla no lo reduce.</p>
+            </div>
+          }
+          @if (condicionesCancelacion()?.advertencia; as advertencia) {
+            <div class="cancellation-warning" role="status">
+              <svg lucideTriangleAlert [size]="22" aria-hidden="true"></svg>
+              <p>{{ advertencia }}</p>
             </div>
           }
           @if (estadoCancelacion() === 'formulario') {
@@ -77,7 +83,7 @@
             <details class="cancellation-terms">
               <summary>Términos y condiciones de cancelación</summary>
               <ul>
-                <li>Podés solicitar la cancelación hasta {{ politica.diasDevolucionParcial }} días antes del ingreso, inclusive. Se cuentan días calendario de Argentina.</li>
+                <li>Como inquilino podés solicitar la cancelación hasta el día anterior al ingreso, inclusive. Si faltan menos de {{ politica.diasDevolucionParcial }} días, no hay devolución. Desde la fecha de ingreso no se permite cancelar; podés abrir un reclamo. Se cuentan días calendario de Argentina.</li>
                 <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Si el pago fue con tarjeta u otro medio distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por transferencia con administración.</li>
                 <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al enviar la solicitud.</li>
                 <li>Si al solicitar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
@@ -89,7 +95,7 @@
                 <input type="checkbox" name="aceptaTerminosCancelacion" required
                   [ngModel]="aceptaTerminosCancelacion()" (ngModelChange)="aceptaTerminosCancelacion.set($event)"
                   [disabled]="enviandoCancelacion() || !!bloqueo" />
-                Acepto los términos y condiciones de cancelación
+                {{ condicionesCancelacion()?.advertencia ? 'Acepto los términos y entiendo que no recibiré una devolución' : 'Acepto los términos y condiciones de cancelación' }}
               </label>
             }
           }

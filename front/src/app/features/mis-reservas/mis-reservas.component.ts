@@ -190,6 +190,7 @@ export class MisReservasComponent {
       reserva.estado_pago === 'APROBADO' &&
       !reserva.cancelada &&
       !reserva.finalizada &&
+      !!reserva.fecha_inicio && reserva.fecha_inicio > this.hoy() &&
       ['CONFIRMADA', 'PENDIENTE_INGRESO'].includes(reserva.estado_estadia) &&
       !reserva.codigo_validado_en &&
       reserva.estado_liquidacion !== 'EN_REVISION' &&
@@ -242,6 +243,12 @@ export class MisReservasComponent {
     if (!reserva || this.estadoCancelacion() !== 'formulario' || this.enviandoCancelacion() ||
         !condiciones || condiciones.motivoBloqueo || !this.aceptaTerminosCancelacion() ||
         motivo.length < 10 || motivo.length > 500) return;
+    if (condiciones.devolucion && condiciones.devolucion.fechaSolicitud !== this.hoy()) {
+      this.aceptaTerminosCancelacion.set(false);
+      this.consultarCancelacion();
+      this.errorCancelacion.set('Cambió el día. Revisá la devolución actualizada y aceptá nuevamente los términos antes de enviar.');
+      return;
+    }
     this.errorCancelacion.set('');
     this.enviandoCancelacion.set(true);
     this.reservasApi.requestCancellation(reserva.id, motivo, this.aceptaTerminosCancelacion())

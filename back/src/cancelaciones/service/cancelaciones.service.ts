@@ -57,7 +57,8 @@ export class CancelacionesService {
       const hoy = fechaArgentina(creadaEn);
       this.validarReserva(reserva, hoy);
       const politica = await this.politicaAplicable(cancelaciones, reserva);
-      const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica);
+      const actor = this.actorDeCancelacion(reserva, idUsuario);
+      const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor);
       if (motivoBloqueo) throw new BadRequestException(motivoBloqueo);
       await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
       const solicitud = cancelaciones.crear({
@@ -113,17 +114,27 @@ export class CancelacionesService {
     const hoy = fechaArgentina();
     const fechaSolicitud = solicitud ? fechaArgentina(solicitud.creada_en) : hoy;
     const actor = this.actorDeCancelacion(reserva, solicitud ? solicitud.solicitante?.id : idUsuario);
+    const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor);
+    const devolucion = pago && (!motivoBloqueo || solicitud)
+      ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica), moneda: pago.currency }
+      : null;
     return {
       solicitud,
       politica,
-      motivoBloqueo: this.bloqueoPorPlazo(reserva, hoy, politica),
+      motivoBloqueo,
+      advertencia: !motivoBloqueo && actor === 'INQUILINO' && devolucion?.porcentaje === 0
+        ? `Faltan menos de ${politica.diasDevolucionParcial} días para el ingreso. Si se aprueba la cancelación, no recibirás devolución del importe pagado (0 %).`
+        : null,
       admiteReembolso: pago != null,
       devolucionPorTransferencia: pago != null && pago.payment_method_id !== 'account_money',
-      devolucion: pago ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica), moneda: pago.currency } : null,
+      devolucion,
     };
   }
 
-  private bloqueoPorPlazo(reserva: Reserva, hoy: string, politica: PoliticaCancelacion): string | null {
+  private bloqueoPorPlazo(reserva: Reserva, hoy: string, politica: PoliticaCancelacion, actor: ActorCancelacion): string | null {
+    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
+      return 'Desde la fecha de ingreso no se puede solicitar la cancelación. Para una devolución, abrí un reclamo.';
+    if (actor === 'INQUILINO') return null;
     const diasMinimos = politica.diasDevolucionParcial;
     return this.diasHastaIngreso(reserva, hoy) < diasMinimos
       ? `El plazo venció. Tenés que solicitar la cancelación al menos ${diasMinimos} días antes del ingreso.`

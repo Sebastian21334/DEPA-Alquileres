@@ -19,6 +19,11 @@ Mis reservas debe mostrar únicamente las reservas realizadas.
 `?publicacionesPerfil=14` muestra 14 propiedades en el perfil del anunciante para
 probar su paginación (6 por página). Acepta entre 0 y 60; `pagina=2` abre la segunda página.
 
+En `/mis-reservas?rol=Usuario&anunciante=no&cancelacion=sin-devolucion`, la reserva
+#3 ingresa mañana: permite enviar la solicitud y muestra el 0 % con advertencia.
+Con `cancelacion=iniciada`, ingresa hoy y no ofrece solicitar la cancelación.
+Los envíos de esta vista se guardan únicamente en memoria, sin llamar a la API.
+
 Revisión realizada el 5 de noviembre de 2026:
 
 - Las 21 rutas se comprobaron a 320 y 768 px sin desbordamiento horizontal de página:

@@ -113,6 +113,8 @@ const fechas = Array.from({ length: 70 }, (_, i) => ({
   disponible: true,
   reserva: null,
 }));
+const diasCancelacion = params.get('cancelacion') === 'sin-devolucion' ? 1
+  : params.get('cancelacion') === 'iniciada' ? 0 : null;
 const reservas = publicaciones.map((p, i) => ({
   id: i + 1,
   publicacion: p,
@@ -121,10 +123,10 @@ const reservas = publicaciones.map((p, i) => ({
   usuario_apellido: user.apellido,
   usuario_email: user.email,
   usuario_telefono: user.telefono,
-  estado_estadia: i === 1 ? 'EN_CURSO' : 'CONFIRMADA',
+  estado_estadia: i === 1 ? 'EN_CURSO' : i === 2 && diasCancelacion === 0 ? 'PENDIENTE_INGRESO' : 'CONFIRMADA',
   finalizada: false,
   cancelada: false,
-  fecha_inicio: fecha(10 + i),
+  fecha_inicio: fecha(i === 2 && diasCancelacion !== null ? diasCancelacion : 10 + i),
   fecha_fin: fecha(14 + i),
   fecha_pago: new Date().toISOString(),
   estado_pago: 'APROBADO',
@@ -274,11 +276,15 @@ const interceptor: HttpInterceptorFn = (req) => {
     };
   else if (/^\/reservas\/\d+\/cancelacion\/condiciones$/.test(p)) {
     const id = Number(p.split('/')[2]);
+    const dias = id === 3 && diasCancelacion !== null ? diasCancelacion : 10 + id - 1;
+    const bloqueo = dias <= 0;
     body = {
       solicitud: cancelaciones.get(id) ?? null,
-      motivoBloqueo: null, admiteReembolso: true, devolucionPorTransferencia: false,
+      motivoBloqueo: bloqueo ? 'Desde la fecha de ingreso no se puede solicitar la cancelación.' : null,
+      advertencia: dias === 1 ? 'Faltan menos de 2 días para el ingreso. Si se aprueba la cancelación, no recibirás devolución del importe pagado (0 %).' : null,
+      admiteReembolso: true, devolucionPorTransferencia: false,
       politica: { diasDevolucionTotal: 7, diasDevolucionParcial: 2, porcentajeTotal: 100, porcentajeParcial: 50, porcentajeFueraDePlazo: 0, porcentajeOtrosActores: 100 },
-      devolucion: { fechaSolicitud: fecha(0), diasAnticipacion: 10 + id - 1, porcentaje: 100, importe: 175000, moneda: 'ARS' },
+      devolucion: bloqueo ? null : { fechaSolicitud: fecha(0), diasAnticipacion: dias, porcentaje: dias === 1 ? 0 : 100, importe: dias === 1 ? 0 : 175000, moneda: 'ARS' },
     };
   }
   else if (p.endsWith('/reembolsos')) body = [];
