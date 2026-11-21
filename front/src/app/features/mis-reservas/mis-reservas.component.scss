@@ -175,6 +175,10 @@
 .cancellation-refund { margin-bottom: 1.2rem; padding: 1rem; border: 1px solid #b9d7c0; border-radius: 10px; background: #edf7ef; color: #174d2a; overflow-wrap: anywhere; }
 .cancellation-refund strong { font-size: 1.1rem; }
 .cancellation-refund p { margin: .5rem 0 0; font-size: .9rem; }
+.cancellation-refund--warning, .cancellation-warning { border: 1px solid #e0b961; background: #fff6df; color: #684000; }
+.cancellation-warning { display: flex; align-items: flex-start; gap: .7rem; padding: .8rem 1rem; margin-bottom: 1rem; border-radius: 10px; }
+.cancellation-warning svg { flex: none; }
+.cancellation-warning p { margin: 0; }
 .cancellation-info { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem; margin-top: 1rem; border-radius: 10px; background: #e1efff; color: #123664; }
 .cancellation-info svg { flex: none; }
 .cancellation-info p { margin: 0; }

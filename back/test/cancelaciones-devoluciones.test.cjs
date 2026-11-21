@@ -397,19 +397,53 @@ test('la solicitud admite exactamente dos días y exige aceptar los términos', 
   const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
   assert.equal(condiciones.motivoBloqueo, null);
   assert.equal(condiciones.politica.porcentajeParcial, 50);
+  assert.equal(condiciones.advertencia, null);
   const dto = await validar({ motivo, aceptaTerminos: true });
   assert.equal((await cancelaciones.solicitar(reserva.id, dto, 1)).estado, 'PENDIENTE');
 });
 
-test('la consulta muestra los términos aunque el plazo haya vencido', async () => {
+test('el inquilino puede solicitar el día anterior con advertencia y sin devolución', async () => {
   const { reserva } = await escenario(fechaEnDias(1));
   const dto = { motivo: 'Cambio de planes', aceptaTerminos: true };
   const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
   assert.equal(condiciones.politica.diasDevolucionParcial, 2);
-  assert.match(condiciones.motivoBloqueo, /plazo venció/);
-  await assert.rejects(cancelaciones.solicitar(reserva.id, dto, 1), /plazo venció/);
+  assert.equal(condiciones.motivoBloqueo, null);
+  assert.match(condiciones.advertencia, /no recibirás devolución.*0 %/);
+  assert.equal(condiciones.devolucion.importe, 0);
+  assert.equal(condiciones.devolucion.porcentaje, 0);
+  const solicitud = await cancelaciones.solicitar(reserva.id, dto, 1);
+  assert.equal(solicitud.estado, 'PENDIENTE');
+  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  assert.equal(resultado.reembolso, null);
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+  const actual = await reservas.obtenerReserva(reserva.id);
+  assert.equal(actual.cancelada, true);
+  assert.equal(actual.estado_pago, 'APROBADO');
+  assert.equal(actual.estado_liquidacion, 'EN_REVISION');
+});
 
+test('desde la medianoche argentina del ingreso se bloquea al inquilino aunque no validó el código', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-10T02:59:59Z') });
+  const { reserva } = await escenario();
+  const antes = await cancelaciones.consultarCondiciones(reserva.id, 1);
+  assert.equal(antes.motivoBloqueo, null);
+  assert.equal(antes.devolucion.diasAnticipacion, 1);
+  assert.equal(antes.devolucion.porcentaje, 0);
+  t.mock.timers.setTime(new Date('2099-01-10T03:00:00Z').getTime());
+  const desdeIngreso = await cancelaciones.consultarCondiciones(reserva.id, 1);
+  assert.match(desdeIngreso.motivoBloqueo, /Desde la fecha de ingreso/);
+  assert.equal(desdeIngreso.advertencia, null);
+  assert.equal(desdeIngreso.devolucion, null);
+  await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1), { status: 400 });
   assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
+});
+
+test('el cambio de plazo del inquilino conserva por ahora el plazo del anunciante', async () => {
+  const { reserva } = await escenario(fechaEnDias(1));
+  const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 2);
+  assert.match(condiciones.motivoBloqueo, /plazo venció/);
+  assert.equal(condiciones.advertencia, null);
+  await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 2), { status: 400 });
 });
 
 for (const medio of ['visa', 'debvisa', null]) {
@@ -536,9 +570,8 @@ test('la resolución bloquea la solicitud antes de leer su estado y decide en la
 });
 
 test('si falla la liberación de fechas se revierte la aprobación y se puede reintentar', async () => {
-  const { reserva } = await escenario(fechaEnDias(2));
+  const { reserva } = await escenario(fechaEnDias(1));
   const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
-  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaEnDias(1) });
   disponibilidad.liberarReserva = async () => { throw new Error('fallo simulado del calendario'); };
   await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /fallo simulado del calendario/);
   const pendiente = await solicitudActual(solicitud.id);
@@ -625,11 +658,8 @@ test('las notas internas de reclamos solo se entregan al administrador', async (
 
 for (const [dias, porcentaje] of [[7, 100], [2, 50], [1, 0]]) {
   test(`cancelar con ${dias} días de anticipación aplica ${porcentaje}% de devolución`, async () => {
-    const { reserva } = await escenario(fechaEnDias(Math.max(dias, 2)));
+    const { reserva } = await escenario(fechaEnDias(dias));
     const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
-    if (dias === 1) {
-      await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaEnDias(1) });
-    }
     const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
     const listado = await reembolsos.listarAdministracion();
     if (porcentaje > 0) {
@@ -1032,5 +1062,45 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const [dia] = await source.query("SELECT disponible,id_reserva FROM fecha WHERE fecha='2099-01-10'");
     assert.equal(dia.disponible, true);
     assert.equal(dia.id_reserva, null);
+
+    // T38: la cancelación del día anterior conserva el pago y no mueve dinero.
+    await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+    const { reserva: tardia, pago: pagoTardio } = await escenario(fechaEnDias(1));
+    await source.query('INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva) VALUES ($1,false,1,$2)', [tardia.fecha_inicio, tardia.id]);
+    const rutaTardia = `/reservas/${tardia.id}/cancelacion`;
+    const consultaTardia = await request(http).get(`${rutaTardia}/condiciones`).set('Authorization', tenant).expect(200);
+    assert.equal(consultaTardia.body.motivoBloqueo, null);
+    assert.equal(consultaTardia.body.devolucion.importe, 0);
+    assert.equal(consultaTardia.body.devolucion.porcentaje, 0);
+    assert.match(consultaTardia.body.advertencia, /no recibirás devolución/);
+    await request(http).post(rutaTardia).set('Authorization', tenant)
+      .send({ motivo: 'Cambio de planes', aceptaTerminos: false }).expect(400);
+    const enviadaTardia = await request(http).post(rutaTardia).set('Authorization', tenant)
+      .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
+    const resueltaTardia = await request(http).patch(`${rutaTardia}/${enviadaTardia.body.id}`).set('Authorization', admin)
+      .send({ decision: 'APROBADA' }).expect(200);
+    assert.equal(resueltaTardia.body.reembolso, null);
+    assert.equal(resueltaTardia.body.solicitud.estado, 'APROBADA');
+    const detalleTardio = await request(http).get(`/reservas/${tardia.id}`).set('Authorization', tenant).expect(200);
+    assert.equal(detalleTardio.body.cancelada, true);
+    assert.equal(detalleTardio.body.estado_pago, 'APROBADO');
+    assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pagoTardio.id })).amount_refunded), 0);
+    assert.equal(await source.getRepository(Reembolso).count(), 0);
+    assert.equal(reembolsar.mock.callCount(), 1, 'la cancelación sin devolución no llama a la pasarela');
+    const [diaLiberado] = await source.query('SELECT disponible,id_reserva FROM fecha WHERE fecha=$1', [tardia.fecha_inicio]);
+    assert.deepEqual(diaLiberado, { disponible: true, id_reserva: null });
+
+    for (const dias of [0, -1]) {
+      await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+      const { reserva: iniciada } = await escenario(fechaEnDias(dias));
+      const rutaIniciada = `/reservas/${iniciada.id}/cancelacion`;
+      const bloqueada = await request(http).get(`${rutaIniciada}/condiciones`).set('Authorization', tenant).expect(200);
+      assert.match(bloqueada.body.motivoBloqueo, /Desde la fecha de ingreso/);
+      assert.equal(bloqueada.body.devolucion, null);
+      const rechazoInicio = await request(http).post(rutaIniciada).set('Authorization', tenant)
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(400);
+      assert.match(rechazoInicio.body.message, /estadía ya comenzó/);
+      assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
+    }
   } finally { await app.close(); }
 });

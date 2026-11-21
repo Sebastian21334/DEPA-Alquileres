@@ -135,6 +135,7 @@ export interface ResumenReserva {
 export interface CondicionesCancelacion {
   solicitud: SolicitudCancelacion | null;
   motivoBloqueo: string | null;
+  advertencia: string | null;
   admiteReembolso: boolean;
   devolucionPorTransferencia?: boolean;
   devolucion: {
