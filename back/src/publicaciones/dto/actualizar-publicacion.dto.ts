@@ -14,7 +14,6 @@ import {
   ValidateIf,
 } from 'class-validator';
 import {
-  AMBIENTES_MAXIMOS,
   LARGO_MAXIMO_TITULO,
   LARGO_MINIMO_TITULO,
   MENSAJE_AMBIENTES_RANGO,
@@ -23,9 +22,8 @@ import {
   MENSAJE_PRECIO_RANGO,
   MENSAJE_SUPERFICIE_RANGO,
   PATRON_TITULO_PUBLICACION,
-  PRECIO_MAXIMO,
-  SUPERFICIE_MAXIMA,
 } from './crear-publicacion.dto';
+import { PUBLICACION_LIMITES } from './publicacion-limites.generated';
 
 export class ActualizarPublicacionDto {
   @ValidateIf((_dto, titulo: unknown) => titulo !== undefined)
@@ -43,7 +41,7 @@ export class ActualizarPublicacionDto {
   @ValidateIf((_dto, precio: unknown) => precio !== undefined)
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  @Max(PRECIO_MAXIMO, { message: MENSAJE_PRECIO_RANGO })
+  @Max(PUBLICACION_LIMITES.precioMaximo, { message: MENSAJE_PRECIO_RANGO })
   precio?: number;
 
   @IsOptional()
@@ -67,13 +65,13 @@ export class ActualizarPublicacionDto {
   @ValidateIf((_dto, cantidad: unknown) => cantidad !== undefined)
   @IsInt()
   @IsPositive()
-  @Max(AMBIENTES_MAXIMOS, { message: MENSAJE_AMBIENTES_RANGO })
+  @Max(PUBLICACION_LIMITES.ambientesMaximos, { message: MENSAJE_AMBIENTES_RANGO })
   cantidad_ambientes?: number;
 
   @ValidateIf((_dto, superficie: unknown) => superficie !== undefined)
   @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
-  @Max(SUPERFICIE_MAXIMA, { message: MENSAJE_SUPERFICIE_RANGO })
+  @Max(PUBLICACION_LIMITES.superficieMaxima, { message: MENSAJE_SUPERFICIE_RANGO })
   superficie?: number;
 
   @IsOptional()

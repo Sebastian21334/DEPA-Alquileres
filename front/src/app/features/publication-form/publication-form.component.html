@@ -63,9 +63,9 @@
         </div>
         <div class="field">
           <label for="price">Precio {{ formulario.esTemporaria() ? 'por día' : 'mensual' }} *</label
-          ><input id="price" type="number" min="1" max="99999999.99" step="0.01" inputmode="decimal" appSoloNumeros="2" formControlName="precio" />
+          ><input id="price" type="number" min="1" [attr.max]="formulario.limites.precioMaximo" step="0.01" inputmode="decimal" appSoloNumeros="2" formControlName="precio" />
           @if (formulario.excedeMaximo('precio')) {
-            <small>El precio máximo es 99.999.999,99.</small>
+            <small>El precio máximo es {{ formulario.precioMaximoTexto }}.</small>
           } @else if (formulario.excedeDecimales('precio')) {
             <small>Ingresá como máximo 2 decimales.</small>
           } @else if (formulario.invalido('precio')) {
@@ -125,9 +125,9 @@
         />
         <div class="field">
           <label for="rooms">Ambientes *</label
-          ><input id="rooms" type="number" min="1" max="10" step="1" inputmode="numeric" appSoloNumeros="0" formControlName="cantidad_ambientes" />
+          ><input id="rooms" type="number" min="1" [attr.max]="formulario.limites.ambientesMaximos" step="1" inputmode="numeric" appSoloNumeros="0" formControlName="cantidad_ambientes" />
           @if (formulario.excedeMaximo('cantidad_ambientes')) {
-            <small>El máximo es 10 ambientes.</small>
+            <small>El máximo es {{ formulario.ambientesMaximosTexto }} ambientes.</small>
           } @else if (formulario.excedeDecimales('cantidad_ambientes')) {
             <small>Ingresá una cantidad entera de ambientes.</small>
           } @else if (formulario.invalido('cantidad_ambientes')) {
@@ -136,9 +136,9 @@
         </div>
         <div class="field">
           <label for="surface">Superficie (m²) *</label
-          ><input id="surface" type="number" min="1" max="10000" step="0.01" inputmode="decimal" appSoloNumeros="2" formControlName="superficie" />
+          ><input id="surface" type="number" min="1" [attr.max]="formulario.limites.superficieMaxima" step="0.01" inputmode="decimal" appSoloNumeros="2" formControlName="superficie" />
           @if (formulario.excedeMaximo('superficie')) {
-            <small>La superficie máxima es 10.000 m².</small>
+            <small>La superficie máxima es {{ formulario.superficieMaximaTexto }} m².</small>
           } @else if (formulario.excedeDecimales('superficie')) {
             <small>Ingresá como máximo 2 decimales.</small>
           } @else if (formulario.invalido('superficie')) {
