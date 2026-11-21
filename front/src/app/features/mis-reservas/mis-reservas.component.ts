@@ -8,6 +8,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
   CondicionesCancelacion,
+  FaltanteCancelacion,
   Reserva,
   ReprogramacionReserva,
   Reclamo,
@@ -88,6 +89,59 @@ export class MisReservasComponent {
   protected readonly reclamoDescripcion = signal('');
   protected readonly reclamoArchivos = signal<File[]>([]);
   protected readonly reclamoEnviando = signal(false);
+  private readonly dialogoFaltante = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoFaltante');
+  private consultaFaltante?: Subscription;
+  protected readonly reservaFaltante = signal<Reserva | null>(null);
+  protected readonly saldoFaltante = signal<FaltanteCancelacion | null>(null);
+  protected readonly cargandoFaltante = signal(false);
+  protected readonly enviandoFaltante = signal(false);
+  protected readonly errorFaltante = signal('');
+  protected descripcionFaltante = '';
+
+  protected abrirFaltante(reserva: Reserva): void {
+    this.consultaFaltante?.unsubscribe();
+    this.reservaFaltante.set(reserva);
+    this.saldoFaltante.set(null);
+    this.descripcionFaltante = '';
+    this.errorFaltante.set('');
+    this.cargandoFaltante.set(true);
+    this.dialogoFaltante().nativeElement.showModal();
+    this.consultaFaltante = this.reservasApi.cancellationRefundBalance(reserva.id).pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: saldo => { this.saldoFaltante.set(saldo); this.cargandoFaltante.set(false); },
+        error: (error: ApiError) => { this.errorFaltante.set(error.message); this.cargandoFaltante.set(false); },
+      });
+  }
+
+  protected cerrarFaltante(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.enviandoFaltante()) return;
+    this.consultaFaltante?.unsubscribe();
+    this.dialogoFaltante().nativeElement.close();
+    this.reservaFaltante.set(null);
+  }
+
+  protected enviarFaltante(): void {
+    const reserva = this.reservaFaltante();
+    const saldo = this.saldoFaltante();
+    const descripcion = this.descripcionFaltante.trim();
+    if (!reserva || !saldo?.devolucion?.importeReclamable || saldo.reclamoAbierto || this.enviandoFaltante()) return;
+    if (descripcion.length < 20 || descripcion.length > 1000) {
+      this.errorFaltante.set('La descripción debe tener entre 20 y 1000 caracteres.');
+      return;
+    }
+    this.enviandoFaltante.set(true);
+    this.errorFaltante.set('');
+    this.reservasApi.claimMissingRefund(reserva.id, descripcion).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.enviandoFaltante.set(false)))
+      .subscribe({
+        next: () => {
+          this.enviandoFaltante.set(false);
+          this.cerrarFaltante();
+          this.finalizarReclamo('Reclamo por el faltante enviado. Administración revisará la diferencia.');
+        },
+        error: (error: ApiError) => this.errorFaltante.set(error.message),
+      });
+  }
   constructor() {
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
     if (paymentResult) {

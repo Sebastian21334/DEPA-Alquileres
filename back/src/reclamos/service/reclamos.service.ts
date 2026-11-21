@@ -13,6 +13,9 @@ import type { EntityManager } from 'typeorm';
 import sharp from 'sharp';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { fechaArgentina } from '../../common/utils/fechas';
+import { CancelacionesService } from '../../cancelaciones/service/cancelaciones.service';
+import type { Reserva } from '../../reservas/entity/reserva.entity';
+import type { FaltanteCancelacionDto, ReclamoRespuestaDto, ReclamarFaltanteCancelacionDto } from '../dto/reclamo-faltante-cancelacion.dto';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
@@ -46,7 +49,44 @@ const MAX_BYTES = 5 * 1024 * 1024;
 export class ReclamosService {
   private readonly logger = new Logger(ReclamosService.name);
 
-  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
+  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly cancelaciones: CancelacionesService, private readonly notificaciones?: ReservaNotificacionesService) {}
+
+  async consultarFaltanteCancelacion(idReserva: number, idUsuario: number): Promise<FaltanteCancelacionDto> {
+    const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
+    this.verificarInquilino(reserva, idUsuario);
+    return {
+      devolucion: await this.cancelaciones.saldoDevolucion(reserva),
+      reclamoAbierto: await this.reclamos.existeAbierto(idReserva, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]),
+    };
+  }
+
+  async reclamarFaltanteCancelacion(idReserva: number, dto: ReclamarFaltanteCancelacionDto, idUsuario: number): Promise<ReclamoRespuestaDto> {
+    let idReclamo = 0;
+    await this.reservas.conReservaBloqueada(idReserva, async (reserva, transaccion) => {
+      this.verificarInquilino(reserva, idUsuario);
+      const repo = this.reclamos.enTransaccion(transaccion);
+      const saldo = await this.cancelaciones.saldoDevolucion(reserva, transaccion);
+      if (!saldo || saldo.importeReclamable <= 0)
+        throw new ConflictException('No hay un importe faltante para reclamar; revisá lo devuelto y lo que sigue en gestión');
+      if (await repo.existeAbierto(idReserva, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]))
+        throw new ConflictException('La reserva ya tiene un reclamo abierto');
+      const reclamo = await repo.guardar({
+        reserva, inquilino: referenciaUsuario(idUsuario), anunciante: reserva.publicacion?.anunciante?.usuario,
+        categoria: 'OTRO', descripcion: dto.descripcion.trim(), solicitud_cancelacion_id: saldo.solicitudId,
+        estado: this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), resolucion: null,
+        importe_reembolso: null, administrador_resolucion: null, resuelto_en: null,
+      });
+      idReclamo = reclamo.id;
+    });
+    const reclamo = await this.obtener(idReclamo, idUsuario, false);
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo por reembolso faltante', 'Se abrió un reclamo por el importe faltante de una cancelación. Consultá el expediente en DEPA.');
+    return reclamo;
+  }
+
+  private verificarInquilino(reserva: Reserva, idUsuario: number): void {
+    if (!this.reservas.esDelInquilino(reserva, idUsuario))
+      throw new ForbiddenException('Solo el Inquilino de la reserva puede reclamar el faltante');
+  }
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
     const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
@@ -99,22 +139,22 @@ export class ReclamosService {
     return this.prepararRespuesta(reclamo);
   }
 
-  async listarMios(idUsuario: number): Promise<Reclamo[]> {
+  async listarMios(idUsuario: number): Promise<ReclamoRespuestaDto[]> {
     const reclamos = await this.reclamos.listarPorParticipante(idUsuario);
-    return reclamos.map((reclamo) => this.sinNotasInternas(reclamo));
+    return Promise.all(reclamos.map((reclamo) => this.prepararFaltante(this.sinNotasInternas(reclamo))));
   }
 
-  async listarAdministracion(): Promise<Reclamo[]> {
+  async listarAdministracion(): Promise<ReclamoRespuestaDto[]> {
     const reclamos = await this.reclamos.listarAdministracion();
-    return reclamos.map((reclamo) => this.prepararRespuesta(reclamo));
+    return Promise.all(reclamos.map((reclamo) => this.prepararFaltante(reclamo)));
   }
 
-  async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<Reclamo> {
+  async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<ReclamoRespuestaDto> {
     const reclamo = await this.reclamos.buscarPorId(id);
     if (!reclamo) throw new NotFoundException('Reclamo no encontrado');
-    if (esAdmin) return this.prepararRespuesta(reclamo);
+    if (esAdmin) return this.prepararFaltante(reclamo);
     this.verificarParticipante(reclamo, idUsuario);
-    return this.sinNotasInternas(reclamo);
+    return this.prepararFaltante(this.sinNotasInternas(reclamo));
   }
 
   async subirEvidencias(id: number, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[]): Promise<ReclamoEvidencia[]> {
@@ -223,6 +263,11 @@ export class ReclamosService {
       if (!expediente || estadosCerrados.includes(expediente.estado))
         throw new ConflictException('El reclamo ya fue resuelto');
       const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
+      if (expediente.solicitud_cancelacion_id != null) {
+        resultado.reembolso = await this.resolverFaltanteCancelacion(expediente, actual, dto, idAdmin, previo, transaccion);
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, resultado.reembolso ? Number(resultado.reembolso.importe) : null, idAdmin));
+        return;
+      }
       if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
         if (previo) throw new ConflictException('El reclamo tiene una devolución registrada');
         expediente.reserva = await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion, transaccion);
@@ -292,6 +337,33 @@ export class ReclamosService {
       this.logger.warn(`La devolución ${reembolso.id} quedó pendiente en Reembolsos: ${(error as Error).message}`);
       return null;
     }
+  }
+
+  private async resolverFaltanteCancelacion(reclamo: Reclamo, reserva: Reserva, dto: ResolverReclamoDto, idAdmin: number, previo: Reembolso | null, transaccion: EntityManager): Promise<Reembolso | undefined> {
+    if (previo) throw new ConflictException('El reclamo ya tiene una devolución registrada');
+    if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) return undefined;
+    const saldo = await this.cancelaciones.saldoDevolucion(reserva, transaccion);
+    if (!saldo || saldo.solicitudId !== reclamo.solicitud_cancelacion_id || saldo.importeReclamable <= 0)
+      throw new ConflictException('El faltante ya está cubierto por devoluciones confirmadas o en gestión');
+    const importe = dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL ? saldo.importeReclamable : Number(dto.importe);
+    if (!Number.isFinite(importe) || importe <= 0 || importe > saldo.importeReclamable)
+      throw new BadRequestException('El importe debe ser positivo y no superar el faltante disponible');
+    if (dto.resolucion === ResolucionReclamo.DEVOLUCION_PARCIAL && importe >= saldo.importeReclamable)
+      throw new BadRequestException('Para completar el faltante elegí "Completar faltante"');
+    const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
+    if (!pago) throw new ConflictException('La reserva no tiene un pago registrado');
+    const referencia = `rec:${reclamo.id}`;
+    return this.reembolsos.crearSolicitud({
+      reserva, pago, importe, tipo: importe >= this.reembolsos.saldoReembolsable(pago) ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL,
+      origen: OrigenReembolso.RECLAMO, motivo: `Reclamo #${reclamo.id}: ${dto.observacion ?? 'faltante de cancelación'}`,
+      idSolicitadoPor: idAdmin, idempotencyKey: referencia, referenciaInterna: referencia,
+    }, transaccion);
+  }
+
+  private async prepararFaltante(reclamo: Reclamo): Promise<ReclamoRespuestaDto> {
+    const respuesta = this.prepararRespuesta(reclamo);
+    if (reclamo.solicitud_cancelacion_id == null) return respuesta;
+    return { ...respuesta, devolucion_cancelacion: await this.cancelaciones.saldoDevolucion(reclamo.reserva) };
   }
 
   /** Registra la decisión del administrador sobre el reclamo; las asignaciones viven en el servicio. */

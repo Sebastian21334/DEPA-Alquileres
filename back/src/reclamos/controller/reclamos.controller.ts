@@ -20,6 +20,7 @@ import { ReclamosService } from '../service/reclamos.service';
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
+import { ReclamarFaltanteCancelacionDto } from '../dto/reclamo-faltante-cancelacion.dto';
 
 const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', 5, {
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -29,6 +30,18 @@ const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', 5, {
 @UseGuards(JwtAuthGuard)
 export class ReclamosController {
   constructor(private readonly reclamosService: ReclamosService) {}
+
+  @PermitirAccesoLimitado()
+  @Get('cancelacion/:idReserva')
+  consultarFaltante(@Param('idReserva', ParseIntPipe) idReserva: number, @Req() req: AuthenticatedRequest) {
+    return this.reclamosService.consultarFaltanteCancelacion(idReserva, req.user.id);
+  }
+
+  @PermitirAccesoLimitado()
+  @Post('cancelacion/:idReserva')
+  reclamarFaltante(@Param('idReserva', ParseIntPipe) idReserva: number, @Body() dto: ReclamarFaltanteCancelacionDto, @Req() req: AuthenticatedRequest) {
+    return this.reclamosService.reclamarFaltanteCancelacion(idReserva, dto, req.user.id);
+  }
 
   @PermitirAccesoLimitado()
   @Post()

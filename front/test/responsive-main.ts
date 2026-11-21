@@ -115,6 +115,7 @@ const fechas = Array.from({ length: 70 }, (_, i) => ({
   reserva: null,
 }));
 const casoCancelacion = params.get('cancelacion');
+const casoFaltante = params.get('faltante');
 const cancelacionAnunciante = casoCancelacion?.startsWith('anunciante-') ?? false;
 const diasCancelacion = casoCancelacion === 'sin-devolucion' ? 1
   : casoCancelacion === 'anunciante-posterior' ? -1
@@ -127,23 +128,38 @@ const reservas = publicaciones.map((p, i) => ({
   usuario_apellido: user.apellido,
   usuario_email: user.email,
   usuario_telefono: user.telefono,
-  estado_estadia: i === 1 || (i === 2 && casoCancelacion === 'anunciante-validada') ? 'EN_CURSO'
+  estado_estadia: i === 2 && casoFaltante ? 'CANCELADA' : i === 1 || (i === 2 && casoCancelacion === 'anunciante-validada') ? 'EN_CURSO'
     : i === 2 && diasCancelacion !== null && diasCancelacion <= 0 ? 'PENDIENTE_INGRESO' : 'CONFIRMADA',
   finalizada: false,
-  cancelada: false,
+  cancelada: i === 2 && !!casoFaltante,
   fecha_inicio: fecha(i === 2 && diasCancelacion !== null ? diasCancelacion : 10 + i),
   fecha_fin: fecha(14 + i),
   fecha_pago: new Date().toISOString(),
   estado_pago: 'APROBADO',
-  estado_liquidacion: i === 0 ? 'EN_REVISION' : 'RETENIDO',
+  estado_liquidacion: i === 2 && casoFaltante ? 'DEVUELTO_PARCIAL_INQUILINO' : i === 0 ? 'EN_REVISION' : 'RETENIDO',
   codigo_validado_en: i === 1 || (i === 2 && casoCancelacion === 'anunciante-validada') ? new Date().toISOString() : null,
   codigo_generado_en: new Date().toISOString(),
-  monto_pago: 175000,
+  monto_pago: i === 2 && casoFaltante ? 100000 : 175000,
   moneda_contratada: 'ARS',
-  importe_contratado: 175000,
+  importe_contratado: i === 2 && casoFaltante ? 100000 : 175000,
   precio_unitario_contratado: 35000,
   observacion_liquidacion: 'El inquilino solicitó una revisión de las condiciones de ingreso.',
 }));
+const saldoDevolucionFaltante = {
+  solicitudId: 12, porcentaje: casoFaltante === 'cero' ? 0 : 50, moneda: 'ARS',
+  esperado: casoFaltante === 'cero' ? 0 : 50000,
+  devuelto: casoFaltante === 'completo' ? 50000 : casoFaltante === 'cero' ? 0 : 30000,
+  enGestion: casoFaltante === 'pendiente' ? 20000 : 0,
+  faltante: ['completo', 'cero'].includes(casoFaltante ?? '') ? 0 : 20000,
+  importeReclamable: ['completo', 'pendiente', 'cero'].includes(casoFaltante ?? '') ? 0 : 20000,
+};
+const reclamosFaltante: Record<string, unknown>[] = [];
+if (casoFaltante && location.pathname === '/admin') reclamosFaltante.push({
+  id: 43, reserva: reservas[2], inquilino: user, anunciante: user,
+  categoria: 'OTRO', descripcion: 'Recibí treinta mil de los cincuenta mil que correspondían.', estado: 'ABIERTO',
+  solicitud_cancelacion_id: 12, devolucion_cancelacion: saldoDevolucionFaltante,
+  resolucion: null, importe_reembolso: null, creado_en: new Date().toISOString(), evidencias: [], mensajes: [],
+});
 const pendiente = location.pathname === '/mi-perfil/anunciante';
 const solicitud = {
   id: 1,
@@ -195,6 +211,22 @@ const interceptor: HttpInterceptorFn = (req) => {
   let body;
   if (req.method !== 'GET') {
     if (p.endsWith('/visualizacion')) body = { visualizaciones: 126 };
+    else if (/^\/reclamos\/cancelacion\/\d+$/.test(p) && req.method === 'POST') {
+      const reclamo = { id: 43, reserva: reservas[2], inquilino: user, anunciante: user,
+        categoria: 'OTRO', descripcion: (req.body as { descripcion: string }).descripcion,
+        estado: 'ABIERTO', solicitud_cancelacion_id: 12, devolucion_cancelacion: saldoDevolucionFaltante,
+        resolucion: null, importe_reembolso: null, creado_en: new Date().toISOString(), evidencias: [], mensajes: [] };
+      reclamosFaltante.push(reclamo);
+      body = reclamo;
+    }
+    else if (/^\/reclamos\/\d+\/resolver$/.test(p) && req.method === 'PATCH') {
+      const reclamo = reclamosFaltante[0];
+      const datos = req.body as { resolucion: string; importe?: number };
+      const importe = datos.resolucion === 'DEVOLUCION_TOTAL' ? saldoDevolucionFaltante.importeReclamable : datos.resolucion === 'DEVOLUCION_PARCIAL' ? datos.importe ?? 0 : null;
+      Object.assign(reclamo, { estado: importe ? 'RESUELTO_INQUILINO' : 'RESUELTO_ANUNCIANTE', resolucion: datos.resolucion, importe_reembolso: importe, resuelto_en: new Date().toISOString() });
+      if (importe) { saldoDevolucionFaltante.enGestion += importe; saldoDevolucionFaltante.importeReclamable -= importe; }
+      body = { ...reclamo };
+    }
     else if (/^\/reservas\/\d+\/cancelacion\/\d+$/.test(p) && req.method === 'PATCH') {
       const id = Number(p.split('/').pop());
       const indice = solicitudesCancelacionAdmin.findIndex(solicitud => solicitud.id === id);
@@ -257,6 +289,8 @@ const interceptor: HttpInterceptorFn = (req) => {
     body = page([user, { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true }]);
   else if (p === '/publicaciones/administracion') body = page(publicaciones);
   else if (p === '/reservas/cancelaciones/administracion') body = [...solicitudesCancelacionAdmin];
+  else if (/^\/reclamos\/cancelacion\/\d+$/.test(p)) body = { devolucion: saldoDevolucionFaltante, reclamoAbierto: !!reclamosFaltante.length };
+  else if (p === '/reclamos/mios' || p === '/reclamos/administracion') body = [...reclamosFaltante];
   else if (p === '/publicaciones/mias') body = publicaciones.map(pub => ({ ...pub }));
   else if (p.startsWith('/publicaciones/anunciante/')) {
     const requestedCount = Number(params.get('publicacionesPerfil') ?? publicaciones.length);

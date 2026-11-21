@@ -126,6 +126,40 @@
       }
     </dialog>
 
+    <dialog #dialogoFaltante class="cancellation-dialog" aria-labelledby="faltante-titulo" (cancel)="cerrarFaltante($event)">
+      <h2 id="faltante-titulo">Reclamar reembolso faltante</h2>
+      <p>Reserva #{{ reservaFaltante()?.id }}. Revisá cuánto corresponde por la cancelación y cuánto ya se devolvió.</p>
+      @if (cargandoFaltante()) { <p role="status">Consultando la devolución…</p> }
+      @if (saldoFaltante(); as saldo) {
+        @if (saldo.devolucion; as devolucion) {
+          <div class="cancellation-refund">
+            <p>Correspondía devolver ({{ devolucion.porcentaje }} %): <strong>{{ devolucion.moneda }} {{ monto(devolucion.esperado, devolucion.moneda) }}</strong></p>
+            <p>Ya devuelto: {{ devolucion.moneda }} {{ monto(devolucion.devuelto, devolucion.moneda) }}</p>
+            <p>En gestión: {{ devolucion.moneda }} {{ monto(devolucion.enGestion, devolucion.moneda) }}</p>
+            <p>Falta recibir: {{ devolucion.moneda }} {{ monto(devolucion.faltante, devolucion.moneda) }}</p>
+            <p><strong>Disponible para reclamar: {{ devolucion.moneda }} {{ monto(devolucion.importeReclamable, devolucion.moneda) }}</strong></p>
+          </div>
+          @if (saldo.reclamoAbierto) {
+            <p role="status">Ya tenés un reclamo abierto para esta reserva. Podés seguirlo en la pestaña Reclamos.</p>
+          } @else if (devolucion.importeReclamable > 0) {
+            <form class="claim-form" (ngSubmit)="enviarFaltante()" [attr.aria-busy]="enviandoFaltante()">
+              <label for="faltante-descripcion">Contanos qué falta recibir</label>
+              <textarea id="faltante-descripcion" name="descripcionFaltante" [(ngModel)]="descripcionFaltante" rows="4" required
+                minlength="20" maxlength="1000" [disabled]="enviandoFaltante()" aria-describedby="faltante-ayuda"></textarea>
+              <small id="faltante-ayuda">Entre 20 y 1000 caracteres. Administración revisará el reclamo antes de devolver la diferencia.</small>
+              <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviandoFaltante() || descripcionFaltante.trim().length < 20">{{ enviandoFaltante() ? 'Enviando…' : 'Enviar reclamo por el faltante' }}</button>
+            </form>
+          } @else if (devolucion.faltante > 0) {
+            <p role="status">La diferencia ya está en gestión. Podés seguir la devolución desde el detalle de la reserva.</p>
+          } @else {
+            <p role="status">No falta dinero según la política de cancelación. La parte retenida no constituye un faltante.</p>
+          }
+        } @else { <p>No hay una cancelación aprobada con devolución para esta reserva.</p> }
+      }
+      @if (errorFaltante()) { <p class="cancellation-error" role="alert">{{ errorFaltante() }}</p> }
+      <button type="button" class="acct-btn acct-btn--ghost" [disabled]="enviandoFaltante()" (click)="cerrarFaltante()">Volver</button>
+    </dialog>
+
     @if (mensaje()) { <div class="acct-alert acct-alert--info" role="status">{{ mensaje() }}</div> }
     @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
     @if (cargando()) {
@@ -323,6 +357,9 @@
           <button type="button" class="booking-button" [disabled]="ocupada() !== null" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
         }
         <a class="booking-button booking-button--primary" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">{{ recibida ? 'Ver detalle y contactar' : 'Ver detalle' }}</a>
+        @if (!recibida && (reserva.cancelada || devolucionPendiente)) {
+          <button type="button" class="booking-button" (click)="abrirFaltante(reserva)">Reclamar reembolso faltante</button>
+        }
         @if (reserva.publicacion || cambiarFechas || puedeReportar || solicitarBaja || cancelarDirecto) {
           <button type="button" class="booking-button booking-button--more" #accionesReserva [attr.popovertarget]="menuId" [attr.aria-label]="'Más acciones para la reserva ' + reserva.id">
             <svg lucideEllipsis [size]="19" aria-hidden="true"></svg>

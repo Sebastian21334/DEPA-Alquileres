@@ -144,6 +144,34 @@ históricos ambiguos. Quedan fuera del proceso automático hasta su revisión.
 
 ## Reclamos posteriores al ingreso
 
+### Faltantes de una cancelación aprobada
+
+El Inquilino puede consultar `GET /reclamos/cancelacion/:idReserva` y enviar
+`POST /reclamos/cancelacion/:idReserva` con una descripción de 20 a 1000
+caracteres. El servidor calcula el importe con la política, el autor y la fecha
+de la solicitud aprobada, y con el pago original. Descuenta lo ya devuelto y lo
+reservado por devoluciones pendientes, en proceso o fallidas. La parte retenida
+por la política no es un faltante. El cliente no puede elegir el importe.
+
+Se reutiliza el expediente de Reclamos (categoría existente `OTRO`), vinculado
+a la solicitud de cancelación mediante `id_solicitud_cancelacion`. Este reclamo
+también admite reservas canceladas y no usa el plazo de los reclamos por estadía.
+No altera las fechas ni reabre la liquidación. Solo el Inquilino puede iniciarlo
+y solo se admite un reclamo abierto por reserva.
+
+Administración ve el importe esperado, devuelto, en gestión y disponible. Puede
+rechazar, devolver una parte o elegir **Completar faltante**. Esta última opción
+devuelve exclusivamente la diferencia disponible, aunque la política original
+fuese del 50 %. Se vuelve a calcular y se bloquean la reserva y el pago antes de
+decidir. Crear el reclamo no mueve dinero; la decisión favorable crea el
+complemento con el circuito habitual de Reembolsos y su clave de idempotencia.
+
+La migración aditiva `20261121-reclamo-faltante-cancelacion.sql` conserva los
+expedientes anteriores y debe aplicarse antes de iniciar esta versión. Está
+incluida en el comando existente de preparación de cancelaciones y devoluciones.
+
+### Problemas de una estadía
+
 - El Inquilino puede reclamar desde el inicio de la estadía hasta 7 días corridos
   después de `fecha_fin` (23:59:59 de Argentina).
 - El reclamo pasa `reserva.estado_liquidacion` a `EN_REVISION`.

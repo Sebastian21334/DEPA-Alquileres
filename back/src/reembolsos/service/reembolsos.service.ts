@@ -702,6 +702,11 @@ export class ReembolsosService {
     return this.pagos.buscarPorReserva(idReserva, !transaccion, transaccion);
   }
 
+  async buscarPagoParaReembolsoReserva(idReserva: number, transaccion: EntityManager): Promise<Pago | null> {
+    const pago = await this.buscarPagoPorReserva(idReserva, transaccion);
+    return pago ? this.pagos.buscarParaReembolso(pago.id, transaccion) : null;
+  }
+
   async tieneDevolucionDeCancelacionActiva(idReserva: number, transaccion?: EntityManager): Promise<boolean> {
     const repositorio = transaccion ? this.reembolsos.enTransaccion(transaccion) : this.reembolsos;
     const reembolsos = await repositorio.buscarPorReserva(idReserva);

@@ -73,7 +73,7 @@ beforeEach(async () => {
   reclamos = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia),
       source.getRepository(ReclamoMensaje)),
-    reservas, reembolsos, {}, catalogosDePrueba(),
+    reservas, reembolsos, {}, catalogosDePrueba(), cancelaciones,
   );
   operacionesReembolso = new OperacionesReembolsoService(reembolsos, reservas, reclamos);
 });
@@ -97,6 +97,157 @@ async function escenario(fechaInicio = '2099-01-10') {
   });
   return { reserva, pago, crearReembolso };
 }
+
+async function cancelacionConFaltante(recibido = 30) {
+  const { reserva, pago } = await escenario();
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'credit_card' });
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  await source.getRepository(SolicitudCancelacion).update(solicitud.id, { creada_en: new Date('2099-01-08T15:00:00Z') });
+  const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  if (recibido > 0) {
+    // Reproduce una devolución histórica incompleta sin falsificar el saldo agregado del pago.
+    await source.getRepository(Reembolso).update(reembolso.id, { importe: recibido });
+    await operacionesReembolso.registrarTransferencia(reembolso.id, 'comprobante-original', 3);
+  }
+  return { reserva, pago, solicitud, reembolso };
+}
+
+const descripcionFaltante = 'Recibí una devolución menor a la que correspondía por la cancelación.';
+
+test('T43: reclama y completa solo los 20 faltantes de una devolución del 50 %, incluso antes del ingreso', async () => {
+  const { reserva, pago, solicitud } = await cancelacionConFaltante();
+  const saldo = await reclamos.consultarFaltanteCancelacion(reserva.id, 1);
+  assert.deepEqual(saldo.devolucion, { solicitudId: solicitud.id, porcentaje: 50, moneda: 'ARS', esperado: 50, devuelto: 30, enGestion: 0, faltante: 20, importeReclamable: 20 });
+  const reclamo = await reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1);
+  assert.equal(reclamo.solicitud_cancelacion_id, solicitud.id);
+  assert.equal(reclamo.devolucion_cancelacion.importeReclamable, 20);
+  assert.equal((await reclamos.listarMios(1))[0].devolucion_cancelacion.esperado, 50);
+  assert.equal((await reclamos.listarAdministracion())[0].devolucion_cancelacion.devuelto, 30);
+  await assert.rejects(reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1), /reclamo abierto/);
+  assert.equal(await source.getRepository(Reclamo).count(), 1);
+  assert.equal(await source.getRepository(Reembolso).count(), 1);
+  const resuelto = await reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_TOTAL', importe: 999 }, 3);
+  assert.equal(Number(resuelto.importe_reembolso), 20);
+  const complemento = await reembolsos.buscarPorOrigen('RECLAMO', `rec:${reclamo.id}`);
+  assert.equal(Number(complemento.importe), 20);
+  assert.equal(complemento.tipo, 'PARCIAL');
+  assert.equal((await reclamos.consultarFaltanteCancelacion(reserva.id, 1)).devolucion.importeReclamable, 0);
+  await operacionesReembolso.registrarTransferencia(complemento.id, 'comprobante-complemento', 3);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 50);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, true);
+  assert.equal((await reclamos.consultarFaltanteCancelacion(reserva.id, 1)).devolucion.faltante, 0);
+  await assert.rejects(reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1), /No hay un importe faltante/);
+  await assert.rejects(reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_TOTAL' }, 3), /ya fue resuelto/);
+});
+
+for (const estado of ['PENDIENTE', 'EN_PROCESO', 'FALLIDO']) {
+  test(`T43: una devolución ${estado} que cubre el faltante impide otro reclamo`, async () => {
+    const { reserva, reembolso } = await cancelacionConFaltante(0);
+    await source.getRepository(Reembolso).update(reembolso.id, { estado });
+    const { devolucion } = await reclamos.consultarFaltanteCancelacion(reserva.id, 1);
+    assert.equal(devolucion.faltante, 50);
+    assert.equal(devolucion.enGestion, 50);
+    assert.equal(devolucion.importeReclamable, 0);
+    await assert.rejects(reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1), /No hay un importe faltante/);
+    assert.equal(await source.getRepository(Reclamo).count(), 0);
+  });
+}
+
+test('T43: retener el 50 % según la política no es un faltante', async () => {
+  const { reserva } = await cancelacionConFaltante(50);
+  const saldo = await reclamos.consultarFaltanteCancelacion(reserva.id, 1);
+  assert.equal(saldo.devolucion.esperado, 50);
+  assert.equal(saldo.devolucion.devuelto, 50);
+  assert.equal(saldo.devolucion.faltante, 0);
+  await assert.rejects(reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1), /No hay un importe faltante/);
+});
+
+test('T43: una cancelación con 0 % no permite reclamar el importe retenido', async () => {
+  const { reserva, solicitud, reembolso } = await cancelacionConFaltante(0);
+  await source.getRepository(SolicitudCancelacion).update(solicitud.id, { creada_en: new Date('2099-01-09T15:00:00Z') });
+  await source.getRepository(Reembolso).update(reembolso.id, { estado: 'RECHAZADO' });
+  const { devolucion } = await reclamos.consultarFaltanteCancelacion(reserva.id, 1);
+  assert.equal(devolucion.esperado, 0);
+  assert.equal(devolucion.importeReclamable, 0);
+  await assert.rejects(reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1), /No hay un importe faltante/);
+});
+
+test('T43: si canceló el anunciante el faltante se calcula sobre el 100 %', async () => {
+  const { reserva, solicitud } = await cancelacionConFaltante();
+  await source.getRepository(SolicitudCancelacion).update(solicitud.id, { solicitante: { id: 2 } });
+  const { devolucion } = await reclamos.consultarFaltanteCancelacion(reserva.id, 1);
+  assert.equal(devolucion.esperado, 100);
+  assert.equal(devolucion.importeReclamable, 70);
+});
+
+test('T43: descuenta los complementos en gestión y permite devolver una parte del faltante', async () => {
+  const { reserva, pago } = await cancelacionConFaltante();
+  await reembolsos.crearSolicitud({ reserva, pago, importe: 5, tipo: 'PARCIAL', origen: 'AJUSTE_ADMIN', motivo: 'Parte del complemento', idSolicitadoPor: 3 });
+  const saldo = await reclamos.consultarFaltanteCancelacion(reserva.id, 1);
+  assert.equal(saldo.devolucion.importeReclamable, 15);
+  const reclamo = await reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1);
+  const resuelto = await reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_PARCIAL', importe: 10 }, 3);
+  assert.equal(Number(resuelto.importe_reembolso), 10);
+  assert.equal((await reclamos.consultarFaltanteCancelacion(reserva.id, 1)).devolucion.importeReclamable, 5);
+});
+
+test('T43: vuelve a comprobar el faltante antes de resolver y no duplica una devolución nueva', async () => {
+  const { reserva, pago } = await cancelacionConFaltante();
+  const reclamo = await reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1);
+  await reembolsos.crearSolicitud({ reserva, pago, importe: 20, tipo: 'PARCIAL', origen: 'AJUSTE_ADMIN', motivo: 'Complemento en gestión', idSolicitadoPor: 3 });
+  await assert.rejects(reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_TOTAL' }, 3), /faltante ya está cubierto/);
+  assert.equal((await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id })).estado, 'ABIERTO');
+  assert.equal(await source.getRepository(Reembolso).count(), 2);
+});
+
+test('T43: limita una devolución parcial al faltante y permite rechazar sin cambiar la cancelación', async () => {
+  const { reserva } = await cancelacionConFaltante();
+  const reclamo = await reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1);
+  await assert.rejects(reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_PARCIAL', importe: 30 }, 3), /no superar el faltante/);
+  await assert.rejects(reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_PARCIAL', importe: 20 }, 3), /Completar faltante/);
+  const antes = await reservas.obtenerReserva(reserva.id);
+  await reclamos.resolver(reclamo.id, { resolucion: 'SIN_DEVOLUCION' }, 3);
+  const despues = await reservas.obtenerReserva(reserva.id);
+  assert.equal(despues.estado_liquidacion, antes.estado_liquidacion);
+  assert.equal(despues.cancelada, true);
+  assert.equal(await source.getRepository(Reembolso).count(), 1);
+});
+
+test('T43: un fallo al guardar la reserva revierte el alta del reclamo y permite reintentar', async t => {
+  const { reserva } = await cancelacionConFaltante();
+  const fallo = t.mock.method(ReservaRepository.prototype, 'guardar', async () => { throw new Error('fallo al guardar reserva'); });
+  await assert.rejects(reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1), /fallo al guardar reserva/);
+  assert.equal(await source.getRepository(Reclamo).count(), 0);
+  fallo.mock.restore();
+  await reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1);
+  assert.equal(await source.getRepository(Reclamo).count(), 1);
+});
+
+test('T43: si falla la decisión se revierte el complemento y permite resolver una sola vez', async t => {
+  const { reserva } = await cancelacionConFaltante();
+  const reclamo = await reclamos.reclamarFaltanteCancelacion(reserva.id, { descripcion: descripcionFaltante }, 1);
+  const fallo = t.mock.method(ReclamosRepository.prototype, 'guardar', async () => { throw new Error('fallo de decisión'); });
+  await assert.rejects(reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_TOTAL' }, 3), /fallo de decisión/);
+  assert.equal(await source.getRepository(Reembolso).count(), 1);
+  assert.equal((await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id })).estado, 'ABIERTO');
+  fallo.mock.restore();
+  await reclamos.resolver(reclamo.id, { resolucion: 'DEVOLUCION_TOTAL' }, 3);
+  assert.equal(await source.getRepository(Reembolso).count(), 2);
+});
+
+test('T43: la migración es repetible y conserva expedientes de la versión anterior', async () => {
+  const anterior = await crearPostgresPruebas({ reclamoFaltante: false });
+  try {
+    await anterior.cargarSeed();
+    await anterior.db.exec("INSERT INTO usuario (id_usuario,nombre,apellido,email,telefono,contrasenia) VALUES (900,'Prueba','Migración','migracion@example.invalid','123','hash'); INSERT INTO reserva (id_reserva,monto_pago) VALUES (900,100); INSERT INTO reclamo_reserva (id_reserva,id_inquilino,categoria,descripcion) VALUES (900,900,'OTRO','Expediente anterior que debe conservarse');");
+    const sql = migracion('20261121-reclamo-faltante-cancelacion.sql');
+    await anterior.db.exec(sql);
+    await anterior.db.exec(sql);
+    const { rows } = await anterior.db.query('SELECT descripcion,id_solicitud_cancelacion FROM reclamo_reserva WHERE id_reserva=900');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].id_solicitud_cancelacion, null);
+  } finally { await anterior.cerrar(); }
+});
 
 test('la migración de estados por ámbito es repetible y conserva reservas y pagos', async () => {
   const { reserva, pago } = await escenario();
@@ -874,7 +1025,7 @@ function reclamosConAvisos() {
   const avisos = [];
   const servicio = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia), source.getRepository(ReclamoMensaje)),
-    reservas, reembolsos, {}, catalogosDePrueba(),
+    reservas, reembolsos, {}, catalogosDePrueba(), cancelaciones,
     { avisarCambio: async (_reserva, destinos, asunto, mensaje) => { avisos.push({ destinos, asunto, mensaje }); } },
   );
   return { servicio, avisos };
@@ -1496,5 +1647,28 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       const pagoFinal = await source.getRepository(Pago).findOneByOrFail({ id: pagoConCentavos.id });
       assert.equal(Number(pagoFinal.amount_refunded), esperado);
     }
+    await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+    const faltanteHttp = await cancelacionConFaltante();
+    const rutaFaltante = `/reclamos/cancelacion/${faltanteHttp.reserva.id}`;
+    await request(http).get(rutaFaltante).expect(401);
+    await request(http).get(rutaFaltante).set('Authorization', ajeno).expect(403);
+    await request(http).post(rutaFaltante).set('Authorization', `Bearer ${token(2)}`).send({ descripcion: descripcionFaltante }).expect(403);
+    const saldoHttp = await request(http).get(rutaFaltante).set('Authorization', tenant).expect(200);
+    assert.equal(saldoHttp.body.devolucion.importeReclamable, 20);
+    await request(http).post(rutaFaltante).set('Authorization', tenant).send({ descripcion: 'Corta' }).expect(400);
+    await request(http).post(rutaFaltante).set('Authorization', tenant).send({ descripcion: ' '.repeat(30) }).expect(400);
+    await request(http).post(rutaFaltante).set('Authorization', tenant).send({ descripcion: descripcionFaltante, importe: 999 }).expect(400);
+    const creadoFaltante = await request(http).post(rutaFaltante).set('Authorization', tenant).send({ descripcion: descripcionFaltante }).expect(201);
+    assert.equal(creadoFaltante.body.devolucion_cancelacion.esperado, 50);
+    await request(http).post(rutaFaltante).set('Authorization', tenant).send({ descripcion: descripcionFaltante }).expect(409);
+    const listaFaltantes = await request(http).get('/reclamos/administracion').set('Authorization', admin).expect(200);
+    assert.equal(listaFaltantes.body[0].devolucion_cancelacion.importeReclamable, 20);
+    await request(http).patch(`/reclamos/${creadoFaltante.body.id}/resolver`).set('Authorization', tenant).send({ resolucion: 'DEVOLUCION_TOTAL' }).expect(403);
+    const decisionFaltante = await request(http).patch(`/reclamos/${creadoFaltante.body.id}/resolver`).set('Authorization', admin)
+      .send({ resolucion: 'DEVOLUCION_TOTAL', observacion: 'Completar únicamente los veinte faltantes.' }).expect(200);
+    assert.equal(Number(decisionFaltante.body.importe_reembolso), 20);
+    const complementoHttp = await reembolsos.buscarPorOrigen('RECLAMO', `rec:${creadoFaltante.body.id}`);
+    assert.equal(Number(complementoHttp.importe), 20);
+    assert.equal(await source.getRepository(Reembolso).count(), 2);
   } finally { await app.close(); }
 });

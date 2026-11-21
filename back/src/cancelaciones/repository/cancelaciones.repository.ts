@@ -9,6 +9,10 @@ import type { ICancelacionesRepository } from './cancelaciones.repository.interf
 export class CancelacionesRepository implements ICancelacionesRepository {
   constructor(@InjectRepository(SolicitudCancelacion) private readonly repository: Repository<SolicitudCancelacion>) {}
 
+  enTransaccion(transaccion: EntityManager): ICancelacionesRepository {
+    return new CancelacionesRepository(transaccion.getRepository(SolicitudCancelacion));
+  }
+
   conTransaccion<T>(operacion: (cancelaciones: ICancelacionesRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
     return this.repository.manager.transaction('READ COMMITTED', (transaccion) =>
       operacion(new CancelacionesRepository(transaccion.getRepository(SolicitudCancelacion)), transaccion),
