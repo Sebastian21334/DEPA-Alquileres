@@ -8,7 +8,7 @@ const tiposPg = require('pg').types;
 const { prepareValue } = require('pg/lib/utils');
 
 // Mantiene el SQL y la hidratación de TypeORM/pg, sin conexiones ni datos reales.
-async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito = true, aplicacionReembolsos = true } = {}) {
+async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito = true, aplicacionReembolsos = true, reclamoFaltante = true } = {}) {
   const db = new PGlite({ parsers: {
     1082: tiposPg.getTypeParser(1082),
     1114: tiposPg.getTypeParser(1114),
@@ -73,6 +73,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
       await db.exec('BEGIN;\n' + leerMigracion('20261113-retirar-liquidacion-de-reserva.sql') + '\nCOMMIT;');
       await db.exec(leerMigracion('20261116-historial-pagos-anunciantes.sql'));
       await db.exec(leerMigracion('20261116-chat-reembolsos.sql'));
+      if (reclamoFaltante) await db.exec(leerMigracion('20261121-reclamo-faltante-cancelacion.sql'));
     }
     await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await db.exec(leerMigracion('20261116-cbu-anunciantes.sql'));

@@ -13,6 +13,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Reserva } from '../../reservas/entity/reserva.entity';
+import { SolicitudCancelacion } from '../../cancelaciones/entity/solicitud-cancelacion.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { ReclamoEvidencia } from './reclamo-evidencia.entity';
 import { ReclamoMensaje } from './reclamo-mensaje.entity';
@@ -24,12 +25,16 @@ export const ResolucionReclamo = codigosCatalogo('RECLAMO_RESOLUCION');
 export type ResolucionReclamo = keyof typeof ResolucionReclamo;
 
 @Entity('reclamo_reserva')
+@ForeignKey(() => SolicitudCancelacion, ['solicitud_cancelacion_id'], ['id'], { name: 'fk_reclamo_solicitud_cancelacion', onDelete: 'RESTRICT' })
 @Check('ck_reclamo_reserva_estado_ambito', `"ambito_estado" = '${"RECLAMO"}'`)
 @ForeignKey(() => Estado, ['ambitoEstado', 'estado'], ['codigoAmbito', 'codigo'], {
   name: 'fk_reclamo_reserva_estado',
   onDelete: 'RESTRICT',
 })
 export class Reclamo {
+  @Column({ name: 'id_solicitud_cancelacion', type: 'integer', nullable: true })
+  solicitud_cancelacion_id: number | null;
+
   @PrimaryGeneratedColumn({ name: 'id_reclamo' })
   id: number;
 

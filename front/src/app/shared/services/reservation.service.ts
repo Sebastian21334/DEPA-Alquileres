@@ -164,6 +164,22 @@ export interface SolicitudCancelacion {
   creada_en: string;
 }
 
+export interface SaldoDevolucionCancelacion {
+  solicitudId: number;
+  porcentaje: number;
+  moneda: string;
+  esperado: number;
+  devuelto: number;
+  enGestion: number;
+  faltante: number;
+  importeReclamable: number;
+}
+
+export interface FaltanteCancelacion {
+  devolucion: SaldoDevolucionCancelacion | null;
+  reclamoAbierto: boolean;
+}
+
 export interface Reembolso {
   id: number;
   tipo: 'TOTAL' | 'PARCIAL' | 'CONTRACARGO';
@@ -182,6 +198,8 @@ export interface ParticipanteReclamo {
 }
 
 export interface Reclamo {
+  solicitud_cancelacion_id?: number | null;
+  devolucion_cancelacion?: SaldoDevolucionCancelacion | null;
   id: number;
   reserva?: {
     id: number;
@@ -300,6 +318,14 @@ export class ReservationService {
 
   createClaim(payload: { id_reserva: number; categoria: Reclamo['categoria']; descripcion: string; }): Observable<Reclamo> {
     return this.http.post<Reclamo>(`${environment.apiUrl}/reclamos`, payload);
+  }
+
+  cancellationRefundBalance(id: number): Observable<FaltanteCancelacion> {
+    return this.http.get<FaltanteCancelacion>(`${environment.apiUrl}/reclamos/cancelacion/${id}`);
+  }
+
+  claimMissingRefund(id: number, descripcion: string): Observable<Reclamo> {
+    return this.http.post<Reclamo>(`${environment.apiUrl}/reclamos/cancelacion/${id}`, { descripcion });
   }
 
   myClaims(): Observable<Reclamo[]> {

@@ -13,6 +13,17 @@ export interface SolicitudCancelacionAdministracionDto extends SolicitudCancelac
   devolucion: DevolucionCancelacionDto | null;
 }
 
+export interface SaldoDevolucionCancelacionDto {
+  solicitudId: number;
+  porcentaje: number;
+  moneda: string;
+  esperado: number;
+  devuelto: number;
+  enGestion: number;
+  faltante: number;
+  importeReclamable: number;
+}
+
 export interface CondicionesCancelacionDto {
   solicitud: SolicitudCancelacion | null;
   politica: PoliticaCancelacion;

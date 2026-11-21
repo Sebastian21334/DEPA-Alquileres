@@ -5,6 +5,7 @@ import type { PoliticaCancelacion } from '../entity/politica-cancelacion.entity'
 export const CANCELACIONES_REPOSITORY = 'CANCELACIONES_REPOSITORY';
 
 export interface ICancelacionesRepository {
+  enTransaccion(transaccion: EntityManager): ICancelacionesRepository;
   conTransaccion<T>(operacion: (cancelaciones: ICancelacionesRepository, transaccion: EntityManager) => Promise<T>): Promise<T>;
   crear(datos: Partial<SolicitudCancelacion>): SolicitudCancelacion;
   guardar(solicitud: SolicitudCancelacion): Promise<SolicitudCancelacion>;

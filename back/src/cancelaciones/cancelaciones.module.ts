@@ -26,5 +26,6 @@ import { CancelacionesService } from './service/cancelaciones.service';
     // El token queda privado: los demás módulos piden efectos al servicio.
     { provide: CANCELACIONES_REPOSITORY, useExisting: CancelacionesRepository },
   ],
+  exports: [CancelacionesService],
 })
 export class CancelacionesModule {}

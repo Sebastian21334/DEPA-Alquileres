@@ -20,7 +20,14 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
         {{ estados[item.estado] }}
       </span>
     </header>
-    <p class="meta">{{ categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    <p class="meta">{{ item.solicitud_cancelacion_id ? 'Reembolso faltante de cancelación' : categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    @if (item.devolucion_cancelacion; as saldo) {
+      <div class="resolution">
+        <p>Correspondía devolver: <strong>{{ saldo.esperado | currency:saldo.moneda:'code' }}</strong> ({{ saldo.porcentaje }} %)</p>
+        <p>Ya devuelto: {{ saldo.devuelto | currency:saldo.moneda:'code' }} · En gestión: {{ saldo.enGestion | currency:saldo.moneda:'code' }}</p>
+        <p>Falta recibir: {{ saldo.faltante | currency:saldo.moneda:'code' }} · Disponible para completar: <strong>{{ saldo.importeReclamable | currency:saldo.moneda:'code' }}</strong></p>
+      </div>
+    }
     @if (item.reserva?.monto_pago; as monto) {
       <p class="meta">Importe de la reserva: <strong class="amount">{{ monto | currency:(item.reserva?.moneda_contratada || 'ARS') }}</strong></p>
     }
@@ -28,11 +35,11 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
       <div class="resolution" role="status">
         <p class="resolution__title">Reclamo resuelto</p>
         @if (item.resolucion === 'SIN_DEVOLUCION') {
-          <p>A favor del anunciante: sin devolución al inquilino.</p>
+          <p>{{ item.solicitud_cancelacion_id ? 'No se aprobó una devolución adicional.' : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
         } @else {
           <p>
-            A favor del inquilino: {{ resoluciones[item.resolucion].toLowerCase() }}
-            @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.reserva?.moneda_contratada || 'ARS') }}</span>}.
+            A favor del inquilino: {{ item.solicitud_cancelacion_id ? 'devolución del faltante' : resoluciones[item.resolucion].toLowerCase() }}
+            @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.devolucion_cancelacion?.moneda || item.reserva?.moneda_contratada || 'ARS') }}</span>}.
             {{ administracion() ? 'La devolución se gestiona en Reembolsos.' : 'La devolución se sigue desde el detalle de la reserva.' }}
           </p>
         }

@@ -19,7 +19,7 @@ import type { ActorCancelacion, Reserva } from '../../reservas/entity/reserva.en
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
-import type { CondicionesCancelacionDto, DevolucionCancelacionDto, SolicitudCancelacionAdministracionDto } from '../dto/condiciones-cancelacion.dto';
+import type { CondicionesCancelacionDto, DevolucionCancelacionDto, SaldoDevolucionCancelacionDto, SolicitudCancelacionAdministracionDto } from '../dto/condiciones-cancelacion.dto';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
@@ -181,6 +181,32 @@ export class CancelacionesService {
       }
       return { ...this.prepararRespuesta(solicitud), devolucion };
     }));
+  }
+
+  async saldoDevolucion(reserva: Reserva, transaccion?: EntityManager): Promise<SaldoDevolucionCancelacionDto | null> {
+    const repo = transaccion ? this.cancelaciones.enTransaccion(transaccion) : this.cancelaciones;
+    const solicitud = await repo.buscarActiva(reserva.id, this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA'));
+    if (!solicitud) return null;
+    const pago = transaccion
+      ? await this.reembolsos.buscarPagoParaReembolsoReserva(reserva.id, transaccion)
+      : await this.reembolsos.buscarPagoPorReserva(reserva.id);
+    if (!pago) throw new ConflictException('La reserva no tiene un pago registrado');
+    const politica = await this.politicaAplicable(repo, reserva);
+    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+    const devolucion = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica, pago.amount);
+    const reembolsos = await this.reembolsos.listarPorReserva(reserva.id, transaccion);
+    const estadosReservados: string[] = (['PENDIENTE', 'EN_PROCESO', 'FALLIDO'] as const).map(estado => this.catalogos.codigoEstado('REEMBOLSO', estado));
+    const enGestion = reembolsos.filter(actual => estadosReservados.includes(actual.estado))
+      .reduce((total, actual) => total + decimalEntero(actual.importe, 2), 0n);
+    const esperado = decimalEntero(devolucion.importe, 2);
+    const devuelto = decimalEntero(pago.amount_refunded ?? 0, 2);
+    const faltante = esperado > devuelto ? esperado - devuelto : 0n;
+    return {
+      solicitudId: solicitud.id, porcentaje: devolucion.porcentaje, moneda: pago.currency,
+      esperado: devolucion.importe, devuelto: Number(importeTexto(devuelto)),
+      enGestion: Number(importeTexto(enGestion)), faltante: Number(importeTexto(faltante)),
+      importeReclamable: Number(importeTexto(faltante > enGestion ? faltante - enGestion : 0n)),
+    };
   }
 
   /**
