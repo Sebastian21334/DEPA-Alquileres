@@ -41,7 +41,7 @@ export class ActualizarPublicacionDto {
   descripcion?: string;
 
   @ValidateIf((_dto, precio: unknown) => precio !== undefined)
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   @Max(PRECIO_MAXIMO, { message: MENSAJE_PRECIO_RANGO })
   precio?: number;
@@ -71,7 +71,7 @@ export class ActualizarPublicacionDto {
   cantidad_ambientes?: number;
 
   @ValidateIf((_dto, superficie: unknown) => superficie !== undefined)
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   @Max(SUPERFICIE_MAXIMA, { message: MENSAJE_SUPERFICIE_RANGO })
   superficie?: number;

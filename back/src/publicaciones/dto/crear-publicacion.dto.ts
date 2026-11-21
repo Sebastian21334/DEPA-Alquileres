@@ -41,7 +41,7 @@ export class CrearPublicacionDto {
   @MaxLength(255)
   descripcion: string;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   @Max(PRECIO_MAXIMO, { message: MENSAJE_PRECIO_RANGO })
   precio: number;
@@ -66,7 +66,7 @@ export class CrearPublicacionDto {
   @Max(AMBIENTES_MAXIMOS, { message: MENSAJE_AMBIENTES_RANGO })
   cantidad_ambientes: number;
 
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
   @Max(SUPERFICIE_MAXIMA, { message: MENSAJE_SUPERFICIE_RANGO })
   superficie: number;
