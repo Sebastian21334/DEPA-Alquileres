@@ -3,7 +3,7 @@ import {
   FechaDisponible,
   FechaDisponibleAdministracion,
 } from '../../services/availability.service';
-import { RentalDateRange, availableRentalStarts, isRentalRangeAvailable, rentalDays, rentalEnd } from '../../utils/rental-dates';
+import { RentalDateRange, availableRentalStarts, fechaHoyArgentina, isRentalRangeAvailable, rentalDays, rentalEnd } from '../../utils/rental-dates';
 
 export type CalendarMode = 'select' | 'manage' | 'setup' | 'reschedule';
 interface CalendarDay {
@@ -27,15 +27,13 @@ export class AvailabilityCalendarComponent {
   readonly loading = input(false);
   readonly fixedDays = input(1);
   readonly currentStart = input<string | null>(null);
+  readonly minStart = input<string | null>(null);
   readonly locked = input(false);
   @Output() rangeChange = new EventEmitter<RentalDateRange>();
   @Output() availabilityToggle = new EventEmitter<FechaDisponibleAdministracion>();
 
   protected get today(): string {
-    const now = new Date();
-    return this.mode() === 'reschedule'
-      ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(now)
-      : this.toIso(now);
+    return this.mode() === 'reschedule' ? fechaHoyArgentina() : this.toIso(new Date());
   }
   protected readonly month = signal(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   protected readonly selectionType = signal<'single' | 'range'>('range');
@@ -76,7 +74,11 @@ export class AvailabilityCalendarComponent {
   protected readonly monthLabel = computed(() =>
     new Intl.DateTimeFormat('es-AR', { month: 'long', year: 'numeric' }).format(this.month()),
   );
-  private readonly fixedStarts = computed(() => availableRentalStarts(this.dates(), this.fixedDays()));
+  private readonly fixedStarts = computed(() => {
+    const starts = availableRentalStarts(this.dates(), this.fixedDays());
+    const minStart = this.minStart();
+    return minStart ? new Set([...starts].filter((start) => start >= minStart)) : starts;
+  });
   protected readonly preview = computed(() => {
     const start = this.selectedStart();
     const hover = this.hoveredDate();
@@ -89,10 +91,11 @@ export class AvailabilityCalendarComponent {
   constructor() {
     effect(() => {
       const start = this.selectedStart() ?? this.currentStart();
+      const minimo = this.minStart() ?? this.today;
       const first = this.dates()
         .filter(
           (day) =>
-            day.fecha.slice(0, 10) >= this.today &&
+            day.fecha.slice(0, 10) >= minimo &&
             (this.mode() === 'manage' || (day.disponible && !day.reserva)),
         )
         .map((day) => day.fecha.slice(0, 10))
@@ -100,7 +103,7 @@ export class AvailabilityCalendarComponent {
       if (this.positioned || (!start && !first && this.mode() !== 'setup')) return;
       this.positioned = true;
       const target = start ?? first;
-      if (target && target >= this.today) {
+      if (target && target >= minimo) {
         const date = this.parseDate(target);
         this.month.set(new Date(date.getFullYear(), date.getMonth(), 1));
       }

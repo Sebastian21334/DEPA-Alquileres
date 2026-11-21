@@ -40,6 +40,7 @@
     "test:liquidaciones": "npm run build && node --test test/liquidaciones.test.cjs",
     "test:liquidaciones-entidad": "npm run build && node --test test/liquidaciones-entidad.test.cjs",
     "test:bloqueo-anunciante": "npm run build && node --test test/bloqueo-anunciante.test.cjs",
+    "test:reprogramaciones": "npm run build && node --test test/reprogramaciones.test.cjs",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config test/jest/jest.config.cjs",
     "db:retirar-metodo-pago": "node scripts/retirar-metodo-pago.cjs --aplicar",
     "deploy": "nest deploy",

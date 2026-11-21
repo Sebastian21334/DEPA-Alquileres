@@ -15,7 +15,7 @@
   <div class="reschedule__grid">
     <app-availability-calendar
       mode="reschedule" [dates]="fechas()" [fixedDays]="dias()" [currentStart]="reserva().fecha_inicio"
-      [selectedStart]="seleccion().start" [selectedEnd]="seleccion().end"
+      [minStart]="fechaMinima()" [selectedStart]="seleccion().start" [selectedEnd]="seleccion().end"
       [loading]="!actualizado() && consultando()" [locked]="guardando() || !!errorDisponibilidad()"
       (rangeChange)="elegir($event)"
     />

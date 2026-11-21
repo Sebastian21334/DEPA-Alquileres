@@ -8,7 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { nombreInquilinoReserva } from './reservas.utils';
-import { fechaArgentina } from '../../common/utils/fechas';
+import { diasDeAntelacion, fechaArgentina } from '../../common/utils/fechas';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { Reserva } from '../entity/reserva.entity';
 import {
@@ -18,6 +18,8 @@ import {
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { ReservasService } from './reservas.service';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
+
+const DIAS_MINIMOS_REPROGRAMACION = 6;
 
 @Injectable()
 export class ReservaReprogramacionService {
@@ -129,6 +131,11 @@ export class ReservaReprogramacionService {
         ) {
           throw new BadRequestException(
             'El nuevo rango de fechas no es válido',
+          );
+        }
+        if (diasDeAntelacion(dto.fecha_inicio, hoyTexto) < DIAS_MINIMOS_REPROGRAMACION) {
+          throw new BadRequestException(
+            `La reprogramación requiere al menos ${DIAS_MINIMOS_REPROGRAMACION} días de antelación`,
           );
         }
         const diasOriginales =

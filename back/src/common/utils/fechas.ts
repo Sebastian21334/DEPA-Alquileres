@@ -12,6 +12,14 @@ export function fechaArgentina(ahora = new Date()): string {
   return `${parte('year')}-${parte('month')}-${parte('day')}`;
 }
 
+/** Días corridos entre dos fechas de calendario, sin depender de la zona del servidor. */
+export function diasDeAntelacion(fecha: string, hoy = fechaArgentina()): number {
+  return Math.round(
+    (Date.parse(`${fecha}T00:00:00Z`) - Date.parse(`${hoy}T00:00:00Z`)) /
+      86_400_000,
+  );
+}
+
 export function esFechaCalendarioValida(fecha: string | null): fecha is string {
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
   const valor = new Date(`${fecha}T00:00:00Z`);
