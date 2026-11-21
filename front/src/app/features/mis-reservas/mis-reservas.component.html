@@ -208,7 +208,8 @@
           @if (errorAccionReclamo()) { <p class="claim-error" role="alert">{{ errorAccionReclamo() }}</p> }
           @for (reclamo of reclamos(); track reclamo.id) {
             <article class="acct-card reservation claim-card">
-              <app-claim-history [reclamo]="reclamo" (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)">
+              <app-claim-history [reclamo]="reclamo" [mostrarVerReembolso]="esInquilinoDelReclamo(reclamo)"
+                (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)" (verReembolso)="verReembolsoReclamo(reclamo)">
                 @if (reclamo.estado !== 'CERRADO') {
                   @if (respuestaReclamo() === reclamo.id) {
                     <app-conversation-composer [(texto)]="textoRespuesta" etiqueta="Mensaje para el reclamo"
