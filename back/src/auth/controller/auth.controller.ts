@@ -1,8 +1,8 @@
-import { Body, Controller, Header, Headers, HttpCode, Patch, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, HttpCode, Patch, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
 import { AuthService } from '../service/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
-import { ApelacionBloqueoDto, ConsultarBloqueoDto } from '../dto/apelacion-bloqueo.dto';
+import { ApelacionBloqueoDto, ConsultarBloqueoDto, TextoApelacionBloqueoDto } from '../dto/apelacion-bloqueo.dto';
 
 import { VerificarCuentaDto } from '../dto/verificar-cuenta.dto';
 import { RecuperarContraseniaDto } from '../dto/recuperar-contrasenia.dto';
@@ -10,7 +10,7 @@ import { RestablecerContraseniaDto } from '../dto/restablecer-contrasenia.dto';
 import { CambiarContraseniaDto } from '../dto/cambiar-contrasenia.dto';
 import { ConfirmarReactivacionDto } from '../dto/confirmar-reactivacion.dto';
 import { SolicitarReactivacionDto } from '../dto/solicitar-reactivacion.dto';
-import { JwtAuthGuard, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -43,6 +43,18 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Get('sesion')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
+  consultarSesion(@Req() req: AuthenticatedRequest) {
+    return {
+      accesoLimitado: req.user.accesoLimitado === true,
+      anuncianteVerificado: req.user.anuncianteVerificado === true,
+      rol: req.user.rol ?? null,
+    };
+  }
+
   @Post('bloqueo/consultar')
   @HttpCode(200)
   @Header('Cache-Control', 'no-store')
@@ -54,6 +66,22 @@ export class AuthController {
   @Header('Cache-Control', 'no-store')
   apelarBloqueo(@Body(new ValidationPipe({ transform: true })) dto: ApelacionBloqueoDto) {
     return this.authService.apelarBloqueo(dto.token, dto.texto);
+  }
+
+  @Get('bloqueo/actual')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
+  consultarBloqueoActual(@Req() req: AuthenticatedRequest) {
+    return this.authService.consultarBloqueoActual(req.user.id);
+  }
+
+  @Post('bloqueo/actual')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
+  apelarBloqueoActual(@Body(new ValidationPipe({ transform: true })) dto: TextoApelacionBloqueoDto, @Req() req: AuthenticatedRequest) {
+    return this.authService.apelarBloqueoActual(req.user.id, dto.texto);
   }
 
   @Post('reenviar-verificacion')

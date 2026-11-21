@@ -39,8 +39,8 @@ test('F-04 conserva bloqueos anteriores y permite apelar únicamente el bloqueo 
   const mail = { enviarCambioBloqueo: async () => {} };
   const credenciales = new UsuariosCredencialesService(repo, {});
   const usuarios = new UsuariosService(repo, catalogosDePrueba(), credenciales, mail, {},
-    { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {});
-  const bloqueo = new BloqueoAnuncianteService(usuarios, {}, mail);
+    { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, { buscarPorUsuario: async () => null });
+  const bloqueo = new BloqueoAnuncianteService(usuarios, mail);
   const jwt = new JwtService({ secret: 'clave-jwt-solo-para-pruebas' });
   const auth = new AuthService(usuarios, credenciales, jwt, mail);
   const seguridad = new SeguridadService(usuarios);

@@ -43,6 +43,7 @@ export interface AdminBloqueo {
     motivo: string | null;
     administradorId: number | null;
     fecha: string | null;
+    accesoLimitado?: boolean;
     apelacion?: { texto: string; fecha: string };
     respuesta?: { texto: string; fecha: string; administradorId: number };
   };
@@ -109,6 +110,8 @@ export interface AdminReembolso {
   estado: 'PENDIENTE' | 'EN_PROCESO' | 'APROBADO' | 'RECHAZADO' | 'FALLIDO' | 'CANCELADO';
   motivo: string;
   creado_en: string;
+  /** Origen interno del reembolso; en los reclamos es `rec:<id del reclamo>`. */
+  referencia_interna?: string | null;
   referencia_externa?: string | null;
   resuelto_en?: string | null;
   resuelto_por?: { nombre?: string; apellido?: string } | null;
@@ -234,7 +237,9 @@ export class AdminService {
     });
   }
   cambiarBloqueo(id: number, bloquear: boolean, motivo?: string) {
-    return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo });
+    return this.http.patch<{ mensaje: string; accesoLimitado: boolean }>(
+      `${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo },
+    );
   }
 
   listarBloqueados() {

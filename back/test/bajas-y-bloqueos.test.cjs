@@ -145,15 +145,21 @@ test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de
   const publicaciones = db.prepare('SELECT * FROM publicacion').all();
   const repo = {
     conTransaccion: (operacion) => operacion({}),
-    buscarBloqueado: async (id) => {
+    buscarConBloqueo: async (id) => {
       const fila = db.prepare('SELECT * FROM usuario WHERE id = ?').get(id);
       return { ...fila, activa: !!fila.activa, bloqueado: !!fila.bloqueado };
     },
     guardar: async (usuario) => db.prepare('UPDATE usuario SET bloqueado = ? WHERE id = ?')
       .run(usuario.bloqueado ? 1 : 0, usuario.id),
+    contarOperacionesPendientes: async (_id, participacion) => ({
+      reservasPendientes: participacion === 'Anunciante' ? 1 : 0,
+    }),
   };
-  const servicio = new BloqueoAnuncianteService(new UsuariosService(repo, {}, {}, {}, {}, { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, {}), {}, {});
-  await servicio.cambiarBloqueo(2, true, 99, 'Moderación');
+  const usuarios = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
+    { bloquearPublicacionesParaCambioDeCuenta: async () => {} },
+    { buscarPorUsuario: async () => ({ verificado: true }) });
+  const servicio = new BloqueoAnuncianteService(usuarios, {});
+  assert.equal((await servicio.cambiarBloqueo(2, true, 99, 'Moderación')).accesoLimitado, true);
   assert.equal(db.prepare('SELECT bloqueado FROM usuario WHERE id = 2').get().bloqueado, 1);
   assert.deepEqual(db.prepare('SELECT * FROM reserva').all(), antes);
   assert.deepEqual(db.prepare('SELECT * FROM publicacion').all(), publicaciones);
@@ -260,28 +266,33 @@ test('informa por separado los pendientes como Anunciante y como Inquilino', asy
 test('no se puede bloquear ni habilitar una cuenta dada de baja', async () => {
   const usuario = Object.assign(new Usuario(), { id: 5, activa: false, bloqueado: false });
   let guardado = false, avisado = false;
-  const repo = { conTransaccion: (operacion) => operacion({}), buscarBloqueado: async () => usuario,
+  const repo = { conTransaccion: (operacion) => operacion({}), buscarConBloqueo: async () => usuario,
     guardar: async () => { guardado = true; } };
   const mail = { enviarCambioBloqueo: async () => { avisado = true; } };
-  const servicio = new BloqueoAnuncianteService(new UsuariosService(repo, {}, {}, {}, {}, {}, {}), {}, mail);
+  const servicio = new BloqueoAnuncianteService(new UsuariosService(repo, {}, {}, {}, {}, {}, {}), mail);
   await assert.rejects(servicio.cambiarBloqueo(5, true, 1, 'motivo'), ConflictException);
   assert.equal(guardado, false);
   assert.equal(avisado, false);
 });
 
-function servicioMensajes(usuarios) {
+function servicioMensajes(usuarios, { conversacionExistente = true, accesoLimitado = false } = {}) {
   const guardados = [], correos = [];
   const publicacion = { id: 10, titulo: 'Casa', activa: false, anunciante: { idUsuario: 2 } };
   const servicio = new MensajesService(
     {
       conTransaccion: async (accion) => accion({ crear: (datos) => datos,
+        existeConversacion: async () => conversacionExistente,
         guardar: async (mensaje) => { guardados.push(mensaje); return mensaje; } }, {}),
       crear: (datos) => datos,
       guardar: async (mensaje) => { guardados.push(mensaje); return mensaje; },
       existeConversacion: async () => true,
     },
     new PublicacionesService({ buscarPorId: async () => publicacion, bloquearPorId: async () => publicacion }),
-    new UsuariosService({ buscarPorId: async (id) => usuarios[id] ?? null }),
+    {
+      buscarPorId: async (id) => usuarios[id] ?? null,
+      nombreCompleto: (usuario) => usuario.nombre,
+      puedeContinuarConversaciones: async () => accesoLimitado,
+    },
     { existeReservaAprobada: async () => true },
     { enviarMensajeNuevo: async (email) => { correos.push(email); } },
   );
@@ -299,12 +310,22 @@ for (const bloqueado of [1, 2]) {
     });
     await assert.rejects(
       servicio.enviar({ id_publicacion: 10, id_destino_usuario: 2, texto: 'hola' }, 1),
-      (error) => error instanceof ConflictException && /suspendido/.test(error.message),
+      (error) => error instanceof ConflictException && /bloqueada/.test(error.message),
     );
     assert.equal(guardados.length, 0);
     assert.equal(correos.length, 0);
   });
 }
+
+test('una cuenta con acceso limitado puede responder en un chat existente pero no abrir otro', async () => {
+  const personas = { 1: persona(1), 2: persona(2, { bloqueado: true }) };
+  const existente = servicioMensajes(personas, { accesoLimitado: true });
+  await existente.servicio.enviar({ id_publicacion: 10, id_destino_usuario: 1, texto: 'Respuesta' }, 2);
+  assert.equal(existente.guardados.length, 1);
+  const nuevo = servicioMensajes(personas, { accesoLimitado: true, conversacionExistente: false });
+  await assert.rejects(nuevo.servicio.enviar({ id_publicacion: 10, id_destino_usuario: 2, texto: 'Consulta' }, 1), ConflictException);
+  assert.equal(nuevo.guardados.length, 0);
+});
 
 test('no se le puede escribir a una cuenta dada de baja ni le llega el correo', async () => {
   const { servicio, guardados, correos } = servicioMensajes({

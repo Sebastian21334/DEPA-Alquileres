@@ -50,6 +50,7 @@
       <form class="block-form" (ngSubmit)="confirmarBloqueo()">
         <h2 id="block-dialog-title">Bloquear a {{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</h2>
         <p>El usuario verá este motivo al intentar iniciar sesión y podrá apelar el bloqueo.</p>
+        <p>Si tiene operaciones pendientes, solo podrá entrar para resolverlas y apelar. Al terminarlas, se aplicará el bloqueo total.</p>
         <label for="block-reason">Motivo del bloqueo</label>
         <textarea id="block-reason" name="motivoBloqueo" [(ngModel)]="motivoBloqueo"
           placeholder="Explicá por qué se bloquea esta cuenta" rows="5" maxlength="500" required autofocus></textarea>
@@ -515,7 +516,8 @@
     <div class="settlement-list">
       @for (claim of claims(); track claim.id) {
         <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
-          <app-claim-history [reclamo]="claim" [administracion]="true" (verArchivo)="verEvidencia(claim, $event)">
+          <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
+            (verArchivo)="verEvidencia(claim, $event)" (verReembolso)="verReembolsoReclamo(claim)">
             @if (gestionReclamo()?.id === claim.id && gestionReclamo()?.accion === 'mensaje') {
               <app-conversation-composer [(texto)]="textoReclamo" etiqueta="Mensaje para el inquilino y el anunciante"
                 [deshabilitado]="!!busy()" (enviar)="responderReclamo(claim)" />
@@ -542,15 +544,22 @@
                 </label>
                 @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
                   <label>Importe a devolver en pesos
-                    <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required [disabled]="!!busy()" />
+                    <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required
+                      [attr.max]="totalPagadoReclamo(claim)" [attr.aria-invalid]="parcialCubreElTotal(claim)" [disabled]="!!busy()" />
                   </label>
+                  @if (totalPagadoReclamo(claim); as total) {
+                    <p class="refund-help">Pagó el inquilino {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
+                  }
+                  @if (parcialCubreElTotal(claim)) {
+                    <p class="refund-error" role="alert">Para devolver todo elegí «Devolución total».</p>
+                  }
                 }
                 <label>Conclusión de la revisión
                   <textarea name="observacionReclamo" [(ngModel)]="observacionReclamo" rows="3" maxlength="500" required [disabled]="!!busy()"></textarea>
                 </label>
                 <div class="actions">
                   <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
-                  <button type="submit" class="button button--light" [disabled]="!!busy() || !observacionReclamo.trim() || (resolucionReclamo === 'DEVOLUCION_PARCIAL' && !(importeReclamo && importeReclamo > 0))">Confirmar resolución</button>
+                  <button type="submit" class="button button--light" [disabled]="!!busy() || !observacionReclamo.trim() || (resolucionReclamo === 'DEVOLUCION_PARCIAL' && (!(importeReclamo && importeReclamo > 0) || parcialCubreElTotal(claim)))">Confirmar resolución</button>
                 </div>
               </form>
             }
@@ -839,6 +848,9 @@
               <p><strong>Fecha del bloqueo</strong> {{ bloqueo.detalle.fecha | date: 'dd/MM/yyyy' }}</p>
             }
             <p><strong>Motivo</strong> {{ bloqueo.detalle.motivo || 'Sin registro' }}</p>
+            @if (bloqueo.detalle.accesoLimitado) {
+              <p>Acceso limitado a operaciones pendientes y apelación.</p>
+            }
             @if (bloqueo.detalle.apelacion) {
               <app-conversation-panel titulo="Apelación del bloqueo"
                 [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">

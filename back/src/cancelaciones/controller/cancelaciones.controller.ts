@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
-import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
@@ -33,18 +33,21 @@ export class CancelacionesController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Post(':id/cancelacion')
   solicitar(@Param('id', ParseIntPipe) id: number, @Body() dto: SolicitarCancelacionDto, @Req() req: AuthenticatedRequest) {
     return this.cancelacionesService.solicitar(id, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get(':id/cancelacion/condiciones')
   consultarCondiciones(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.cancelacionesService.consultarCondiciones(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get(':id/cancelacion')
   consultarActiva(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.cancelacionesService.consultarActiva(id, req.user.id);

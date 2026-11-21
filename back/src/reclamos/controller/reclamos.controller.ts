@@ -13,7 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { ReclamosService } from '../service/reclamos.service';
@@ -30,11 +30,13 @@ const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', 5, {
 export class ReclamosController {
   constructor(private readonly reclamosService: ReclamosService) {}
 
+  @PermitirAccesoLimitado()
   @Post()
   crear(@Body() dto: CrearReclamoDto, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.crear(dto, req.user.id);
   }
 
+  @PermitirAccesoLimitado()
   @Get('mios')
   listarMios(@Req() req: AuthenticatedRequest) {
     return this.reclamosService.listarMios(req.user.id);
@@ -47,6 +49,7 @@ export class ReclamosController {
     return this.reclamosService.listarAdministracion();
   }
 
+  @PermitirAccesoLimitado()
   @Get(':id')
   obtener(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.obtener(
@@ -56,6 +59,7 @@ export class ReclamosController {
     );
   }
 
+  @PermitirAccesoLimitado()
   @Post(':id/evidencias')
   @UseInterceptors(EVIDENCIAS_INTERCEPTOR)
   subirEvidencias(@Param('id', ParseIntPipe) id: number, @UploadedFiles() archivos: Express.Multer.File[], @Req() req: AuthenticatedRequest) {
@@ -67,6 +71,7 @@ export class ReclamosController {
     );
   }
 
+  @PermitirAccesoLimitado()
   @Get(':id/evidencias/:idEvidencia/url')
   urlEvidencia(@Param('id', ParseIntPipe) id: number, @Param('idEvidencia', ParseIntPipe) idEvidencia: number, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.urlEvidencia(
@@ -77,6 +82,7 @@ export class ReclamosController {
     );
   }
 
+  @PermitirAccesoLimitado()
   @Get(':id/mensajes')
   listarMensajes(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.listarMensajes(
@@ -86,6 +92,7 @@ export class ReclamosController {
     );
   }
 
+  @PermitirAccesoLimitado()
   @Post(':id/mensajes')
   enviarMensaje(@Param('id', ParseIntPipe) id: number, @Body() dto: EnviarMensajeReclamoDto, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.enviarMensaje(

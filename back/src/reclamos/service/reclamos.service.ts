@@ -5,11 +5,13 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import sharp from 'sharp';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
@@ -42,6 +44,8 @@ const MAX_BYTES = 5 * 1024 * 1024;
 
 @Injectable()
 export class ReclamosService {
+  private readonly logger = new Logger(ReclamosService.name);
+
   constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
@@ -222,26 +226,25 @@ export class ReclamosService {
       if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
         if (previo) throw new ConflictException('El reclamo tiene una devolución registrada');
         expediente.reserva = await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion, transaccion);
-        expediente.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE');
-        expediente.resolucion = ResolucionReclamo.SIN_DEVOLUCION;
-        expediente.administrador_resolucion = referenciaUsuario(idAdmin);
-        expediente.resuelto_en = new Date();
-        resultado.reclamo = await repositorio.guardar(expediente);
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, ResolucionReclamo.SIN_DEVOLUCION, null, idAdmin));
         return;
       }
       const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
       if (!pago)
         throw new ConflictException('La reserva no tiene un pago registrado');
       const saldo = this.reembolsos.saldoReembolsable(pago);
-      const importe = previo ? Number(previo.importe) :
-        dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL
-          ? saldo
-          : Number(dto.importe ?? 0);
+      const total = dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL;
+      if (!previo && total && saldo <= TOLERANCIA_MONETARIA)
+        throw new ConflictException('El pago no tiene saldo para devolver');
+      const importe = previo ? Number(previo.importe) : total ? saldo : Number(dto.importe ?? 0);
       if (!Number.isFinite(importe) || importe <= 0)
         throw new BadRequestException('Indicá el importe de la devolución parcial');
-      if (!previo && importe > saldo + 0.009)
-        throw new ConflictException('La devolución supera el saldo del pago');
-      const tipo = dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL;
+      // Un parcial por todo el saldo es una devolución total: el reclamo y la reserva tienen que decir lo mismo.
+      if (!previo && !total && importe >= saldo - TOLERANCIA_MONETARIA)
+        throw new BadRequestException(
+          `La devolución parcial tiene que ser menor que el saldo del pago (${pago.currency} ${saldo.toFixed(2)}). Para devolver todo elegí "Devolución total".`,
+        );
+      const tipo = total ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL;
       if (previo && (previo.tipo !== tipo ||
           (tipo === TipoReembolso.PARCIAL && importe !== Number(dto.importe))))
         throw new ConflictException('El reclamo ya tiene una devolución por otro importe o tipo');
@@ -256,23 +259,51 @@ export class ReclamosService {
         idempotencyKey: referencia,
         referenciaInterna: referencia,
       }, transaccion);
+      // La decisión se registra junto con la devolución; la plata se mueve después.
+      resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, Number(resultado.reembolso.importe), idAdmin));
     });
     if (!resultado.reembolso) {
       await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto', 'La administración resolvió el reclamo sin devolución. Consultá el expediente en DEPA.');
       return this.prepararRespuesta(resultado.reclamo);
     }
-    const reembolso = resultado.reembolso;
-    if (reembolso.transferencia_manual && reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
-      return this.prepararRespuesta(await this.obtener(id, idAdmin, true));
-    const ejecutado = await this.reembolsos.ejecutar(reembolso.id, idAdmin);
-    if (ejecutado.transferencia_manual && ejecutado.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
-      return this.prepararRespuesta(await this.obtener(id, idAdmin, true));
-    const aplicado = await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
-      this.aplicarResolucionReembolso(confirmado, transaccion),
-    );
+    const aplicado = await this.ejecutarDevolucion(resultado.reembolso, idAdmin);
     if (aplicado)
       await this.notificaciones?.avisarCambio(aplicado.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La devolución quedó registrada y el reclamo se resolvió. Consultá el detalle en DEPA.');
+    else
+      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La administración resolvió el reclamo con devolución. La devolución está en gestión; consultá su estado en DEPA.');
     return this.prepararRespuesta(aplicado ?? await this.obtener(id, idAdmin, true));
+  }
+
+  /**
+   * Mueve la plata de una decisión ya registrada. Si no puede hacerlo ahora
+   * (transferencia manual o Mercado Pago no confirma), la devolución sigue en
+   * Reembolsos y su conciliación la aplica al reclamo cuando se aprueba.
+   */
+  private async ejecutarDevolucion(reembolso: Reembolso, idAdmin: number): Promise<Reclamo | null> {
+    if (reembolso.transferencia_manual && reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
+      return null;
+    try {
+      const ejecutado = await this.reembolsos.ejecutar(reembolso.id, idAdmin);
+      if (!this.reembolsos.estaAprobado(ejecutado)) return null;
+      return await this.reembolsos.aplicarConfirmado(ejecutado.id, (confirmado, transaccion) =>
+        this.aplicarResolucionReembolso(confirmado, transaccion),
+      );
+    } catch (error) {
+      this.logger.warn(`La devolución ${reembolso.id} quedó pendiente en Reembolsos: ${(error as Error).message}`);
+      return null;
+    }
+  }
+
+  /** Registra la decisión del administrador sobre el reclamo; las asignaciones viven en el servicio. */
+  private registrarDecision(reclamo: Reclamo, resolucion: ResolucionReclamo, importe: number | null, idAdmin: number | null): Reclamo {
+    reclamo.estado = resolucion === ResolucionReclamo.SIN_DEVOLUCION
+      ? this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE')
+      : this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
+    reclamo.resolucion = resolucion;
+    reclamo.importe_reembolso = importe;
+    reclamo.administrador_resolucion = idAdmin != null ? referenciaUsuario(idAdmin) : null;
+    reclamo.resuelto_en = new Date();
+    return reclamo;
   }
 
   async aplicarResolucionReembolso(reembolso: Reembolso, transaccion: EntityManager): Promise<Reclamo> {
@@ -285,12 +316,14 @@ export class ReclamosService {
       throw new ConflictException('El reclamo tiene una resolución incompatible con el reembolso');
     reclamo.reserva = await this.reservas.aplicarEfectoReembolso(reembolso, transaccion,
       reembolso.motivo.replace(/^Reclamo #\d+: /, ''));
-    reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
-    reclamo.resolucion = reembolso.tipo === TipoReembolso.TOTAL
-      ? ResolucionReclamo.DEVOLUCION_TOTAL : ResolucionReclamo.DEVOLUCION_PARCIAL;
-    reclamo.importe_reembolso = Number(reembolso.importe);
-    reclamo.administrador_resolucion = reembolso.resuelto_por ?? reembolso.solicitado_por;
-    reclamo.resuelto_en = new Date();
+    // La decisión ya quedó registrada al resolver; los reclamos anteriores a ese
+    // cambio la completan recién cuando se confirma la devolución.
+    if (!reclamo.resuelto_en) {
+      const resolucion = reembolso.tipo === TipoReembolso.TOTAL
+        ? ResolucionReclamo.DEVOLUCION_TOTAL : ResolucionReclamo.DEVOLUCION_PARCIAL;
+      this.registrarDecision(reclamo, resolucion, Number(reembolso.importe),
+        reembolso.resuelto_por?.id ?? reembolso.solicitado_por?.id ?? null);
+    }
     return reclamos.guardar(reclamo);
   }
 

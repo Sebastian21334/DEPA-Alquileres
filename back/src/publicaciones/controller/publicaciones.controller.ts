@@ -18,7 +18,7 @@ import {
 import { PublicacionesService } from '../service/publicaciones.service';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
-import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../seguridad/guards/optional-jwt-auth.guard';
 import { AnuncianteGuard } from '../../anunciantes/guards/anunciante.guard';
@@ -71,6 +71,7 @@ export class PublicacionesController {
     );
   }
 
+  @PermitirAccesoLimitado()
   @Get('mias')
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
   listarPropias(@Req() req: AnuncianteRequest) {

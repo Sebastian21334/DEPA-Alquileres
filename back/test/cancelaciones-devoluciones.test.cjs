@@ -770,6 +770,105 @@ test('resolver un reclamo con devolución parcial conserva la estadía y registr
   assert.equal(liquidacion.moneda, 'ARS');
 });
 
+function reclamosConAvisos() {
+  const avisos = [];
+  const servicio = new ReclamosService(
+    new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia), source.getRepository(ReclamoMensaje)),
+    reservas, reembolsos, {}, catalogosDePrueba(),
+    { avisarCambio: async (_reserva, destinos, asunto, mensaje) => { avisos.push({ destinos, asunto, mensaje }); } },
+  );
+  return { servicio, avisos };
+}
+
+async function reclamoAbierto(reserva) {
+  return reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1);
+}
+
+test('la devolución total por transferencia deja el reclamo resuelto al decidir y el reembolso pendiente', async () => {
+  const { reserva, pago } = await escenario('2026-01-01');
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  const { servicio, avisos } = reclamosConAvisos();
+  const reclamo = await reclamoAbierto(reserva);
+
+  const resuelto = await servicio.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_TOTAL, observacion: 'Corresponde devolver todo' }, 3);
+  assert.equal(resuelto.estado, 'RESUELTO_INQUILINO');
+  assert.equal(resuelto.resolucion, 'DEVOLUCION_TOTAL');
+  assert.equal(Number(resuelto.importe_reembolso), 100);
+  const [pendiente] = await reembolsos.listarPorReserva(reserva.id);
+  assert.deepEqual([pendiente.tipo, Number(pendiente.importe), pendiente.estado], ['TOTAL', 100, 'PENDIENTE']);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'APROBADO');
+  assert.deepEqual(avisos.map(aviso => aviso.asunto), ['Reclamo resuelto con devolución']);
+  assert.match(avisos[0].mensaje, /La devolución está en gestión/);
+
+  const decidido = await source.getRepository(Reclamo).findOneOrFail({ where: { id: reclamo.id }, relations: { administrador_resolucion: true } });
+  // Otro administrador registra la transferencia.
+  await operacionesReembolso.registrarTransferencia(pendiente.id, 'trf-inquilino', 4);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'REEMBOLSADO');
+  const final = await source.getRepository(Reclamo).findOneOrFail({ where: { id: reclamo.id }, relations: { administrador_resolucion: true } });
+  assert.deepEqual([final.estado, final.resolucion, Number(final.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
+  // La transferencia no pisa quién ni cuándo decidió.
+  assert.equal(final.administrador_resolucion.id, 3);
+  assert.equal(final.resuelto_en.getTime(), decidido.resuelto_en.getTime());
+});
+
+test('la devolución total por Mercado Pago devuelve todo lo pagado y resuelve el reclamo', async () => {
+  const { reserva, pago } = await escenario('2026-01-01');
+  const reclamo = await reclamoAbierto(reserva);
+  const resuelto = await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_TOTAL, observacion: 'Corresponde devolver todo' }, 3);
+  assert.deepEqual([resuelto.estado, resuelto.resolucion, Number(resuelto.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'REEMBOLSADO');
+});
+
+test('sin devolución no genera reembolso aunque llegue un importe', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  const reclamo = await reclamoAbierto(reserva);
+  const resuelto = await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION, importe: 50, observacion: 'No corresponde' }, 3);
+  assert.deepEqual([resuelto.estado, resuelto.resolucion, resuelto.importe_reembolso], ['RESUELTO_ANUNCIANTE', 'SIN_DEVOLUCION', null]);
+  assert.equal(await source.getRepository(Reembolso).countBy({ reserva: { id: reserva.id } }), 0);
+});
+
+test('una devolución parcial por todo el saldo se rechaza y pide elegir la total', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  const reclamo = await reclamoAbierto(reserva);
+  for (const importe of [100, 150])
+    await assert.rejects(
+      reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe, observacion: 'Parcial' }, 3),
+      /Para devolver todo elegí "Devolución total"/,
+    );
+  assert.equal((await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id })).estado, 'ABIERTO');
+  assert.equal(await source.getRepository(Reembolso).countBy({ reserva: { id: reserva.id } }), 0);
+});
+
+test('si Mercado Pago falla, el reclamo queda resuelto y la devolución sigue en Reembolsos', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  const reclamo = await reclamoAbierto(reserva);
+  pasarela.reembolsar = async () => { throw new Error('Mercado Pago no responde'); };
+  const resuelto = await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_TOTAL, observacion: 'Corresponde devolver todo' }, 3);
+  assert.deepEqual([resuelto.estado, Number(resuelto.importe_reembolso)], ['RESUELTO_INQUILINO', 100]);
+  const [fallido] = await reembolsos.listarPorReserva(reserva.id);
+  assert.equal(fallido.estado, 'FALLIDO');
+  await assert.rejects(
+    reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_TOTAL, observacion: 'Otra vez' }, 3),
+    /ya fue resuelto/,
+  );
+});
+
+test('un reclamo con la devolución pedida antes de este cambio se completa al confirmar la transferencia', async () => {
+  const { reserva, pago } = await escenario('2026-01-01');
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  const reclamo = await reclamoAbierto(reserva);
+  const anterior = await reembolsos.crearSolicitud({
+    reserva, pago, tipo: TipoReembolso.PARCIAL, origen: OrigenReembolso.RECLAMO, importe: 30,
+    motivo: `Reclamo #${reclamo.id}: decisión previa`, idSolicitadoPor: 3,
+    idempotencyKey: `rec:${reclamo.id}`, referenciaInterna: `rec:${reclamo.id}`,
+  });
+  await operacionesReembolso.registrarTransferencia(anterior.id, 'trf-previa', 3);
+  const completo = await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id });
+  assert.deepEqual([completo.estado, completo.resolucion, Number(completo.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_PARCIAL', 30]);
+  assert.ok(completo.resuelto_en);
+});
+
 test('si falla la escritura de la liquidación se revierte la reserva y se puede reintentar', async () => {
   const { reserva, crearReembolso } = await escenario();
   const reembolso = await crearReembolso({ importe: 40, tipo: TipoReembolso.PARCIAL });
@@ -1138,6 +1237,32 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const [dia] = await source.query("SELECT disponible,id_reserva FROM fecha WHERE fecha='2099-01-10'");
     assert.equal(dia.disponible, true);
     assert.equal(dia.id_reserva, null);
+
+    // Resolver un reclamo por la API: el parcial no puede cubrir todo y la decisión queda registrada.
+    const conReclamo = await source.getRepository(Reserva).save({
+      monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: 1 },
+      fecha_inicio: '2026-01-01', fecha_fin: '2099-03-20',
+    });
+    await source.getRepository(Pago).save({
+      reserva: conReclamo, amount: 100, currency: 'ARS', status: 'approved', payment_id: 'mp-reclamo-api',
+      payment_method_id: 'visa', external_reference: `reserva:${conReclamo.id}`, idempotency_key: 'pago-reclamo-api',
+    });
+    const { body: abierto } = await request(http).post('/reclamos').set('Authorization', tenant)
+      .send({ id_reserva: conReclamo.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }).expect(201);
+    const rutaResolver = `/reclamos/${abierto.id}/resolver`;
+    await request(http).patch(rutaResolver).set('Authorization', tenant)
+      .send({ resolucion: 'DEVOLUCION_TOTAL', observacion: 'Pedido del inquilino' }).expect(403);
+    await request(http).patch(rutaResolver).set('Authorization', admin)
+      .send({ resolucion: 'DEVOLUCION_PARCIAL', observacion: 'Falta el importe' }).expect(400);
+    const { body: parcialTotal } = await request(http).patch(rutaResolver).set('Authorization', admin)
+      .send({ resolucion: 'DEVOLUCION_PARCIAL', importe: 100, observacion: 'Todo como parcial' }).expect(400);
+    assert.match(parcialTotal.message, /Para devolver todo elegí "Devolución total"/);
+    const { body: resuelto } = await request(http).patch(rutaResolver).set('Authorization', admin)
+      .send({ resolucion: 'DEVOLUCION_TOTAL', observacion: 'Corresponde devolver todo' }).expect(200);
+    assert.deepEqual([resuelto.estado, resuelto.resolucion, Number(resuelto.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
+    await request(http).patch(rutaResolver).set('Authorization', admin)
+      .send({ resolucion: 'SIN_DEVOLUCION', observacion: 'Otra decisión' }).expect(409);
+    assert.equal(correos.filter(({ content }) => content.subject === 'Reclamo resuelto con devolución').length, 2);
 
     // T38: la cancelación del día anterior conserva el pago y no mueve dinero.
     await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');

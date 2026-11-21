@@ -5,7 +5,12 @@
 }
 
 <main class="app-content" [class.cbu-fondo]="accesoRestringido() || esPantallaCbu()">
-  @if (comprobandoPerfil()) {
+  @if (mostrarAvisoAcceso()) {
+    <p class="acceso-limitado-aviso">Tu cuenta tiene acceso limitado para resolver operaciones pendientes. <a routerLink="/cuenta-bloqueada">Consultar o apelar el bloqueo</a></p>
+  }
+  @if (!rutaPermitida()) {
+    <p class="cbu-cargando" role="status">Abriendo tus reservas…</p>
+  } @else if (comprobandoPerfil()) {
     @if (perfil.errorSolicitud()) {
       <div class="cbu-cargando">
         <p role="alert">No pudimos comprobar el estado de tu cuenta.</p>
@@ -40,7 +45,9 @@
 </main>
 
 @if (!esPantallaAuth() && !esPantallaCbu() && !accesoRestringido()) {
-  <app-footer />
+  @if (!accesoLimitado()) {
+    <app-footer />
+  }
   <app-chat-dock />
 }
 

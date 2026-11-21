@@ -733,6 +733,10 @@ export class AdminComponent {
       this.toast.mostrar('Indicá un importe parcial válido.', 'error');
       return;
     }
+    if (resolucion === 'DEVOLUCION_PARCIAL' && this.parcialCubreElTotal(reclamo)) {
+      this.toast.mostrar('La devolución parcial tiene que ser menor que lo que pagó el inquilino. Para devolver todo elegí «Devolución total».', 'error');
+      return;
+    }
     this.run(
       `claim-${reclamo.id}`,
       () => this.api.resolverReclamo(reclamo.id, resolucion, importe ?? undefined, observacion),
@@ -740,10 +744,41 @@ export class AdminComponent {
         const resuelto = value as Reclamo;
         this.claims.update((items) => items.map((item) => item.id === reclamo.id ? { ...item, ...resuelto, reserva: item.reserva } : item));
         this.gestionReclamo.set(null);
+        this.toast.mostrar(this.avisoResolucion(reclamo, resuelto), 'exito');
         this.reload();
       },
-      resolucion === 'SIN_DEVOLUCION' ? 'Reclamo resuelto.' : 'Decisión registrada. Consultá el estado en Reembolsos.',
+      null,
     );
+  }
+
+  private avisoResolucion(reclamo: Reclamo, resuelto: Reclamo): string {
+    if (resuelto.resolucion === 'SIN_DEVOLUCION') return 'Reclamo resuelto a favor del anunciante, sin devolución.';
+    const tipo = resuelto.resolucion === 'DEVOLUCION_TOTAL' ? 'total' : 'parcial';
+    const importe = resuelto.importe_reembolso ? ` de ${this.montoReclamo(reclamo, resuelto.importe_reembolso)}` : '';
+    return `Reclamo resuelto con devolución ${tipo}${importe}. La devolución sigue en Reembolsos.`;
+  }
+
+  /** Lleva al reembolso del reclamo; si ya no está en la lista, abre la sección igual. */
+  protected verReembolsoReclamo(reclamo: Reclamo): void {
+    const reembolso = this.refunds().find((item) =>
+      item.origen === 'RECLAMO' && item.referencia_interna === `rec:${reclamo.id}`);
+    this.openSection('reembolsos', reembolso?.id);
+  }
+
+  /** Lo que pagó el inquilino; el back controla el saldo exacto descontando devoluciones previas. */
+  protected totalPagadoReclamo(reclamo: Reclamo): number | null {
+    const total = Number(reclamo.reserva?.monto_pago);
+    return Number.isFinite(total) && total > 0 ? total : null;
+  }
+
+  /** Un parcial por todo lo pagado es una devolución total: se pide elegir esa opción. */
+  protected parcialCubreElTotal(reclamo: Reclamo): boolean {
+    const total = this.totalPagadoReclamo(reclamo);
+    return total != null && this.importeReclamo != null && Number(this.importeReclamo) >= total - 0.009;
+  }
+
+  protected montoReclamo(reclamo: Reclamo, importe: number): string {
+    return Number(importe).toLocaleString('es-AR', { style: 'currency', currency: reclamo.reserva?.moneda_contratada || 'ARS' });
   }
 
   protected nombreInquilino(settlement: AdminSettlement): string {
@@ -810,11 +845,11 @@ export class AdminComponent {
     this.bloqueando.set(true);
     this.bloqueoError.set('');
     this.api.cambiarBloqueo(usuario.id, true, motivo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
+      next: ({ accesoLimitado }) => {
         this.bloqueando.set(false);
         this.cerrarBloqueo();
         this.actualizarBloqueoUsuario(usuario.id, true);
-        this.toast.mostrar('Usuario bloqueado.', 'exito');
+        this.toast.mostrar(accesoLimitado ? 'Usuario bloqueado con acceso a operaciones pendientes.' : 'Usuario bloqueado.', 'exito');
       },
       error: (error: Error) => {
         this.bloqueando.set(false);

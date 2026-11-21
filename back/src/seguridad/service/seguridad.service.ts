@@ -16,13 +16,27 @@ export class SeguridadService {
     }
 
     const usuario = await this.usuariosService.buscarParaSesion(idUsuario);
-    if (!usuario || !usuario.activa || usuario.bloqueado) {
+    if (!usuario || !usuario.activa) {
       throw new UnauthorizedException('La cuenta no está habilitada');
     }
     if (usuario.version_sesion && usuario.version_sesion !== versionSesion) {
       throw new UnauthorizedException('La sesión ya no está habilitada');
     }
 
-    return { id: usuario.id, email: usuario.email, rol: usuario.rol?.nombre };
+    const accesoLimitado = usuario.bloqueado && usuario.bloqueoDetalle
+      ? await this.usuariosService.verificarAccesoLimitado(usuario)
+      : null;
+    if (usuario.bloqueado && !accesoLimitado) {
+      throw new UnauthorizedException({
+        codigo: 'USUARIO_BLOQUEADO',
+        message: 'Tu cuenta está bloqueada. Ingresá nuevamente para consultar o apelar el bloqueo.',
+      });
+    }
+    return {
+      id: usuario.id,
+      email: usuario.email,
+      rol: accesoLimitado ? undefined : usuario.rol?.nombre,
+      ...(accesoLimitado && { accesoLimitado: true, ...accesoLimitado }),
+    };
   }
 }

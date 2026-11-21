@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import { ReservasService } from '../service/reservas.service';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
-import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { ValidarCodigoAlojamientoDto } from '../dto/validar-codigo-alojamiento.dto';
 import { ReportarProblemaReservaDto } from '../dto/reportar-problema-reserva.dto';
 
@@ -23,6 +23,7 @@ export class ReservasController {
   constructor(private readonly reservasService: ReservasService, private readonly reprogramacionService: ReservaReprogramacionService) {}
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get('mis-reservas')
   // Filtra el historial por el usuario autenticado.
   listarPorUsuario(@Req() req: AuthenticatedRequest) {
@@ -30,6 +31,7 @@ export class ReservasController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get('recibidas')
   listarRecibidas(@Req() req: AuthenticatedRequest) {
     return this.reservasService.listarRecibidasPorAnunciante(req.user.id);
@@ -37,18 +39,21 @@ export class ReservasController {
 
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get('publicacion/:id')
   listarPorPublicacion(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.listarPorPublicacion(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get(':id')
   buscarPorId(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.buscarPorId(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get(':id/codigo-alojamiento')
   consultarCodigo(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.consultarCodigoAlojamiento(
@@ -58,6 +63,7 @@ export class ReservasController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Patch(':id/validar-codigo')
   validarCodigo(@Param('id', ParseIntPipe) id: number, @Body() dto: ValidarCodigoAlojamientoDto, @Req() req: AuthenticatedRequest) {
     return this.reservasService.validarCodigoAlojamiento(
@@ -68,6 +74,7 @@ export class ReservasController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Patch(':id/reportar-problema')
   reportarProblema(@Param('id', ParseIntPipe) id: number, @Body() dto: ReportarProblemaReservaDto, @Req() req: AuthenticatedRequest) {
     return this.reservasService.reportarProblema(
@@ -79,18 +86,21 @@ export class ReservasController {
 
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Patch(':id/cancelar')
   cancelar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.cancelar(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get(':id/reembolsos')
   listarReembolsos(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reservasService.listarReembolsosReserva(id, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Get(':id/fechas-disponibles')
   @Header('Cache-Control', 'no-store')
   listarFechasDisponibles(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
@@ -98,12 +108,14 @@ export class ReservasController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Patch(':id/fechas')
   actualizarFechas(@Param('id', ParseIntPipe) id: number, @Body() dto: ActualizarFechasReservaDto, @Req() req: AuthenticatedRequest) {
     return this.reprogramacionService.actualizarFechas(id, dto, req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
   @Patch(':id/reprogramaciones/:idCambio/notificar')
   reintentarAviso(@Param('id', ParseIntPipe) id: number, @Param('idCambio', ParseIntPipe) idCambio: number, @Req() req: AuthenticatedRequest) {
     return this.reprogramacionService.reintentarAvisoReprogramacion(

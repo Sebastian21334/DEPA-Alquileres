@@ -18,6 +18,7 @@ import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
+import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
@@ -38,6 +39,7 @@ export class MisReservasComponent {
   protected readonly actividadReembolsos = inject(ActividadReembolsosService);
   private readonly toast = inject(ToastService);
   private readonly perfil = inject(PerfilService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -47,7 +49,10 @@ export class MisReservasComponent {
   protected readonly imagenesConError = signal<Record<number, string>>({});
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
   protected readonly puedeValidarCodigo = puedeValidarCodigo;
-  protected readonly esAnunciante = this.perfil.esAnuncianteVerificado;
+  protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
+  protected readonly esAnunciante = computed(() => this.accesoLimitado()
+    ? this.auth.currentUser()?.anuncianteVerificado === true
+    : this.perfil.esAnuncianteVerificado());
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
@@ -104,9 +109,10 @@ export class MisReservasComponent {
 
   private cargarReservas(silenciosa = false): void {
     this.consultaReservas?.unsubscribe();
+    const anunciante = this.accesoLimitado() ? of(this.esAnunciante()) : this.perfil.esAnunciante();
     this.consultaReservas = forkJoin({
       propias: this.reservasApi.mine(),
-      recibidas: this.perfil.esAnunciante().pipe(
+      recibidas: anunciante.pipe(
         switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received() : of<Reserva[]>([])),
       ),
       reclamos: this.reservasApi.myClaims().pipe(catchError((err: ApiError) => {
@@ -543,6 +549,16 @@ export class MisReservasComponent {
 
   protected detalleReserva(reserva: Reserva): { reserva_id: number } {
     return { reserva_id: reserva.id };
+  }
+
+  /** La devolución la sigue el inquilino; el anunciante no gestiona reembolsos. */
+  protected esInquilinoDelReclamo(reclamo: Reclamo): boolean {
+    return reclamo.inquilino?.id === Number(this.auth.currentUser()?.sub);
+  }
+
+  /** El estado y el chat de la devolución están en el detalle de la reserva. */
+  protected verReembolsoReclamo(reclamo: Reclamo): void {
+    if (reclamo.reserva?.id) void this.router.navigate(['/reserva/resultado'], { queryParams: { reserva_id: reclamo.reserva.id } });
   }
 
   private iniciarOperacion(id: number): void {
