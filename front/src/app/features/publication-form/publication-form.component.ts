@@ -18,6 +18,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import { RentalDateRange } from '../../shared/utils/rental-dates';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { SoloEnterosDirective } from '../../shared/directives/solo-enteros.directive';
 import {
   LocationPickerComponent,
   UbicacionConfirmada,
@@ -31,6 +32,7 @@ import {
   imports: [
     ReactiveFormsModule,
     RouterLink,
+    SoloEnterosDirective,
     AvailabilityCalendarComponent,
     SpinnerComponent,
     LocationPickerComponent,
