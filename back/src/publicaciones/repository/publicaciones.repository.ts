@@ -88,9 +88,10 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     await this.repo.update({ id }, { activa: false, motivo_baja_admin: motivo });
   }
 
-  async reactivar(id: number, activa: boolean): Promise<boolean> {
+  async reactivar(id: number): Promise<boolean> {
     // El filtro por motivo impide que dos pedidos simultáneos reactiven la misma publicación.
-    const resultado = await this.repo.update({ id, eliminada: false, motivo_baja_admin: Not(IsNull()) }, { activa, motivo_baja_admin: null });
+    // La publicación queda inactiva: el anunciante decide cuándo volver a publicarla.
+    const resultado = await this.repo.update({ id, eliminada: false, motivo_baja_admin: Not(IsNull()) }, { activa: false, motivo_baja_admin: null });
     return (resultado.affected ?? 0) > 0;
   }
 

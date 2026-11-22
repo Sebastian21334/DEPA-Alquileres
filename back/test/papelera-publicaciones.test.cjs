@@ -174,9 +174,12 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     await db.exec(`
       INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante,activa,eliminada)
         VALUES (40,'Reactivar con foto','Prueba',CURRENT_DATE,100,'Calle 4',1,30,2,true,false),
+          (50,'Pausada con foto','Prueba',CURRENT_DATE,100,'Calle 7',1,30,2,false,false),
           (60,'Reactivar sin foto','Prueba',CURRENT_DATE,100,'Calle 5',1,30,2,false,false),
           (70,'Baja de eliminada','Prueba',CURRENT_DATE,100,'Calle 6',1,30,2,false,true);
-      INSERT INTO imagen (id_imagen,id_publicacion,url) VALUES (80,40,'https://example.invalid/foto2.jpg');
+      INSERT INTO imagen (id_imagen,id_publicacion,url) VALUES
+        (80,40,'https://example.invalid/foto2.jpg'),
+        (90,50,'https://example.invalid/foto3.jpg');
     `);
     const ids = publicaciones => publicaciones.map(p => p.id).sort((a, b) => a - b);
     const administracion = async consulta => {
@@ -185,23 +188,22 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
       return (await respuesta.json()).datos;
     };
 
-    for (const id of [40, 60, 70]) {
+    for (const id of [40, 50, 60, 70]) {
       const respuesta = await request(`/administracion/${id}/baja`, 9, 'PATCH', { motivo: 'Moderación' });
       assert.equal(respuesta.status, 200);
       assert.equal((await respuesta.json()).correoEnviado, true);
     }
-    assert.equal(correos.length, 3);
+    assert.equal(correos.length, 4);
     assert.ok(!(await feed()).includes(40));
+    assert.ok(!(await feed()).includes(50));
 
-    assert.deepEqual(ids(await administracion('?estado=bajas&limite=100')), [40, 60, 70]);
+    assert.deepEqual(ids(await administracion('?estado=bajas&limite=100')), [40, 50, 60, 70]);
     const inactivas = await administracion('?estado=inactivas&limite=100');
     assert.ok(inactivas.every(p => p.activa === false && p.motivo_baja_admin === null));
-    for (const id of [10, 30]) assert.ok(ids(inactivas).includes(id));
-    for (const id of [40, 60, 70]) assert.ok(!ids(inactivas).includes(id));
-    const activas = await administracion('?estado=activas&limite=100');
-    assert.ok(activas.every(p => p.activa === true && p.motivo_baja_admin === null));
+    assert.deepEqual(ids(inactivas), [10, 20, 30]);
+    assert.deepEqual(ids(await administracion('?estado=activas&limite=100')), []);
     const todas = await administracion('?estado=todas&limite=100');
-    for (const id of [40, 60, 70]) assert.ok(ids(todas).includes(id));
+    for (const id of [10, 20, 30, 40, 50, 60, 70]) assert.ok(ids(todas).includes(id));
     assert.deepEqual(ids(await administracion('?limite=100')), ids(todas));
     assert.equal((await request('/administracion?estado=eliminadas', 9)).status, 400);
 
@@ -213,15 +215,19 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     assert.equal(reactivada.status, 200);
     const cuerpo = await reactivada.json();
     assert.equal(cuerpo.motivo_baja_admin, null);
-    assert.equal(cuerpo.activa, true);
-    assert.deepEqual(await estadoDe(40), { activa: true, eliminada: false, motivo_baja_admin: null });
-    assert.ok((await feed()).includes(40));
-    assert.ok(ids(await administracion('?estado=activas&limite=100')).includes(40));
+    assert.equal(cuerpo.activa, false);
+    assert.deepEqual(await estadoDe(40), { activa: false, eliminada: false, motivo_baja_admin: null });
+    assert.ok(!(await feed()).includes(40));
+    assert.ok(ids(await administracion('?estado=inactivas&limite=100')).includes(40));
+    assert.ok(!ids(await administracion('?estado=activas&limite=100')).includes(40));
     assert.ok(!ids(await administracion('?estado=bajas&limite=100')).includes(40));
 
-    const repetida = await request('/administracion/40/reactivar', 9, 'PATCH');
-    assert.equal(repetida.status, 409);
-    assert.equal((await repetida.json()).message, 'La publicación no está dada de baja');
+    const reactivadaPausada = await request('/administracion/50/reactivar', 9, 'PATCH');
+    assert.equal(reactivadaPausada.status, 200);
+    assert.equal((await reactivadaPausada.json()).activa, false);
+    assert.deepEqual(await estadoDe(50), { activa: false, eliminada: false, motivo_baja_admin: null });
+    assert.ok(!(await feed()).includes(50));
+    assert.ok(ids(await administracion('?estado=inactivas&limite=100')).includes(50));
 
     const sinImagenes = await request('/administracion/60/reactivar', 9, 'PATCH');
     assert.equal(sinImagenes.status, 200);
@@ -229,14 +235,26 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     assert.deepEqual(await estadoDe(60), { activa: false, eliminada: false, motivo_baja_admin: null });
     assert.ok(!(await feed()).includes(60));
     assert.ok(!ids(await administracion('?estado=bajas&limite=100')).includes(60));
+    assert.equal((await request('/60', 2, 'PATCH', { activa: true })).status, 400);
 
     const eliminada = await request('/administracion/70/reactivar', 9, 'PATCH');
     assert.equal(eliminada.status, 409);
     assert.equal((await eliminada.json()).message, 'La publicación fue eliminada por su anunciante y no se puede reactivar');
     assert.equal((await estadoDe(70)).motivo_baja_admin, 'Moderación');
 
+    const repetida = await request('/administracion/40/reactivar', 9, 'PATCH');
+    assert.equal(repetida.status, 409);
+    assert.equal((await repetida.json()).message, 'La publicación no está dada de baja');
+
     assert.equal((await request('/administracion/999/reactivar', 9, 'PATCH')).status, 404);
     assert.equal((await request('/administracion/invalido/reactivar', 9, 'PATCH')).status, 400);
+
+    const activadaPorDueno = await request('/40', 2, 'PATCH', { activa: true });
+    assert.equal(activadaPorDueno.status, 200);
+    assert.deepEqual(await estadoDe(40), { activa: true, eliminada: false, motivo_baja_admin: null });
+    assert.ok((await feed()).includes(40));
+    assert.ok(ids(await administracion('?estado=activas&limite=100')).includes(40));
+    assert.ok(!ids(await administracion('?estado=inactivas&limite=100')).includes(40));
 
     assert.equal((await request('/administracion/60/baja', 9, 'PATCH', { motivo: 'Segunda moderación' })).status, 200);
     const simultaneas = await Promise.all([
@@ -245,7 +263,7 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     ]);
     assert.deepEqual(simultaneas.map(r => r.status).sort(), [200, 409]);
     assert.deepEqual(await estadoDe(60), { activa: false, eliminada: false, motivo_baja_admin: null });
-    assert.equal(correos.length, 4);
+    assert.equal(correos.length, 5);
   });
 });
 

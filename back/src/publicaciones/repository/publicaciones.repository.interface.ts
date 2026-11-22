@@ -52,7 +52,7 @@ export interface IPublicacionesRepository {
   buscarCondicionesDeReserva(id: number, transaccion: EntityManager): Promise<Publicacion | null>;
   desactivarPorAnunciante(idUsuario: number, transaccion: EntityManager): Promise<void>;
   darDeBaja(id: number, motivo: string): Promise<void>;
-  reactivar(id: number, activa: boolean): Promise<boolean>;
+  reactivar(id: number): Promise<boolean>;
   incrementarVisualizaciones(id: number): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
   existeReserva(consulta: ConsultaReservasAcceso): Promise<boolean>;
