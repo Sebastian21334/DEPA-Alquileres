@@ -75,11 +75,12 @@ export class SolicitudAnuncianteComponent {
     domicilio_comercial: ['', [Validators.required, Validators.maxLength(255)]],
     dni_corredor: ['', [Validators.required, Validators.maxLength(15), Validators.pattern(/^\d{7,8}$/)]],
   });
-  private readonly tipoSeleccionado = toSignal(this.form.controls.idTipoAnunciante.valueChanges, { initialValue: 0 });
+  private readonly tipoFormulario = toSignal(this.form.controls.idTipoAnunciante.valueChanges, { initialValue: 0 });
+  private readonly tipoSolicitud = computed(() => this.solicitud()?.anunciante.tipoAnunciante?.id ?? 0);
+  private readonly tipoSeleccionado = computed(() => this.tipoFormulario() || this.tipoSolicitud());
   protected readonly esInmobiliaria = computed(() => {
-    const nombre = this.solicitud()?.anunciante.tipoAnunciante?.nombre ??
-      this.tipos().find((tipo) => tipo.id === this.tipoSeleccionado())?.nombre ?? '';
-    return /inmobiliaria|institucional/i.test(nombre);
+    const tipo = this.tipos().find((item) => item.id === this.tipoSeleccionado());
+    return /inmobiliaria|institucional/i.test(tipo?.nombre ?? '');
   });
   protected readonly matricula = signal<File | null>(null);
   protected readonly constanciaCuit = signal<File | null>(null);
@@ -105,8 +106,6 @@ export class SolicitudAnuncianteComponent {
           cuit: solicitud.anunciante.cuit_cuil ?? '',
           numero_contacto: solicitud.anunciante.numero_contacto ?? '',
         }, { emitEvent: false });
-        this.form.controls.cbu.disable({ emitEvent: false });
-        this.form.controls.titularidad_declarada.disable({ emitEvent: false });
         this.empresaForm.patchValue({
           razon_social: solicitud.razon_social ?? '',
           matricula_profesional: solicitud.matricula_profesional ?? '',
@@ -114,9 +113,6 @@ export class SolicitudAnuncianteComponent {
           domicilio_comercial: solicitud.domicilio_comercial ?? '',
           dni_corredor: solicitud.dni_corredor ?? '',
         }, { emitEvent: false });
-      } else {
-        this.form.controls.cbu.enable({ emitEvent: false });
-        this.form.controls.titularidad_declarada.enable({ emitEvent: false });
       }
       if (!solicitud || !this.puedeEditarDatos()) this.pasoManual.set(null);
     });
@@ -135,9 +131,21 @@ export class SolicitudAnuncianteComponent {
   }
 
   protected enviarDatos(): void {
-    if (this.form.invalid || this.enviando() || (this.esInmobiliaria() && this.empresaForm.invalid)) {
+    const existente = !!this.solicitud();
+    const datosValidos = existente
+      ? this.form.controls.idTipoAnunciante.valid &&
+        this.form.controls.cuit.valid &&
+        this.form.controls.numero_contacto.valid
+      : this.form.valid;
+    if (!datosValidos || this.enviando() || (this.esInmobiliaria() && this.empresaForm.invalid)) {
       this.empresaForm.markAllAsTouched();
-      this.form.markAllAsTouched();
+      if (existente) {
+        this.form.controls.idTipoAnunciante.markAsTouched();
+        this.form.controls.cuit.markAsTouched();
+        this.form.controls.numero_contacto.markAsTouched();
+      } else {
+        this.form.markAllAsTouched();
+      }
       return;
     }
     this.enviando.set(true);
@@ -150,7 +158,6 @@ export class SolicitudAnuncianteComponent {
       numero_contacto: valor.numero_contacto.trim(),
       ...(this.esInmobiliaria() ? this.empresaForm.getRawValue() : {}),
     };
-    const existente = !!this.solicitud();
     const peticion = existente
       ? this.perfilService.actualizarDatosSolicitud(datos)
       : this.perfilService.solicitarAnunciante({
