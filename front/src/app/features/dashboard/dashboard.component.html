@@ -85,8 +85,13 @@
       <div class="dashboard-grid dashboard-grid--bottom">
         <article class="dashboard-card performance-card">
           <div class="card-heading">
-            <div><span>Rendimiento</span><h2>Tus publicaciones destacadas</h2></div>
+            <div><span>Rendimiento</span><h2>Rendimiento por publicación</h2></div>
             <a routerLink="/mis-publicaciones">Ver todas →</a>
+          </div>
+          <div class="performance-search">
+            <label for="dashboard-performance-search">Buscar publicación</label>
+            <input #rendimientoBusqueda id="dashboard-performance-search" type="search" maxlength="200"
+              placeholder="Buscar por título" [value]="busquedaRendimiento()" (input)="buscarRendimiento(rendimientoBusqueda.value)" />
           </div>
           <div class="performance-table">
             <div class="performance-table__head"><span>Publicación</span><span>Vistas</span><span>Reservas</span><span>Ingresos</span><span></span></div>
@@ -103,9 +108,19 @@
                 <a [routerLink]="['/publicaciones', item.publicacion.id]" aria-label="Ver publicación">↗</a>
               </div>
             } @empty {
-              <div class="performance-empty">Todavía no hay publicaciones para analizar.</div>
+              <div class="performance-empty">{{ busquedaRendimiento().trim() ? 'No encontramos publicaciones para esa búsqueda.' : 'Todavía no hay publicaciones para analizar.' }}</div>
             }
           </div>
+          @if (rendimientoFiltrado().length > 0) {
+            <app-paginador
+              [pagina]="paginaRendimientoActual()"
+              [paginas]="paginasRendimiento()"
+              [total]="rendimientoFiltrado().length"
+              etiqueta="publicaciones"
+              ariaLabel="Paginación de publicaciones del dashboard"
+              (paginaCambia)="paginaRendimiento.set($event)"
+            />
+          }
         </article>
 
         <article class="dashboard-card conversion-card">
