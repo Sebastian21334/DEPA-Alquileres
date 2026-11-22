@@ -1148,72 +1148,49 @@ test('si falla la escritura de la liquidación se revierte la reserva y se puede
   assert.equal(liquidacion.estado, 'DEVUELTO_PARCIAL_INQUILINO');
 });
 
-for (const resultado of ['GANADA', 'PERDIDA']) {
-  test(`el contracargo ${resultado} integra la disputa, el pago y la reserva sin duplicaciones`, async (t) => {
-    const { Disputa } = require('../dist/disputas/entity/disputa.entity');
-    const { DisputasService } = require('../dist/disputas/service/disputas.service');
-    const { DisputasRepository } = require('../dist/disputas/repository/disputas.repository');
-    const { PagosRepository } = require('../dist/pagos/repository/pagos.repository');
-    const { CatalogosService } = require('../dist/catalogos/service/catalogos.service');
-    const { Estado } = require('../dist/catalogos/entity/estado.entity');
-    const { reserva, pago } = await escenario();
-    const estados = source.getRepository(Estado);
-    const catalogos = new CatalogosService({
-      buscarTodosRoles: async () => [{ nombre: 'Administrador' }, { nombre: 'Inquilino' }],
-      listarEstados: () => estados.find({ relations: { ambito: true } }),
-    });
-    await catalogos.onModuleInit();
-    const disputasRepo = new DisputasRepository(source.getRepository(Disputa));
-    const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
-    const disputas = new DisputasService(disputasRepo, pagos, reembolsos, reservas, catalogos);
-    let llamadasPasarela = 0;
-    pasarela.reembolsar = async () => { llamadasPasarela++; throw new Error('El contracargo ya movió el dinero'); };
-    const datos = { idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-prueba', importe: 100 };
-    const disputa = await disputas.registrarContracargo(datos);
-    assert.equal(disputa.estado.codigo, 'ABIERTA');
-    assert.equal((await disputas.registrarContracargo(datos)).id, disputa.id);
-    assert.equal(await source.getRepository(Disputa).count(), 1);
-    assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).estado_pago, 'CONTRACARGO');
-    assert.equal((await disputas.listarAdministracion())[0].estado, 'ABIERTA');
-    if (resultado === 'GANADA') {
-      const guardar = t.mock.method(DisputasRepository.prototype, 'guardar', async () => { throw new Error('fallo al cerrar disputa'); });
-      await assert.rejects(disputas.resolver(disputa.id, { resultado }, 3), /fallo al cerrar disputa/);
-      assert.equal((await pagos.buscarPorId(pago.id)).status, 'charged_back');
-      assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'CONTRACARGO');
-      guardar.mock.restore();
-    }
-    assert.equal((await disputas.resolver(disputa.id, { resultado }, 3)).estado, resultado);
-    await assert.rejects(disputas.resolver(disputa.id, { resultado }, 3), /ya fue resuelta/);
-    assert.equal((await disputasRepo.buscarPorId(disputa.id)).estado.codigo, resultado);
-    const actual = await reservas.obtenerReserva(reserva.id);
-    assert.equal(actual.estado_pago, resultado === 'GANADA' ? 'APROBADO' : 'REEMBOLSADO');
-    assert.equal(actual.cancelada, resultado === 'PERDIDA');
-    assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), resultado === 'GANADA' ? 0 : 100);
-    const pagoResuelto = await pagos.buscarPorId(pago.id);
-    await disputas.registrarContracargo(datos);
-    assert.equal((await pagos.buscarPorId(pago.id)).status, pagoResuelto.status);
-    assert.equal(llamadasPasarela, 0);
-  });
-}
-
-test('si falla el contracargo revierte el pago y la liquidación, y el aviso permite reintentar', async (t) => {
-  const { Disputa } = require('../dist/disputas/entity/disputa.entity');
-  const { DisputasService } = require('../dist/disputas/service/disputas.service');
-  const { DisputasRepository } = require('../dist/disputas/repository/disputas.repository');
+test('recibir un contracargo no cambia el pago, la reserva ni la liquidación', async () => {
+  const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
   const { reserva, pago } = await escenario();
-  const repo = new DisputasRepository(source.getRepository(Disputa));
+  const referencia = 'reserva:' + reserva.id;
+  await source.getRepository(Pago).update(pago.id, { external_reference: referencia, payment_id: '123' });
   const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
-  const disputas = new DisputasService(repo, pagos, reembolsos, reservas, catalogosDePrueba());
-  const guardar = t.mock.method(DisputasRepository.prototype, 'guardar', async () => { throw new Error('fallo de escritura'); });
-  const datos = { idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-con-reintento', importe: 100 };
-  await assert.rejects(disputas.registrarContracargo(datos), /fallo de escritura/);
-  assert.equal((await pagos.buscarPorId(pago.id)).status, 'approved');
-  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'APROBADO');
-  assert.equal(await source.getRepository(Liquidacion).count(), 0);
-  guardar.mock.restore();
-  assert.equal((await disputas.registrarContracargo(datos)).estado.codigo, 'ABIERTA');
-  assert.equal((await pagos.buscarPorId(pago.id)).status, 'charged_back');
-  assert.equal(await source.getRepository(Liquidacion).count(), 1);
+  const pagoAntes = await pagos.buscarPorId(pago.id);
+  const reservaAntes = await reservas.obtenerReserva(reserva.id);
+  const pasarela = {
+    validarWebhook: () => {},
+    consultarPago: async () => ({
+      id: 123, external_reference: referencia, status: 'charged_back', transaction_amount: 100, currency_id: 'ARS',
+      refunds: [{ id: 321, payment_id: 123, amount: 100, status: 'approved' }],
+    }),
+  };
+  const operaciones = new OperacionesPagoService({}, pagos, reservas, reembolsos, {}, pasarela,
+    catalogosDePrueba(), operacionesReembolso);
+  const entrada = { body: { type: 'payment' }, dataId: '123' };
+
+  assert.deepEqual(await operaciones.procesarWebhook(entrada), { received: true });
+  assert.deepEqual(await operaciones.procesarWebhook(entrada), { received: true });
+  assert.deepEqual(await pagos.buscarPorId(pago.id), pagoAntes);
+  assert.deepEqual(await reservas.obtenerReserva(reserva.id), reservaAntes);
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+});
+
+test('los reembolsos históricos de contracargos quedan fuera de la conciliación y la aplicación', async () => {
+  const { pago, crearReembolso } = await escenario();
+  const pendiente = await crearReembolso();
+  await source.query(
+    "UPDATE reembolso SET estado = 'FALLIDO', origen = 'CONTRACARGO', conciliar_en = now(), primer_intento_en = now() WHERE id_reembolso = $1",
+    [pendiente.id],
+  );
+  let llamadas = 0;
+  pasarela.reembolsar = async () => { llamadas++; };
+  await reembolsos.reconciliarPendientes();
+  await assert.rejects(reembolsos.ejecutar(pendiente.id, 3), /fuera de la aplicación/);
+  assert.equal(llamadas, 0);
+
+  await source.query("UPDATE reembolso SET estado = 'APROBADO' WHERE id_reembolso = $1", [pendiente.id]);
+  assert.deepEqual(await reembolsos.listarPendientesAplicacion(0), []);
+  await assert.rejects(operacionesReembolso.aplicarReembolsoConfirmado(pendiente.id), /fuera de la aplicación/);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
 });
 
 test('el webhook de reembolso permite recuperar la aplicación tras un fallo sin registrar otro movimiento', async (t) => {
@@ -1226,7 +1203,7 @@ test('el webhook de reembolso permite recuperar la aplicación tras un fallo sin
     refunds: [{ id: 321, payment_id: 123, amount: 100, status: 'approved' }],
   });
   const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
-  const operaciones = new OperacionesPagoService({}, pagos, reservas, reembolsos, {}, {},
+  const operaciones = new OperacionesPagoService({}, pagos, reservas, reembolsos, {},
     { consultarPago, validarWebhook: () => {} }, catalogosDePrueba(), operacionesReembolso);
   const aplicar = t.mock.method(operacionesReembolso, 'aplicarReembolsoConfirmado', async () => { throw new Error('fallo de aplicación'); });
   const entrada = { body: { type: 'payment' }, dataId: '123' };
@@ -1252,7 +1229,6 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
   const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
   const { CancelacionesModule } = require('../dist/cancelaciones/cancelaciones.module');
   const { ReclamosModule } = require('../dist/reclamos/reclamos.module');
-  const { DisputasService } = require('../dist/disputas/service/disputas.service');
   const { MercadoPagoAdapter } = require('../dist/mercado-pago/proveedor/mercado-pago.adapter');
   const { Estado } = require('../dist/catalogos/entity/estado.entity');
   const { CLIENTE_CORREO } = require('../dist/mail/proveedor/cliente-correo.interface');
@@ -1289,13 +1265,13 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
   try {
     const estados = source.getRepository(Estado);
-    const codigoAmbito = 'DISPUTA';
-    await estados.delete({ codigoAmbito, codigo: 'GANADA' });
-    await estados.update({ codigoAmbito, codigo: 'ABIERTA' }, { nombre: 'Abierta en el panel' });
+    const codigoAmbito = 'RECLAMO';
+    await estados.delete({ codigoAmbito, codigo: 'CERRADO' });
+    await estados.update({ codigoAmbito, codigo: 'ABIERTO' }, { nombre: 'Abierto en el panel' });
     await base.cargarSeed();
     await app.init();
-    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'GANADA' })).nombre, 'Ganada');
-    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'ABIERTA' })).nombre, 'Abierta en el panel');
+    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'CERRADO' })).nombre, 'Cerrado');
+    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'ABIERTO' })).nombre, 'Abierto en el panel');
     assert.equal(await estados.countBy({ codigoAmbito }), 5);
     const http = app.getHttpServer();
     const token = id => app.get(JwtService).sign({ sub: id });
@@ -1342,10 +1318,16 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.deepEqual((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).codigo_generado_en, primeraConfirmacion.codigo_generado_en);
     const reconciliar = (autorizacion) => request(http).post('/pagos/reconciliar')
       .set('Authorization', autorizacion).send({ payment_id: '123' });
+    cobro.status = 'charged_back';
+    const liquidacionAntes = await reservas.obtenerReserva(reserva.id);
+    await webhook('123', `ts=${ts},v1=${hash}`).expect(201, { received: true });
     await reconciliar(ajeno).expect(403);
     await reconciliar(tenant).expect(201, {
       reserva_id: reserva.id, estado_pago: 'APROBADO', mercado_pago_status: 'approved', mercado_pago_status_detail: 'accredited',
     });
+    assert.deepEqual(await reservas.obtenerReserva(reserva.id), liquidacionAntes);
+    assert.equal(await source.getRepository(Reembolso).count(), 0);
+    cobro.status = 'approved';
     assert.equal(await source.getRepository(Pago).count(), 1);
     const anunciante = `Bearer ${token(2)}`;
     const hoy = require('../dist/common/utils/fechas').fechaArgentina();
@@ -1454,18 +1436,9 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.equal(correos.filter(({ content }) => content.subject === 'Pago al anunciante registrado').length, 1);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);
-    const disputa = await app.get(DisputasService).registrarContracargo({
-      idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-api', importe: 100,
-    });
-    await request(http).get('/disputas/administracion').expect(401);
-    await request(http).get('/disputas/administracion').set('Authorization', tenant).expect(403);
-    const expedientes = await request(http).get('/disputas/administracion')
-      .set('Authorization', admin).expect(200);
-    assert.equal(expedientes.body[0].estado, 'ABIERTA');
-    assert.equal(Object.hasOwn(expedientes.body[0], 'ambitoEstado'), false);
-    const resolucion = await request(http).patch(`/disputas/${disputa.id}/resolver`)
-      .set('Authorization', admin).send({ resultado: 'GANADA' }).expect(200);
-    assert.equal(resolucion.body.estado, 'GANADA');
+    await request(http).get('/disputas/administracion').set('Authorization', admin).expect(404);
+    await request(http).patch('/disputas/1/resolver')
+      .set('Authorization', admin).send({ resultado: 'GANADA' }).expect(404);
     await request(http).patch(`/reservas/${reserva.id}/liquidacion`)
       .set('Authorization', admin).send({ estado: 'GANADA' }).expect(400);
     await request(http).get('/reservas/cancelaciones/administracion').expect(401);
@@ -1616,8 +1589,8 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
     }
 
-    // T39: el anunciante devuelve el total antes, durante y después de la fecha de ingreso.
-    for (const dias of [1, 0, -1]) {
+    // T39: el anunciante devuelve el total si solicita cancelar antes del ingreso.
+    for (const dias of [7, 1, 0, -1]) {
       await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
       const { reserva: delAnunciante, pago: pagoDelAnunciante } = await escenario(fechaEnDias(dias));
       await source.getRepository(Pago).update(pagoDelAnunciante.id, { payment_id: '123' });
@@ -1630,6 +1603,14 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       await request(http).post(rutaAnunciante).set('Authorization', anunciante)
         .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, actor: 'ANUNCIANTE' }).expect(400);
       const condicionesAnunciante = await request(http).get(`${rutaAnunciante}/condiciones`).set('Authorization', anunciante).expect(200);
+      if (dias <= 0) {
+        assert.match(condicionesAnunciante.body.motivoBloqueo, /Desde la fecha de ingreso/);
+        assert.equal(condicionesAnunciante.body.devolucion, null);
+        await request(http).post(rutaAnunciante).set('Authorization', anunciante)
+          .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(400);
+        assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
+        continue;
+      }
       assert.equal(condicionesAnunciante.body.motivoBloqueo, null);
       assert.equal(condicionesAnunciante.body.devolucion.porcentaje, 100);
       assert.equal(condicionesAnunciante.body.devolucion.importe, 100);
@@ -1651,11 +1632,12 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     }
 
     await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
-    const { reserva: ingresoValidado } = await escenario(fechaEnDias(0));
+    const { reserva: ingresoValidado } = await escenario(fechaEnDias(1));
     await source.getRepository(Reserva).update(ingresoValidado.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
     const rutaValidada = `/reservas/${ingresoValidado.id}/cancelacion`;
     const solicitudAntesDelCodigo = await request(http).post(rutaValidada).set('Authorization', anunciante)
       .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(201);
+    await source.getRepository(Reserva).update(ingresoValidado.id, { fecha_inicio: fechaEnDias(0) });
     await request(http).patch(`/reservas/${ingresoValidado.id}/validar-codigo`).set('Authorization', anunciante)
       .send({ codigo: '12345678' }).expect(200);
     const vencidaPorCodigo = await request(http).patch(`${rutaValidada}/${solicitudAntesDelCodigo.body.id}`).set('Authorization', admin)
@@ -1665,7 +1647,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     await request(http).post(rutaValidada).set('Authorization', anunciante)
       .send({ motivo: 'Segundo pedido de cancelación', aceptaTerminos: true }).expect(400);
     const bloqueadaPorCodigo = await request(http).get(`${rutaValidada}/condiciones`).set('Authorization', anunciante).expect(200);
-    assert.match(bloqueadaPorCodigo.body.motivoBloqueo, /ingreso ya validado/);
+    assert.match(bloqueadaPorCodigo.body.motivoBloqueo, /Desde la fecha de ingreso/);
     assert.equal(bloqueadaPorCodigo.body.devolucion, null);
     assert.equal(await source.getRepository(Reembolso).count(), 0);
   } finally { await app.close(); }

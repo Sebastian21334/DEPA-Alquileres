@@ -113,7 +113,6 @@ function escenario(moneda = 'ARS') {
     }),
     reservas,
     { registrarDesdeWebhook: async () => ({}), registrarManual: async () => ({}) },
-    { registrarContracargo: async () => ({}) },
     config,
     {
       validarConfiguracionCheckout: () => {},
