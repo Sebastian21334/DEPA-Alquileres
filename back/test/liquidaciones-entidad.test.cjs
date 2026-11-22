@@ -30,6 +30,7 @@ test('el vencimiento libera solo ingresos sin código y sin revisión ni devoluc
     conReservaBloqueada: async (id, operar) => operar(reservas.find(r => r.id === id), {}),
     pagoAprobado: r => r.estado_pago === 'APROBADO',
     codigoValidado: r => !!r.codigo_validado_en,
+    codigoBloqueado: r => (r.intentos_codigo ?? 0) >= 5,
   };
   const reembolsos = { listarPorReserva: async id => id === 4 ? [{ estado: 'PENDIENTE' }] : [] };
   const operaciones = new OperacionesLiquidacionService(reembolsos, reservaService, liquidaciones, catalogos, {}, { tieneReclamoAbierto: async () => false });

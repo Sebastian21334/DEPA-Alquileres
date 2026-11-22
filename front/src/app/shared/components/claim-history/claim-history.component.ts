@@ -33,12 +33,16 @@ const INTERVALO_CHAT_MS = 5000;
     @if (item.resolucion) {
       <div class="resolution" role="status">
         <p class="resolution__title">Reclamo resuelto</p>
-        @if (item.resolucion === 'SIN_DEVOLUCION') {
-          <p>A favor del anunciante: sin devolución al inquilino.</p>
+        @if (item.resolucion === 'SIN_DEVOLUCION' || item.resolucion === 'REINICIAR_CODIGO') {
+          <p>{{ item.resolucion === 'REINICIAR_CODIGO'
+            ? 'A favor del anunciante: la administración habilitó nuevos intentos para cargar el código.'
+            : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
           <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
           @if (item.reserva && puedeValidarCodigo(item.reserva)) {
             <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
           }
+        } @else if (item.resolucion === 'CONFIRMAR_INGRESO') {
+          <p>A favor del anunciante: la administración confirmó el ingreso sin el código. El pago sigue los plazos habituales.</p>
         } @else {
           <p>
             A favor del inquilino: {{ resoluciones[item.resolucion].toLowerCase() }}
@@ -47,7 +51,7 @@ const INTERVALO_CHAT_MS = 5000;
           </p>
         }
         @if (item.resuelto_en) { <p class="meta">Resuelto el {{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</p> }
-        @if (mostrarVerReembolso() && item.resolucion !== 'SIN_DEVOLUCION') {
+        @if (mostrarVerReembolso() && (item.resolucion === 'DEVOLUCION_TOTAL' || item.resolucion === 'DEVOLUCION_PARCIAL')) {
           <button type="button" class="resolution__action" (click)="verReembolso.emit(item)">Ver reembolso</button>
         }
       </div>
@@ -237,6 +241,7 @@ export class ClaimHistoryComponent {
   protected readonly categorias = {
     LIMPIEZA: 'Limpieza', MANTENIMIENTO: 'Mantenimiento', INGRESO: 'Problemas de ingreso',
     DESCRIPCION: 'La propiedad no coincide', OTRO: 'Otro motivo',
+    CODIGO_BLOQUEADO: 'Pedido de reinicio del código de alojamiento',
   };
   protected readonly estados = {
     ABIERTO: 'Recibido', EN_REVISION: 'En revisión', RESUELTO_INQUILINO: 'Resuelto',
@@ -244,6 +249,7 @@ export class ClaimHistoryComponent {
   };
   protected readonly resoluciones = {
     SIN_DEVOLUCION: 'Cerrado sin devolución', DEVOLUCION_TOTAL: 'Devolución total',
-    DEVOLUCION_PARCIAL: 'Devolución parcial',
+    DEVOLUCION_PARCIAL: 'Devolución parcial', REINICIAR_CODIGO: 'Nuevos intentos del código',
+    CONFIRMAR_INGRESO: 'Ingreso confirmado sin código',
   };
 }

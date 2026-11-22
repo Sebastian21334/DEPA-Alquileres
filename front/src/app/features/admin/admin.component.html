@@ -560,11 +560,21 @@
               <form class="claim-form" (ngSubmit)="resolverReclamoReserva(claim)">
                 <label>Resultado de la revisión
                   <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
-                    <option value="SIN_DEVOLUCION">Sin devolución</option>
-                    <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
-                    <option value="DEVOLUCION_TOTAL">Devolución total</option>
+                    @if (claim.categoria === 'CODIGO_BLOQUEADO') {
+                      <!-- T34: el pedido de reinicio del código tiene sus propias salidas. -->
+                      <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
+                      <option value="CONFIRMAR_INGRESO">Confirmar el ingreso sin código (a favor del anunciante)</option>
+                      <option value="DEVOLUCION_TOTAL">Devolver el 100 % al inquilino</option>
+                    } @else {
+                      <option value="SIN_DEVOLUCION">Sin devolución</option>
+                      <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
+                      <option value="DEVOLUCION_TOTAL">Devolución total</option>
+                    }
                   </select>
                 </label>
+                @if (claim.categoria === 'CODIGO_BLOQUEADO' && resolucionReclamo === 'CONFIRMAR_INGRESO') {
+                  <p class="refund-help">El pago al anunciante se habilita en la fecha habitual, a los 5 días del fin de la estadía.</p>
+                }
                 @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
                   <label>Importe a devolver en pesos
                     <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required

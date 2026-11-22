@@ -191,7 +191,7 @@ test('T34: cada caso del código de alojamiento tiene su mensaje y la reserva in
   await rechaza(validar(reserva), 400, /^Código incorrecto\. El código se bloqueó tras 5 intentos incorrectos/);
   assert.equal(await restantes(reserva), 0);
   // Bloqueado, el código correcto tampoco pasa y el mensaje sigue siendo el del bloqueo.
-  await rechaza(validar(reserva, codigo), 409, /^El código se bloqueó tras 5 intentos incorrectos\. Contactá a Administración/);
+  await rechaza(validar(reserva, codigo), 409, /^El código se bloqueó tras 5 intentos incorrectos\. Pedí el reinicio a Administración desde la reserva\.$/);
 
   t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
   await rechaza(validar(vencida, codigo), 409, /El plazo para validar el código terminó el 24\/01\/2099/);
@@ -199,6 +199,97 @@ test('T34: cada caso del código de alojamiento tiene su mensaje y la reserva in
   t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
   await validar(vencida, codigo);
   await rechaza(validar(vencida, codigo), 409, /El ingreso ya se validó el 24\/01\/2099/);
+});
+
+async function codigoBloqueado(datos = {}) {
+  const reserva = await reservaParaReclamo(datos, {
+    estado: 'EN_REVISION', observacion: 'Código bloqueado después de cinco intentos incorrectos',
+  });
+  await source.getRepository(Reserva).update(reserva.id, { intentos_codigo: 5 });
+  return reserva;
+}
+
+const pedirReinicio = (servicio, reserva, idUsuario = 2) => servicio.crear({
+  id_reserva: reserva.id, categoria: 'CODIGO_BLOQUEADO', descripcion: 'El huésped me dictó el código y no lo toma',
+}, idUsuario);
+
+test('T34: solo el anunciante con el código bloqueado puede pedir el reinicio', async () => {
+  const { servicio, avisos } = reclamosConAvisos();
+  const sinBloqueo = await reservaParaReclamo({}, { estado: 'RETENIDO' });
+  await assert.rejects(pedirReinicio(servicio, sinBloqueo), /no está bloqueado/);
+
+  const bloqueada = await codigoBloqueado();
+  await assert.rejects(pedirReinicio(servicio, bloqueada, 1), (error) => error.getStatus() === 403);
+  await assert.rejects(servicio.crear({ id_reserva: bloqueada.id, categoria: 'OTRO', descripcion: 'Quiero reclamar como anunciante' }, 2),
+    /Solo el Inquilino/);
+
+  const pedido = await pedirReinicio(servicio, bloqueada);
+  assert.equal(pedido.estado, 'ABIERTO');
+  assert.equal(pedido.categoria, 'CODIGO_BLOQUEADO');
+  assert.equal((await liquidacionDe(bloqueada)).observacion,
+    'Código bloqueado después de cinco intentos incorrectos · Pedido de reinicio del código en revisión');
+  assert.deepEqual(avisos.map(aviso => aviso.asunto), ['Pedido de reinicio del código de alojamiento']);
+  await assert.rejects(pedirReinicio(servicio, bloqueada), /ya tiene un reclamo abierto/);
+});
+
+test('T34: el admin habilita intentos sin límite de reinicios o confirma el ingreso sin código', async () => {
+  const { servicio, avisos } = reclamosConAvisos();
+  const reserva = await codigoBloqueado();
+  const primero = await pedirReinicio(servicio, reserva);
+  await assert.rejects(servicio.resolver(primero.id, { resolucion: 'SIN_DEVOLUCION' }, 3), /pedido de reinicio del código se resuelve/);
+
+  const reiniciado = await servicio.resolver(primero.id, { resolucion: 'REINICIAR_CODIGO' }, 3);
+  assert.deepEqual([reiniciado.estado, reiniciado.resolucion], ['RESUELTO_ANUNCIANTE', 'REINICIAR_CODIGO']);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).intentos_codigo, 0);
+  assert.equal((await liquidacionDe(reserva)).estado, 'RETENIDO');
+  assert.equal(avisos.at(-1).asunto, 'Código de alojamiento reiniciado');
+
+  // Vuelve a bloquearse: se puede pedir otro reinicio, y esta vez el admin confirma el ingreso.
+  await source.getRepository(Reserva).update(reserva.id, { intentos_codigo: 5 });
+  await source.getRepository(Liquidacion).update({ reserva: { id: reserva.id } }, { estado: 'EN_REVISION' });
+  const segundo = await pedirReinicio(servicio, reserva);
+  const confirmado = await servicio.resolver(segundo.id, { resolucion: 'CONFIRMAR_INGRESO' }, 3);
+  assert.deepEqual([confirmado.estado, confirmado.resolucion], ['RESUELTO_ANUNCIANTE', 'CONFIRMAR_INGRESO']);
+  assert.equal((await liquidacionDe(reserva)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal((await reservas.obtenerReserva(reserva.id)).codigo_validado_en, null);
+  assert.equal(avisos.at(-1).asunto, 'Ingreso confirmado por la administración');
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+
+  // Las salidas del pedido no se usan en otros reclamos.
+  const otra = await reservaParaReclamo({}, { estado: 'RETENIDO' });
+  const comun = await reclamoAbierto(otra);
+  await assert.rejects(servicio.resolver(comun.id, { resolucion: 'REINICIAR_CODIGO' }, 3), /solo corresponde a un pedido de reinicio/);
+});
+
+test('T34: rechazar el pedido devuelve el total al inquilino y exige el motivo', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'EN_REVISION', moneda: 'ARS' });
+  await source.getRepository(Reserva).update(reserva.id, { intentos_codigo: 5 });
+  const { servicio } = reclamosConAvisos();
+  const pedido = await pedirReinicio(servicio, reserva);
+  await assert.rejects(servicio.resolver(pedido.id, { resolucion: 'DEVOLUCION_TOTAL' }, 3), /Indicá el motivo/);
+  const rechazado = await servicio.resolver(pedido.id, { resolucion: 'DEVOLUCION_TOTAL', observacion: 'El huésped no pudo entrar' }, 3);
+  assert.deepEqual([rechazado.estado, rechazado.resolucion, Number(rechazado.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
+});
+
+test('T34: T36 deja a favor del anunciante el código bloqueado sin pedido ni reclamo', async () => {
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  const fechas = { fecha_inicio: '2026-11-10', fecha_fin: '2026-11-16' };
+  const bloqueada = await codigoBloqueado(fechas);
+  const conPedido = await codigoBloqueado(fechas);
+  const otraRevision = await reservaParaReclamo(fechas, { estado: 'EN_REVISION', observacion: 'Pago tardío en revisión' });
+  await source.getRepository(Reclamo).save({
+    reserva: conPedido, inquilino: { id: 1 }, anunciante: { id: 2 }, categoria: 'CODIGO_BLOQUEADO',
+    descripcion: 'Pedido de reinicio abierto', estado: 'ABIERTO',
+  });
+
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-20T12:00:00Z'));
+  assert.equal((await liquidacionDe(bloqueada)).estado, 'EN_REVISION');
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal((await liquidacionDe(bloqueada)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal((await liquidacionDe(conPedido)).estado, 'EN_REVISION');
+  assert.equal((await liquidacionDe(otraRevision)).estado, 'EN_REVISION');
 });
 
 test('T55: el historial del anunciante junta los pagos de todas sus publicaciones, una vez cada uno', async (t) => {

@@ -16,6 +16,7 @@ import {
 } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { fechaArgentina } from '../../common/utils/fechas';
+import { MAX_INTENTOS_CODIGO } from '../../reservas-consulta/service/reserva-estado.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
@@ -50,14 +51,14 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
 
   private async procesarAvisos(ahora: Date): Promise<void> {
     try {
-      const vencidas = await this.liquidaciones.listarIngresosNoVerificadosVencidos(ahora);
+      const vencidas = await this.liquidaciones.listarIngresosNoVerificadosVencidos(ahora, MAX_INTENTOS_CODIGO);
       for (const id of vencidas) {
         try {
           await this.reservasService.conReservaBloqueada(id, async (reserva, transaccion) => {
             const fecha = this.liquidaciones.fechaDisponiblePagoManual(reserva);
             if (!fecha || fecha > fechaArgentina(ahora) || reserva.cancelada ||
                 !this.reservasService.pagoAprobado(reserva) || this.reservasService.codigoValidado(reserva) ||
-                reserva.estado_liquidacion !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO') ||
+                !this.vencePorIngresoNoVerificado(reserva) ||
                 await this.tieneDevolucionActiva(id, transaccion) ||
                 await this.reclamos.tieneReclamoAbierto(id, transaccion)) return;
             await this.liquidaciones.registrarVencimientoIngreso(reserva, transaccion);
@@ -81,6 +82,13 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     } catch {
       this.logger.warn('No se pudieron consultar los avisos pendientes de liquidación.');
     }
+  }
+
+  /** T36, extendido por T34: vence la retenida y la que está en revisión solo por el código bloqueado. */
+  private vencePorIngresoNoVerificado(reserva: Reserva): boolean {
+    const estado = reserva.estado_liquidacion;
+    return estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO') ||
+      (estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION') && this.reservasService.codigoBloqueado(reserva));
   }
 
   private async avisarSiDisponible(reserva: Reserva, hoy: string, ahora: Date, transaccion: EntityManager): Promise<void> {

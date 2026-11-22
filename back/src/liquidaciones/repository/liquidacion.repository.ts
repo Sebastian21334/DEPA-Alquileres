@@ -35,11 +35,16 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     return filas.map(({ id }) => id);
   }
 
-  async listarIngresosNoVerificadosVencidos(estadoLiquidacion: string, estadoPago: string, fechaFinLimite: string): Promise<number[]> {
+  async listarIngresosNoVerificadosVencidos(
+    estados: { retenido: string; revision: string; maxIntentosCodigo: number },
+    estadoPago: string,
+    fechaFinLimite: string,
+  ): Promise<number[]> {
     const filas = await this.repository.createQueryBuilder('liquidacion')
       .innerJoin('liquidacion.reserva', 'reserva')
       .select('reserva.id', 'id')
-      .where('liquidacion.estado = :estadoLiquidacion', { estadoLiquidacion })
+      // En revisión solo entra la que se bloqueó por el código; las otras revisiones siguen esperando al admin.
+      .where('(liquidacion.estado = :retenido OR (liquidacion.estado = :revision AND reserva.intentos_codigo >= :maxIntentosCodigo))', estados)
       .andWhere('reserva.estado_pago = :estadoPago', { estadoPago })
       .andWhere('reserva.cancelada = false AND reserva.codigo_validado_en IS NULL')
       .andWhere('reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite', { fechaFinLimite })

@@ -60,9 +60,17 @@ export class LiquidacionesService {
     );
   }
 
-  listarIngresosNoVerificadosVencidos(ahora: Date): Promise<number[]> {
+  /**
+   * Ingresos sin código cuyo plazo venció: retenidos y, desde T34, en revisión solo
+   * porque el código se bloqueó (`maxIntentosCodigo` intentos incorrectos).
+   */
+  listarIngresosNoVerificadosVencidos(ahora: Date, maxIntentosCodigo: number): Promise<number[]> {
     return this.liquidaciones.listarIngresosNoVerificadosVencidos(
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'),
+      {
+        retenido: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'),
+        revision: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
+        maxIntentosCodigo,
+      },
       this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
       this.desplazarFecha(fechaArgentina(ahora), -DIAS_ESPERA_PAGO_MANUAL),
     );

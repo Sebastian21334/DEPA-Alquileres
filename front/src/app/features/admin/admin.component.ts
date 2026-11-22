@@ -772,7 +772,8 @@ export class AdminComponent {
   protected abrirGestionReclamo(id: number, accion: 'mensaje' | 'resolver'): void {
     if (this.busy()) return;
     this.textoReclamo = '';
-    this.resolucionReclamo = 'SIN_DEVOLUCION';
+    const pedidoDeCodigo = this.claims().find(reclamo => reclamo.id === id)?.categoria === 'CODIGO_BLOQUEADO';
+    this.resolucionReclamo = pedidoDeCodigo ? 'REINICIAR_CODIGO' : 'SIN_DEVOLUCION';
     this.importeReclamo = null;
     this.observacionReclamo = '';
     this.gestionReclamo.set({ id, accion });
@@ -827,6 +828,8 @@ export class AdminComponent {
 
   private avisoResolucion(reclamo: Reclamo, resuelto: Reclamo): string {
     if (resuelto.resolucion === 'SIN_DEVOLUCION') return 'Reclamo resuelto a favor del anunciante, sin devolución.';
+    if (resuelto.resolucion === 'REINICIAR_CODIGO') return 'Pedido resuelto: el anunciante ya puede volver a cargar el código.';
+    if (resuelto.resolucion === 'CONFIRMAR_INGRESO') return 'Pedido resuelto: el ingreso quedó confirmado y la liquidación pasa a pendiente de pago.';
     const tipo = resuelto.resolucion === 'DEVOLUCION_TOTAL' ? 'total' : 'parcial';
     const importe = resuelto.importe_reembolso ? ` de ${this.montoReclamo(reclamo, resuelto.importe_reembolso)}` : '';
     return `Reclamo resuelto con devolución ${tipo}${importe}. La devolución sigue en Reembolsos.`;

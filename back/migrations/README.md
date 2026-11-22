@@ -261,6 +261,14 @@ Antes de iniciar esta versión del backend, ejecutar `npm run db:liquidaciones` 
 separado los avisos de disponibilidad enviados a Administración y al anunciante.
 Es reejecutable y conserva las liquidaciones existentes.
 
+# Pedido de reinicio del código de alojamiento (T34)
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:cancelaciones-devoluciones`
+desde `back`. La migración `20261122-reinicio-codigo-alojamiento.sql` agrega al catálogo
+la categoría de reclamo `CODIGO_BLOQUEADO` y las resoluciones `REINICIAR_CODIGO` y
+`CONFIRMAR_INGRESO`. Solo inserta valores nuevos y es reejecutable. Si se prefiere,
+`npm run db:seed` también completa estos valores.
+
 # Historial de bloqueos
 
 Antes de iniciar esta versión ejecutar `npm run db:apelaciones-bloqueo` desde

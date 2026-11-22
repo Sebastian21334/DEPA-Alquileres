@@ -39,6 +39,7 @@
 .code-entry__hint { color: var(--color-text-muted); }
 .code-entry__aviso { padding: .5rem .7rem; border-radius: 7px; background: #e9f7ef; color: #1d5e3b; font-weight: 650; }
 .code-entry__aviso--error { background: #fdecea; color: #8a1c13; }
+.code-entry__pedido { justify-self: start; margin-top: .5rem; }
 
 @media (max-width: 600px) {
     .reservation-tabs { flex-direction: column; }

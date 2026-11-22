@@ -198,10 +198,11 @@ export interface Reclamo {
   } | null;
   anunciante?: ParticipanteReclamo | null;
   inquilino?: ParticipanteReclamo | null;
-  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO';
+  /** CODIGO_BLOQUEADO: pedido de reinicio del código que abre el anunciante (T34). */
+  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'CODIGO_BLOQUEADO';
   descripcion: string;
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
-  resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | null;
+  resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | 'REINICIAR_CODIGO' | 'CONFIRMAR_INGRESO' | null;
   importe_reembolso: number | null;
   creado_en: string;
   resuelto_en: string | null;
