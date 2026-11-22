@@ -6,7 +6,8 @@ import { LucideBadgeCheck, LucideBuilding2, LucideMapPin, LucideSearch } from '@
 import { ListingService } from '../home/listing.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { AnunciantePublico } from '../../shared/models/anunciante.model';
-import { AdvertiserProfileService } from './advertiser-profile.service';
+import { AnunciantePublicoService } from '../../shared/services/anunciante-publico.service';
+import { esInmobiliaria } from '../../shared/utils/anunciante';
 import { ListingCardComponent } from '../../shared/components/listing-card/listing-card.component';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
@@ -28,7 +29,7 @@ export class AdvertiserProfileComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly listings = inject(ListingService);
-  private readonly profiles = inject(AdvertiserProfileService);
+  private readonly profiles = inject(AnunciantePublicoService);
   private readonly publicationsHeading = viewChild<ElementRef<HTMLElement>>('publicationsHeading');
   private readonly requestedPage = signal(1);
   protected readonly pageSize = 6;
@@ -56,6 +57,9 @@ export class AdvertiserProfileComponent {
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   protected readonly name = computed(() => this.perfil()?.nombre_publico?.trim() || 'Anunciante');
+  protected readonly verifiedLabel = computed(() =>
+    esInmobiliaria(this.perfil()?.tipoAnunciante) ? 'Inmobiliaria verificada' : 'Dueño Verificado',
+  );
   protected readonly locations = computed(() =>
     Array.from(
       new Set(
