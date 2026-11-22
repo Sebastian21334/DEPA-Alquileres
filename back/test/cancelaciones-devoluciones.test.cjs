@@ -120,6 +120,48 @@ test('el vencimiento se revierte ante un error y se puede reintentar sin validar
   assert.equal(await source.getRepository(Liquidacion).count(), 1);
 });
 
+test('T47-Extra: el código bloqueado con la estadía terminada llega al pago del anunciante', async (t) => {
+  // Estadía del 10 al 20/01/2099: el pago se habilita el 25/01.
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: 'K7M4P9Q2', codigo_generado_en: new Date() });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(
+    reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => '0010000700000000000017' }, reclamos,
+  );
+  const liquidacion = () => source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  const actual = () => source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+
+  // 1. Durante la estadía el anunciante falla 5 veces y el código se bloquea.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-15T15:00:00Z') });
+  for (let intento = 0; intento < 5; intento++)
+    await assert.rejects(reservas.validarCodigoAlojamiento(reserva.id, 'AAAAAAAA', 2), /Código incorrecto/);
+  assert.equal((await liquidacion()).estado, 'EN_REVISION');
+
+  // 2. Terminada la estadía, el admin cierra la revisión: vuelve a RETENIDO con los intentos en 0.
+  t.mock.timers.setTime(new Date('2099-01-22T15:00:00Z').getTime());
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO', observacion: 'Revisión cerrada' }, 3);
+  assert.equal((await liquidacion()).estado, 'RETENIDO');
+  assert.equal((await actual()).intentos_codigo, 0);
+
+  // 3. Antes de que venza el plazo no se puede pagar ni se adelanta el vencimiento.
+  t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles();
+  assert.equal((await liquidacion()).estado, 'RETENIDO');
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'pago-anticipado' }, 3),
+    (error) => error.getStatus() === 409);
+
+  // 4. Al vencer el plazo, T36 lo deja pendiente de pago a favor del anunciante y el admin paga sin código.
+  t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles();
+  assert.equal((await liquidacion()).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'transferencia-1' }, 3);
+  const pagada = await liquidacion();
+  assert.equal(pagada.estado, 'PAGADO_PROPIETARIO');
+  assert.equal(Number(pagada.importe), 100);
+  assert.equal((await actual()).codigo_validado_en, null);
+});
+
 test('un reclamo no puede sobrescribir una liquidación ya pagada al anunciante', async () => {
   const { reserva } = await escenario('2026-01-01');
   const fecha = new Date();
