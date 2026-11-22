@@ -576,11 +576,7 @@ export class ReservasService
     return this.liquidaciones.proyectarEnReserva(reserva, transaccion);
   }
 
-  conReservaParaReclamo<T>(
-    id: number,
-    crearReclamo: (reserva: Reserva, transaccion: EntityManager) => Promise<T>,
-    motivo = 'Reclamo del inquilino en revisión',
-  ): Promise<T> {
+  conReservaParaReclamo<T>(id: number, crearReclamo: (reserva: Reserva, transaccion: EntityManager) => Promise<T>, motivo = 'Reclamo del inquilino en revisión'): Promise<T> {
     return this.reservaRepository.conTransaccion(async (reservas, transaccion) => {
       const reserva = await reservas.buscarParaReclamo(id);
       if (!reserva) throw new NotFoundException('No se encontró la reserva');
