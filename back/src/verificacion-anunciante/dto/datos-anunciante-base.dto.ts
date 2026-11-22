@@ -7,7 +7,7 @@ import {
   MaxLength,
 } from 'class-validator';
 
-// Campos comunes al alta y a la corrección de datos del solicitante.
+// Base de la corrección de datos. El alta conserva CbuDto para no interferir con T14.
 export class DatosAnuncianteBaseDto {
   @IsNumber()
   idTipoAnunciante: number;
