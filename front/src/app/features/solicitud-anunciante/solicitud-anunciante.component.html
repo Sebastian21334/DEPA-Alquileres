@@ -58,18 +58,20 @@
                   <span class="acct-hint acct-hint--error">Ingresá un teléfono (máximo 20 caracteres).</span>
                 }
               </div>
-              <div class="acct-field acct-span">
-                <label for="alta-cbu">CBU de la cuenta bancaria</label>
-                <input id="alta-cbu" formControlName="cbu" inputmode="numeric" maxlength="22" autocomplete="off" aria-describedby="alta-cbu-ayuda" />
-                <small id="alta-cbu-ayuda">Es obligatorio que la cuenta bancaria esté a nombre del mismo titular de la cuenta en DEPA. Un administrador verificará la titularidad del CBU antes de que puedas usarlo para cobrar.</small>
-                @if (form.controls.cbu.invalid && form.controls.cbu.touched) {
-                  <span class="acct-hint acct-hint--error">Ingresá un CBU de 22 dígitos.</span>
-                }
-                <label><input type="checkbox" formControlName="titularidad_declarada" /> Confirmo que la cuenta bancaria está a mi nombre.</label>
-                @if (form.controls.titularidad_declarada.invalid && form.controls.titularidad_declarada.touched) {
-                  <span class="acct-hint acct-hint--error">Confirmá que sos titular de la cuenta bancaria.</span>
-                }
-              </div>
+              @if (!solicitud()) {
+                <div class="acct-field acct-span">
+                  <label for="alta-cbu">CBU de la cuenta bancaria</label>
+                  <input id="alta-cbu" formControlName="cbu" inputmode="numeric" maxlength="22" autocomplete="off" aria-describedby="alta-cbu-ayuda" />
+                  <small id="alta-cbu-ayuda">Es obligatorio que la cuenta bancaria esté a nombre del mismo titular de la cuenta en DEPA. Un administrador verificará la titularidad del CBU antes de que puedas usarlo para cobrar.</small>
+                  @if (form.controls.cbu.invalid && form.controls.cbu.touched) {
+                    <span class="acct-hint acct-hint--error">Ingresá un CBU de 22 dígitos.</span>
+                  }
+                  <label><input type="checkbox" formControlName="titularidad_declarada" /> Confirmo que la cuenta bancaria está a mi nombre.</label>
+                  @if (form.controls.titularidad_declarada.invalid && form.controls.titularidad_declarada.touched) {
+                    <span class="acct-hint acct-hint--error">Confirmá que sos titular de la cuenta bancaria.</span>
+                  }
+                </div>
+              }
             </div>
             @if (esInmobiliaria()) { <ng-container [ngTemplateOutlet]="datosEmpresa" /> }
             <div class="acct-actions form-actions">
