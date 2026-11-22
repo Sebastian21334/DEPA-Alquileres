@@ -1,6 +1,27 @@
 .notice { display: flex; align-items: center; gap: 0.75rem; }
 .notice button { margin-left: auto; display: grid; border: 0; background: transparent; color: inherit; cursor: pointer; }
 
+.mis-publicaciones-search { display: grid; gap: 0.5rem; }
+.mis-publicaciones-search label { font-size: 0.88rem; font-weight: 700; }
+.mis-publicaciones-search > div { display: flex; gap: 0.5rem; }
+.mis-publicaciones-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+.mis-publicaciones-search input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+@media (max-width: 560px) {
+  .mis-publicaciones-search > div { flex-direction: column; }
+  .mis-publicaciones-search button { min-height: 44px; }
+}
+
 .item { padding: 1rem; transition: opacity 0.15s ease; }
 .item.is-busy { opacity: 0.75; }
 .item__main { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 1.1rem; align-items: center; }

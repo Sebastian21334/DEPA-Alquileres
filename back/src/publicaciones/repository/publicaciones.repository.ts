@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
 import type { EstadoPublicacionAdministracion } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, MoreThan, MoreThanOrEqual, Not, Repository, SelectQueryBuilder } from 'typeorm';
@@ -173,6 +174,55 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       case 'todas':
         break;
     }
+  }
+
+  async buscarMiasPaginadas(idAnunciante: number, consulta: ListarMisPublicacionesDto) {
+    const query = this.repo.createQueryBuilder('publicacion')
+      .leftJoinAndSelect('publicacion.tipoMoneda', 'tipoMoneda')
+      .leftJoinAndSelect('publicacion.modalidad', 'modalidad')
+      .leftJoinAndSelect('publicacion.tipoPropiedad', 'tipoPropiedad')
+      .leftJoinAndSelect('publicacion.provincia', 'provincia')
+      .leftJoinAndSelect('publicacion.ciudad', 'ciudad')
+      .where('publicacion.id_anunciante = :idAnunciante', { idAnunciante })
+      .andWhere('publicacion.eliminada = false')
+      .orderBy('publicacion.fecha_publicacion', 'DESC')
+      .addOrderBy('publicacion.id', 'DESC');
+    if (consulta.q?.trim()) {
+      query.andWhere(
+        "POSITION(:q IN LOWER(CONCAT_WS(' ', publicacion.id, publicacion.titulo, publicacion.descripcion, publicacion.direccion, ciudad.nombre, provincia.nombre))) > 0",
+        { q: consulta.q.trim().toLowerCase() },
+      );
+    }
+    // La cuenta de activas usa los mismos filtros de búsqueda.
+    const activas = await query.clone().andWhere('publicacion.activa = true').getCount();
+    const pagina = await paginar(query, consulta);
+    const ids = pagina.datos.map((publicacion) => publicacion.id);
+    if (ids.length) {
+      const conImagenes = await this.repo.find({
+        where: ids.map((id) => ({ id })),
+        relations: { imagenes: true },
+        order: { imagenes: { orden: 'ASC', id: 'ASC' } },
+      });
+      const porId = new Map(conImagenes.map((publicacion) => [publicacion.id, publicacion]));
+      for (const publicacion of pagina.datos)
+        publicacion.imagenes = porId.get(publicacion.id)?.imagenes ?? [];
+    }
+    return { ...pagina, activas };
+  }
+
+  buscarPapeleraPorAnunciante(idAnunciante: number): Promise<Publicacion[]> {
+    return this.repo.find({
+      where: { eliminada: true, anunciante: { idUsuario: idAnunciante } },
+      relations: {
+        tipoPropiedad: true,
+        ciudad: true,
+        provincia: true,
+        modalidad: true,
+        tipoMoneda: true,
+        imagenes: true,
+      },
+      order: { fecha_publicacion: 'DESC', id: 'DESC', imagenes: { orden: 'ASC', id: 'ASC' } },
+    });
   }
 
   buscarTodasActivas(): Promise<Publicacion[]> {

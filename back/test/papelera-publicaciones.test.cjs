@@ -265,6 +265,62 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     assert.deepEqual(await estadoDe(60), { activa: false, eliminada: false, motivo_baja_admin: null });
     assert.equal(correos.length, 5);
   });
+
+  await t.test('mis publicaciones: pagina y busca las vigentes y sirve la papelera simple', async () => {
+    const mias = async (consulta, id = 2) => {
+      const respuesta = await request(`/mias/paginadas${consulta}`, id);
+      assert.equal(respuesta.status, 200);
+      return respuesta.json();
+    };
+    const papeleraDe = async (id = 2) => {
+      const respuesta = await request('/mias/papelera', id);
+      assert.equal(respuesta.status, 200);
+      return respuesta.json();
+    };
+    const ids = (pagina) => pagina.datos.map((publicacion) => publicacion.id);
+    const idsPapelera = (lista) => lista.map((publicacion) => publicacion.id);
+
+    const defecto = await mias('');
+    assert.equal(defecto.pagina, 1);
+    assert.equal(defecto.limite, 6);
+    assert.equal(defecto.total, 5);
+    assert.equal(defecto.totalPaginas, 1);
+    assert.equal(defecto.activas, 1);
+    assert.deepEqual(ids(defecto), [60, 50, 40, 30, 10]);
+
+    const primera = await mias('?limite=2&pagina=1');
+    assert.deepEqual(ids(primera), [60, 50]);
+    assert.equal(primera.total, 5);
+    assert.equal(primera.totalPaginas, 3);
+    assert.equal(primera.activas, 1);
+    assert.deepEqual(ids(await mias('?limite=2&pagina=2')), [40, 30]);
+    assert.deepEqual(ids(await mias('?limite=2&pagina=3')), [10]);
+    const fuera = await mias('?limite=2&pagina=99');
+    assert.equal(fuera.pagina, 3);
+    assert.deepEqual(ids(fuera), [10]);
+
+    const busqueda = await mias('?q=foto&limite=10');
+    assert.deepEqual(ids(busqueda), [60, 50, 40, 30]);
+    assert.equal(busqueda.total, 4);
+    assert.equal(busqueda.activas, 1);
+    assert.deepEqual(ids(await mias('?q=Calle%207&limite=10')), [50]);
+
+    assert.deepEqual(idsPapelera(await papeleraDe(2)), [70]);
+    assert.deepEqual(idsPapelera(await papeleraDe(3)), [20]);
+    const otro = await mias('?limite=10', 3);
+    assert.deepEqual(ids(otro), []);
+    assert.equal(otro.total, 0);
+    assert.equal(otro.activas, 0);
+
+    assert.equal((await request('/mias/paginadas', undefined)).status, 401);
+    assert.equal((await request('/mias/paginadas', 1)).status, 403);
+    assert.equal((await request('/mias/paginadas?estado=vigentes', 2)).status, 400);
+    assert.equal((await request('/mias/paginadas?pagina=0', 2)).status, 400);
+    assert.equal((await request('/mias/paginadas?limite=101', 2)).status, 400);
+    assert.equal((await request(`/mias/paginadas?q=${'a'.repeat(201)}`, 2)).status, 400);
+    assert.equal((await request('/mias/papelera', undefined)).status, 401);
+    assert.equal((await request('/mias/papelera', 1)).status, 403);
+  });
 });
 
 test('subir imágenes no reactiva una publicación pausada que ya tenía fotos', async () => {

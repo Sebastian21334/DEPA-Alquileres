@@ -1,5 +1,6 @@
 import { ListarPublicacionesDto } from '../dto/listar-publicaciones.dto';
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guard';
 import {
   Controller,
@@ -82,6 +83,18 @@ export class PublicacionesController {
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
   listarPropias(@Req() req: AnuncianteRequest) {
     return this.publicacionesService.listarPropias(req.anunciante);
+  }
+
+  @Get('mias/paginadas')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  listarMiasPaginadas(@Req() req: AnuncianteRequest, @Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) consulta: ListarMisPublicacionesDto) {
+    return this.publicacionesService.listarMiasPaginadas(req.anunciante, consulta);
+  }
+
+  @Get('mias/papelera')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  listarPapelera(@Req() req: AnuncianteRequest) {
+    return this.publicacionesService.listarPapelera(req.anunciante);
   }
 
   @Post(':id/visualizacion')

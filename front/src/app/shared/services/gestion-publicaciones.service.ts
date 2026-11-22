@@ -1,9 +1,18 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { Imagen } from '../models/imagen.model';
+
+export interface PaginaMisPublicaciones {
+  datos: Publicacion[];
+  pagina: number;
+  limite: number;
+  total: number;
+  totalPaginas: number;
+  activas: number;
+}
 
 export interface PagoPublicacion {
   id: string;
@@ -27,9 +36,15 @@ export class GestionPublicacionesService {
     return this.http.get<Publicacion[]>(`${this.api}/publicaciones/anunciante/${idAnunciante}`);
   }
 
-  /** Lista privada que incluye la papelera del anunciante autenticado. */
-  listarConPapelera(): Observable<Publicacion[]> {
-    return this.http.get<Publicacion[]>(`${this.api}/publicaciones/mias`);
+  /** Lista principal del dueño: no eliminadas, paginadas y con búsqueda. */
+  listarMiasPaginadas(pagina = 1, limite = 6, q = ''): Observable<PaginaMisPublicaciones> {
+    const params = new HttpParams().set('pagina', pagina).set('limite', limite).set('q', q);
+    return this.http.get<PaginaMisPublicaciones>(`${this.api}/publicaciones/mias/paginadas`, { params });
+  }
+
+  /** Papelera simple del dueño: sin paginación ni búsqueda. */
+  listarPapelera(): Observable<Publicacion[]> {
+    return this.http.get<Publicacion[]>(`${this.api}/publicaciones/mias/papelera`);
   }
 
   cambiarActividad(id: number, activa: boolean): Observable<Publicacion> {
