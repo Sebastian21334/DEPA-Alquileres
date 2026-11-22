@@ -67,9 +67,21 @@ export function puedeReprogramar(reserva: Reserva): boolean {
 }
 
 export function puedeConsultarCodigo(reserva: Reserva): boolean {
-  return estadiaActiva(reserva) && !reserva.codigo_validado_en;
+  return (estadiaActiva(reserva) || ingresoEnPlazo(reserva)) && !reserva.codigo_validado_en;
 }
 
-export function puedeValidarCodigo(reserva: Reserva): boolean {
-  return reserva.estado_estadia === 'PENDIENTE_INGRESO' && reserva.estado_liquidacion !== 'EN_REVISION';
+/** Solo los datos que decide la carga del código, para usarla también desde un reclamo. */
+type EstadoCodigo = Partial<Pick<Reserva, 'estado_estadia' | 'estado_liquidacion' | 'fecha_fin'>>;
+
+export function puedeValidarCodigo(reserva: EstadoCodigo): boolean {
+  return (reserva.estado_estadia === 'PENDIENTE_INGRESO' || ingresoEnPlazo(reserva)) && reserva.estado_liquidacion !== 'EN_REVISION';
+}
+
+function ingresoEnPlazo(reserva: EstadoCodigo): boolean {
+  if (reserva.estado_estadia !== 'INGRESO_NO_VERIFICADO' || reserva.estado_liquidacion !== 'RETENIDO' || !reserva.fecha_fin) return false;
+  const vencimiento = new Date(`${reserva.fecha_fin}T00:00:00Z`);
+  if (!Number.isFinite(vencimiento.getTime())) return false;
+  vencimiento.setUTCDate(vencimiento.getUTCDate() + 5);
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  return hoy < vencimiento.toISOString().slice(0, 10);
 }

@@ -46,6 +46,9 @@ export interface AdminBloqueo {
     accesoLimitado?: boolean;
     apelacion?: { texto: string; fecha: string };
     respuesta?: { texto: string; fecha: string; administradorId: number };
+    mensajes?: { id: string; autor: 'usuario' | 'administracion'; texto: string; fecha: string; imagen?: string }[];
+    fechaDesbloqueo?: string | null;
+    desbloqueadoPorId?: number | null;
   };
 }
 
@@ -83,7 +86,7 @@ export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
-export type AdminSettlement = Reserva;
+export type AdminSettlement = Reserva & { fecha_disponible_pago: string | null };
 
 export interface AdminPagoLiquidacion {
   id: string;
@@ -246,8 +249,16 @@ export class AdminService {
     return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/bloqueados`);
   }
 
-  responderApelacion(id: number, bloqueoId: string, texto: string) {
-    return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/${id}/bloqueo/responder`, { bloqueoId, texto });
+  listarHistorialBloqueos() {
+    return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/historial-bloqueos`);
+  }
+
+  responderApelacion(id: number, bloqueoId: string, texto: string, imagen?: File | null) {
+    const datos = new FormData();
+    datos.append('bloqueoId', bloqueoId);
+    datos.append('texto', texto);
+    if (imagen) datos.append('imagen', imagen);
+    return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/${id}/bloqueo/mensajes`, datos);
   }
   cambiarRol(id: number, nombreRol: string) {
     return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });

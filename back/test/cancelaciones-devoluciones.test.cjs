@@ -18,6 +18,7 @@ const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.ser
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
+const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 const { SolicitudCancelacion } = require('../dist/cancelaciones/entity/solicitud-cancelacion.entity');
@@ -97,6 +98,140 @@ async function escenario(fechaInicio = '2099-01-10') {
   });
   return { reserva, pago, crearReembolso };
 }
+
+test('el vencimiento se revierte ante un error y se puede reintentar sin validar el código', async () => {
+  const { reserva } = await escenario('2026-11-10');
+  await source.getRepository(Reserva).update(reserva.id, { fecha_fin: '2026-11-16' });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  const leer = () => source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-20T12:00:00Z'));
+  assert.equal((await leer()).estado, 'RETENIDO');
+  const registrar = liquidaciones.registrarVencimientoIngreso.bind(liquidaciones);
+  liquidaciones.registrarVencimientoIngreso = async (...args) => { await registrar(...args); throw new Error('fallo simulado'); };
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal((await leer()).estado, 'RETENIDO');
+  liquidaciones.registrarVencimientoIngreso = registrar;
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal((await leer()).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).codigo_validado_en, null);
+  assert.equal(await source.getRepository(Liquidacion).count(), 1);
+});
+
+test('un reclamo no puede sobrescribir una liquidación ya pagada al anunciante', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  const fecha = new Date();
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(fecha);
+  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: '2026-01-01', fecha_fin: hoy });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PAGADO_PROPIETARIO', importe: 100, moneda: 'ARS' });
+  await assert.rejects(
+    reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 2),
+    /Solo el Inquilino/,
+  );
+  await assert.rejects(
+    reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1),
+    /liquidación de esta reserva ya fue resuelta/i,
+  );
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(liquidacion.estado, 'PAGADO_PROPIETARIO');
+  assert.equal(Number(liquidacion.importe), 100);
+  assert.equal(await source.getRepository(Reclamo).count(), 0);
+});
+
+test('se puede reclamar antes del vencimiento y el reclamo congela la liquidación', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T02:59:59Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'EN_REVISION');
+});
+
+test('el reclamo vence al comienzo del quinto día después del fin de la estadía', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T03:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await assert.rejects(reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1), /plazo para reclamar terminó el 24\/01\/2099/i);
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'RETENIDO');
+  assert.equal(await source.getRepository(Reclamo).count(), 0);
+});
+
+test('un reclamo abierto mantiene la liquidación en revisión incluso después del vencimiento', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'EN_REVISION');
+});
+
+test('administración y el vencimiento no liberan una reserva con reclamo abierto', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /reclamo abierto/i);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PENDIENTE_PAGO_PROPIETARIO' }, 3), /reclamo abierto/i);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /reclamo abierto/i);
+  await source.getRepository(Liquidacion).update({ reserva: { id: reserva.id } }, { estado: 'RETENIDO' });
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'RETENIDO');
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+});
+
+test('el reporte anterior respeta el plazo y la identidad del inquilino', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await assert.rejects(reservas.reportarProblema(reserva.id, 'Problema', 2), /Solo el inquilino/);
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await assert.rejects(reservas.reportarProblema(reserva.id, 'Problema', 1), /plazo de reclamos/);
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'RETENIDO');
+});
+
+test('una estadía sin código vence y permite registrar el pago sin marcar el ingreso como validado', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T03:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos);
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }, 3);
+  const actual = await reservas.obtenerReserva(reserva.id);
+  assert.equal(actual.estado_liquidacion, 'PAGADO_PROPIETARIO');
+  assert.equal(actual.codigo_validado_en, null);
+  assert.equal(reservas.prepararRespuesta(actual).estado_estadia, 'INGRESO_NO_VERIFICADO');
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(Number(liquidacion.importe), 100);
+  assert.equal(liquidacion.referencia, 'pago-prueba');
+});
+
+test('un reclamo en una estadía con ingreso validado bloquea el pago hasta resolverse y vencer el plazo', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-15T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2);
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), /pendiente|revisión/i);
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), /cinco días/i);
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'transferencia' }, 3);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PAGADO_PROPIETARIO');
+});
 
 test('la migración de estados por ámbito es repetible y conserva reservas y pagos', async () => {
   const { reserva, pago } = await escenario();
@@ -438,7 +573,7 @@ test('desde la medianoche argentina del ingreso se bloquea al inquilino aunque n
   assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
 });
 
-for (const dias of [7, 1, 0, -1]) {
+for (const dias of [7, 1]) {
   test(`el anunciante puede cancelar con ingreso en ${dias} días y devuelve el 100 % antes de validar el código`, async () => {
     const { reserva } = await escenario(fechaEnDias(dias));
     await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
@@ -463,32 +598,42 @@ for (const dias of [7, 1, 0, -1]) {
   });
 }
 
-test('el anunciante conserva la cancelación sin código cuando pasaron las fechas de la estadía', async () => {
+for (const dias of [0, -1]) {
+  test(`el anunciante no puede cancelar con el ingreso previsto hace ${-dias} días`, async () => {
+    const { reserva } = await escenario(fechaEnDias(dias));
+    const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 2);
+    assert.match(condiciones.motivoBloqueo, /Desde la fecha de ingreso/);
+    await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'No se concretó el ingreso', aceptaTerminos: true }, 2), { status: 400 });
+    assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
+  });
+}
+
+test('el anunciante no puede cancelar una vez finalizada la estadía sin código', async () => {
   const { reserva } = await escenario(fechaEnDias(-10));
   await source.getRepository(Reserva).update(reserva.id, { fecha_fin: fechaEnDias(-1) });
   assert.equal((await reservas.buscarPorId(reserva.id, 2)).estado_estadia, 'INGRESO_NO_VERIFICADO');
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'No se concretó el ingreso', aceptaTerminos: true }, 2);
-  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
-  assert.equal(Number(resultado.reembolso.importe), 100);
+  await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'No se concretó el ingreso', aceptaTerminos: true }, 2), { status: 400 });
+  assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
 });
 
-test('una solicitud del anunciante no vence al llegar la fecha de ingreso', async (t) => {
+test('una solicitud del anunciante pendiente vence al llegar la fecha de ingreso', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
   const { reserva } = await escenario();
   const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
   t.mock.timers.setTime(new Date('2099-01-11T15:00:00Z').getTime());
-  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
-  assert.equal(resultado.solicitud.estado, 'APROBADA');
-  assert.equal(Number(resultado.reembolso.importe), 100);
+  await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /estadía comenzó.*quedó vencida/);
+  assert.equal((await solicitudActual(solicitud.id)).estado, 'VENCIDA');
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
 });
 
 test('el código validado impide nuevas solicitudes del anunciante y vence una pendiente', async () => {
-  const { reserva } = await escenario(fechaEnDias(0));
+  const { reserva } = await escenario(fechaEnDias(1));
   const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaEnDias(0) });
   await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
   await reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2);
   const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 2);
-  assert.match(condiciones.motivoBloqueo, /ingreso ya validado/);
+  assert.match(condiciones.motivoBloqueo, /Desde la fecha de ingreso/);
   await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /código de ingreso fue validado.*quedó vencida/);
   assert.equal((await solicitudActual(solicitud.id)).estado, 'VENCIDA');
   await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'Segundo pedido de cancelación', aceptaTerminos: true }, 2), { status: 400 });
@@ -497,18 +642,20 @@ test('el código validado impide nuevas solicitudes del anunciante y vence una p
 });
 
 test('una cancelación del anunciante aprobada impide validar el código mientras se gestiona el reembolso', async () => {
-  const { reserva } = await escenario(fechaEnDias(0));
+  const { reserva } = await escenario(fechaEnDias(1));
   await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
   const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
   await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaEnDias(0) });
   await assert.rejects(reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2), /cancelación aprobada/);
   assert.equal((await reservas.obtenerReserva(reserva.id)).codigo_validado_en, null);
 });
 
 test('si falla liberar el calendario después del ingreso, se reintenta sin duplicar la devolución del anunciante', async () => {
-  const { reserva } = await escenario(fechaEnDias(-1));
+  const { reserva } = await escenario(fechaEnDias(1));
   const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
   const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaEnDias(-1) });
   let movimientos = 0;
   pasarela.reembolsar = async () => { movimientos += 1; return { id: 'devolucion-anunciante', status: 'approved', amount: 100 }; };
   disponibilidad.liberarReserva = async () => { throw new Error('Fallo de calendario después del ingreso'); };
@@ -817,7 +964,7 @@ test('T47: se puede reclamar durante la estadía sin código, con el código val
   assert.equal(actual.estado_liquidacion, 'RETENIDO');
 });
 
-test('T47: el reclamo respeta el período de la estadía y los 7 días posteriores', async (t) => {
+test('T47: el reclamo respeta el período de la estadía hasta el día anterior al pago (T35)', async (t) => {
   const reserva = await reservaParaReclamo({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' });
   const vencida = await reservaParaReclamo({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' });
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
@@ -826,12 +973,13 @@ test('T47: el reclamo respeta el período de la estadía y los 7 días posterior
     assert.match(error.message, /Podés reclamar desde el 10\/01\/2099/);
     return true;
   });
-  t.mock.timers.setTime(new Date('2099-01-27T15:00:00Z').getTime());
+  // Fin 20/01: se puede reclamar hasta el 24/01; el pago se habilita el 25/01.
+  t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
   assert.equal((await reclamoAbierto(reserva)).estado, 'ABIERTO');
-  t.mock.timers.setTime(new Date('2099-01-28T15:00:00Z').getTime());
+  t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
   await assert.rejects(reclamoAbierto(vencida), (error) => {
     assert.equal(error.getStatus(), 400);
-    assert.match(error.message, /venció el 27\/01\/2099, 7 días después/);
+    assert.match(error.message, /terminó el 24\/01\/2099, antes de que se habilite el pago/);
     return true;
   });
 });
@@ -840,7 +988,7 @@ test('T47: no se abre un reclamo sobre una liquidación ya pagada y no se pisa s
   const reserva = await reservaParaReclamo({ codigo_validado_en: new Date() }, { estado: 'PAGADO_PROPIETARIO' });
   await assert.rejects(reclamoAbierto(reserva), (error) => {
     assert.equal(error.getStatus(), 409);
-    assert.match(error.message, /ya está cerrada/);
+    assert.match(error.message, /ya fue resuelta/);
     return true;
   });
   assert.equal((await liquidacionDe(reserva)).estado, 'PAGADO_PROPIETARIO');
@@ -850,7 +998,7 @@ test('T47: no se abre un reclamo sobre una liquidación ya pagada y no se pisa s
 test('T47: la respuesta de la reserva informa el fin del plazo de reclamos', async () => {
   const reserva = await reservaParaReclamo({ fecha_fin: '2099-01-28' });
   const respuesta = reservas.prepararRespuesta(await reservas.obtenerReserva(reserva.id));
-  assert.equal(respuesta.fin_plazo_reclamo, '2099-02-04');
+  assert.equal(respuesta.fin_plazo_reclamo, '2099-02-01');
   assert.equal(reservas.finPlazoReclamo({ ...reserva, cancelada: true }), null);
 });
 
@@ -1059,6 +1207,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
   const request = require('supertest');
   const { AuthModule } = require('../dist/auth/auth.module');
   const { OperacionesReservaModule } = require('../dist/operaciones-reserva/operaciones-reserva.module');
+  const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
   const { CancelacionesModule } = require('../dist/cancelaciones/cancelaciones.module');
   const { ReclamosModule } = require('../dist/reclamos/reclamos.module');
   const { DisputasService } = require('../dist/disputas/service/disputas.service');
@@ -1077,6 +1226,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     return ajustes[clave];
   } };
   const correos = [];
+  let fallaAvisoAnunciante = false;
   const modulo = await Test.createTestingModule({ imports: [
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
     TypeOrmModule.forRoot(source.options), AuthModule, OperacionesReservaModule, CancelacionesModule, ReclamosModule,
@@ -1084,6 +1234,10 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     .overrideProvider(DataSource).useValue(source)
     .overrideProvider(ConfigService).useValue(config)
     .overrideProvider(CLIENTE_CORREO).useValue({ beginSend: async (mensaje) => {
+      if (fallaAvisoAnunciante && mensaje.content.subject === 'Liquidación disponible para pago manual' &&
+          mensaje.recipients.to[0].address === 'usuario2@example.invalid') {
+        throw new Error('Fallo simulado para el anunciante');
+      }
       correos.push(mensaje);
       return { pollUntilDone: async () => ({ status: 'Succeeded' }) };
     } })
@@ -1180,26 +1334,62 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.equal(avisosIngreso.length, 1);
     assert.match(avisosIngreso[0].content.html, /src="cid:logo-depa"/);
     assert.equal(avisosIngreso[0].content.html.includes(acceso.codigo), false);
-    const lista = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
-    assert.equal(lista.body.find(fila => fila.id === ingreso.id).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
     const detalle = await request(http).get(`/reservas/${ingreso.id}`).set('Authorization', tenant).expect(200);
     assert.equal(detalle.body.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
     const historialAnunciante = '/reservas/liquidaciones/publicacion/1';
     await request(http).get(historialAnunciante).set('Authorization', anunciante).expect(200, []);
     const consultaCbu = `/reservas/${ingreso.id}/liquidacion/cbu`;
     await request(http).get(consultaCbu).set('Authorization', anunciante).expect(403);
-    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu: null });
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO' }).expect(409);
     const cbu = '0010000700000000000017';
     await source.query('UPDATE anunciante SET cbu_validado = $1 WHERE id_usuario = 2', [cbu]);
+    const operacionesLiquidacion = app.get(OperacionesLiquidacionService);
+    const correosDeLiquidacion = () => correos.filter(({ content }) => content.subject === 'Liquidación disponible para pago manual');
+    const configurarFin = async (dias) => {
+      const fin = new Date(`${hoy}T00:00:00Z`);
+      fin.setUTCDate(fin.getUTCDate() - dias);
+      const fecha = fin.toISOString().slice(0, 10);
+      await source.getRepository(Reserva).update(ingreso.id, {
+        fecha_inicio: fecha, fecha_fin: fecha, codigo_validado_en: fin, finalizada: true,
+      });
+    };
+    await configurarFin(4);
+    const listaAntes = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
+    const liquidacionEnEspera = listaAntes.body.find(fila => fila.id === ingreso.id);
+    assert.equal(liquidacionEnEspera.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+    const fechaHabilitacion = new Date(`${hoy}T00:00:00Z`);
+    fechaHabilitacion.setUTCDate(fechaHabilitacion.getUTCDate() + 1);
+    assert.equal(liquidacionEnEspera.fecha_disponible_pago, fechaHabilitacion.toISOString().slice(0, 10));
+    await request(http).get(consultaCbu).set('Authorization', admin).expect(409);
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin)
+      .send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-anticipado' }).expect(409);
+    await operacionesLiquidacion.avisarLiquidacionesDisponibles();
+    assert.equal(correosDeLiquidacion().length, 0);
+
+    await configurarFin(5);
+    const lista = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
+    assert.equal(lista.body.find(fila => fila.id === ingreso.id).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+    fallaAvisoAnunciante = true;
+    await operacionesLiquidacion.avisarLiquidacionesDisponibles();
+    assert.deepEqual(correosDeLiquidacion().map(aviso => aviso.recipients.to[0].address).sort(), ['usuario3@example.invalid', 'usuario4@example.invalid']);
+    const repositorioLiquidaciones = source.getRepository(Liquidacion);
+    const primerAviso = await repositorioLiquidaciones.findOneByOrFail({ reserva: { id: ingreso.id } });
+    assert.ok(primerAviso.aviso_pago_admin_en);
+    assert.equal(primerAviso.aviso_pago_anunciante_en, null);
+    fallaAvisoAnunciante = false;
+    await Promise.all([
+      operacionesLiquidacion.avisarLiquidacionesDisponibles(), operacionesLiquidacion.avisarLiquidacionesDisponibles(),
+    ]);
+    await operacionesLiquidacion.avisarLiquidacionesDisponibles();
+    assert.deepEqual(correosDeLiquidacion().map(aviso => aviso.recipients.to[0].address).sort(), ['usuario2@example.invalid', 'usuario3@example.invalid', 'usuario4@example.invalid']);
+    await db.exec(migracion('20261121-avisos-liquidacion-disponible.sql'));
+    const avisosEnviados = await repositorioLiquidaciones.findOneByOrFail({ reserva: { id: ingreso.id } });
+    assert.deepEqual(avisosEnviados.aviso_pago_admin_en, primerAviso.aviso_pago_admin_en);
+    assert.ok(avisosEnviados.aviso_pago_anunciante_en);
     await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu });
-    // T47: el pago al anunciante espera a que cierre el plazo de reclamos.
-    const fechas = require('../dist/common/utils/fechas');
-    assert.equal(lista.body.find(fila => fila.id === ingreso.id).fin_plazo_reclamo, fechas.sumarDiasCalendario(hoy, 7));
-    const retenido = await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }).expect(409);
-    assert.match(retenido.body.message, /plazo de reclamos/);
-    const salidaVencida = fechas.sumarDiasCalendario(hoy, -8);
-    await source.query('UPDATE reserva SET fecha_inicio = $1, fecha_fin = $1 WHERE id_reserva = $2', [salidaVencida, ingreso.id]);
+    // T47: el plazo de reclamos termina el día anterior a que se habilite el pago (T35).
+    const { sumarDiasCalendario } = require('../dist/common/utils/fechas');
+    const filaPagable = lista.body.find(fila => fila.id === ingreso.id);
+    assert.equal(filaPagable.fin_plazo_reclamo, sumarDiasCalendario(filaPagable.fecha_disponible_pago, -1));
     await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({
       estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
     }).expect(200);
@@ -1211,6 +1401,9 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const [{ id: idPago, fecha: fechaPago }] = historialPropio;
     assert.ok(idPago);
     assert.ok(Number.isFinite(Date.parse(fechaPago)));
+    const historialAdministracion = await request(http).get('/reservas/liquidaciones/administracion/historial')
+      .set('Authorization', admin).expect(200);
+    assert.ok(historialAdministracion.body.some(item => item.reservaId === ingreso.id));
     assert.deepEqual(historialPropio, [{
       id: idPago, reservaId: ingreso.id, fecha: fechaPago, importe: 100, moneda: 'ARS',
       referencia: 'pago-prueba', observacion: 'Transferencia acreditada',

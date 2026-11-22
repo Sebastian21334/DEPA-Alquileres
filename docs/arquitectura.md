@@ -141,7 +141,8 @@ Ciclo principal:
 
 - Al aprobarse el pago se genera el código de alojamiento y la liquidación queda `RETENIDO`.
 - El inquilino consulta el código; el anunciante lo valida durante la estadía y una sola vez. La comparación usa `timingSafeEqual`.
-- Un código correcto pasa la liquidación a `PENDIENTE_PAGO_PROPIETARIO`. Cinco intentos incorrectos la dejan en `EN_REVISION`.
+- Un código correcto pasa la liquidación a `PENDIENTE_PAGO_PROPIETARIO`. El pago manual queda habilitado desde el quinto día corrido posterior al fin de la estadía, según la fecha de Argentina. Cinco intentos incorrectos dejan la liquidación en `EN_REVISION`.
+- El backend comprueba al iniciar y cada minuto qué liquidaciones están disponibles. Envía un correo a Administración y otro al anunciante cuando hay un CBU validado y la liquidación cumple las condiciones de pago. Registra los avisos enviados y reintenta los pendientes.
 - El inquilino puede reportar un problema dentro del período; eso congela la liquidación en `EN_REVISION`.
 - El administrador resuelve entre `RETENIDO`, `PENDIENTE_PAGO_PROPIETARIO`, `EN_REVISION`, `PAGADO_PROPIETARIO`, `DEVUELTO_INQUILINO` y `DEVUELTO_PARCIAL_INQUILINO`. El pago al propietario es un registro manual con referencia; no hay transferencia automática.
 

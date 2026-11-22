@@ -41,11 +41,54 @@
 }
 .cancellation-approval-dialog h2 { font-size: 1.35rem; font-weight: 700; }
 .cancellation-approval-dialog textarea:focus-visible { outline: 2px solid #146c43; outline-offset: 2px; }
-.blocked-users { display: grid; gap: 12px; padding: 16px; }
-.blocked-user { display: grid; justify-items: start; gap: 10px; padding: 16px; border: 1px solid #dfe6ea; border-radius: 10px; }
-.blocked-user p { white-space: pre-wrap; overflow-wrap: anywhere; }
-.blocked-user p strong { display: block; }
-.blocked-user .block-form { width: min(100%, 560px); }
+.appeals-panel { color: #122441; }
+.appeals-panel__title { position: relative; padding-left: 32px; }
+.appeals-panel__title::before { position: absolute; left: 20px; top: 24px; width: 4px; height: 26px; border-radius: 4px; background: #ff8900; content: ''; }
+.appeals-tabs { display: flex; gap: 6px; padding: 12px 16px 0; }
+.appeals-tabs button { padding: 9px 14px; border: 0; border-radius: 7px; background: #f1f4f9; color: #52617a; font: inherit; font-size: .84rem; font-weight: 700; cursor: pointer; }
+.appeals-tabs button.active { background: #e7efff; color: #174ac4; }
+.appeals-tabs button:focus-visible { outline: 2px solid #5276ff; outline-offset: 2px; }
+.blocked-users { display: grid; gap: 14px; padding: 16px; }
+.blocked-user { min-width: 0; overflow: hidden; border: 1px solid #d7e0ee; border-radius: 10px; background: #fff; }
+.blocked-user p { margin: 0; overflow-wrap: anywhere; }
+.blocked-user__header { display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: #f3f6fb; }
+.blocked-user__avatar { display: grid; flex: none; place-items: center; width: 48px; height: 48px; border-radius: 50%; background: #ffe9dc; color: #153154; }
+.blocked-user__identity { min-width: 0; flex: 1; padding-left: 16px; border-left: 1px solid #c6d2e2; }
+.blocked-user__identity h3 { margin: 0; font-size: 1rem; line-height: 1.25; overflow-wrap: anywhere; }
+.blocked-user__identity p { margin-top: 3px; font-size: .82rem; }
+.blocked-user__status { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid #ffe0ba; border-radius: 99px; background: #fff3df; color: #ed7100; font-size: .78rem; font-weight: 700; }
+.blocked-user__status--closed { border-color: #cbe9d6; background: #eaf8ef; color: #28734b; }
+.blocked-user__history-date { margin: 0 18px 14px !important; color: #687991; font-size: .82rem; }
+.blocked-user__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 18px; }
+.blocked-user__details > div { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 0 18px; }
+.blocked-user__details > div:first-child { padding-left: 0; }
+.blocked-user__details > div + div { border-left: 1px solid #d6dfed; }
+.blocked-user__details svg { flex: none; color: #78889e; }
+.blocked-user__details p { font-size: .88rem; white-space: pre-wrap; }
+.blocked-user__details strong { display: block; margin-bottom: 4px; color: #687991; font-size: .66rem; font-weight: 700; text-transform: uppercase; }
+.blocked-user__notice { margin: 0 18px !important; padding: 12px 0; border-top: 1px solid #e8edf4; color: #687991; font-size: .82rem; }
+.blocked-user__conversation { margin: 0 14px 14px; --conversation-height: 230px; }
+.blocked-user__composer { display: flex; align-items: center; gap: 8px; padding: 10px; border-top: 1px solid #d5deee; background: #f8faff; }
+.blocked-user__composer textarea { flex: 1; min-width: 0; min-height: 40px; max-height: 130px; padding: 9px 12px; resize: vertical; border: 1px solid #c3d0e2; border-radius: 7px; background: #fff; color: #122441; font: inherit; font-size: .88rem; }
+.blocked-user__composer button, .blocked-user__attach { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 14px; border: 0; border-radius: 7px; font: inherit; font-size: .85rem; font-weight: 700; cursor: pointer; }
+.blocked-user__send { background: #5276ff; color: #fff; }
+.blocked-user__cancel { background: #e7ebf0; color: #35445d; }
+.blocked-user__attach { position: relative; padding: 0 10px; color: #58708e; background: #eaf0fa; }
+.blocked-user__attach input, .blocked-user__sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.blocked-user__attach:focus-within, .blocked-user__composer :focus-visible { outline: 2px solid #5276ff; outline-offset: 2px; }
+.blocked-user__composer button:disabled { opacity: .55; cursor: default; }
+.blocked-user__attachment { padding: 0 12px 10px; color: #52607a; font-size: .8rem; }
+.blocked-user__attachment button { border: 0; background: none; color: #1648f5; cursor: pointer; }
+@media (max-width: 620px) {
+  .blocked-user__header { flex-wrap: wrap; gap: 10px; }
+  .blocked-user__identity { padding-left: 10px; }
+  .blocked-user__status { margin-left: 58px; }
+  .blocked-user__details { grid-template-columns: 1fr; gap: 14px; }
+  .blocked-user__details > div { padding: 0; }
+  .blocked-user__details > div + div { border-left: 0; }
+  .blocked-user__composer { flex-wrap: wrap; }
+  .blocked-user__composer textarea { flex-basis: calc(100% - 50px); }
+}
 
 .management {
   overflow: visible;
@@ -509,9 +552,7 @@ select {
 .claim-card > .actions { margin-top: 0; }
 .claim-card .button--ghost { border: 1px solid #10233f; color: #10233f; }
 .button--resolve-claim { background: #081b38; color: #fff; }
-.settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }
-.settlement-hold { flex-basis: 100%; margin: 0; color: #74470a; font-size: .85rem; text-align: right; }
-.alert {
+.settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }.alert {
   margin: 18px 0;
   padding: 12px 16px;
   border-radius: 9px;

@@ -15,7 +15,6 @@ import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { fechaArgentina, fechaParaMostrar } from '../../common/utils/fechas';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
-import { DIAS_PLAZO_RECLAMO } from '../../reservas-consulta/service/reserva-estado.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
@@ -49,6 +48,13 @@ export class ReclamosService {
 
   constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
+  tieneReclamoAbierto(idReserva: number, transaccion: EntityManager): Promise<boolean> {
+    return this.reclamos.enTransaccion(transaccion).existeAbierto(idReserva, [
+      this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
+      this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION'),
+    ]);
+  }
+
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
     const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
       const reclamos = this.reclamos.enTransaccion(transaccion);
@@ -56,6 +62,8 @@ export class ReclamosService {
         throw new ForbiddenException(
           'Solo el Inquilino de la reserva puede iniciar un reclamo',
         );
+      if (this.reservas.liquidacionResuelta(reserva))
+        throw new ConflictException('La liquidación de esta reserva ya fue resuelta');
       if (reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))
         throw new ConflictException('La reserva no tiene un pago aprobado');
       if (reserva.cancelada)
@@ -69,8 +77,6 @@ export class ReclamosService {
 
       if (!reserva.usuario)
         throw new ConflictException('La reserva no tiene un Inquilino asociado');
-      if (this.reservas.liquidacionResuelta(reserva))
-        throw new ConflictException('La liquidación de esta reserva ya está cerrada; no se puede abrir un reclamo');
 
       // Se puede reclamar con el código validado, sin validar o bloqueado.
       this.validarPeriodoReclamo(reserva);
@@ -353,7 +359,7 @@ export class ReclamosService {
     const finPlazo = this.reservas.finPlazoReclamo(reserva);
     if (finPlazo && hoy > finPlazo)
       throw new BadRequestException(
-        `El plazo para reclamar venció el ${fechaParaMostrar(finPlazo)}, ${DIAS_PLAZO_RECLAMO} días después del fin de la estadía.`,
+        `El plazo para reclamar terminó el ${fechaParaMostrar(finPlazo)}, antes de que se habilite el pago al anunciante.`,
       );
   }
 }

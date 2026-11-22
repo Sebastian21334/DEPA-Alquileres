@@ -28,4 +28,8 @@ export class AlmacenamientoService {
   eliminarDocumentoPropio(url: string): Promise<void> {
     return this.archivosRepo.eliminarDocumentoPropio(url);
   }
+
+  eliminarArchivo(contenedor: ContenedorArchivos, url: string): Promise<void> {
+    return this.archivosRepo.eliminarArchivo(contenedor, url);
+  }
 }

@@ -1,7 +1,7 @@
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
-import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, linkedSignal, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, finalize, forkJoin, of, Subscription, switchMap } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -56,6 +56,41 @@ export class MisReservasComponent {
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
+  protected readonly filtroEstadoRecibidas = signal('todos');
+  protected readonly filtroPublicacionRecibidas = signal('');
+  protected readonly filtroDesdeRecibidas = signal('');
+  protected readonly filtroHastaRecibidas = signal('');
+  protected readonly recibidasFiltradas = computed(() => {
+    const estado = this.filtroEstadoRecibidas();
+    const busqueda = this.filtroPublicacionRecibidas().trim().toLocaleLowerCase('es-AR');
+    const desde = this.filtroDesdeRecibidas();
+    const hasta = this.filtroHastaRecibidas();
+    return this.recibidas().filter(reserva => {
+      const categoria = this.categoriaRecibida(reserva);
+      const fecha = reserva.fecha_inicio?.slice(0, 10);
+      const terminada = !reserva.cancelada && (reserva.finalizada || reserva.estado_estadia === 'FINALIZADA');
+      return (estado === 'todos' || categoria === estado || (estado === 'terminada' && terminada)) &&
+        (!busqueda || (reserva.publicacion?.titulo ?? '').toLocaleLowerCase('es-AR').includes(busqueda)) &&
+        (!desde || (!!fecha && fecha >= desde)) && (!hasta || (!!fecha && fecha <= hasta));
+    }).sort((a, b) => {
+      const orden = ['codigo', 'liquidacion', 'confirmada', 'terminada', 'historial'];
+      const categoriaA = this.categoriaRecibida(a);
+      const categoriaB = this.categoriaRecibida(b);
+      const prioridad = orden.indexOf(categoriaA) - orden.indexOf(categoriaB);
+      const fechaA = categoriaA === 'liquidacion' ? this.fechaHabilitacion(a) : a.fecha_inicio;
+      const fechaB = categoriaB === 'liquidacion' ? this.fechaHabilitacion(b) : b.fecha_inicio;
+      return prioridad || (fechaA ?? '9999').localeCompare(fechaB ?? '9999') || a.id - b.id;
+    });
+  });
+  protected readonly paginasRecibidas = computed(() => Math.max(1, Math.ceil(this.recibidasFiltradas().length / 10)));
+  protected readonly paginaRecibidas = linkedSignal<number, number>({
+    source: this.paginasRecibidas,
+    computation: (paginas, anterior) => Math.min(anterior?.value ?? 1, paginas),
+  });
+  protected readonly recibidasPagina = computed(() => {
+    const inicio = (this.paginaRecibidas() - 1) * 10;
+    return this.recibidasFiltradas().slice(inicio, inicio + 10);
+  });
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
   protected readonly ocupada = signal<number | null>(null);
@@ -146,6 +181,38 @@ export class MisReservasComponent {
     }).format(new Date());
   }
 
+  protected cambiarFiltroRecibidas(filtro: 'estado' | 'publicacion' | 'desde' | 'hasta', valor: string): void {
+    const filtros = { estado: this.filtroEstadoRecibidas, publicacion: this.filtroPublicacionRecibidas,
+      desde: this.filtroDesdeRecibidas, hasta: this.filtroHastaRecibidas };
+    filtros[filtro].set(valor);
+    this.paginaRecibidas.set(1);
+  }
+
+  protected categoriaRecibida(reserva: Reserva): string {
+    if (reserva.estado_pago === 'APROBADO' && !reserva.cancelada &&
+        ['PENDIENTE_PAGO_PROPIETARIO', 'EN_REVISION'].includes(reserva.estado_liquidacion)) return 'liquidacion';
+    if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' &&
+        ['PENDIENTE_INGRESO', 'INGRESO_NO_VERIFICADO'].includes(reserva.estado_estadia)) return 'codigo';
+    if (!reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'APROBADO' &&
+        reserva.estado_estadia === 'CONFIRMADA') return 'confirmada';
+    if (!reserva.cancelada && (reserva.finalizada || reserva.estado_estadia === 'FINALIZADA')) return 'terminada';
+    return 'historial';
+  }
+
+  protected fechaHabilitacion(reserva: Reserva): string | null {
+    if (!reserva.fecha_fin || !/^\d{4}-\d{2}-\d{2}$/.test(reserva.fecha_fin)) return null;
+    const fecha = new Date(`${reserva.fecha_fin}T00:00:00Z`);
+    if (!Number.isFinite(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== reserva.fecha_fin ||
+        !reserva.fecha_inicio || reserva.fecha_inicio > reserva.fecha_fin) return null;
+    fecha.setUTCDate(fecha.getUTCDate() + 5);
+    return fecha.toISOString().slice(0, 10);
+  }
+
+  protected diasHastaVencimiento(reserva: Reserva): number | null {
+    const fecha = this.fechaHabilitacion(reserva);
+    return fecha ? Math.max(0, Math.round((Date.parse(fecha) - Date.parse(this.hoy())) / 86_400_000)) : null;
+  }
+
   protected ultimoCambio(reserva: Reserva): ReprogramacionReserva | undefined {
     return [...(reserva.reprogramaciones ?? [])].sort((a, b) => b.id - a.id)[0];
   }
@@ -197,7 +264,7 @@ export class MisReservasComponent {
       reserva.estado_pago === 'APROBADO' &&
       !reserva.cancelada &&
       !reserva.finalizada &&
-      !!reserva.fecha_inicio && (recibida || reserva.fecha_inicio > this.hoy()) &&
+      !!reserva.fecha_inicio && reserva.fecha_inicio > this.hoy() &&
       (recibida || ['CONFIRMADA', 'PENDIENTE_INGRESO'].includes(reserva.estado_estadia)) &&
       !reserva.codigo_validado_en &&
       (recibida || reserva.estado_liquidacion !== 'EN_REVISION') &&
@@ -346,7 +413,7 @@ export class MisReservasComponent {
     if (this.hoy() < reserva.fecha_inicio)
       return `Podés reclamar desde el ${this.fecha(reserva.fecha_inicio)}, cuando empieza la estadía. Antes, usá Solicitar cancelación.`;
     if (!this.plazoReclamoAbierto(reserva))
-      return `El plazo para reclamar venció el ${this.fecha(reserva.fin_plazo_reclamo)}, 7 días después del fin de la estadía.`;
+      return `El plazo para reclamar terminó el ${this.fecha(reserva.fin_plazo_reclamo)}, antes de que se habilite el pago al anunciante.`;
     if (this.tieneReclamoAbierto(reserva)) return 'Ya tenés un reclamo abierto para esta reserva. Seguilo desde la pestaña Reclamos.';
     return '';
   }
@@ -512,9 +579,7 @@ export class MisReservasComponent {
       : etiquetasEstadia[reserva.estado_estadia];
   }
 
-  protected estadoLiquidacion(reserva: Reserva, recibida = false): string {
-    if (recibida && reserva.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO' && this.plazoReclamoAbierto(reserva))
-      return `Ingreso confirmado · el pago se habilita cuando cierre el plazo de reclamos (${this.fecha(reserva.fin_plazo_reclamo ?? null)})`;
+  protected estadoLiquidacion(reserva: Reserva): string {
     const etiquetas: Partial<Record<Reserva['estado_liquidacion'], string>> = {
       NO_APLICA: 'Sin liquidación',
       RETENIDO: 'Dinero retenido hasta el ingreso',

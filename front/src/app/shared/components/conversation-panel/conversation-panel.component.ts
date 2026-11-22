@@ -13,12 +13,18 @@ export interface MensajeConversacion {
   propio?: boolean;
   interno?: boolean;
   leido?: boolean;
+  imagen?: string;
 }
 
 export function mensajesApelacion(detalle: {
   apelacion?: { texto: string; fecha: string } | null;
   respuesta?: { texto: string; fecha: string } | null;
+  mensajes?: { id: string; autor: 'usuario' | 'administracion'; texto: string; fecha: string; imagen?: string }[] | null;
 }, autor: string, propia: boolean): MensajeConversacion[] {
+  if (detalle.mensajes) return detalle.mensajes.map(mensaje => ({
+    ...mensaje, autor: mensaje.autor === 'usuario' ? autor : 'Administración',
+    propio: mensaje.autor === 'usuario' ? propia : !propia,
+  }));
   const mensajes: MensajeConversacion[] = [];
   if (detalle.apelacion) mensajes.push({ id: 'apelacion', autor, propio: propia, ...detalle.apelacion });
   if (detalle.respuesta) mensajes.push({ id: 'respuesta', autor: 'Administración', ...detalle.respuesta });
@@ -46,6 +52,11 @@ export function mensajesApelacion(detalle: {
                 @if (mensaje.interno) { <span class="nota">Nota interna</span> }
               </div>
               <p class="burbuja" [class.interna]="mensaje.interno">{{ mensaje.texto }}</p>
+              @if (mensaje.imagen) {
+                <a class="imagen" [href]="mensaje.imagen" target="_blank" rel="noopener noreferrer" aria-label="Abrir imagen adjunta">
+                  <img [src]="mensaje.imagen" alt="Imagen adjunta" loading="lazy" />
+                </a>
+              }
               <div class="hora"><time [attr.datetime]="mensaje.fecha">{{ mensaje.fecha | date:'HH:mm' }}</time>
                 @if (mensaje.leido !== undefined) {
                   <span [attr.aria-label]="mensaje.leido ? 'Leído' : 'Enviado'">{{ mensaje.leido ? '✓✓' : '✓' }}</span>
@@ -81,6 +92,8 @@ export function mensajesApelacion(detalle: {
     .burbuja { display: inline-block; padding: 8px 11px; border-radius: 6px 11px 11px; background: #dbe8ff; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92rem; }
     .propio .burbuja { border-radius: 11px 6px 11px 11px; background: #e3eaff; }
     .burbuja.interna { background: #fff0cb; }
+    .imagen { display: block; margin-top: 6px; }
+    .imagen img { display: block; max-width: min(100%, 240px); max-height: 220px; border-radius: 8px; object-fit: contain; }
     .hora { margin-top: 4px; font-size: .72rem; }
     .hora span { margin-inline-start: 4px; }
     .vacio { margin: 16px 0; color: #52607a; font-size: .88rem; text-align: center; }

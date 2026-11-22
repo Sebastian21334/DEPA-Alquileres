@@ -9,6 +9,11 @@
 .reservation-tabs button:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-secondary), transparent 70%); outline-offset: 2px; }
 
 .reservation-section { margin-top: .25rem; }
+.reservation-filters { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }
+.reservation-filters label { display: grid; gap: .3rem; flex: 1 1 150px; color: var(--color-text-muted); font-size: .85rem; font-weight: 700; }
+.reservation-filters :is(input, select) { width: 100%; min-height: 42px; padding: .5rem; border: 1px solid var(--color-border); border-radius: 7px; background: #fff; color: var(--color-text); font: inherit; }
+.reservation-pagination { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .75rem; margin: 1rem 0; }
+.reservation-pagination div { display: flex; gap: .5rem; }
 .section-heading { margin-bottom: .85rem; }
 .section-heading h2 { margin: 0; font-size: 1.15rem; }
 .section-heading p { margin: .2rem 0 0; color: var(--color-text-muted); font-size: .9rem; }

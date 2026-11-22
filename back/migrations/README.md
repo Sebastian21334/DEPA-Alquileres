@@ -253,3 +253,17 @@ El registro ofrece recuperar la cuenta o crear una nueva con el mismo email
 cuando la baja se confirmó desde el perfil con esta versión. Las bajas
 anteriores conservan su historial y permiten reutilizar el email. El origen
 de esas bajas no quedó registrado en la base.
+
+# Avisos de liquidación disponible (T35)
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:liquidaciones` desde
+`back`. La migración `20261121-avisos-liquidacion-disponible.sql` registra por
+separado los avisos de disponibilidad enviados a Administración y al anunciante.
+Es reejecutable y conserva las liquidaciones existentes.
+
+# Historial de bloqueos
+
+Antes de iniciar esta versión ejecutar `npm run db:apelaciones-bloqueo` desde
+`back`. La migración agrega el historial y recupera el último bloqueo de las
+cuentas actualmente desbloqueadas cuando todavía existe su detalle. Los bloqueos
+anteriores que ya fueron reemplazados no pueden reconstruirse. Es reejecutable.

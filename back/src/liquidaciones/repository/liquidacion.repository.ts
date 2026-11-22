@@ -21,12 +21,38 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     });
   }
 
+  async listarReservasPendientesDeAviso(estadoLiquidacion: string, estadoPago: string, fechaFinLimite: string): Promise<number[]> {
+    const filas = await this.repository.createQueryBuilder('liquidacion')
+      .innerJoin('liquidacion.reserva', 'reserva')
+      .select('reserva.id', 'id')
+      .where('liquidacion.estado = :estadoLiquidacion', { estadoLiquidacion })
+      .andWhere('(liquidacion.aviso_pago_admin_en IS NULL OR liquidacion.aviso_pago_anunciante_en IS NULL)')
+      .andWhere('reserva.estado_pago = :estadoPago', { estadoPago })
+      .andWhere('reserva.cancelada = false')
+      .andWhere('reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite', { fechaFinLimite })
+      .orderBy('reserva.id', 'ASC')
+      .getRawMany<{ id: number }>();
+    return filas.map(({ id }) => id);
+  }
+
+  async listarIngresosNoVerificadosVencidos(estadoLiquidacion: string, estadoPago: string, fechaFinLimite: string): Promise<number[]> {
+    const filas = await this.repository.createQueryBuilder('liquidacion')
+      .innerJoin('liquidacion.reserva', 'reserva')
+      .select('reserva.id', 'id')
+      .where('liquidacion.estado = :estadoLiquidacion', { estadoLiquidacion })
+      .andWhere('reserva.estado_pago = :estadoPago', { estadoPago })
+      .andWhere('reserva.cancelada = false AND reserva.codigo_validado_en IS NULL')
+      .andWhere('reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite', { fechaFinLimite })
+      .getRawMany<{ id: number }>();
+    return filas.map(({ id }) => id);
+  }
+
   listarPagosRegistrados(estadoPagado: string, propietario?: { idUsuario: number; idPublicacion: number }): Promise<Liquidacion[]> {
-    const reserva = propietario ? {
+    const filtroReserva = propietario ? { reserva: {
       publicacion: { id: propietario.idPublicacion, anunciante: { usuario: { id: propietario.idUsuario } } },
-    } : undefined;
+    } } : {};
     return this.repository.find({
-      where: [{ estado: estadoPagado, reserva }, { pagos_anunciante: Not(IsNull()), reserva }],
+      where: [{ estado: estadoPagado, ...filtroReserva }, { pagos_anunciante: Not(IsNull()), ...filtroReserva }],
       relations: propietario
         ? { reserva: true }
         : { reserva: { publicacion: { anunciante: { usuario: true } } }, admin_resolucion: true },

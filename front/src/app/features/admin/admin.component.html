@@ -190,7 +190,7 @@
     <div class="panel__title">
       <div>
         <h2>Reservas por liquidar</h2>
-        <p>Registrá pagos a anunciantes con el código validado. Derivá a Reembolsos los casos que deben devolverse al inquilino.</p>
+        <p>Registrá pagos a anunciantes cuando la liquidación esté habilitada. Derivá a Reembolsos los casos que deben devolverse al inquilino.</p>
       </div>
       <span class="counter">{{ settlements().length }}</span>
     </div>
@@ -204,8 +204,16 @@
           <article class="settlement-card">
             <div>
               <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
-                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : 'Código validado' }}
+                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : settlement.codigo_validado_en ? 'Código validado' : 'Ingreso no verificado: plazo vencido' }}
               </span>
+              @if (settlement.estado_liquidacion !== 'EN_REVISION') {
+                @let dias = diasEsperaLiquidacion(settlement);
+                @if (dias === null) {
+                  <p class="settlement-note">Fecha de habilitación pendiente de revisión.</p>
+                } @else if (dias > 0) {
+                  <p class="settlement-note">Lapso de espera · {{ dias === 1 ? 'Falta 1 día' : 'Faltan ' + dias + ' días' }} para habilitar el pago.</p>
+                }
+              }
               <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
@@ -223,14 +231,8 @@
                 <button type="button" class="button button--ghost" (click)="abrirResolucionLiquidacion(settlement, false)">Cerrar revisión del pago</button>
               }
               <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
-              @if (settlement.codigo_validado_en) {
-                @let retenidoHasta = pagoRetenidoHasta(settlement);
-                <button type="button" class="button button--success" [disabled]="settlement.estado_liquidacion === 'EN_REVISION' || retenidoHasta"
-                  [attr.aria-describedby]="retenidoHasta ? 'plazo-reclamo-' + settlement.id : null"
-                  (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
-                @if (retenidoHasta) {
-                  <p class="settlement-hold" [id]="'plazo-reclamo-' + settlement.id">Plazo de reclamos abierto hasta el {{ retenidoHasta }}</p>
-                }
+              @if (settlement.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO') {
+                <button type="button" class="button button--success" [disabled]="diasEsperaLiquidacion(settlement) !== 0" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
               }
             </div>
           </article>
@@ -275,7 +277,7 @@
   <section class="panel admin-module" [hidden]="activeSection() !== 'reembolsos'">
     <div class="panel__title">
       <div>
-        <h2>Reembolsos pendientes</h2>
+        <h2>Reembolsos</h2>
         <p>Devoluciones creadas por cancelaciones, reclamos o contracargos.</p>
       </div>
       <span class="counter">{{ refunds().length }}</span>
@@ -284,13 +286,16 @@
       <p class="empty">No hay reembolsos registrados.</p>
     } @else {
       <div class="settlement-list">
-        @for (reembolso of refunds(); track reembolso.id) {
+        @for (reembolso of refundsPageItems(); track reembolso.id) {
           <article class="settlement-card" [id]="'admin-reembolsos-' + reembolso.id" tabindex="-1">
             <div>
               <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ estadosReembolso[reembolso.estado] }}</span>
               <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
               <p><strong>{{ reembolso.tipo }}</strong> · {{ reembolso.importe | currency: reembolso.moneda }}</p>
               <p class="muted">{{ origenesReembolso[reembolso.origen] || reembolso.origen }} · {{ reembolso.motivo }}</p>
+              @if (reembolso.creado_en) {
+                <p class="muted">Creado el <time [attr.datetime]="reembolso.creado_en">{{ reembolso.creado_en | date:'dd/MM/yyyy HH:mm':'-0300' }}</time></p>
+              }
               @if (puedeRegistrarTransferencia(reembolso)) {
                 <p>Transferencia bancaria pendiente · Chat disponible</p>
               }
@@ -303,6 +308,17 @@
           </article>
         }
       </div>
+      @if (refundsPages() > 1) {
+        <nav class="pagination" aria-label="Paginación de reembolsos">
+          <span role="status">Página {{ refundsPage() }} de {{ refundsPages() }}</span>
+          <div class="pagination__actions">
+            <button type="button" class="button button--ghost" (click)="refundsPage.set(refundsPage() - 1)"
+              [disabled]="refundsPage() <= 1">Anterior</button>
+            <button type="button" class="button button--ghost" (click)="refundsPage.set(refundsPage() + 1)"
+              [disabled]="refundsPage() >= refundsPages()">Siguiente</button>
+          </div>
+        </nav>
+      }
     }
   </section>
 
@@ -828,14 +844,18 @@
       </div>
     </nav>
   </section>
-  <section class="panel admin-module" aria-labelledby="blocked-users-title" [hidden]="activeSection() !== 'bloqueos'">
-    <div class="panel__title">
+  <section class="panel admin-module appeals-panel" aria-labelledby="blocked-users-title" [hidden]="activeSection() !== 'bloqueos'">
+    <div class="panel__title appeals-panel__title">
       <div>
         <h2 id="blocked-users-title">Usuarios bloqueados</h2>
         <p>Consultá los bloqueos vigentes y respondé las apelaciones.</p>
       </div>
-      <button type="button" class="button button--ghost" (click)="cargarBloqueados()" [disabled]="bloqueadosCargando()">Actualizar</button>
     </div>
+    <nav class="appeals-tabs" aria-label="Vistas de bloqueos">
+      <button type="button" [class.active]="vistaBloqueos() === 'actuales'" [attr.aria-pressed]="vistaBloqueos() === 'actuales'" (click)="cambiarVistaBloqueos('actuales')">Bloqueos actuales</button>
+      <button type="button" [class.active]="vistaBloqueos() === 'historial'" [attr.aria-pressed]="vistaBloqueos() === 'historial'" (click)="cambiarVistaBloqueos('historial')">Historial</button>
+    </nav>
+    @if (vistaBloqueos() === 'actuales') {
     @if (bloqueadosError()) {
       <p class="alert alert--error" role="alert">{{ bloqueadosError() }}</p>
     }
@@ -843,41 +863,81 @@
       <p class="empty" role="status">Cargando usuarios bloqueados…</p>
     } @else {
       <div class="blocked-users">
-        @for (bloqueo of bloqueados(); track bloqueo.detalle.id) {
+        @for (bloqueo of bloqueosOrdenados(); track bloqueo.detalle.id) {
           <article class="blocked-user">
-            <header>
-              <h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3>
-              <p>{{ bloqueo.usuario.email }}</p>
+            <header class="blocked-user__header">
+              <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
+              <div class="blocked-user__identity">
+                <h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3>
+                <p>{{ bloqueo.usuario.email }}</p>
+              </div>
+              <span class="blocked-user__status">
+                @if (bloqueo.detalle.apelacion) {
+                  <svg lucideMessageCircle [size]="15" aria-hidden="true"></svg> {{ bloqueo.detalle.respuesta ? 'Respondida' : 'Apelación en curso' }}
+                } @else {
+                  <svg lucideClock3 [size]="15" aria-hidden="true"></svg> Sin apelación
+                }
+              </span>
             </header>
-            <p><strong>Bloqueado por</strong> {{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p>
-            @if (bloqueo.detalle.fecha) {
-              <p><strong>Fecha del bloqueo</strong> {{ bloqueo.detalle.fecha | date: 'dd/MM/yyyy' }}</p>
-            }
-            <p><strong>Motivo</strong> {{ bloqueo.detalle.motivo || 'Sin registro' }}</p>
+            <div class="blocked-user__details">
+              <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
+              <div><svg lucideCalendarDays [size]="20" aria-hidden="true"></svg><p><strong>Fecha del bloqueo</strong>{{ bloqueo.detalle.fecha ? (bloqueo.detalle.fecha | date: 'dd/MM/yyyy') : 'Sin registro' }}</p></div>
+              <div><svg lucideMessageCircle [size]="20" aria-hidden="true"></svg><p><strong>Motivo</strong>{{ bloqueo.detalle.motivo || 'Sin registro' }}</p></div>
+            </div>
             @if (bloqueo.detalle.accesoLimitado) {
-              <p>Acceso limitado a operaciones pendientes y apelación.</p>
+              <p class="blocked-user__notice">Acceso limitado a operaciones pendientes y apelación.</p>
             }
             @if (bloqueo.detalle.apelacion) {
-              <app-conversation-panel titulo="Apelación del bloqueo"
+              <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo"
                 [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">
-                @if (!bloqueo.detalle.respuesta) {
-                  @if (apelacionSeleccionada() === bloqueo.detalle.id) {
-                    <app-conversation-composer [(texto)]="respuestaApelacion" [limite]="2000"
-                      etiqueta="Respuesta de Administración" [deshabilitado]="!!busy()" (enviar)="responderApelacion(bloqueo)" />
-                    <button type="button" class="button button--ghost" (click)="apelacionSeleccionada.set(null)" [disabled]="!!busy()">Cancelar</button>
-                  } @else {
-                    <button type="button" class="button button--ghost" (click)="abrirRespuesta(bloqueo)" [disabled]="!!busy()">Responder apelación</button>
+                  <div class="blocked-user__composer">
+                    <textarea [(ngModel)]="respuestasApelacion[bloqueo.detalle.id]" [ngModelOptions]="{ standalone: true }" rows="1" maxlength="2000" [disabled]="!!busy()" aria-label="Respuesta de Administración" placeholder="Escribí un mensaje..." (keydown.enter)="enviarApelacionConEnter($event, bloqueo)"></textarea>
+                    <label class="blocked-user__attach" title="Adjuntar imagen">
+                      <svg lucidePaperclip [size]="19" aria-hidden="true"></svg><span class="blocked-user__sr-only">Adjuntar imagen JPEG o PNG de hasta 5 MB</span>
+                      <input type="file" accept="image/jpeg,image/png" [disabled]="!!busy()" (change)="seleccionarImagenApelacion($event, bloqueo)" />
+                    </label>
+                    <button type="button" class="blocked-user__send" [disabled]="!!busy() || !(respuestasApelacion[bloqueo.detalle.id] || '').trim()" (click)="responderApelacion(bloqueo)"><svg lucideSend [size]="17" aria-hidden="true"></svg> Enviar</button>
+                    <button type="button" class="blocked-user__cancel" [disabled]="!!busy()" (click)="cancelarRespuesta(bloqueo)">Cancelar</button>
+                  </div>
+                  @if (imagenesApelacion[bloqueo.detalle.id]; as imagen) {
+                    <p class="blocked-user__attachment">{{ imagen.name }} <button type="button" (click)="imagenesApelacion[bloqueo.detalle.id] = null">Quitar imagen</button></p>
                   }
-                }
               </app-conversation-panel>
-            } @else {
-              <p>Sin apelación.</p>
             }
           </article>
         } @empty {
           @if (!bloqueadosError()) { <p class="empty">No hay usuarios bloqueados.</p> }
         }
       </div>
+    }
+    } @else {
+      @if (historialBloqueosError()) { <p class="alert alert--error" role="alert">{{ historialBloqueosError() }}</p> }
+      @if (historialBloqueosCargando()) {
+        <p class="empty" role="status">Cargando historial de bloqueos...</p>
+      } @else {
+        <div class="blocked-users">
+          @for (bloqueo of historialBloqueos(); track bloqueo.usuario.id + '-' + bloqueo.detalle.id) {
+            <article class="blocked-user">
+              <header class="blocked-user__header">
+                <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
+                <div class="blocked-user__identity"><h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3><p>{{ bloqueo.usuario.email }}</p></div>
+                <span class="blocked-user__status blocked-user__status--closed">Desbloqueado</span>
+              </header>
+              <div class="blocked-user__details">
+                <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
+                <div><svg lucideCalendarDays [size]="20" aria-hidden="true"></svg><p><strong>Fecha del bloqueo</strong>{{ bloqueo.detalle.fecha ? (bloqueo.detalle.fecha | date: 'dd/MM/yyyy') : 'Sin registro' }}</p></div>
+                <div><svg lucideMessageCircle [size]="20" aria-hidden="true"></svg><p><strong>Motivo</strong>{{ bloqueo.detalle.motivo || 'Sin registro' }}</p></div>
+              </div>
+              <p class="blocked-user__history-date">Desbloqueado: {{ bloqueo.detalle.fechaDesbloqueo ? (bloqueo.detalle.fechaDesbloqueo | date: 'dd/MM/yyyy HH:mm') : 'fecha no registrada' }}</p>
+              @if (bloqueo.detalle.apelacion) {
+                <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)" />
+              }
+            </article>
+          } @empty {
+            @if (!historialBloqueosError()) { <p class="empty">No hay bloqueos anteriores registrados.</p> }
+          }
+        </div>
+      }
     }
   </section>
 

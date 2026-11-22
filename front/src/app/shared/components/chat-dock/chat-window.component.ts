@@ -53,7 +53,7 @@ export class ChatWindowComponent implements OnInit {
     if (mensaje.contactoSuspendido !== undefined) return mensaje.contactoSuspendido;
     const otro = mensaje.origenUsuario.id === this.miId()
       ? mensaje.destinoUsuario : mensaje.origenUsuario;
-    return otro.bloqueado === true || otro.activa === false;
+    return otro.activa === false;
   });
 
   constructor() {
