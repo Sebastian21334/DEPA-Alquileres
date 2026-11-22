@@ -18,6 +18,7 @@ import type { ModalidadRespuestaDto } from '../dto/modalidad-respuesta.dto';
 import type { Estado } from '../entity/estado.entity';
 import catalogosIniciales from '../catalogos-iniciales.json';
 import estadosIniciales from '../estados-iniciales.json';
+import type { EntityManager } from 'typeorm';
 
 type CodigoAmbito = keyof typeof estadosIniciales;
 type CodigoEstado<A extends CodigoAmbito> = Extract<keyof typeof estadosIniciales[A]['estados'], string>;
@@ -26,6 +27,14 @@ type CodigoEstado<A extends CodigoAmbito> = Extract<keyof typeof estadosIniciale
 export class CatalogosService implements OnModuleInit {
   private estados = new Map<string, Estado>();
   constructor(@Inject(CATALOGOS_REPOSITORY) private readonly catalogosRepo: ICatalogosRepository) {}
+
+  obtenerComision(transaccion?: EntityManager): Promise<number> {
+    return this.catalogosRepo.obtenerComision(transaccion);
+  }
+
+  actualizarComision(porcentaje: number): Promise<number> {
+    return this.catalogosRepo.actualizarComision(porcentaje);
+  }
 
   async onModuleInit(): Promise<void> {
     const [roles, estados] = await Promise.all([

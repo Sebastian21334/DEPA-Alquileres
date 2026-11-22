@@ -285,6 +285,7 @@ export class ReservasService
           cancelada: false,
           fecha_cancelacion: null,
           monto_pago: montoCalculado,
+          porcentaje_comision_depa: await this.catalogos.obtenerComision(transaccion),
           precio_unitario_contratado: precioDiario,
           importe_contratado: montoCalculado,
           moneda_contratada: 'ARS',

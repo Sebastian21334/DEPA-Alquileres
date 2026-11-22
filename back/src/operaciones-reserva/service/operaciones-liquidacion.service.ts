@@ -15,6 +15,7 @@ import {
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { decimalEntero } from '../../common/utils/importes';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
@@ -113,7 +114,16 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
       .map(reserva => ({
         ...this.reservasService.prepararRespuesta(reserva),
         fecha_disponible_pago: this.liquidaciones.fechaDisponiblePagoManual(reserva),
+        ...this.calcularComision(reserva, Number(reserva.monto_pago), false),
       }));
+  }
+
+  private calcularComision(reserva: Reserva, importe: number, huboDevolucion: boolean): { importe_comision_depa: number; importe_neto_anunciante: number } {
+    const porcentaje = huboDevolucion || reserva.porcentaje_comision_depa == null ? 0 : reserva.porcentaje_comision_depa;
+    const centavos = decimalEntero(importe, 2);
+    const centesimasPorcentaje = decimalEntero(porcentaje, 2);
+    const comision = (centavos * centesimasPorcentaje + 5000n) / 10000n;
+    return { importe_comision_depa: Number(comision) / 100, importe_neto_anunciante: Number(centavos - comision) / 100 };
   }
 
   listarPagosRegistrados() {
@@ -167,8 +177,9 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
         throw new ConflictException('Una reserva cancelada no puede volver al circuito de ingreso');
       await this.asegurarSinDevoluciones(id, transaccion);
       const pago = registraPago ? await this.reembolsosService.buscarPagoPorReserva(id, transaccion) : null;
+      const bruto = pago ? this.reembolsosService.saldoReembolsable(pago) : Number(actual.monto_pago);
       await this.liquidaciones.registrarResolucion(actual, dto.estado, {
-        importe: registraPago ? (pago ? this.reembolsosService.saldoReembolsable(pago) : Number(actual.monto_pago)) : null,
+        importe: registraPago ? this.calcularComision(actual, bruto, Number(pago?.amount_refunded ?? 0) > 0).importe_neto_anunciante : null,
         moneda: pago?.currency ?? actual.moneda_contratada ?? 'ARS',
         referencia: dto.referencia ?? null,
         observacion: dto.observacion ?? null,
