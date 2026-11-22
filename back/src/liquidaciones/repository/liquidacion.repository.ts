@@ -35,11 +35,7 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     return filas.map(({ id }) => id);
   }
 
-  async listarIngresosNoVerificadosVencidos(
-    estados: { retenido: string; revision: string; maxIntentosCodigo: number },
-    estadoPago: string,
-    fechaFinLimite: string,
-  ): Promise<number[]> {
+  async listarIngresosNoVerificadosVencidos(estados: { retenido: string; revision: string; maxIntentosCodigo: number }, estadoPago: string, fechaFinLimite: string): Promise<number[]> {
     const filas = await this.repository.createQueryBuilder('liquidacion')
       .innerJoin('liquidacion.reserva', 'reserva')
       .select('reserva.id', 'id')
