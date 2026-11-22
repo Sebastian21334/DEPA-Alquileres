@@ -85,12 +85,12 @@ export class ReservaResultadoComponent {
     const reserva = this.reserva();
     const otro = this.esInquilino()
       ? reserva?.publicacion?.anunciante?.usuario : reserva?.usuario;
-    return otro?.bloqueado === true || otro?.activa === false;
+    return otro?.activa === false;
   });
   protected readonly contactoDisponible = computed(() => {
     const reserva = this.reserva();
     return (
-      !this.accesoLimitado() && !this.contactoSuspendido() &&
+      !this.contactoSuspendido() &&
       reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
     );
   });

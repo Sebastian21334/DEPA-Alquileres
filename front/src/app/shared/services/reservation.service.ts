@@ -190,6 +190,8 @@ export interface Reclamo {
     monto_pago?: number | string;
     moneda_contratada?: string | null;
     estado_estadia?: EstadoEstadia;
+    estado_liquidacion?: Reserva['estado_liquidacion'];
+    fecha_fin?: string | null;
     publicacion?: { id?: number; titulo?: string; imagenes?: { url: string }[] } | null;
   } | null;
   anunciante?: ParticipanteReclamo | null;

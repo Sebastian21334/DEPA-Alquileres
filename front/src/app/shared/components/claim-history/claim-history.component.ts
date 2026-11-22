@@ -4,6 +4,7 @@ import { CurrencyPipe, DatePipe } from '@angular/common';
 import { Component, computed, inject, input, output } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
+import { puedeValidarCodigo } from '../../utils/reservation-state';
 
 @Component({
   selector: 'app-claim-history',
@@ -29,8 +30,8 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
         <p class="resolution__title">Reclamo resuelto</p>
         @if (item.resolucion === 'SIN_DEVOLUCION') {
           <p>A favor del anunciante: sin devolución al inquilino.</p>
-          <!-- Solo mientras dura la estadía sin código validado: es cuando el anunciante puede cargarlo. -->
-          @if (item.reserva?.estado_estadia === 'PENDIENTE_INGRESO') {
+          <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
+          @if (item.reserva && puedeValidarCodigo(item.reserva)) {
             <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
           }
         } @else {
@@ -163,6 +164,7 @@ export class ClaimHistoryComponent {
   /** Cada pantalla decide a dónde lleva el reembolso; este componente solo lo ofrece si hubo devolución. */
   readonly mostrarVerReembolso = input(false);
   readonly verReembolso = output<Reclamo>();
+  protected readonly puedeValidarCodigo = puedeValidarCodigo;
   protected readonly participantes = computed(() => [
     { rol: 'Anunciante', usuario: this.reclamo().anunciante },
     { rol: 'Inquilino', usuario: this.reclamo().inquilino },

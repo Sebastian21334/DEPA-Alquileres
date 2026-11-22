@@ -13,6 +13,7 @@ async function main() {
     await client.query('BEGIN');
     await client.query("SET LOCAL lock_timeout = '10s'");
     await client.query(fs.readFileSync(path.join(__dirname, '..', 'migrations', '20261111-apelaciones-bloqueo.sql'), 'utf8'));
+    await client.query(fs.readFileSync(path.join(__dirname, '..', 'migrations', '20261122-historial-bloqueos.sql'), 'utf8'));
     await client.query('COMMIT');
     console.log('Migración de apelaciones de bloqueo aplicada.');
   } catch (error) {

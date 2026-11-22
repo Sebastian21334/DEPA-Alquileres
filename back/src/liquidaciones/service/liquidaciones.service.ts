@@ -1,6 +1,7 @@
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Inject, Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
+import { esFechaCalendarioValida, fechaArgentina, sumarDiasCalendario } from '../../common/utils/fechas';
 import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.error';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { Liquidacion } from '../entity/liquidacion.entity';
@@ -22,6 +23,9 @@ export type DevolucionLiquidacionDatos = ResolucionLiquidacionDatos & {
   parcial?: boolean;
 };
 
+/** Días después del fin de la estadía hasta que se habilita el pago al anunciante (T35). */
+export const DIAS_ESPERA_PAGO_MANUAL = 5;
+
 /**
  * Mantiene el registro auditable de la liquidación y sincroniza la caché de
  * compatibilidad que la reserva expone a los flujos existentes.
@@ -31,14 +35,57 @@ export class LiquidacionesService {
   constructor(@Inject(LIQUIDACION_REPOSITORY) private readonly liquidaciones: ILiquidacionRepository, private readonly catalogos: CatalogosService) {}
 
   async listarParaAdministracion(): Promise<Reserva[]> {
+    const pendiente = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
+    const revision = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
     const filas = await this.liquidaciones.listarPorEstados([
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
+      pendiente, revision,
     ]);
     return filas.map(liquidacion => {
       this.sincronizarReserva(liquidacion.reserva, liquidacion);
       return liquidacion.reserva;
     });
+  }
+
+  fechaDisponiblePagoManual(reserva: Pick<Reserva, 'fecha_inicio' | 'fecha_fin'>): string | null {
+    if (!esFechaCalendarioValida(reserva.fecha_inicio) || !esFechaCalendarioValida(reserva.fecha_fin) ||
+        reserva.fecha_inicio > reserva.fecha_fin) return null;
+    return this.desplazarFecha(reserva.fecha_fin, DIAS_ESPERA_PAGO_MANUAL);
+  }
+
+  listarReservasPendientesDeAviso(ahora: Date): Promise<number[]> {
+    return this.liquidaciones.listarReservasPendientesDeAviso(
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
+      this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+      this.desplazarFecha(fechaArgentina(ahora), -DIAS_ESPERA_PAGO_MANUAL),
+    );
+  }
+
+  listarIngresosNoVerificadosVencidos(ahora: Date): Promise<number[]> {
+    return this.liquidaciones.listarIngresosNoVerificadosVencidos(
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'),
+      this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+      this.desplazarFecha(fechaArgentina(ahora), -DIAS_ESPERA_PAGO_MANUAL),
+    );
+  }
+
+  async registrarVencimientoIngreso(reserva: Reserva, transaccion: EntityManager): Promise<void> {
+    const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
+    liquidacion.estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
+    liquidacion.observacion = 'Ingreso no verificado: venció el plazo de cinco días';
+    liquidacion.fecha_resolucion = null;
+    this.sincronizarReserva(reserva, liquidacion, false);
+    await this.liquidaciones.guardar(liquidacion, transaccion);
+  }
+
+  async registrarAvisosPagoManual(liquidacion: Liquidacion, avisados: { admin: boolean; anunciante: boolean }, fecha: Date, transaccion: EntityManager): Promise<void> {
+    if (!avisados.admin && !avisados.anunciante) return;
+    if (avisados.admin) liquidacion.aviso_pago_admin_en = fecha;
+    if (avisados.anunciante) liquidacion.aviso_pago_anunciante_en = fecha;
+    await this.liquidaciones.guardar(liquidacion, transaccion);
+  }
+
+  private desplazarFecha(fecha: string, dias: number): string {
+    return sumarDiasCalendario(fecha, dias);
   }
 
   async listarPagosRegistrados() {
@@ -236,7 +283,7 @@ export class LiquidacionesService {
     return this.liquidaciones.guardar(liquidacion, transaccion);
   }
 
-  /** El código válido habilita el pago al propietario. */
+  /** El código válido deja el pago agendado conforme a la fecha de disponibilidad. */
   async registrarValidacionCodigo(reserva: Reserva, transaccion?: EntityManager): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
     liquidacion.estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');

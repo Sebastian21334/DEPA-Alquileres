@@ -34,7 +34,7 @@ export class App {
     { requireSync: true },
   );
 
-  protected readonly esPantallaAuth = computed(() => ['/login', '/registro', '/confirmar-baja', '/reactivar-cuenta'].includes(this.ruta()));
+  protected readonly esPantallaAuth = computed(() => ['/login', '/registro', '/confirmar-baja', '/reactivar-cuenta', '/verificar-cuenta'].includes(this.ruta()));
   protected readonly esPantallaCbu = computed(() => this.ruta() === '/mi-perfil/validar-cbu');
   protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   private readonly idUsuario = computed(() => this.auth.currentUser()?.sub);

@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Header, Headers, HttpCode, Patch, Post, Req, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, HttpCode, Patch, Post, Req, UploadedFile, UseGuards, UseInterceptors, ValidationPipe } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from '../service/auth.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
@@ -68,6 +69,13 @@ export class AuthController {
     return this.authService.apelarBloqueo(dto.token, dto.texto);
   }
 
+  @Post('bloqueo/mensajes')
+  @Header('Cache-Control', 'no-store')
+  @UseInterceptors(FileInterceptor('imagen', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  enviarMensajeBloqueo(@Body(new ValidationPipe({ transform: true })) dto: ApelacionBloqueoDto, @UploadedFile() archivo?: Express.Multer.File) {
+    return this.authService.apelarBloqueo(dto.token, dto.texto, archivo);
+  }
+
   @Get('bloqueo/actual')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)
@@ -82,6 +90,15 @@ export class AuthController {
   @PermitirAccesoLimitado()
   apelarBloqueoActual(@Body(new ValidationPipe({ transform: true })) dto: TextoApelacionBloqueoDto, @Req() req: AuthenticatedRequest) {
     return this.authService.apelarBloqueoActual(req.user.id, dto.texto);
+  }
+
+  @Post('bloqueo/actual/mensajes')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
+  @UseInterceptors(FileInterceptor('imagen', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  enviarMensajeBloqueoActual(@Body(new ValidationPipe({ transform: true })) dto: TextoApelacionBloqueoDto, @Req() req: AuthenticatedRequest, @UploadedFile() archivo?: Express.Multer.File) {
+    return this.authService.apelarBloqueoActual(req.user.id, dto.texto, archivo);
   }
 
   @Post('reenviar-verificacion')

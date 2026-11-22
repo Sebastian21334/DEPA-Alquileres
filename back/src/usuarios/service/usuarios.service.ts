@@ -120,6 +120,10 @@ export class UsuariosService {
           fecha: new Date().toISOString(),
           accesoLimitado: accesoLimitado !== null,
         };
+      } else if (usuario.bloqueoDetalle) {
+        usuario.historialBloqueos = [...(usuario.historialBloqueos ?? []), {
+          ...usuario.bloqueoDetalle, fechaDesbloqueo: new Date().toISOString(), desbloqueadoPorId: idOperador,
+        }];
       }
       await this.usuariosRepo.guardar(usuario, transaccion);
       return { usuario, cambio: true };
@@ -417,8 +421,25 @@ export class UsuariosService {
     return motivos;
   }
 
-  listarBloqueados() {
-    return this.usuariosRepo.listarBloqueados();
+  async listarBloqueados() {
+    const bloqueos = await this.usuariosRepo.listarBloqueados();
+    return Promise.all(bloqueos.map(async bloqueo => ({
+      ...bloqueo, detalle: { ...bloqueo.detalle, mensajes: await this.firmarImagenesApelacion(bloqueo.detalle.mensajes) },
+    })));
+  }
+
+  async listarHistorialBloqueos() {
+    const usuarios = await this.usuariosRepo.listarHistorialBloqueos();
+    const registros = usuarios.flatMap(({ usuario, historial }) => historial.map(detalle => ({ usuario, detalle })));
+    const ids = [...new Set(registros.map(({ detalle }) => detalle.administradorId).filter((id): id is number => id != null))];
+    const administradores = new Map(await Promise.all(ids.map(async id => {
+      const usuario = await this.usuariosRepo.buscarPorId(id);
+      return [id, usuario ? { nombre: usuario.nombre, apellido: usuario.apellido } : null] as const;
+    })));
+    return Promise.all(registros.map(async ({ usuario, detalle }) => ({
+      usuario, administrador: detalle.administradorId == null ? null : administradores.get(detalle.administradorId) ?? null,
+      detalle: { ...detalle, mensajes: await this.firmarImagenesApelacion(detalle.mensajes) },
+    })));
   }
 
   private bloqueoVigente(usuario: Usuario | null, idBloqueo?: string): DetalleBloqueo {
@@ -429,10 +450,26 @@ export class UsuariosService {
     return usuario.bloqueoDetalle;
   }
 
-  private vistaBloqueo(detalle: DetalleBloqueo) {
-    const { motivo, fecha, apelacion, respuesta } = detalle;
+  private async firmarImagenesApelacion(mensajes: DetalleBloqueo['mensajes']): Promise<DetalleBloqueo['mensajes']> {
+    if (!mensajes) return undefined;
+    return Promise.all(mensajes.map(async mensaje => ({ ...mensaje,
+      imagen: mensaje.imagen ? await this.almacenamientoService.firmarArchivo('reclamos', mensaje.imagen) : undefined,
+    })));
+  }
+
+  private async vistaBloqueo(detalle: DetalleBloqueo) {
+    const { motivo, fecha, apelacion, respuesta, mensajes } = detalle;
     return { motivo, fecha, apelacion: apelacion ?? null,
-      respuesta: respuesta ? { texto: respuesta.texto, fecha: respuesta.fecha } : null };
+      respuesta: respuesta ? { texto: respuesta.texto, fecha: respuesta.fecha } : null,
+      mensajes: (await this.firmarImagenesApelacion(mensajes))?.map(({ id, autor, texto, fecha, imagen }) => ({ id, autor, texto, fecha, imagen })) ?? null };
+  }
+
+  private mensajesApelacion(detalle: DetalleBloqueo): NonNullable<DetalleBloqueo['mensajes']> {
+    if (detalle.mensajes) return detalle.mensajes;
+    const mensajes: NonNullable<DetalleBloqueo['mensajes']> = [];
+    if (detalle.apelacion) mensajes.push({ id: randomUUID(), autor: 'usuario', ...detalle.apelacion });
+    if (detalle.respuesta) mensajes.push({ id: randomUUID(), autor: 'administracion', ...detalle.respuesta });
+    return mensajes;
   }
 
   async consultarBloqueo(idUsuario: number, idBloqueo?: string) {
@@ -440,26 +477,48 @@ export class UsuariosService {
     return this.vistaBloqueo(this.bloqueoVigente(usuario, idBloqueo));
   }
 
-  async apelarBloqueo(idUsuario: number, idBloqueo: string | undefined, texto: string) {
-    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+  async apelarBloqueo(idUsuario: number, idBloqueo: string | undefined, texto: string, archivo?: Express.Multer.File) {
+    return this.conImagenApelacion(archivo, async imagen => this.usuariosRepo.conTransaccion(async (transaccion) => {
       const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion);
       const detalle = this.bloqueoVigente(usuario, idBloqueo);
-      if (detalle.apelacion) throw new ConflictException('Ya enviaste una apelación para este bloqueo.');
-      detalle.apelacion = { texto, fecha: new Date().toISOString() };
+      const fecha = new Date().toISOString();
+      detalle.mensajes = this.mensajesApelacion(detalle);
+      detalle.mensajes.push({ id: randomUUID(), autor: 'usuario', texto, fecha, imagen });
+      detalle.apelacion ??= { texto, fecha };
+      delete detalle.respuesta;
       await this.usuariosRepo.guardar(usuario!, transaccion);
       return this.vistaBloqueo(detalle);
-    });
+    }));
   }
 
-  async responderApelacion(idUsuario: number, idBloqueo: string, administradorId: number, texto: string) {
-    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+  async responderApelacion(idUsuario: number, idBloqueo: string, administradorId: number, texto: string, archivo?: Express.Multer.File) {
+    return this.conImagenApelacion(archivo, async imagen => this.usuariosRepo.conTransaccion(async (transaccion) => {
       const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion);
       const detalle = this.bloqueoVigente(usuario, idBloqueo);
-      if (!detalle.apelacion || detalle.respuesta) throw new ConflictException('La apelación ya no está pendiente.');
-      detalle.respuesta = { texto, fecha: new Date().toISOString(), administradorId };
+      if (!detalle.apelacion) throw new ConflictException('No hay una apelación para responder.');
+      const fecha = new Date().toISOString();
+      detalle.mensajes = this.mensajesApelacion(detalle);
+      detalle.mensajes.push({ id: randomUUID(), autor: 'administracion', texto, fecha, administradorId, imagen });
+      detalle.respuesta = { texto, fecha, administradorId };
       await this.usuariosRepo.guardar(usuario!, transaccion);
       return { mensaje: 'Respuesta registrada.' };
-    });
+    }));
+  }
+
+  private async conImagenApelacion<T>(archivo: Express.Multer.File | undefined, operar: (imagen?: string) => Promise<T>): Promise<T> {
+    if (!archivo) return operar();
+    if (archivo.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(archivo.mimetype))
+      throw new BadRequestException('La imagen debe ser JPEG o PNG y pesar hasta 5 MB');
+    let contenido: Buffer;
+    try { contenido = await sharp(archivo.buffer).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer(); }
+    catch { throw new BadRequestException('La imagen no es válida'); }
+    const imagen = await this.almacenamientoService.subir('reclamos', `apelaciones/${randomUUID()}.jpg`, contenido, 'image/jpeg');
+    try { return await operar(imagen); }
+    catch (error) {
+      try { await this.almacenamientoService.eliminarArchivo('reclamos', imagen); }
+      catch { this.logger.warn('No se pudo eliminar una imagen de apelación no guardada'); }
+      throw error;
+    }
   }
 
   /** Devuelve los datos del usuario autenticado sin exponer secretos de cuenta. */
