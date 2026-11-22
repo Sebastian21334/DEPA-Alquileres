@@ -47,14 +47,18 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     return filas.map(({ id }) => id);
   }
 
-  listarPagosRegistrados(estadoPagado: string, propietario?: { idUsuario: number; idPublicacion: number }): Promise<Liquidacion[]> {
+  listarPagosRegistrados(estadoPagado: string, propietario?: { idUsuario: number; idPublicacion?: number }): Promise<Liquidacion[]> {
+    // Sin publicación, el anunciante ve los pagos de todas sus publicaciones.
     const filtroReserva = propietario ? { reserva: {
-      publicacion: { id: propietario.idPublicacion, anunciante: { usuario: { id: propietario.idUsuario } } },
+      publicacion: {
+        ...(propietario.idPublicacion === undefined ? {} : { id: propietario.idPublicacion }),
+        anunciante: { usuario: { id: propietario.idUsuario } },
+      },
     } } : {};
     return this.repository.find({
       where: [{ estado: estadoPagado, ...filtroReserva }, { pagos_anunciante: Not(IsNull()), ...filtroReserva }],
       relations: propietario
-        ? { reserva: true }
+        ? { reserva: { publicacion: true } }
         : { reserva: { publicacion: { anunciante: { usuario: true } } }, admin_resolucion: true },
     });
   }

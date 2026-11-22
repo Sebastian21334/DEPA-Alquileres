@@ -162,6 +162,35 @@ test('T47-Extra: el código bloqueado con la estadía terminada llega al pago de
   assert.equal((await actual()).codigo_validado_en, null);
 });
 
+test('T55: el historial del anunciante junta los pagos de todas sus publicaciones, una vez cada uno', async (t) => {
+  await db.exec(`INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante)
+    VALUES (900,'Segunda publicación','Integración',CURRENT_DATE,100,'Dirección',1,30,2)`);
+  t.after(() => db.exec('DELETE FROM publicacion WHERE id_publicacion = 900'));
+  const pagar = async (idPublicacion, referencia) => {
+    const reserva = await source.getRepository(Reserva).save({
+      monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: idPublicacion },
+      fecha_inicio: '2026-01-01', fecha_fin: '2026-01-05',
+    });
+    await source.getRepository(Liquidacion).save({
+      reserva, estado: 'PAGADO_PROPIETARIO', importe: 100, moneda: 'ARS', referencia, fecha_pago_propietario: new Date(),
+    });
+    return reserva;
+  };
+  const primera = await pagar(1, 'transferencia-1');
+  const segunda = await pagar(900, 'transferencia-2');
+  await source.getRepository(Reserva).save({ monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: 1 } });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+
+  const todos = await liquidaciones.listarPagosDelAnunciante(2);
+  assert.deepEqual(todos.map(pago => [pago.reservaId, pago.publicacion, pago.referencia]).sort(), [
+    [primera.id, 'Publicación de prueba', 'transferencia-1'],
+    [segunda.id, 'Segunda publicación', 'transferencia-2'],
+  ]);
+  assert.equal(Object.hasOwn(todos[0], 'administrador'), false);
+  assert.deepEqual((await liquidaciones.listarPagosDelAnunciante(2, 900)).map(pago => pago.reservaId), [segunda.id]);
+  assert.deepEqual(await liquidaciones.listarPagosDelAnunciante(4), []);
+});
+
 test('un reclamo no puede sobrescribir una liquidación ya pagada al anunciante', async () => {
   const { reserva } = await escenario('2026-01-01');
   const fecha = new Date();
@@ -1447,9 +1476,15 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       .set('Authorization', admin).expect(200);
     assert.ok(historialAdministracion.body.some(item => item.reservaId === ingreso.id));
     assert.deepEqual(historialPropio, [{
-      id: idPago, reservaId: ingreso.id, fecha: fechaPago, importe: 100, moneda: 'ARS',
+      id: idPago, reservaId: ingreso.id, publicacion: 'Publicación de prueba', fecha: fechaPago, importe: 100, moneda: 'ARS',
       referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
     }]);
+    // T55: el panel del anunciante muestra el mismo pago, una sola vez, y nadie más lo ve.
+    const misPagos = '/reservas/liquidaciones/mias';
+    await request(http).get(misPagos).expect(401);
+    await request(http).get(misPagos).set('Authorization', tenant).expect(200, []);
+    await request(http).get(misPagos).set('Authorization', ajeno).expect(200, []);
+    await request(http).get(misPagos).set('Authorization', anunciante).expect(200, historialPropio);
     await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-repetido' }).expect(409);
     assert.equal(correos.filter(({ content }) => content.subject === 'Pago al anunciante registrado').length, 1);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
