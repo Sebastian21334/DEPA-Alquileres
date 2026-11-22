@@ -18,6 +18,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { SolicitarAnuncianteDto } from '../dto/solicitar-anunciante.dto';
+import { ActualizarDatosSolicitanteDto } from '../dto/actualizar-datos-solicitante.dto';
+import { MENSAJE_CUIT_EN_USO } from '../../anunciantes/service/anunciantes.service';
+import { digitosCuit } from '../../common/utils/cuit';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
@@ -25,7 +28,6 @@ import { SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
 
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 import { PruebaVidaService } from './prueba-vida.service';
-import { DatosInmobiliariaDto } from '../dto/datos-inmobiliaria.dto';
 import type { RevisarVerificacionDto } from '../dto/revisar-verificacion.dto';
 import sharp from 'sharp';
 import { EliminacionDocumentosService } from './eliminacion-documentos.service';
@@ -138,7 +140,7 @@ export class VerificacionAnuncianteService {
     });
   }
 
-  private datosEmpresa(dto: Partial<DatosInmobiliariaDto>, requerida: boolean) {
+  private datosEmpresa(dto: Partial<ActualizarDatosSolicitanteDto>, requerida: boolean) {
     const datos = {
       razon_social: dto.razon_social?.trim() || null,
       matricula_profesional: dto.matricula_profesional?.trim() || null,
@@ -146,36 +148,54 @@ export class VerificacionAnuncianteService {
       domicilio_comercial: dto.domicilio_comercial?.trim() || null,
       dni_corredor: dto.dni_corredor?.trim() || null,
     };
+    if (!requerida) return datos;
     if (
-      requerida &&
-      (Object.values(datos).some((valor) => !valor) ||
-        !/^\d{7,8}$/.test(datos.dni_corredor ?? ''))
+      Object.values(datos).some((valor) => !valor) ||
+      !/^\d{7,8}$/.test(datos.dni_corredor ?? '')
     ) {
       throw new BadRequestException(
         'Completá razón social, matrícula, colegio, domicilio comercial y DNI del corredor responsable',
       );
     }
-    return requerida ? datos : {};
+    return datos;
   }
 
-  async actualizarDatosInmobiliaria(idUsuario: number, dto: DatosInmobiliariaDto) {
+  private esEditable(solicitud: SolicitudVerificacion): boolean {
+    return solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'borrador') ||
+      solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada');
+  }
+
+  async actualizarDatosSolicitud(idUsuario: number, dto: ActualizarDatosSolicitanteDto) {
+    const tipoAnunciante = await this.catalogosService.getTipoAnunciantePorId(dto.idTipoAnunciante);
+    const esEmpresa = this.catalogosService.esInmobiliaria(tipoAnunciante);
+    const datosEmpresa = this.datosEmpresa(dto, esEmpresa);
+    const cuit = dto.cuit.trim();
+    const numeroContacto = dto.numero_contacto.trim();
+
     const guardada = await this.verificacionRepo.conSolicitudBloqueada(
       idUsuario,
-      async (solicitud, persistencia) => {
-        if (
-          !solicitud ||
-          !this.catalogosService.esInmobiliaria(solicitud.anunciante.tipoAnunciante)
-        ) {
-          throw new NotFoundException(
-            'No hay una solicitud de inmobiliaria para esta cuenta',
-          );
-        }
-        if (!this.pruebaVidaService.puedeRecibirDocumentos(solicitud, solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'rechazada'))) {
+      async (solicitud, persistencia, transaccion) => {
+        if (!solicitud) throw new NotFoundException('No solicitaste ser anunciante todavía');
+        if (!this.esEditable(solicitud)) {
           throw new ConflictException(
             'Solo podés corregir datos antes de enviarlos o después de un rechazo',
           );
         }
-        Object.assign(solicitud, this.datosEmpresa(dto, true));
+        const cuitAnterior = solicitud.anunciante.cuit_cuil ?? '';
+        if (digitosCuit(cuit) !== digitosCuit(cuitAnterior) &&
+            await this.anunciantesService.existeCuitVigente(cuit, transaccion)) {
+          throw new ConflictException(MENSAJE_CUIT_EN_USO);
+        }
+        await this.anunciantesService.actualizarDatos(
+          solicitud.anunciante.idUsuario,
+          { cuit_cuil: cuit, numero_contacto: numeroContacto, tipoAnunciante },
+          transaccion,
+        );
+        solicitud.anunciante.cuit_cuil = cuit;
+        solicitud.anunciante.numero_contacto = numeroContacto;
+        solicitud.anunciante.tipoAnunciante = tipoAnunciante;
+        Object.assign(solicitud, datosEmpresa);
+        solicitud.actualizada_en = new Date();
         return persistencia.guardarSolicitud(solicitud);
       },
     );

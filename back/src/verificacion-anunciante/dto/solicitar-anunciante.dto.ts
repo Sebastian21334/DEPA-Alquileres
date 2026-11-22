@@ -1,52 +1,11 @@
-import {
-  IsNotEmpty,
-  IsString,
-  MaxLength,
-  IsNumber,
-  IsOptional,
-  Matches,
-} from 'class-validator';
+import { Equals, IsString, Matches } from 'class-validator';
+import { DatosAnuncianteBaseDto } from './datos-anunciante-base.dto';
 
-import { CbuDto } from './cbu.dto';
-
-export class SolicitarAnuncianteDto extends CbuDto {
-  // El CUIT/CUIL y el contacto identifican la solicitud que revisará un administrador.
+export class SolicitarAnuncianteDto extends DatosAnuncianteBaseDto {
   @IsString()
-  @IsNotEmpty()
-  @MaxLength(15)
-  @Matches(/^\d{2}-?\d{8}-?\d$/)
-  cuit: string;
+  @Matches(/^\d{22}$/)
+  cbu: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(20)
-  numero_contacto: string;
-
-  @IsNumber()
-  // El service resuelve este ID contra el catálogo antes de guardar.
-  idTipoAnunciante: number;
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  razon_social?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(50)
-  matricula_profesional?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  colegio_profesional?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(255)
-  domicilio_comercial?: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(15)
-  dni_corredor?: string;
+  @Equals(true)
+  titularidad_declarada: boolean;
 }

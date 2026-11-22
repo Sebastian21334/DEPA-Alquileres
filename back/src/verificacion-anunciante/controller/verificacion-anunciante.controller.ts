@@ -23,7 +23,7 @@ import { Roles } from '../../seguridad/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 import { PruebaVidaService } from '../service/prueba-vida.service';
-import { DatosInmobiliariaDto } from '../dto/datos-inmobiliaria.dto';
+import { ActualizarDatosSolicitanteDto } from '../dto/actualizar-datos-solicitante.dto';
 import { RevisarVerificacionDto } from '../dto/revisar-verificacion.dto';
 import { CbuDto } from '../dto/cbu.dto';
 
@@ -126,10 +126,10 @@ export class VerificacionAnuncianteController {
     return { mensaje: 'El CBU quedó pendiente de revisión' };
   }
 
-  @Patch('mi-solicitud/datos-inmobiliaria')
+  @Patch('mi-solicitud/datos')
   @UseGuards(JwtAuthGuard)
-  actualizarDatosInmobiliaria(@Req() req: AuthenticatedRequest, @Body() dto: DatosInmobiliariaDto) {
-    return this.verificacionService.actualizarDatosInmobiliaria(
+  actualizarDatosSolicitud(@Req() req: AuthenticatedRequest, @Body() dto: ActualizarDatosSolicitanteDto) {
+    return this.verificacionService.actualizarDatosSolicitud(
       req.user.id,
       dto,
     );

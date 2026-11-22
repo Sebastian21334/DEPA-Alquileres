@@ -19,6 +19,8 @@ export interface SolicitarAnuncianteDto {
   dni_corredor?: string;
 }
 
+export type ActualizarDatosSolicitudDto = Omit<SolicitarAnuncianteDto, 'cbu' | 'titularidad_declarada'>;
+
 export interface DocumentosVerificacion {
   dni_frente: File;
   dni_dorso: File;
@@ -155,8 +157,12 @@ export class PerfilService {
     );
   }
 
-  actualizarDatosInmobiliaria(datos: { razon_social: string; matricula_profesional: string; colegio_profesional: string; domicilio_comercial: string; dni_corredor: string; }) {
-    return this.http.patch(`${this.api}/anunciantes/mi-solicitud/datos-inmobiliaria`, datos);
+  actualizarDatosSolicitud(dto: ActualizarDatosSolicitudDto) {
+    return this.http.patch(`${this.api}/anunciantes/mi-solicitud/datos`, dto).pipe(
+      tap(() => {
+        this.solicitud$ = null;
+      }),
+    );
   }
 
   /** POST /anunciantes/mi-solicitud/documentos o /reenviar si la anterior fue rechazada. */

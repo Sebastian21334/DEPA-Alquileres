@@ -31,6 +31,12 @@
 .steps li.is-current { border-color: var(--color-accent); color: var(--color-text); }
 .steps li.is-current span { background: var(--color-accent); color: #fff; }
 .steps li.is-done span { background: #dcfce7; color: #15803d; }
+.steps li:has(button) { padding: 0; }
+.step-link { display: flex; width: 100%; align-items: center; gap: 0.55rem; padding: 0.7rem 0.9rem; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.step-link:disabled { cursor: default; }
+.company-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem 1rem; margin: 0.75rem 0 1rem; }
+.company-summary dt { color: var(--color-text-muted); font-size: 0.72rem; font-weight: 600; }
+.company-summary dd { margin: 0.15rem 0 0; font-weight: 650; overflow-wrap: anywhere; }
 
 .form-actions { margin-top: 1.25rem; }
 .intro { margin: 0 0 1rem; }
@@ -89,6 +95,7 @@
 
 @media (max-width: 640px) {
   .docs { grid-template-columns: 1fr; }
+  .company-summary { grid-template-columns: 1fr; }
   .steps li { justify-content: center; font-size: 0; gap: 0; }
   .steps span { font-size: 0.8rem; }
 }
