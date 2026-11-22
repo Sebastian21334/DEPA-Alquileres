@@ -1,10 +1,12 @@
 import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { finalize } from 'rxjs';
+import { catchError, finalize, of, switchMap } from 'rxjs';
 import { LucideBadgeCheck, LucideBuilding2, LucideMapPin, LucideSearch } from '@lucide/angular';
 import { ListingService } from '../home/listing.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import { AnunciantePublico } from '../../shared/models/anunciante.model';
+import { AdvertiserProfileService } from './advertiser-profile.service';
 import { ListingCardComponent } from '../../shared/components/listing-card/listing-card.component';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
@@ -26,10 +28,13 @@ export class AdvertiserProfileComponent {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly listings = inject(ListingService);
+  private readonly profiles = inject(AdvertiserProfileService);
   private readonly publicationsHeading = viewChild<ElementRef<HTMLElement>>('publicationsHeading');
   private readonly requestedPage = signal(1);
   protected readonly pageSize = 6;
   protected readonly publications = signal<Publicacion[]>([]);
+  protected readonly perfil = signal<AnunciantePublico | null>(null);
+  protected readonly publicationsError = signal(false);
   protected readonly searchText = signal('');
   protected readonly matchingPublications = computed(() => {
     const query = normalizeSearchText(this.searchText()).trim();
@@ -50,11 +55,7 @@ export class AdvertiserProfileComponent {
   );
   protected readonly loading = signal(true);
   protected readonly error = signal('');
-  protected readonly advertiser = computed(() => this.publications()[0]?.anunciante ?? null);
-  protected readonly name = computed(() => {
-    const user = this.advertiser()?.usuario;
-    return user ? `${user.nombre} ${user.apellido}`.trim() : 'Anunciante';
-  });
+  protected readonly name = computed(() => this.perfil()?.nombre_publico?.trim() || 'Anunciante');
   protected readonly locations = computed(() =>
     Array.from(
       new Set(
@@ -76,14 +77,20 @@ export class AdvertiserProfileComponent {
       const page = Number(params.get('pagina'));
       this.requestedPage.set(Number.isSafeInteger(page) && page > 0 ? page : 1);
     });
-    this.listings.getByAdvertiser(id).pipe(
+    this.profiles.getPublicProfile(id).pipe(
+      switchMap((perfil) => {
+        this.perfil.set(perfil);
+        return this.listings.getByAdvertiser(id).pipe(
+          catchError(() => {
+            this.publicationsError.set(true);
+            return of([]);
+          }),
+        );
+      }),
       finalize(() => this.loading.set(false)),
       takeUntilDestroyed(this.destroyRef),
     ).subscribe({
-      next: (items) => {
-        this.publications.set(items);
-        if (!items.length) this.error.set('Este anunciante no tiene publicaciones activas.');
-      },
+      next: (items) => this.publications.set(items),
       error: () => this.error.set('No pudimos cargar este perfil.'),
     });
   }
