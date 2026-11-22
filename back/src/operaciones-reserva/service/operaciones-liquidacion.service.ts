@@ -120,7 +120,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     return this.liquidaciones.listarPagosRegistrados();
   }
 
-  listarPagosDelAnunciante(idUsuario: number, idPublicacion: number) {
+  listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
     return this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion);
   }
 

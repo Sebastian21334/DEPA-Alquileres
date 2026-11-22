@@ -95,13 +95,15 @@ export class LiquidacionesService {
     return this.formatearPagosRegistrados(pagos);
   }
 
-  async listarPagosDelAnunciante(idUsuario: number, idPublicacion: number) {
+  /** Sin `idPublicacion` devuelve los pagos de todas las publicaciones del anunciante (T55). */
+  async listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
     const pagos = await this.liquidaciones.listarPagosRegistrados(
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
       { idUsuario, idPublicacion },
     );
-    return this.formatearPagosRegistrados(pagos).map(({ id, reservaId, fecha, importe, moneda, referencia, observacion }) => ({
-      id, reservaId, fecha, importe, moneda, referencia, observacion,
+    // El anunciante no recibe datos del administrador que registró el pago.
+    return this.formatearPagosRegistrados(pagos).map(({ id, reservaId, publicacion, fecha, importe, moneda, referencia, observacion }) => ({
+      id, reservaId, publicacion, fecha, importe, moneda, referencia, observacion,
     }));
   }
 

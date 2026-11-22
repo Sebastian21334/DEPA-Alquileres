@@ -23,6 +23,14 @@ export class LiquidacionesReservaController {
     return this.liquidacionesService.listarPagosRegistrados();
   }
 
+  /** Historial del panel del anunciante: pagos de todas sus publicaciones (T55). */
+  @UseGuards(JwtAuthGuard)
+  @PermitirAccesoLimitado()
+  @Get('liquidaciones/mias')
+  listarMisPagos(@Req() req: AuthenticatedRequest) {
+    return this.liquidacionesService.listarPagosDelAnunciante(req.user.id);
+  }
+
   @UseGuards(JwtAuthGuard)
   @PermitirAccesoLimitado()
   @Get('liquidaciones/publicacion/:id')

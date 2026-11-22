@@ -7,6 +7,7 @@ import { GestionPublicacionesService, type PagoPublicacion } from '../../shared/
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
+import { HistorialLiquidacionesComponent } from '../../shared/components/historial-liquidaciones/historial-liquidaciones.component';
 import { moverImagen } from '../../shared/utils/orden-imagenes';
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -17,7 +18,7 @@ const MAX_IMAGEN = 10 * 1024 * 1024;
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, GaleriaImagenesComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, SpinnerComponent, GaleriaImagenesComponent, HistorialLiquidacionesComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
@@ -85,16 +86,6 @@ export class MisPublicacionesComponent {
       next: pagos => this.liquidaciones.set(pagos),
       error: () => this.errorLiquidaciones.set(true),
     });
-  }
-
-  protected importeLiquidacion(pago: PagoPublicacion): string {
-    if (pago.importe === null) return 'Importe sin registrar';
-    const importe = pago.importe.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return [pago.moneda, importe].filter(Boolean).join(' ');
-  }
-
-  protected fechaLiquidacion(valor: string): string {
-    return new Date(valor).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
   }
 
   protected eliminar(pub: Publicacion): void {

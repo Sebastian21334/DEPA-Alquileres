@@ -8,6 +8,8 @@ import { Imagen } from '../models/imagen.model';
 export interface PagoPublicacion {
   id: string;
   reservaId: number;
+  /** Título de la publicación; el panel del anunciante lo muestra porque junta todas. */
+  publicacion?: string | null;
   fecha: string | null;
   importe: number | null;
   moneda: string | null;
@@ -42,6 +44,11 @@ export class GestionPublicacionesService {
 
   listarLiquidaciones(idPublicacion: number): Observable<PagoPublicacion[]> {
     return this.http.get<PagoPublicacion[]>(`${this.api}/reservas/liquidaciones/publicacion/${idPublicacion}`);
+  }
+
+  /** Pagos registrados de todas las publicaciones del anunciante autenticado (T55). */
+  listarMisLiquidaciones(): Observable<PagoPublicacion[]> {
+    return this.http.get<PagoPublicacion[]>(`${this.api}/reservas/liquidaciones/mias`);
   }
 
   /** POST /publicaciones (alineado con back/src/publicaciones/dto/crear-publicacion.dto.ts). */
