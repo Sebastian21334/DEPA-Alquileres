@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
 import {
   ANUNCIANTES_REPOSITORY,
@@ -24,6 +24,20 @@ export class AnunciantesService {
 
   buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null> {
     return this.anunciantesRepo.buscarCbuValidado(idUsuario, transaccion);
+  }
+
+  existeCuitVigente(cuit: string, transaccion?: EntityManager): Promise<boolean> {
+    return this.anunciantesRepo.existeCuitVigente(cuit, transaccion);
+  }
+
+  async actualizarDatos(idUsuario: number, datos: { cuit_cuil: string; numero_contacto: string; tipoAnunciante: TipoAnunciante }, transaccion: EntityManager): Promise<void> {
+    try {
+      const actualizado = await this.anunciantesRepo.actualizarDatos(idUsuario, datos, transaccion);
+      if (!actualizado) throw new NotFoundException('Anunciante no encontrado');
+    } catch (error) {
+      if (error instanceof ValorDuplicadoError) throw new ConflictException(MENSAJE_CUIT_EN_USO);
+      throw error;
+    }
   }
 
   actualizarCbuValidado(idUsuario: number, cbu: string, transaccion: EntityManager): Promise<void> {
