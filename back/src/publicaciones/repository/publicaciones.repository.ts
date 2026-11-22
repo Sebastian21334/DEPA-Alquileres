@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
-import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import type { EstadoPublicacionAdministracion } from '../dto/listar-publicaciones-administracion.dto';
 import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MoreThan, MoreThanOrEqual, Repository, SelectQueryBuilder } from 'typeorm';
+import { IsNull, MoreThan, MoreThanOrEqual, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
 import {
   CategoriaInicio,
@@ -87,6 +88,12 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     await this.repo.update({ id }, { activa: false, motivo_baja_admin: motivo });
   }
 
+  async reactivar(id: number, activa: boolean): Promise<boolean> {
+    // El filtro por motivo impide que dos pedidos simultáneos reactiven la misma publicación.
+    const resultado = await this.repo.update({ id, eliminada: false, motivo_baja_admin: Not(IsNull()) }, { activa, motivo_baja_admin: null });
+    return (resultado.affected ?? 0) > 0;
+  }
+
   async incrementarVisualizaciones(id: number): Promise<void> {
     await this.repo.increment({ id }, 'visualizaciones', 1);
   }
@@ -133,7 +140,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
-  buscarAdministracion(consulta: ListarAdministracionDto) {
+  buscarAdministracion(consulta: ListarPublicacionesAdministracionDto) {
     const query = this.repo.createQueryBuilder('publicacion')
       .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
       .leftJoinAndSelect('anunciante.usuario', 'usuario')
@@ -141,6 +148,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .leftJoinAndSelect('publicacion.provincia', 'provincia')
       .orderBy('publicacion.fecha_publicacion', 'DESC')
       .addOrderBy('publicacion.id', 'DESC');
+    this.aplicarEstadoAdministracion(query, consulta.estado);
     if (consulta.q?.trim()) {
       query.andWhere(
         "POSITION(:q IN LOWER(CONCAT_WS(' ', publicacion.id, publicacion.titulo, usuario.nombre, usuario.apellido, usuario.email))) > 0",
@@ -148,6 +156,22 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       );
     }
     return paginar(query, consulta);
+  }
+
+  private aplicarEstadoAdministracion(query: SelectQueryBuilder<Publicacion>, estado: EstadoPublicacionAdministracion = 'todas'): void {
+    switch (estado) {
+      case 'activas':
+        query.andWhere('publicacion.activa = true AND publicacion.motivo_baja_admin IS NULL');
+        break;
+      case 'inactivas':
+        query.andWhere('publicacion.activa = false AND publicacion.motivo_baja_admin IS NULL');
+        break;
+      case 'bajas':
+        query.andWhere('publicacion.motivo_baja_admin IS NOT NULL');
+        break;
+      case 'todas':
+        break;
+    }
   }
 
   buscarTodasActivas(): Promise<Publicacion[]> {
