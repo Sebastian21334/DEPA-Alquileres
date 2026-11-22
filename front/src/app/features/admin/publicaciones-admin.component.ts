@@ -2,16 +2,16 @@ import { isPlatformBrowser } from '@angular/common';
 import { Component, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { LucideSearch } from '@lucide/angular';
+import { LucideCheck, LucideSearch } from '@lucide/angular';
 import { Observable, Subscription } from 'rxjs';
 import { ToastService } from '../../core/services/toast.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
-import { AdminService } from './admin.service';
+import { AdminPublicacionEstado, AdminService } from './admin.service';
 
 @Component({
   selector: 'app-publicaciones-admin',
   standalone: true,
-  imports: [FormsModule, LucideSearch],
+  imports: [FormsModule, LucideCheck, LucideSearch],
   templateUrl: './publicaciones-admin.component.html',
   styleUrl: './publicaciones-admin.component.scss',
 })
@@ -22,6 +22,13 @@ export class PublicacionesAdminComponent {
   private publicationsRequest?: Subscription;
   protected readonly publications = signal<Publicacion[]>([]);
   protected readonly publicationQuery = signal('');
+  protected readonly estado = signal<AdminPublicacionEstado>('todas');
+  protected readonly estados: { valor: AdminPublicacionEstado; etiqueta: string }[] = [
+    { valor: 'todas', etiqueta: 'Todas' },
+    { valor: 'activas', etiqueta: 'Activas' },
+    { valor: 'inactivas', etiqueta: 'Inactivas' },
+    { valor: 'bajas', etiqueta: 'Dadas de baja' },
+  ];
   protected readonly bajaId = signal<number | null>(null);
   protected bajaReason = '';
   protected readonly publicationsPage = signal(1);
@@ -44,12 +51,18 @@ export class PublicacionesAdminComponent {
     this.loadPublications(1);
   }
 
+  protected cambiarEstado(valor: AdminPublicacionEstado): void {
+    if (valor === this.estado()) return;
+    this.estado.set(valor);
+    this.loadPublications(1);
+  }
+
   protected loadPublications(page: number): void {
     if (page < 1 || page > this.publicationsPages()) return;
     this.publicationsRequest?.unsubscribe();
     this.publicationsLoading.set(true);
     this.bajaId.set(null);
-    this.publicationsRequest = this.api.listarPublicaciones(page, this.publicationQuery().trim())
+    this.publicationsRequest = this.api.listarPublicaciones(page, this.publicationQuery().trim(), this.estado())
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (result) => {
           this.publications.set(result.datos);
@@ -74,6 +87,25 @@ export class PublicacionesAdminComponent {
     this.bajaId.set(publication.id);
   }
 
+  protected reactivar(publicacion: Publicacion): void {
+    if (this.busy()) return;
+    this.ejecutar(
+      `publication-${publicacion.id}`,
+      this.api.reactivarPublicacion(publicacion.id),
+      (reactivada) => {
+        this.loadPublications(this.publicationsPage());
+        if (reactivada.activa) {
+          this.toast.mostrar('Publicación reactivada. Ya no figura como dada de baja.', 'exito');
+          return;
+        }
+        this.toast.mostrar(
+          'Publicación reactivada, pero sigue inactiva: necesita al menos una imagen para publicarse.',
+          'advertencia',
+        );
+      },
+    );
+  }
+
   protected confirmBaja(publication: Publicacion): void {
     if (this.busy()) return;
     const motivo = this.bajaReason.trim();
@@ -81,14 +113,12 @@ export class PublicacionesAdminComponent {
     this.ejecutar(
       `publication-${publication.id}`,
       this.api.darDeBajaPublicacion(publication.id, motivo),
-      ({ publicacion, correoEnviado }) => {
-        this.publications.update((items) =>
-          items.map((item) => (item.id === publicacion.id ? publicacion : item)),
-        );
+      ({ correoEnviado }) => {
+        this.loadPublications(this.publicationsPage());
         this.bajaId.set(null);
         if (!correoEnviado) {
           this.toast.mostrar(
-            'La publicación fue desactivada, pero no se pudo enviar el correo. Podés repetir la baja para reintentar el aviso.',
+            'La publicación fue desactivada, pero no se pudo enviar el correo. Podés reenviar el aviso con «Actualizar baja / reenviar aviso».',
             'advertencia',
           );
           return;

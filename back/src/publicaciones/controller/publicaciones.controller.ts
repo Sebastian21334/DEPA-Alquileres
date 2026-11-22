@@ -1,5 +1,5 @@
 import { ListarPublicacionesDto } from '../dto/listar-publicaciones.dto';
-import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
 import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guard';
 import {
   Controller,
@@ -43,7 +43,7 @@ export class PublicacionesController {
   @Get('administracion')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarAdministracionDto) {
+  listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarPublicacionesAdministracionDto) {
     return this.publicacionesService.listarAdministracion(consulta);
   }
 
@@ -59,6 +59,13 @@ export class PublicacionesController {
   @Roles('Administrador')
   darDeBajaAdministracion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true, }),) dto: BajaPublicacionDto) {
     return this.publicacionesService.darDeBajaAdministracion(id, dto.motivo);
+  }
+
+  @Patch('administracion/:id/reactivar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  reactivarAdministracion(@Param('id', ParseIntPipe) id: number) {
+    return this.publicacionesService.reactivarAdministracion(id);
   }
 
   @Get('anunciante/:idAnunciante')

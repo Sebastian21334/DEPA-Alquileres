@@ -4,11 +4,20 @@
       <h2>Publicaciones</h2>
       <p>Da de baja publicaciones de cualquier anunciante e informale el motivo por correo.</p>
     </div>
-    <label class="search">
-      <svg lucideSearch [size]="18"></svg>
-      <input type="search" aria-label="Buscar publicaciones" placeholder="Buscar por título, ID o anunciante"
-        [ngModel]="publicationQuery()" (ngModelChange)="searchPublications($event)" maxlength="200" />
-    </label>
+    <div class="publication-filters">
+      <label class="state-filter">Estado
+        <select [ngModel]="estado()" (ngModelChange)="cambiarEstado($event)">
+          @for (item of estados; track item.valor) {
+            <option [value]="item.valor">{{ item.etiqueta }}</option>
+          }
+        </select>
+      </label>
+      <label class="search">
+        <svg lucideSearch [size]="18"></svg>
+        <input type="search" aria-label="Buscar publicaciones" placeholder="Buscar por título, ID o anunciante"
+          [ngModel]="publicationQuery()" (ngModelChange)="searchPublications($event)" maxlength="200" />
+      </label>
+    </div>
   </div>
   @if (publicationsLoading()) {
     <p class="empty">Cargando publicaciones…</p>
@@ -24,10 +33,28 @@
               <td data-label="Estado"><span class="status" [class.status--blocked]="!publication.activa">{{ publication.motivo_baja_admin ? 'Desactivada por un administrador' : publication.activa ? 'Activa' : 'Inactiva' }}</span>
                 @if (publication.motivo_baja_admin) { <small>Motivo: {{ publication.motivo_baja_admin }}</small> }
               </td>
-              <td data-label="Acciones" class="right"><button type="button" class="button button--danger-outline"
-                [disabled]="busy() !== null" (click)="openBaja(publication)">
-                {{ publication.motivo_baja_admin ? 'Actualizar baja / reenviar aviso' : 'Dar de baja' }}
-              </button></td>
+              <td data-label="Acciones" class="right">
+                <div class="row-actions">
+                  @if (publication.motivo_baja_admin) {
+                    @if (!publication.eliminada) {
+                      <button type="button" class="button button--success"
+                        [disabled]="busy() !== null" (click)="reactivar(publication)">
+                        <svg lucideCheck [size]="17" aria-hidden="true"></svg>
+                        {{ busy() === 'publication-' + publication.id ? 'Reactivando…' : 'Reactivar' }}
+                      </button>
+                    }
+                    <button type="button" class="button button--ghost"
+                      [disabled]="busy() !== null" (click)="openBaja(publication)">
+                      Actualizar baja / reenviar aviso
+                    </button>
+                  } @else {
+                    <button type="button" class="button button--danger-outline"
+                      [disabled]="busy() !== null" (click)="openBaja(publication)">
+                      Dar de baja
+                    </button>
+                  }
+                </div>
+              </td>
             </tr>
             @if (bajaId() === publication.id) {
               <tr><td colspan="4">
@@ -46,14 +73,14 @@
               </td></tr>
             }
           } @empty {
-            <tr><td colspan="4" class="empty">No se encontraron publicaciones.</td></tr>
+            <tr><td colspan="4" class="empty">{{ estado() === 'bajas' ? 'No hay publicaciones dadas de baja.' : 'No se encontraron publicaciones.' }}</td></tr>
           }
         </tbody>
       </table>
     </div>
   }
-  <nav class="pagination" aria-label="Paginación de publicaciones">
-    <span role="status">{{ publicationsTotal() }} publicaciones · Página {{ publicationsPage() }} de {{ publicationsPages() }}</span>
+  <nav class="pagination" [attr.aria-label]="estado() === 'bajas' ? 'Paginación de publicaciones dadas de baja' : 'Paginación de publicaciones'">
+    <span role="status">{{ publicationsTotal() }} {{ estado() === 'bajas' ? 'publicaciones dadas de baja' : 'publicaciones' }} · Página {{ publicationsPage() }} de {{ publicationsPages() }}</span>
     <div class="pagination__actions">
       <button type="button" class="button button--ghost" (click)="loadPublications(publicationsPage() - 1)"
         [disabled]="publicationsLoading() || busy() !== null || publicationsPage() <= 1">Anterior</button>

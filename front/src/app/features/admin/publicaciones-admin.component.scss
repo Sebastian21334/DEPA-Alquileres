@@ -6,3 +6,50 @@
 :host([hidden]) {
   display: none;
 }
+
+.publication-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.state-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #60727c;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+.state-filter select {
+  min-width: 150px;
+}
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 700px) {
+  .publication-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .state-filter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .state-filter select {
+    width: 100%;
+  }
+  .publication-filters .search {
+    width: 100%;
+    min-width: 0;
+  }
+  .row-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

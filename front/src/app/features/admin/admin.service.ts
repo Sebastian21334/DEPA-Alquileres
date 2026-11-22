@@ -8,6 +8,9 @@ import {
 } from '../../shared/services/reservation.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 
+export const ESTADOS_PUBLICACION_ADMINISTRACION = ['todas', 'activas', 'inactivas', 'bajas'] as const;
+export type AdminPublicacionEstado = (typeof ESTADOS_PUBLICACION_ADMINISTRACION)[number];
+
 export interface AdminUser {
   id: number;
   nombre: string;
@@ -148,14 +151,17 @@ export type CatalogKey =
 export class AdminService {
   private readonly http = inject(HttpClient);
   private readonly api = environment.apiUrl;
-  listarPublicaciones(pagina = 1, q = '') {
-    const params = new HttpParams().set('pagina', pagina).set('limite', 10).set('q', q);
+  listarPublicaciones(pagina = 1, q = '', estado: AdminPublicacionEstado = 'todas') {
+    const params = new HttpParams().set('pagina', pagina).set('limite', 10).set('q', q).set('estado', estado);
     return this.http.get<AdminPage<Publicacion>>(`${this.api}/publicaciones/administracion`, { params });
   }
   darDeBajaPublicacion(id: number, motivo: string) {
     return this.http.patch<{ publicacion: Publicacion; correoEnviado: boolean }>(
       `${this.api}/publicaciones/administracion/${id}/baja`, { motivo },
     );
+  }
+  reactivarPublicacion(id: number) {
+    return this.http.patch<Publicacion>(`${this.api}/publicaciones/administracion/${id}/reactivar`, {});
   }
   obtenerPerfilUsuario(id: number) {
     return this.http.get<AdminUser & { foto_url: string | null }>(`${this.api}/usuarios/administracion/${id}`);
