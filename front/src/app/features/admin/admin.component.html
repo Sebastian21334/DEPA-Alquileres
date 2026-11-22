@@ -200,7 +200,7 @@
       <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
     } @else {
       <div class="settlement-list">
-        @for (settlement of settlements(); track settlement.id) {
+        @for (settlement of liquidacionesOrdenadas(); track settlement.id) {
           <article class="settlement-card">
             <div>
               <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
@@ -218,6 +218,8 @@
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
               <p><strong>Importe:</strong> {{ montoLiquidacion(settlement) }}</p>
+              <p><strong>Comisión DEPA:</strong> @if (settlement.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ settlement.porcentaje_comision_depa }} % · {{ settlement.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
+              <p><strong>Neto al anunciante:</strong> {{ settlement.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</p>
               @if (settlement.cotizacion_dolar; as dolar) {
                 <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
                 <p>Cotización #{{ dolar.id }} · {{ dolar.proveedor }} · Publicada: {{ dolar.actualizada_fuente_en }} · Aceptada: {{ settlement.cotizacion_aceptada_en }}.</p>
@@ -232,7 +234,21 @@
               }
               <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
               @if (settlement.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO') {
-                <button type="button" class="button button--success" [disabled]="diasEsperaLiquidacion(settlement) !== 0" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+                @let diasPago = diasEsperaLiquidacion(settlement);
+                @if (diasPago === 0) {
+                  <button type="button" class="button button--success" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+                } @else {
+                  <span class="settlement-payment-unavailable" tabindex="0" [attr.aria-describedby]="'payment-wait-' + settlement.id">
+                    <button type="button" class="button button--success" disabled>Registrar pago al anunciante</button>
+                    <span class="settlement-payment-unavailable__tooltip" role="tooltip" [id]="'payment-wait-' + settlement.id">
+                      @if (diasPago === null) {
+                        No se puede registrar el pago: la fecha de habilitación está pendiente de revisión.
+                      } @else {
+                        No se puede registrar el pago todavía. {{ diasPago === 1 ? 'Falta 1 día' : 'Faltan ' + diasPago + ' días' }} para habilitarlo.
+                      }
+                    </span>
+                  </span>
+                }
               }
             </div>
           </article>
@@ -332,7 +348,7 @@
       <p class="empty">Todavía no hay pagos a anunciantes registrados.</p>
     } @else {
       <div class="table-wrap settlement-history">
-        <table>
+        <table class="settlement-history__table">
           <caption class="settlement-history-caption">Pagos registrados a anunciantes</caption>
           <thead>
             <tr><th scope="col">Fecha de registro</th><th scope="col">Reserva</th><th scope="col">Anunciante</th><th scope="col">Importe</th><th scope="col">Comprobante y observación</th><th scope="col">Registrado por</th></tr>
@@ -340,12 +356,17 @@
           <tbody>
             @for (pago of historialLiquidaciones(); track pago.id) {
               <tr>
-                <td>{{ pago.fecha ? (pago.fecha | date:'dd/MM/yyyy HH:mm':'-0300') : 'Sin fecha' }}</td>
-                <td><strong>#{{ pago.reservaId }}</strong><br />{{ pago.publicacion || 'Publicación no disponible' }}</td>
-                <td>{{ pago.anunciante || 'Sin datos' }}</td>
-                <td>{{ pago.importe !== null && pago.moneda ? (pago.importe | currency:pago.moneda:'code') : (pago.importe ?? 'Sin importe') }}</td>
-                <td>{{ pago.referencia || 'Sin referencia' }}@if (pago.observacion) { <p class="settlement-note">{{ pago.observacion }}</p> }</td>
-                <td>{{ pago.administrador || 'Sin datos' }}</td>
+                <td data-label="Fecha de registro">
+                  @if (pago.fecha) {
+                    <span class="settlement-history__date"><svg lucideCalendarDays [size]="16" aria-hidden="true"></svg>{{ pago.fecha | date:'dd/MM/yyyy':'-0300' }}</span>
+                    <span class="settlement-history__date settlement-history__time"><svg lucideClock3 [size]="16" aria-hidden="true"></svg>{{ pago.fecha | date:'HH:mm':'-0300' }}</span>
+                  } @else { Sin fecha }
+                </td>
+                <td data-label="Reserva"><strong class="settlement-history__reservation">#{{ pago.reservaId }}</strong><span class="settlement-history__publication">{{ pago.publicacion || 'Publicación no disponible' }}</span></td>
+                <td data-label="Anunciante">{{ pago.anunciante || 'Sin datos' }}</td>
+                <td data-label="Importe" class="settlement-history__amount">{{ pago.importe !== null && pago.moneda ? (pago.importe | currency:pago.moneda:'code') : (pago.importe ?? 'Sin importe') }}</td>
+                <td data-label="Comprobante y observación">{{ pago.referencia || 'Sin referencia' }}@if (pago.observacion) { <p class="settlement-note">{{ pago.observacion }}</p> }</td>
+                <td data-label="Registrado por">{{ pago.administrador || 'Sin datos' }}</td>
               </tr>
             }
           </tbody>
@@ -384,23 +405,33 @@
     </form>
   </dialog>
 
-  <dialog #dialogoPagoAnunciante class="block-dialog refund-dialog cancellation-approval-dialog" aria-labelledby="advertiser-payment-title"
+  <dialog #dialogoPagoAnunciante class="block-dialog refund-dialog cancellation-approval-dialog advertiser-payment-dialog" aria-labelledby="advertiser-payment-title"
     (cancel)="cerrarPagoAnunciante($event)">
     <form class="block-form" (ngSubmit)="confirmarPagoAnunciante()" [attr.aria-busy]="registrandoPagoAnunciante()">
-      <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideWallet [size]="26"></svg></div>
-      <h2 id="advertiser-payment-title">Registrar pago al anunciante</h2>
+      <div class="advertiser-payment__header">
+        <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideWallet [size]="26"></svg></div>
+        <div>
+          <h2 id="advertiser-payment-title">Registrar pago al anunciante</h2>
+          @if (pagoAnuncianteSeleccionado(); as item) {
+            <p class="refund-meta">Reserva #{{ item.id }} · {{ item.publicacion?.titulo ?? 'Publicación eliminada' }}</p>
+          }
+        </div>
+      </div>
       @if (pagoAnuncianteSeleccionado(); as item) {
-        <p class="refund-meta">Reserva #{{ item.id }} · {{ item.publicacion?.titulo ?? 'Publicación eliminada' }}</p>
-        <p><strong>Anunciante</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
-        <p><strong>Importe</strong> {{ montoLiquidacion(item) }}</p>
+        <p class="advertiser-payment__advertiser"><strong>Anunciante</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
+        <div class="advertiser-payment__summary">
+          <p class="advertiser-payment__row"><strong>Importe total</strong><span>{{ montoLiquidacion(item) }}</span></p>
+          <p class="advertiser-payment__commission"><strong>Comisión DEPA:</strong> @if (item.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ item.porcentaje_comision_depa }} % · {{ item.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
+          <p class="advertiser-payment__row advertiser-payment__net"><strong>Importe a transferir</strong><strong>{{ item.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</strong></p>
+        </div>
       }
       <p class="refund-help" id="advertiser-payment-help">Registrá una transferencia que ya realizaste. El anunciante podrá ver la referencia y la observación en Mis publicaciones.</p>
       @if (consultandoCbuParaPago()) {
         <p role="status">Consultando el CBU validado…</p>
       } @else if (cbuParaPago(); as cbu) {
-        <p><strong>CBU validado para transferir</strong> <code>{{ cbu }}</code></p>
+        <p class="advertiser-payment__cbu"><strong>CBU validado para transferir</strong> <code>{{ cbu }}</code></p>
       } @else if (!errorPagoAnunciante()) {
-        <p class="refund-error" role="alert">El anunciante necesita un CBU validado para recibir el pago.</p>
+        <p class="refund-error advertiser-payment__alert" role="alert">El anunciante necesita un CBU validado para recibir el pago.</p>
       }
       <label for="advertiser-payment-reference">Referencia o número de comprobante <span class="muted">(opcional)</span></label>
       <input id="advertiser-payment-reference" name="referenciaPagoAnunciante" [(ngModel)]="referenciaPagoAnunciante"
@@ -409,7 +440,7 @@
       <label for="advertiser-payment-note">Observación <span class="muted">(opcional)</span></label>
       <textarea id="advertiser-payment-note" name="observacionPagoAnunciante" [(ngModel)]="observacionPagoAnunciante"
         rows="3" maxlength="500" [disabled]="registrandoPagoAnunciante()"></textarea>
-      @if (errorPagoAnunciante()) { <p class="refund-error" role="alert">{{ errorPagoAnunciante() }}</p> }
+      @if (errorPagoAnunciante()) { <p class="refund-error advertiser-payment__alert" role="alert">{{ errorPagoAnunciante() }}</p> }
       <div class="block-actions">
         <button type="button" class="button button--ghost" [disabled]="registrandoPagoAnunciante()" (click)="cerrarPagoAnunciante()">Volver</button>
         <button type="submit" class="button button--success" [disabled]="registrandoPagoAnunciante() || !cbuParaPago()">
@@ -942,6 +973,29 @@
     }
   </section>
 
+  <section class="commission-section admin-module" [hidden]="activeSection() !== 'comision'" aria-label="Configuración de comisión">
+    @if (comisionCargando()) {
+      <p role="status">Cargando comisión…</p>
+    } @else if (comisionError()) {
+      <p class="alert alert--error" role="alert">No se pudo cargar la comisión: {{ comisionError() }}</p>
+      <button type="button" class="button button--ghost" (click)="cargarComision()">Reintentar</button>
+    } @else if (comisionActual !== null) {
+      <div class="commission-grid">
+        <div class="commission-current">
+          <div class="commission-current__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7l10-5Z"/><path d="m2 12 10 5 10-5M2 17l10 5 10-5"/></svg></div>
+          <span>Porcentaje actual</span>
+          <strong>{{ comisionActual }}<span> %</span></strong>
+        </div>
+        <form class="commission-form" (ngSubmit)="guardarComision()">
+          <h2><span class="commission-form__icon" aria-hidden="true">%</span> Cambiar comisión</h2>
+          <p class="commission-info"><span aria-hidden="true">ⓘ</span> El porcentaje se aplica a nuevas reservas y no modifica las anteriores.</p>
+          <label for="comision-depa">Nuevo porcentaje</label>
+          <div class="commission-input"><input id="comision-depa" type="number" name="comision" min="0" max="100" step="0.01" [(ngModel)]="comisionNueva" required /><span aria-hidden="true">%</span></div>
+          <button class="commission-save" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h14l3 3v15H3V3h1Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>Guardar comisión</button>
+        </form>
+      </div>
+    }
+  </section>
   <section class="panel management admin-module" [hidden]="activeSection() !== 'catalogos'">
     <div class="panel__title">
       <div>

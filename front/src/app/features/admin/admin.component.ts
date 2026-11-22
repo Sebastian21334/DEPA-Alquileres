@@ -78,6 +78,7 @@ const ADMIN_NAVIGATION = [
     { id: 'catalogos', label: 'Catálogos' },
     { id: 'ubicaciones', label: 'Ubicaciones' },
     { id: 'cotizaciones', label: 'Cotizaciones' },
+    { id: 'comision', label: 'Comisión DEPA' },
   ] },
 ] as const;
 
@@ -97,6 +98,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   catalogos: 'Administrá las opciones que usa el sistema en los formularios.',
   ubicaciones: 'Administrá las provincias y ciudades disponibles para las publicaciones.',
   cotizaciones: 'Consultá y administrá las cotizaciones que usa el sistema para convertir importes.',
+  comision: 'Configurá la comisión aplicable a nuevas reservas.',
 };
 
 @Component({
@@ -132,6 +134,10 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   styleUrls: ['./admin.component.scss', './admin-dashboard.scss'],
 })
 export class AdminComponent {
+  protected comisionActual: number | null = null;
+  protected comisionNueva: number | null = null;
+  protected readonly comisionCargando = signal(false);
+  protected readonly comisionError = signal('');
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly navigation = ADMIN_NAVIGATION;
@@ -191,6 +197,14 @@ export class AdminComponent {
   protected readonly registeredUsers = signal(0);
   protected readonly requests = signal<VerificationRequest[]>([]);
   protected readonly settlements = signal<AdminSettlement[]>([]);
+  protected readonly liquidacionesOrdenadas = computed(() => [...this.settlements()].sort((a, b) => {
+    const prioridad = (item: AdminSettlement): number => {
+      if (item.estado_liquidacion !== 'PENDIENTE_PAGO_PROPIETARIO') return 3;
+      const dias = this.diasEsperaLiquidacion(item);
+      return dias === 0 ? 0 : dias === null ? 2 : 1;
+    };
+    return prioridad(a) - prioridad(b);
+  }));
   protected readonly claims = signal<Reclamo[]>([]);
   protected readonly errorReclamos = signal('');
   protected readonly gestionReclamo = signal<{ id: number; accion: 'mensaje' | 'resolver' } | null>(null);
@@ -324,6 +338,7 @@ export class AdminComponent {
   }
   protected reload(): void {
     if (this.activeSection() === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
+    if (this.activeSection() === 'comision') this.cargarComision();
     this.otherLoading.set(true);
     this.summaryError.set(false);
     this.loadPublications(this.publicationsPage());
@@ -392,6 +407,7 @@ export class AdminComponent {
 
   protected openSection(section: AdminSection, caseId?: number): void {
     this.activeSection.set(section);
+    if (section === 'comision') this.cargarComision();
     if (section === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
     if (section === 'reembolsos' && caseId !== undefined) {
       const indice = this.orderedRefunds().findIndex(({ id }) => id === caseId);
@@ -870,6 +886,32 @@ export class AdminComponent {
     return Number(settlement.monto_pago).toLocaleString('es-AR', {
       style: 'currency',
       currency: settlement.moneda_contratada ?? 'ARS',
+    });
+  }
+
+  protected guardarComision(): void {
+    const porcentaje = this.comisionNueva;
+    if (porcentaje == null || !Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100 || Math.abs(Math.round(porcentaje * 100) - porcentaje * 100) > 1e-8) {
+      this.toast.mostrar('Ingresá un porcentaje entre 0 y 100 con hasta dos decimales.', 'error');
+      return;
+    }
+    this.api.actualizarComisionDepa(porcentaje).subscribe({ next: (resultado) => { this.comisionActual = resultado.porcentaje; this.toast.mostrar('Comisión actualizada para nuevas reservas.', 'exito'); }, error: (e: Error) => this.toast.mostrar(e.message, 'error') });
+  }
+
+  protected cargarComision(): void {
+    this.comisionCargando.set(true);
+    this.comisionError.set('');
+    this.api.obtenerComisionDepa().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: ({ porcentaje }) => {
+        this.comisionActual = porcentaje;
+        this.comisionNueva = porcentaje;
+        this.comisionCargando.set(false);
+      },
+      error: (error: Error) => {
+        this.comisionActual = null;
+        this.comisionCargando.set(false);
+        this.comisionError.set(error.message || 'No se pudo consultar la comisión.');
+      },
     });
   }
 
