@@ -10,6 +10,8 @@ import { Publicacion } from '../../shared/models/publicacion.model';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { Reserva, ReservationService } from '../../shared/services/reservation.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
+import { normalizarTexto } from '../../shared/utils/texto';
 
 interface SerieMensual {
   key: string;
@@ -28,7 +30,7 @@ interface RendimientoPublicacion {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent],
+  imports: [RouterLink, SpinnerComponent, PaginadorComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -108,7 +110,7 @@ export class DashboardComponent {
   });
   protected readonly maxActividad = computed(() => Math.max(...this.actividadSemanal().map((item) => item.value), 1));
 
-  protected readonly rendimiento = computed<RendimientoPublicacion[]>(() => {
+  protected readonly rendimientoCompleto = computed<RendimientoPublicacion[]>(() => {
     const aggregates = new Map<number, { reservas: number; ingresos: number }>();
     for (const reserva of this.reservasValidas()) {
       const id = reserva.publicacion?.id;
@@ -125,8 +127,24 @@ export class DashboardComponent {
         reservas: aggregates.get(publicacion.id)?.reservas ?? 0,
         ingresos: aggregates.get(publicacion.id)?.ingresos ?? 0,
       }))
-      .sort((a, b) => b.visualizaciones - a.visualizaciones || b.reservas - a.reservas)
-      .slice(0, 5);
+      .sort((a, b) => b.visualizaciones - a.visualizaciones || b.reservas - a.reservas);
+  });
+
+  protected readonly busquedaRendimiento = signal('');
+  protected readonly paginaRendimiento = signal(1);
+  protected readonly rendimientoFiltrado = computed(() => {
+    const terminos = normalizarTexto(this.busquedaRendimiento()).trim().split(/\s+/).filter(Boolean);
+    if (!terminos.length) return this.rendimientoCompleto();
+    return this.rendimientoCompleto().filter(({ publicacion }) => {
+      const texto = normalizarTexto(publicacion.titulo);
+      return terminos.every((termino) => texto.includes(termino));
+    });
+  });
+  protected readonly paginasRendimiento = computed(() => Math.max(1, Math.ceil(this.rendimientoFiltrado().length / 5)));
+  protected readonly paginaRendimientoActual = computed(() => Math.min(this.paginaRendimiento(), this.paginasRendimiento()));
+  protected readonly rendimiento = computed(() => {
+    const pagina = this.paginaRendimientoActual();
+    return this.rendimientoFiltrado().slice((pagina - 1) * 5, pagina * 5);
   });
 
   constructor() {
@@ -171,5 +189,10 @@ export class DashboardComponent {
 
   protected alturaBarra(value: number): number {
     return value ? Math.max(14, (value / this.maxActividad()) * 100) : 8;
+  }
+
+  protected buscarRendimiento(texto: string): void {
+    this.busquedaRendimiento.set(texto);
+    this.paginaRendimiento.set(1);
   }
 }
