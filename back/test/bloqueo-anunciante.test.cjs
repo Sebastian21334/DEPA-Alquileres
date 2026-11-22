@@ -159,7 +159,8 @@ test('el bloqueo usa el perfil y las operaciones propias sin otorgar privilegios
   for (const { id, tokenBloqueo } of sesiones) {
     assert.equal((await auth.consultarBloqueo(tokenBloqueo)).apelacion.texto,
       id === 2 ? detalleAnterior.apelacion.texto : 'Solicito una revisión');
-    await assert.rejects(auth.apelarBloqueo(tokenBloqueo, 'Duplicada'), { status: 409 });
+    const actualizada = await auth.apelarBloqueo(tokenBloqueo, 'Información adicional');
+    assert.equal(actualizada.mensajes.at(-1).texto, 'Información adicional');
   }
   await db.exec("UPDATE reserva SET estado_pago = 'PENDIENTE', cancelada = false WHERE id_reserva = 20");
   await assert.rejects(auth.login(login(2)), { status: 403 });

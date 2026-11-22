@@ -56,7 +56,7 @@ export class CancelacionesService {
       const creadaEn = new Date();
       const hoy = fechaArgentina(creadaEn);
       const actor = this.actorDeCancelacion(reserva, idUsuario);
-      const impedimento = this.impedimentoReserva(reserva, hoy, actor);
+      const impedimento = this.impedimentoReserva(reserva, hoy);
       if (impedimento) throw impedimento;
       const politica = await this.politicaAplicable(cancelaciones, reserva);
       const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor);
@@ -79,7 +79,7 @@ export class CancelacionesService {
     return this.prepararRespuesta(resultado.solicitud);
   }
 
-  private impedimentoReserva(reserva: Reserva, hoy: string, actor: ActorCancelacion): BadRequestException | ConflictException | null {
+  private impedimentoReserva(reserva: Reserva, hoy: string): BadRequestException | ConflictException | null {
     if (!this.reservas.pagoAprobado(reserva))
       return new BadRequestException(
         'La reserva no está pagada. Usá la cancelación inmediata de la reserva pendiente.',
@@ -90,7 +90,7 @@ export class CancelacionesService {
       return new BadRequestException(
         'La reserva ya finalizó. Solo podés abrir un reclamo.',
       );
-    if (!reserva.fecha_inicio || (actor !== 'ANUNCIANTE' && reserva.fecha_inicio <= hoy))
+    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
       return new BadRequestException(
         'La estadía ya comenzó. Para una devolución después del inicio, abrí un reclamo.',
       );
@@ -116,7 +116,7 @@ export class CancelacionesService {
     const hoy = fechaArgentina();
     const fechaSolicitud = solicitud ? fechaArgentina(solicitud.creada_en) : hoy;
     const actor = this.actorDeCancelacion(reserva, solicitud ? solicitud.solicitante?.id : idUsuario);
-    const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor) ?? this.impedimentoReserva(reserva, hoy, actor)?.message ?? null;
+    const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor) ?? this.impedimentoReserva(reserva, hoy)?.message ?? null;
     const devolucion = pago && (!motivoBloqueo || solicitud)
       ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica), moneda: pago.currency }
       : null;
@@ -134,9 +134,11 @@ export class CancelacionesService {
   }
 
   private bloqueoPorPlazo(reserva: Reserva, hoy: string, politica: PoliticaCancelacion, actor: ActorCancelacion): string | null {
-    if (actor === 'ANUNCIANTE') return null;
     if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
-      return 'Desde la fecha de ingreso no se puede solicitar la cancelación. Para una devolución, abrí un reclamo.';
+      return actor === 'ANUNCIANTE'
+        ? 'Desde la fecha de ingreso el anunciante ya no puede solicitar la cancelación.'
+        : 'Desde la fecha de ingreso no se puede solicitar la cancelación. Para una devolución, abrí un reclamo.';
+    if (actor === 'ANUNCIANTE') return null;
     if (actor === 'INQUILINO') return null;
     const diasMinimos = politica.diasDevolucionParcial;
     return this.diasHastaIngreso(reserva, hoy) < diasMinimos
@@ -207,10 +209,9 @@ export class CancelacionesService {
     solicitud.decidida_por = referenciaUsuario(idAdmin);
     solicitud.decidida_en = new Date();
 
-    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
     const motivoVencimiento = this.reservas.codigoValidado(reserva)
       ? 'El código de ingreso fue validado antes de resolver la solicitud'
-      : !reserva.fecha_inicio || (actor !== 'ANUNCIANTE' && reserva.fecha_inicio <= hoy)
+      : !reserva.fecha_inicio || reserva.fecha_inicio <= hoy
         ? 'La estadía comenzó antes de resolver la solicitud' : null;
     if (motivoVencimiento) {
       solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'VENCIDA');
@@ -232,7 +233,7 @@ export class CancelacionesService {
 
   private async aprobarSolicitud(reserva: Reserva, solicitud: SolicitudCancelacion, hoy: string, idAdmin: number, cancelaciones: ICancelacionesRepository, transaccion: EntityManager): Promise<ResultadoResolucion> {
     const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
-    const impedimento = this.impedimentoReserva(reserva, hoy, actor);
+    const impedimento = this.impedimentoReserva(reserva, hoy);
     if (impedimento) throw impedimento;
     await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
     const politica = await this.politicaAplicable(cancelaciones, reserva);

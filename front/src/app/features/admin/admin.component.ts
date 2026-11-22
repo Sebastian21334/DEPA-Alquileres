@@ -1,10 +1,10 @@
 import { ConversationPanelComponent, mensajesApelacion } from '../../shared/components/conversation-panel/conversation-panel.component';
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
-import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, PLATFORM_ID, signal, viewChild } from '@angular/core';
+import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, linkedSignal, PLATFORM_ID, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { finalize, forkJoin, Subscription } from 'rxjs';
+import { finalize, forkJoin, Subscription, timer } from 'rxjs';
 import { ToastService } from '../../core/services/toast.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
@@ -20,6 +20,11 @@ import {
   LucideChevronRight,
   LucideHouse,
   LucideWallet,
+  LucideUserRound,
+  LucideCalendarDays,
+  LucideClock3,
+  LucidePaperclip,
+  LucideSend,
 } from '@lucide/angular';
 import {
   AdminBloqueo,
@@ -44,6 +49,16 @@ interface CatalogSection {
   label: string;
   items: AdminCatalogItem[];
 }
+
+const REEMBOLSOS_POR_PAGINA = 10;
+const ORDEN_ESTADO_REEMBOLSO: Record<AdminReembolso['estado'], number> = {
+  PENDIENTE: 0,
+  EN_PROCESO: 0,
+  FALLIDO: 0,
+  APROBADO: 1,
+  RECHAZADO: 2,
+  CANCELADO: 2,
+};
 
 const ADMIN_NAVIGATION = [
   { label: 'Operaciones', items: [
@@ -107,6 +122,11 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideChevronRight,
     LucideHouse,
     LucideWallet,
+    LucideUserRound,
+    LucideCalendarDays,
+    LucideClock3,
+    LucidePaperclip,
+    LucideSend,
   ],
   templateUrl: './admin.component.html',
   styleUrls: ['./admin.component.scss', './admin-dashboard.scss'],
@@ -135,18 +155,27 @@ export class AdminComponent {
   private publicationsRequest?: Subscription;
   private usersRequest?: Subscription;
   private bloqueadosRequest?: Subscription;
+  private actualizandoBloqueados = false;
   private readonly bloqueoDialog = viewChild.required<ElementRef<HTMLDialogElement>>('bloqueoDialog');
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   protected readonly users = signal<AdminUser[]>([]);
   protected readonly bloqueados = signal<AdminBloqueo[]>([]);
+  protected readonly bloqueosOrdenados = computed(() => [...this.bloqueados()].sort((a, b) => {
+    const prioridad = (bloqueo: AdminBloqueo) => bloqueo.detalle.apelacion && !bloqueo.detalle.respuesta ? 0 : bloqueo.detalle.apelacion ? 1 : 2;
+    return prioridad(a) - prioridad(b) || (b.detalle.fecha ?? '').localeCompare(a.detalle.fecha ?? '');
+  }));
+  protected readonly vistaBloqueos = signal<'actuales' | 'historial'>('actuales');
+  protected readonly historialBloqueos = signal<AdminBloqueo[]>([]);
+  protected readonly historialBloqueosCargando = signal(false);
+  protected readonly historialBloqueosError = signal('');
   protected readonly bloqueadosCargando = signal(true);
   protected readonly bloqueadosError = signal('');
   protected readonly usuarioPorBloquear = signal<AdminUser | null>(null);
   protected readonly bloqueando = signal(false);
   protected readonly bloqueoError = signal('');
   protected motivoBloqueo = '';
-  protected readonly apelacionSeleccionada = signal<string | null>(null);
-  protected respuestaApelacion = '';
+  protected respuestasApelacion: Record<string, string> = {};
+  protected imagenesApelacion: Record<string, File | null> = {};
   protected readonly publications = signal<Publicacion[]>([]);
   protected readonly publicationQuery = signal('');
   protected readonly bajaId = signal<number | null>(null);
@@ -176,6 +205,20 @@ export class AdminComponent {
   protected readonly errorAprobacion = signal('');
   protected observacionAprobacion = '';
   protected readonly refunds = signal<AdminReembolso[]>([]);
+  private readonly orderedRefunds = computed(() => [...this.refunds()].sort((a, b) =>
+    ORDEN_ESTADO_REEMBOLSO[a.estado] - ORDEN_ESTADO_REEMBOLSO[b.estado] ||
+    Date.parse(b.creado_en) - Date.parse(a.creado_en) ||
+    b.id - a.id,
+  ));
+  protected readonly refundsPages = computed(() => Math.max(1, Math.ceil(this.refunds().length / REEMBOLSOS_POR_PAGINA)));
+  protected readonly refundsPage = linkedSignal<number, number>({
+    source: this.refundsPages,
+    computation: (paginas, anterior) => Math.min(anterior?.value ?? 1, paginas),
+  });
+  protected readonly refundsPageItems = computed(() => {
+    const inicio = (this.refundsPage() - 1) * REEMBOLSOS_POR_PAGINA;
+    return this.orderedRefunds().slice(inicio, inicio + REEMBOLSOS_POR_PAGINA);
+  });
   private readonly dialogoReembolso = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoReembolso');
   protected readonly reembolsoSeleccionado = signal<AdminReembolso | null>(null);
   protected readonly guardandoReembolso = signal(false);
@@ -203,8 +246,8 @@ export class AdminComponent {
   protected readonly openClaims = computed(() =>
     this.claims().filter(({ estado }) => estado === 'ABIERTO' || estado === 'EN_REVISION'),
   );
-  protected readonly pendingRefunds = computed(() => this.refunds().filter(({ estado }) =>
-    estado === 'PENDIENTE' || estado === 'EN_PROCESO' || estado === 'FALLIDO',
+  protected readonly pendingRefunds = computed(() => this.orderedRefunds().filter(({ estado }) =>
+    ORDEN_ESTADO_REEMBOLSO[estado] === 0,
   ));
   protected readonly pendingCases = computed(() => [
     ...this.cancellations().slice(0, 2).map((item) => ({
@@ -263,6 +306,20 @@ export class AdminComponent {
       this.reload();
       this.loadCatalogs();
       this.loadProvinces();
+      timer(15_000, 15_000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+        if (this.activeSection() !== 'bloqueos' || this.busy() || this.bloqueadosCargando() || this.actualizandoBloqueados) return;
+        const vista = this.vistaBloqueos();
+        this.actualizandoBloqueados = true;
+        const consulta = vista === 'historial' ? this.api.listarHistorialBloqueos() : this.api.listarBloqueados();
+        consulta.pipe(takeUntilDestroyed(this.destroyRef), finalize(() => { this.actualizandoBloqueados = false; })).subscribe({
+          next: usuarios => {
+            if (this.busy() || this.vistaBloqueos() !== vista) return;
+            if (vista === 'historial') this.historialBloqueos.set(this.ordenarHistorialBloqueos(usuarios));
+            else this.bloqueados.set(usuarios);
+          },
+          error: () => {},
+        });
+      });
     }
   }
   protected reload(): void {
@@ -336,6 +393,10 @@ export class AdminComponent {
   protected openSection(section: AdminSection, caseId?: number): void {
     this.activeSection.set(section);
     if (section === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
+    if (section === 'reembolsos' && caseId !== undefined) {
+      const indice = this.orderedRefunds().findIndex(({ id }) => id === caseId);
+      if (indice >= 0) this.refundsPage.set(Math.floor(indice / REEMBOLSOS_POR_PAGINA) + 1);
+    }
     afterNextRender(() => {
       if (this.activeSection() !== section) return;
       const heading = this.host.nativeElement.querySelector<HTMLElement>('#admin-section-title');
@@ -443,6 +504,7 @@ export class AdminComponent {
   }
 
   protected abrirPagoAnunciante(settlement: AdminSettlement): void {
+    if (this.diasEsperaLiquidacion(settlement) !== 0 || settlement.estado_liquidacion === 'EN_REVISION') return;
     this.pagoAnuncianteSeleccionado.set(settlement);
     this.referenciaPagoAnunciante = '';
     this.observacionPagoAnunciante = '';
@@ -473,7 +535,8 @@ export class AdminComponent {
     const settlement = this.pagoAnuncianteSeleccionado();
     const referencia = this.referenciaPagoAnunciante.trim();
     const observacion = this.observacionPagoAnunciante.trim();
-    if (!settlement?.codigo_validado_en || !this.cbuParaPago() || settlement.estado_liquidacion === 'EN_REVISION' ||
+    if (!settlement || settlement.estado_liquidacion !== 'PENDIENTE_PAGO_PROPIETARIO' || !this.cbuParaPago() ||
+        this.diasEsperaLiquidacion(settlement) !== 0 ||
         this.registrandoPagoAnunciante() || referencia.length > 150 || observacion.length > 500) return;
 
     this.errorPagoAnunciante.set('');
@@ -495,6 +558,17 @@ export class AdminComponent {
       },
       error: (error: Error) => this.errorPagoAnunciante.set(error.message),
     });
+  }
+
+  protected diasEsperaLiquidacion(settlement: AdminSettlement): number | null {
+    const fecha = settlement.fecha_disponible_pago;
+    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return null;
+    const fechaPago = Date.parse(`${fecha}T00:00:00Z`);
+    if (!Number.isFinite(fechaPago) || new Date(fechaPago).toISOString().slice(0, 10) !== fecha) return null;
+    const hoy = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date());
+    return Math.max(0, Math.round((fechaPago - Date.parse(`${hoy}T00:00:00Z`)) / 86_400_000));
   }
 
   protected cargarHistorialLiquidaciones(): void {
@@ -815,6 +889,24 @@ export class AdminComponent {
     });
   }
 
+  protected cambiarVistaBloqueos(vista: 'actuales' | 'historial'): void {
+    this.vistaBloqueos.set(vista);
+    if (vista === 'historial') this.cargarHistorialBloqueos();
+  }
+
+  private cargarHistorialBloqueos(): void {
+    this.historialBloqueosCargando.set(true);
+    this.historialBloqueosError.set('');
+    this.api.listarHistorialBloqueos().pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.historialBloqueosCargando.set(false))).subscribe({
+      next: registros => this.historialBloqueos.set(this.ordenarHistorialBloqueos(registros)),
+      error: (error: Error) => this.historialBloqueosError.set(error.message),
+    });
+  }
+
+  private ordenarHistorialBloqueos(registros: AdminBloqueo[]): AdminBloqueo[] {
+    return [...registros].sort((a, b) => (b.detalle.fechaDesbloqueo ?? b.detalle.fecha ?? '').localeCompare(a.detalle.fechaDesbloqueo ?? a.detalle.fecha ?? ''));
+  }
+
   protected toggleUser(user: AdminUser): void {
     if (!user.bloqueado) {
       this.usuarioPorBloquear.set(user);
@@ -865,22 +957,22 @@ export class AdminComponent {
 
   protected readonly mensajesApelacion = mensajesApelacion;
 
-  protected abrirRespuesta(bloqueo: AdminBloqueo): void {
-    this.respuestaApelacion = '';
+  protected cancelarRespuesta(bloqueo: AdminBloqueo): void {
+    this.respuestasApelacion[bloqueo.detalle.id] = '';
+    this.imagenesApelacion[bloqueo.detalle.id] = null;
     this.bloqueadosError.set('');
-    this.apelacionSeleccionada.set(bloqueo.detalle.id);
   }
 
   protected responderApelacion(bloqueo: AdminBloqueo): void {
-    const texto = this.respuestaApelacion.trim();
+    const texto = (this.respuestasApelacion[bloqueo.detalle.id] ?? '').trim();
     if (!texto || texto.length > 2000 || this.busy()) return;
     this.busy.set(`apelacion-${bloqueo.detalle.id}`);
     this.bloqueadosError.set('');
-    this.api.responderApelacion(bloqueo.usuario.id, bloqueo.detalle.id, texto)
+    this.api.responderApelacion(bloqueo.usuario.id, bloqueo.detalle.id, texto, this.imagenesApelacion[bloqueo.detalle.id])
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.busy.set(null);
-          this.apelacionSeleccionada.set(null);
+          this.cancelarRespuesta(bloqueo);
           this.cargarBloqueados();
         },
         error: (error: Error) => {
@@ -888,6 +980,25 @@ export class AdminComponent {
           this.bloqueadosError.set(error.message);
         },
       });
+  }
+  protected enviarApelacionConEnter(evento: Event, bloqueo: AdminBloqueo): void {
+    const tecla = evento as KeyboardEvent;
+    if (tecla.shiftKey || tecla.isComposing) return;
+    tecla.preventDefault();
+    this.responderApelacion(bloqueo);
+  }
+
+  protected seleccionarImagenApelacion(evento: Event, bloqueo: AdminBloqueo): void {
+    const input = evento.target as HTMLInputElement;
+    const archivo = input.files?.[0];
+    input.value = '';
+    if (!archivo) return;
+    if (!['image/jpeg', 'image/png'].includes(archivo.type) || archivo.size > 5 * 1024 * 1024) {
+      this.bloqueadosError.set('Elegí una imagen JPEG o PNG de hasta 5 MB.');
+      return;
+    }
+    this.bloqueadosError.set('');
+    this.imagenesApelacion[bloqueo.detalle.id] = archivo;
   }
   protected changeRole(user: AdminUser, select: HTMLSelectElement): void {
     const role = select.value;

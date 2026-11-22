@@ -48,7 +48,7 @@
                 }
               </p>
               @if (cancelacionComoAnunciante() && !condicionesCancelacion()?.solicitud) {
-                <p>Como anunciante podés solicitar la cancelación hasta que se valide el código de ingreso. Si se aprueba, se devuelve el 100 % al inquilino.</p>
+                <p>Como anunciante podés solicitar la cancelación hasta el día anterior al ingreso. Si se aprueba, se devuelve el 100 % al inquilino.</p>
               }
               <p>El porcentaje se determina al enviar la solicitud. La demora en aprobarla no lo reduce.</p>
             </div>
@@ -98,7 +98,7 @@
                 <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Si el pago fue con tarjeta u otro medio distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por transferencia con administración.</li>
                 <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al enviar la solicitud.</li>
                 <li>Si al solicitar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
-                <li>El anunciante puede solicitar la cancelación en cualquier momento hasta que se valide el código de ingreso, incluso después de la fecha de ingreso, con devolución del 100 % al inquilino.</li>
+                <li>El anunciante puede solicitar la cancelación hasta el día anterior al ingreso, con devolución del 100 % al inquilino si se aprueba antes de la fecha de ingreso.</li>
                 <li>Si la cancelación la solicita el administrador, la política prevé una devolución del {{ politica.porcentajeOtrosActores }} % si se aprueba antes del ingreso.</li>
               </ul>
             </details>
@@ -216,12 +216,38 @@
         </section>
       } @else if (vista() === 'recibidas' && esAnunciante()) {
         <section class="reservation-section" role="tabpanel">
-          @for (reserva of recibidas(); track reserva.id) {
+          <div class="reservation-filters">
+            <label>Estado
+              <select [ngModel]="filtroEstadoRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('estado', $event)">
+                <option value="todos">Todos</option>
+                <option value="codigo">Ingreso pendiente</option>
+                <option value="liquidacion">Liquidación pendiente o en revisión</option>
+                <option value="confirmada">Confirmadas</option>
+                <option value="terminada">Terminadas</option>
+                <option value="historial">Canceladas y otras</option>
+              </select>
+            </label>
+            <label>Publicación
+              <input type="search" placeholder="Buscar publicación" [ngModel]="filtroPublicacionRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('publicacion', $event)" />
+            </label>
+            <label>Ingreso desde <input type="date" [ngModel]="filtroDesdeRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('desde', $event)" /></label>
+            <label>Ingreso hasta <input type="date" [ngModel]="filtroHastaRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('hasta', $event)" /></label>
+          </div>
+          @for (reserva of recibidasPagina(); track reserva.id) {
             <article class="acct-card booking-card">
               <ng-container *ngTemplateOutlet="tarjetaReserva; context: { $implicit: reserva, recibida: true }" />
             </article>
           } @empty {
-            <div class="acct-card empty">No recibiste reservas todavía.</div>
+            <div class="acct-card empty">{{ recibidas().length ? 'No hay reservas que coincidan con los filtros.' : 'No recibiste reservas todavía.' }}</div>
+          }
+          @if (paginasRecibidas() > 1) {
+            <nav class="reservation-pagination" aria-label="Paginación de reservas recibidas">
+              <span role="status">{{ recibidasFiltradas().length }} reservas · Página {{ paginaRecibidas() }} de {{ paginasRecibidas() }}</span>
+              <div>
+                <button type="button" class="booking-button" [disabled]="paginaRecibidas() <= 1" (click)="paginaRecibidas.set(paginaRecibidas() - 1)">Anterior</button>
+                <button type="button" class="booking-button" [disabled]="paginaRecibidas() >= paginasRecibidas()" (click)="paginaRecibidas.set(paginaRecibidas() + 1)">Siguiente</button>
+              </div>
+            </nav>
           }
         </section>
       } @else {
@@ -299,11 +325,34 @@
           <p class="booking-card__settlement">Tu devolución está en gestión. Podés seguirla desde el detalle.</p>
         } @else if (devolucionRegistrada(reserva); as devolucion) {
           <p class="booking-card__settlement">{{ devolucion.mensaje }}</p>
-        } @else if (reserva.estado_pago === 'APROBADO') {
+        } @else if (recibida && reserva.estado_pago === 'APROBADO') {
           <p class="booking-card__settlement">
             @if (reserva.estado_liquidacion === 'RETENIDO') { <svg lucideLockKeyhole [size]="15" aria-hidden="true"></svg> }
             {{ estadoLiquidacion(reserva) }}
           </p>
+          @if (reserva.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO') {
+            @if (fechaHabilitacion(reserva); as fechaPago) {
+              <p class="booking-card__settlement">{{ fechaPago > hoy() ? 'Pago disponible desde el ' : 'Pago habilitado desde el ' }}{{ fechaTarjeta(fechaPago) }}.</p>
+            } @else {
+              <p class="booking-card__settlement">Fecha de pago pendiente de revisión.</p>
+            }
+          }
+          @if (reserva.estado_estadia === 'INGRESO_NO_VERIFICADO' && reserva.estado_liquidacion === 'RETENIDO') {
+            @let dias = diasHastaVencimiento(reserva);
+            @if (dias !== null && dias > 0) {
+              <p class="booking-card__settlement">Si no se valida el código, en {{ dias }} {{ dias === 1 ? 'día' : 'días' }} la liquidación quedará pendiente de pago a tu favor.</p>
+            } @else if (dias === 0) {
+              <p class="booking-card__settlement">El plazo venció. La liquidación está pendiente de procesamiento a tu favor.</p>
+            }
+          }
+          @if (reserva.estado_liquidacion === 'PAGADO_PROPIETARIO') {
+            @if (reserva.fecha_resolucion_liquidacion) {
+              <p class="booking-card__settlement">Pago registrado el {{ fechaTarjeta(reserva.fecha_resolucion_liquidacion) }}.</p>
+            }
+            @if (reserva.referencia_liquidacion) {
+              <p class="booking-card__settlement">Referencia de pago: {{ reserva.referencia_liquidacion }}</p>
+            }
+          }
         }
       </div>
       <div class="booking-card__total">

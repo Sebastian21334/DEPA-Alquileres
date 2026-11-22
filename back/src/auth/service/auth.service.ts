@@ -158,8 +158,8 @@ export class AuthService {
     return this.usuariosService.consultarBloqueo(idUsuario);
   }
 
-  async apelarBloqueoActual(idUsuario: number, texto: string) {
-    return this.usuariosService.apelarBloqueo(idUsuario, undefined, texto);
+  async apelarBloqueoActual(idUsuario: number, texto: string, archivo?: Express.Multer.File) {
+    return this.usuariosService.apelarBloqueo(idUsuario, undefined, texto, archivo);
   }
 
   private async verificarTokenBloqueo(token: string) {
@@ -182,9 +182,9 @@ export class AuthService {
     return this.usuariosService.consultarBloqueo(usuarioId, bloqueoId);
   }
 
-  async apelarBloqueo(token: string, texto: string) {
+  async apelarBloqueo(token: string, texto: string, archivo?: Express.Multer.File) {
     const { usuarioId, bloqueoId } = await this.verificarTokenBloqueo(token);
-    return this.usuariosService.apelarBloqueo(usuarioId, bloqueoId, texto);
+    return this.usuariosService.apelarBloqueo(usuarioId, bloqueoId, texto, archivo);
   }
 
   /** Genera un token nuevo y reenvía el mail para una cuenta aún no verificada. */

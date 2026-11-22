@@ -38,7 +38,7 @@ import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
 import { RECLAMOS_REPOSITORY } from '../repository/reclamos.repository.interface';
 import type { IReclamosRepository } from '../repository/reclamos.repository.interface';
 
-const DIAS_RECLAMO = 7;
+const DIAS_RECLAMO = 5;
 const MAX_EVIDENCIAS = 5;
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -48,6 +48,13 @@ export class ReclamosService {
 
   constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
+  tieneReclamoAbierto(idReserva: number, transaccion: EntityManager): Promise<boolean> {
+    return this.reclamos.enTransaccion(transaccion).existeAbierto(idReserva, [
+      this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
+      this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION'),
+    ]);
+  }
+
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
     const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
       const reclamos = this.reclamos.enTransaccion(transaccion);
@@ -55,6 +62,8 @@ export class ReclamosService {
         throw new ForbiddenException(
           'Solo el Inquilino de la reserva puede iniciar un reclamo',
         );
+      if (this.reservas.liquidacionResuelta(reserva))
+        throw new ConflictException('La liquidación de esta reserva ya fue resuelta');
       if (reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))
         throw new ConflictException('La reserva no tiene un pago aprobado');
       if (reserva.cancelada)
@@ -351,6 +360,6 @@ export class ReclamosService {
   private fueraDePlazo(fechaFin: string, hoy: string): boolean {
     const fin = new Date(`${fechaFin}T12:00:00Z`).getTime();
     const actual = new Date(`${hoy}T12:00:00Z`).getTime();
-    return actual > fin + DIAS_RECLAMO * 86_400_000;
+    return actual >= fin + DIAS_RECLAMO * 86_400_000;
   }
 }

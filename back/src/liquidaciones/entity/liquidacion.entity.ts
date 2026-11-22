@@ -107,6 +107,12 @@ export class Liquidacion {
   @Column({ name: 'pagos_anunciante', type: 'jsonb', nullable: true })
   pagos_anunciante: PagoAnuncianteRegistrado[] | null;
 
+  @Column({ name: 'aviso_pago_admin_en', type: 'timestamptz', nullable: true })
+  aviso_pago_admin_en: Date | null;
+
+  @Column({ name: 'aviso_pago_anunciante_en', type: 'timestamptz', nullable: true })
+  aviso_pago_anunciante_en: Date | null;
+
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;
 
