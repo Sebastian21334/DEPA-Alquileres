@@ -428,14 +428,29 @@
           <span>No lo compartas hasta estar físicamente en la propiedad.</span>
         </div>
       }
+      @let aviso = avisoCodigo()?.id === reserva.id ? avisoCodigo() : null;
       @if (recibida && puedeValidarCodigo(reserva)) {
+        @let restantes = reserva.intentos_codigo_restantes;
         <form class="code-entry" (ngSubmit)="validarCodigo(reserva)">
           <label [for]="'code-' + reserva.id">Código entregado por el inquilino</label>
           <div>
-            <input [id]="'code-' + reserva.id" [name]="'code-' + reserva.id" [(ngModel)]="codigoIngresado[reserva.id]" maxlength="8" autocomplete="off" placeholder="Ej.: K7M4P9Q2" />
+            <input [id]="'code-' + reserva.id" [name]="'code-' + reserva.id" [(ngModel)]="codigoIngresado[reserva.id]" maxlength="8" autocomplete="off" placeholder="Ej.: K7M4P9Q2"
+              [attr.aria-invalid]="aviso?.tipo === 'error'" [attr.aria-describedby]="'code-feedback-' + reserva.id" />
             <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() !== null">Validar ingreso</button>
           </div>
+          <div [id]="'code-feedback-' + reserva.id">
+            @if (aviso) {
+              <p class="code-entry__aviso" [class.code-entry__aviso--error]="aviso.tipo === 'error'" [attr.role]="aviso.tipo === 'error' ? 'alert' : 'status'">{{ aviso.texto }}</p>
+            } @else if (restantes !== undefined && reserva.intentos_codigo > 0) {
+              <p class="code-entry__hint">Te {{ restantes === 1 ? 'queda 1 intento' : 'quedan ' + restantes + ' intentos' }} antes de que el código se bloquee.</p>
+            }
+          </div>
         </form>
+      } @else if (recibida && aviso) {
+        <!-- Después de validar o de bloquear, el campo desaparece y el aviso queda en la tarjeta. -->
+        <p class="code-entry__aviso" [class.code-entry__aviso--error]="aviso.tipo === 'error'" [attr.role]="aviso.tipo === 'error' ? 'alert' : 'status'">{{ aviso.texto }}</p>
+      } @else if (recibida && codigoBloqueado(reserva)) {
+        <p class="code-entry__aviso code-entry__aviso--error">El código se bloqueó por demasiados intentos incorrectos. Contactá a Administración para que revise la reserva.</p>
       }
     </div>
   }

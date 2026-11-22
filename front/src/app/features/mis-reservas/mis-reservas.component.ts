@@ -382,23 +382,35 @@ export class MisReservasComponent {
     });
   }
 
+  /** T34: el mensaje del código se muestra en la tarjeta de esa reserva, junto al campo. */
+  protected readonly avisoCodigo = signal<{ id: number; tipo: 'error' | 'exito'; texto: string } | null>(null);
+
+  protected codigoBloqueado(reserva: Reserva): boolean {
+    return !reserva.cancelada && !reserva.codigo_validado_en && reserva.intentos_codigo_restantes === 0;
+  }
+
   protected validarCodigo(reserva: Reserva): void {
     if (!puedeValidarCodigo(reserva)) return;
     const codigo = (this.codigoIngresado[reserva.id] ?? '').trim().toUpperCase();
     if (codigo.length !== 8) {
-      this.error.set('El código debe tener ocho caracteres.');
+      this.avisoCodigo.set({ id: reserva.id, tipo: 'error', texto: 'El código tiene 8 caracteres. Revisá el que te pasó el huésped.' });
       return;
     }
     this.iniciarOperacion(reserva.id);
-    this.error.set('');
+    this.avisoCodigo.set(null);
     this.reservasApi.validateLodgingCode(reserva.id, codigo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (actualizada) => {
         this.codigoIngresado[reserva.id] = '';
         this.reemplazar(actualizada);
+        this.avisoCodigo.set({ id: reserva.id, tipo: 'exito', texto: 'Ingreso validado. Le avisamos al huésped por correo.' });
       },
       error: (err: ApiError) => {
-        this.error.set(err.message);
-        this.ocupada.set(null);
+        this.avisoCodigo.set({ id: reserva.id, tipo: 'error', texto: err.message });
+        // El back guardó el intento: se actualiza la tarjeta para mostrar los intentos o el bloqueo.
+        this.reservasApi.byId(reserva.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+          next: (actualizada) => this.reemplazar(actualizada),
+          error: () => this.ocupada.set(null),
+        });
       },
     });
   }
