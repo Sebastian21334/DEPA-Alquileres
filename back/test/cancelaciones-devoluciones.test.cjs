@@ -162,6 +162,45 @@ test('T47-Extra: el código bloqueado con la estadía terminada llega al pago de
   assert.equal((await actual()).codigo_validado_en, null);
 });
 
+test('T34: cada caso del código de alojamiento tiene su mensaje y la reserva informa los intentos restantes', async (t) => {
+  // Estadía del 10 al 20/01/2099: el código se puede cargar hasta el 24/01.
+  const codigo = 'K7M4P9Q2';
+  const conCodigo = async () => {
+    const reserva = await reservaParaReclamo({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' }, { estado: 'RETENIDO' });
+    await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: codigo, codigo_generado_en: new Date() });
+    return reserva;
+  };
+  const validar = (reserva, valor = 'AAAAAAAA') => reservas.validarCodigoAlojamiento(reserva.id, valor, 2);
+  const restantes = async (reserva) => reservas.prepararRespuesta(await reservas.obtenerReserva(reserva.id)).intentos_codigo_restantes;
+  const rechaza = (promesa, estado, mensaje) => assert.rejects(promesa, (error) => {
+    assert.equal(error.getStatus(), estado);
+    assert.match(error.message, mensaje);
+    return true;
+  });
+  const reserva = await conCodigo();
+  const vencida = await conCodigo();
+
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  await rechaza(validar(reserva, codigo), 409, /Vas a poder validar el código desde el 10\/01\/2099/);
+
+  t.mock.timers.setTime(new Date('2099-01-15T15:00:00Z').getTime());
+  assert.equal(await restantes(reserva), 5);
+  await rechaza(validar(reserva), 400, /^Código incorrecto\. Te quedan 4 intentos de 5\.$/);
+  for (let intento = 0; intento < 2; intento++) await rechaza(validar(reserva), 400, /Código incorrecto/);
+  await rechaza(validar(reserva), 400, /Te queda 1 intento de 5\./);
+  await rechaza(validar(reserva), 400, /^Código incorrecto\. El código se bloqueó tras 5 intentos incorrectos/);
+  assert.equal(await restantes(reserva), 0);
+  // Bloqueado, el código correcto tampoco pasa y el mensaje sigue siendo el del bloqueo.
+  await rechaza(validar(reserva, codigo), 409, /^El código se bloqueó tras 5 intentos incorrectos\. Contactá a Administración/);
+
+  t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
+  await rechaza(validar(vencida, codigo), 409, /El plazo para validar el código terminó el 24\/01\/2099/);
+
+  t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
+  await validar(vencida, codigo);
+  await rechaza(validar(vencida, codigo), 409, /El ingreso ya se validó el 24\/01\/2099/);
+});
+
 test('T55: el historial del anunciante junta los pagos de todas sus publicaciones, una vez cada uno', async (t) => {
   await db.exec(`INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante)
     VALUES (900,'Segunda publicación','Integración',CURRENT_DATE,100,'Dirección',1,30,2)`);

@@ -14,10 +14,10 @@ import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { generarCodigoAlojamiento } from './reservas.utils';
-import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
+import { MAX_INTENTOS_CODIGO, ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
 import { timingSafeEqual } from 'node:crypto';
-import { esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
+import { esFechaCalendarioValida, fechaArgentina, fechaParaMostrar } from '../../common/utils/fechas';
 import {
   Inject,
   Injectable,
@@ -832,29 +832,24 @@ export class ReservasService
           );
         }
         if (!this.estaConfirmada(reserva)) {
-          throw new ConflictException('La reserva no se encuentra confirmada');
+          throw new ConflictException('La reserva no está confirmada: el código solo se valida en reservas pagas y vigentes.');
         }
         if (this.codigoValidado(reserva)) {
           throw new ConflictException(
-            'El código de esta reserva ya fue utilizado',
+            `El ingreso ya se validó el ${fechaParaMostrar(fechaArgentina(reserva.codigo_validado_en!))}. No hace falta volver a cargar el código.`,
           );
         }
+        // T34: el bloqueo se informa antes que las fechas, porque es lo que el anunciante tiene que resolver.
+        if (this.codigoBloqueado(reserva)) throw new ConflictException(this.mensajeCodigoBloqueado());
         const estadoEstadia = this.calcularEstadoEstadia(reserva);
         const vencimiento = this.liquidaciones.fechaDisponiblePagoManual(reserva);
         if (estadoEstadia !== 'PENDIENTE_INGRESO' &&
             !(estadoEstadia === 'INGRESO_NO_VERIFICADO' && vencimiento && fechaArgentina() < vencimiento &&
               reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'))) {
-          throw new ConflictException(
-            'El código solo puede validarse durante la estadía o antes del vencimiento del plazo',
-          );
-        }
-        if (this.codigoBloqueado(reserva)) {
-          throw new ConflictException(
-            'Se alcanzó el límite de intentos. Contactá a un administrador',
-          );
+          throw new ConflictException(this.mensajeCodigoFueraDeFecha(reserva, estadoEstadia));
         }
         if (this.liquidacionEnRevision(reserva))
-          throw new ConflictException('La reserva tiene un reclamo abierto y debe revisarla un administrador');
+          throw new ConflictException('La liquidación de esta reserva está en revisión de Administración. Vas a poder validar el código cuando se resuelva.');
         if (await this.reembolsosService.tieneDevolucionDeCancelacionActiva(id, transaccion))
           throw new ConflictException('La reserva tiene una cancelación aprobada con devolución en gestión');
 
@@ -870,9 +865,10 @@ export class ReservasService
           await this.liquidaciones.registrarValidacionCodigo(reserva, transaccion);
         await reservaRepository.guardar(reserva);
         if (!coincide) {
-          return new BadRequestException(
-            `Código incorrecto. Quedan ${this.intentosCodigoRestantes(reserva)} intentos`,
-          );
+          const restantes = this.intentosCodigoRestantes(reserva);
+          return new BadRequestException(restantes
+            ? `Código incorrecto. Te ${restantes === 1 ? 'queda 1 intento' : `quedan ${restantes} intentos`} de ${MAX_INTENTOS_CODIGO}.`
+            : `Código incorrecto. ${this.mensajeCodigoBloqueado()}`);
         }
         const actualizada = await reservaRepository.buscarPorId(id);
         if (!actualizada)
@@ -919,8 +915,6 @@ export class ReservasService
       },
     );
   }
-
-  private readonly maxIntentosCodigo = 5;
 
   pagoAprobado(reserva: Reserva): boolean {
     return reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
@@ -978,12 +972,26 @@ export class ReservasService
     );
   }
 
+  private mensajeCodigoBloqueado(): string {
+    return `El código se bloqueó tras ${MAX_INTENTOS_CODIGO} intentos incorrectos. Contactá a Administración para que revise la reserva.`;
+  }
+
+  /** T34: dice desde o hasta cuándo se puede cargar el código. */
+  private mensajeCodigoFueraDeFecha(reserva: Reserva, estadoEstadia: string): string {
+    if (estadoEstadia === 'CONFIRMADA' && reserva.fecha_inicio)
+      return `Vas a poder validar el código desde el ${fechaParaMostrar(reserva.fecha_inicio)}, cuando empieza la estadía.`;
+    const ultimoDia = this.finPlazoReclamo(reserva);
+    if (estadoEstadia === 'INGRESO_NO_VERIFICADO' && ultimoDia && fechaArgentina() > ultimoDia)
+      return `El plazo para validar el código terminó el ${fechaParaMostrar(ultimoDia)}.`;
+    return 'El código solo puede validarse durante la estadía o hasta el día anterior a que se habilite el pago.';
+  }
+
   codigoBloqueado(reserva: Reserva): boolean {
-    return reserva.intentos_codigo >= this.maxIntentosCodigo;
+    return this.intentosCodigoRestantes(reserva) === 0;
   }
 
   intentosCodigoRestantes(reserva: Reserva): number {
-    return Math.max(0, this.maxIntentosCodigo - reserva.intentos_codigo);
+    return this.estadoService.intentosCodigoRestantes(reserva);
   }
 
   registrarConfirmacionPago(reserva: Reserva, fechaPago: Date, codigoAlojamiento: string): void {

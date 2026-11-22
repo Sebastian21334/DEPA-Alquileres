@@ -6,6 +6,9 @@ import { esFechaCalendarioValida, fechaArgentina, sumarDiasCalendario } from '..
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { DIAS_ESPERA_PAGO_MANUAL } from '../../liquidaciones/service/liquidaciones.service';
 
+/** Intentos incorrectos del código de alojamiento antes de bloquearlo. */
+export const MAX_INTENTOS_CODIGO = 5;
+
 /** Proyección compartida con los módulos que devuelven reservas en sus respuestas. */
 @Injectable()
 export class ReservaEstadoService {
@@ -26,7 +29,12 @@ export class ReservaEstadoService {
     return Object.assign(reserva, {
       estado_estadia: this.calcularEstadoEstadia(reserva),
       fin_plazo_reclamo: this.finPlazoReclamo(reserva),
+      intentos_codigo_restantes: this.intentosCodigoRestantes(reserva),
     });
+  }
+
+  intentosCodigoRestantes(reserva: Pick<Reserva, 'intentos_codigo'>): number {
+    return Math.max(0, MAX_INTENTOS_CODIGO - (reserva.intentos_codigo ?? 0));
   }
 
   /**
