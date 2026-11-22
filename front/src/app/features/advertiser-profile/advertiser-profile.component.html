@@ -10,7 +10,7 @@
           <app-avatar class="avatar" [foto]="owner.foto_url" [nombre]="name()" />
           <h1>{{ name() }}</h1>
           @if (owner.verificado) {
-            <span class="verified"><svg lucideBadgeCheck [size]="13"></svg> Dueño Verificado</span>
+            <span class="verified"><svg lucideBadgeCheck [size]="13"></svg> {{ verifiedLabel() }}</span>
           }
           <ul class="owner-card__meta">
             @if (locations()) { <li><svg lucideMapPin [size]="16"></svg> {{ locations() }}</li> }

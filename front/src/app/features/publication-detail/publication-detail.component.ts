@@ -2,7 +2,7 @@ import { Component, DestroyRef, HostListener, computed, inject, signal } from '@
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { finalize, Subscription } from 'rxjs';
+import { catchError, finalize, of, Subscription } from 'rxjs';
 import {
   LucideBadgeCheck,
   LucideBookmark,
@@ -22,6 +22,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ChatService } from '../../core/services/chat.service';
 import { ListingService } from '../home/listing.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import { AnunciantePublico } from '../../shared/models/anunciante.model';
 import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
@@ -36,8 +37,10 @@ import {
 import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
 import { PresupuestoReserva, ReservationService, type Reserva } from '../../shared/services/reservation.service';
 import { FavoritesService } from '../../shared/services/favorites.service';
+import { AnunciantePublicoService } from '../../shared/services/anunciante-publico.service';
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
+import { esInmobiliaria } from '../../shared/utils/anunciante';
 
 @Component({
   selector: 'app-publication-detail',
@@ -74,11 +77,13 @@ export class PublicationDetailComponent {
   private readonly availabilityApi = inject(AvailabilityService);
   private readonly reservations = inject(ReservationService);
   private readonly favorites = inject(FavoritesService);
+  private readonly anunciantesPublicos = inject(AnunciantePublicoService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly destroyRef = inject(DestroyRef);
   private consultaPresupuesto?: Subscription;
 
   protected readonly publication = signal<Publicacion | null>(null);
+  protected readonly perfilAnunciante = signal<AnunciantePublico | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   protected readonly selectedImage = signal(0);
@@ -119,9 +124,21 @@ export class PublicationDetailComponent {
   );
   protected readonly diasMinimosReprogramacion = DIAS_MINIMOS_REPROGRAMACION;
   protected readonly advertiserName = computed(() => {
+    const nombrePublico = this.perfilAnunciante()?.nombre_publico?.trim();
+    if (nombrePublico) return nombrePublico;
     const user = this.publication()?.anunciante?.usuario;
     return user ? `${user.nombre} ${user.apellido}`.trim() : 'Anunciante';
   });
+  protected readonly advertiserTypeName = computed(() =>
+    this.perfilAnunciante()?.tipoAnunciante?.nombre ??
+    this.publication()?.anunciante?.tipoAnunciante?.nombre ??
+    'Anunciante',
+  );
+  protected readonly verifiedLabel = computed(() =>
+    esInmobiliaria(this.perfilAnunciante()?.tipoAnunciante ?? this.publication()?.anunciante?.tipoAnunciante)
+      ? 'Inmobiliaria verificada'
+      : 'Dueño Verificado',
+  );
   protected readonly bookingDays = computed(() =>
     rentalDays(this.selectedStart(), this.selectedEnd()),
   );
@@ -160,6 +177,10 @@ export class PublicationDetailComponent {
           if (!this.administracion) this.registerView(publication);
           const idAnunciante = publication.anunciante?.idUsuario;
           if (idAnunciante) {
+            this.anunciantesPublicos.getPublicProfile(idAnunciante).pipe(
+              catchError(() => of(null)),
+              takeUntilDestroyed(this.destroyRef),
+            ).subscribe((perfil) => this.perfilAnunciante.set(perfil));
             this.listings.getByAdvertiser(idAnunciante).subscribe({
               next: (items) => this.activeCount.set(items.length),
             });

@@ -52,7 +52,7 @@
             <span class="badge" [class.badge--temp]="esTemporaria()">{{ item.modalidad?.nombre }}</span>
           }
           @if (item.anunciante?.verificado) {
-            <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> Dueño Verificado</span>
+            <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> {{ verifiedLabel() }}</span>
           }
           @if (!administracion && esMiPublicacion() && !item.eliminada) {
             <a class="edit-link" [routerLink]="['/publicaciones', item.id, 'editar']">✎ Modificar publicación</a>
@@ -241,14 +241,14 @@
       @if (item.anunciante; as advertiser) {
         <section class="advertiser-card" appReveal>
           <div class="advertiser-card__head">
-            <app-avatar class="avatar" [foto]="advertiser.usuario?.foto_url" [nombre]="advertiserName()" />
+            <app-avatar class="avatar" [foto]="perfilAnunciante()?.foto_url ?? advertiser.usuario?.foto_url" [nombre]="advertiserName()" />
             <div>
-              <h2>{{ advertiserName() }} @if (advertiser.verificado) { <span class="badge badge--verified"><svg lucideBadgeCheck [size]="13"></svg> Dueño Verificado</span> }</h2>
+              <h2>{{ advertiserName() }} @if (advertiser.verificado) { <span class="badge badge--verified"><svg lucideBadgeCheck [size]="13"></svg> {{ verifiedLabel() }}</span> }</h2>
               @if (city(item)) { <p><svg lucideMapPin [size]="14"></svg> {{ city(item) }}</p> }
             </div>
           </div>
           <dl class="advertiser-card__stats">
-            <div><dt>Tipo de anunciante</dt><dd>{{ advertiser.tipoAnunciante?.nombre ?? 'Anunciante' }}</dd></div>
+            <div><dt>Tipo de anunciante</dt><dd>{{ advertiserTypeName() }}</dd></div>
             <div><dt>Publicaciones activas</dt><dd>{{ activeCount() === null ? '—' : activeCount() + (activeCount() === 1 ? ' publicación activa' : ' publicaciones activas') }}</dd></div>
           </dl>
           <a class="button button--primary button--block shine" [routerLink]="['/perfil', advertiser.idUsuario]">Ver perfil completo</a>
