@@ -442,7 +442,15 @@ export class AdminComponent {
     );
   }
 
+  /** Fecha de cierre del plazo de reclamos mientras sigue abierto; el back retiene el pago hasta entonces. */
+  protected pagoRetenidoHasta(settlement: AdminSettlement): string | null {
+    const fin = settlement.fin_plazo_reclamo;
+    const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }).format(new Date());
+    return fin && hoy <= fin ? new Date(`${fin}T12:00:00`).toLocaleDateString('es-AR') : null;
+  }
+
   protected abrirPagoAnunciante(settlement: AdminSettlement): void {
+    if (this.pagoRetenidoHasta(settlement)) return;
     this.pagoAnuncianteSeleccionado.set(settlement);
     this.referenciaPagoAnunciante = '';
     this.observacionPagoAnunciante = '';

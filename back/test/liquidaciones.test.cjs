@@ -3,6 +3,10 @@ require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
+const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
+const { fechaArgentina } = require('../dist/common/utils/fechas');
+
+const estadoReserva = new ReservaEstadoService(undefined, catalogosDePrueba());
 
 function crearReserva(extra = {}) {
   return {
@@ -35,8 +39,29 @@ function reservasService(reserva, repo) {
     liquidacionResuelta: (r) => ['PAGADO_PROPIETARIO', 'DEVUELTO_INQUILINO', 'DEVUELTO_PARCIAL_INQUILINO'].includes(r.estado_liquidacion),
     marcarCancelada: (r, actor) => { r.cancelada = true; r.cancelada_por = actor; },
     prepararRespuesta: (r) => r,
+    finPlazoReclamo: (r) => estadoReserva.finPlazoReclamo(r),
+    plazoReclamoAbierto: (r) => estadoReserva.plazoReclamoAbierto(r),
   };
 }
+
+test('T47: el pago al anunciante se retiene mientras el plazo de reclamos está abierto', async () => {
+  const hoy = fechaArgentina();
+  const reserva = crearReserva({
+    fecha_inicio: hoy, fecha_fin: hoy, codigo_validado_en: new Date(), estado_liquidacion: 'PENDIENTE_PAGO_PROPIETARIO',
+  });
+  let consultoCbu = false;
+  const service = new OperacionesLiquidacionService(
+    {}, reservasService(reserva, repositorio(reserva)), liquidacionesService(), catalogosDePrueba(),
+    { buscarCbuValidado: async () => { consultoCbu = true; return '0010000700000000000017'; } },
+  );
+  await assert.rejects(service.resolverLiquidacion(1, { estado: 'PAGADO_PROPIETARIO', referencia: 'pago' }, 7), (error) => {
+    assert.equal(error.getStatus(), 409);
+    assert.match(error.message, /plazo de reclamos \(cierra el \d{2}\/\d{2}\/\d{4}\)/);
+    return true;
+  });
+  assert.equal(consultoCbu, false);
+  assert.equal(reserva.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+});
 
 function repositorio(reserva, sobreescribir = {}) {
   const repo = {

@@ -29,6 +29,10 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
         <p class="resolution__title">Reclamo resuelto</p>
         @if (item.resolucion === 'SIN_DEVOLUCION') {
           <p>A favor del anunciante: sin devolución al inquilino.</p>
+          <!-- Solo mientras dura la estadía sin código validado: es cuando el anunciante puede cargarlo. -->
+          @if (item.reserva?.estado_estadia === 'PENDIENTE_INGRESO') {
+            <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
+          }
         } @else {
           <p>
             A favor del inquilino: {{ resoluciones[item.resolucion].toLowerCase() }}

@@ -12,8 +12,10 @@ import { randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import sharp from 'sharp';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
-import { fechaArgentina } from '../../common/utils/fechas';
+import { fechaArgentina, fechaParaMostrar } from '../../common/utils/fechas';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
+import type { Reserva } from '../../reservas/entity/reserva.entity';
+import { DIAS_PLAZO_RECLAMO } from '../../reservas-consulta/service/reserva-estado.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
@@ -38,7 +40,6 @@ import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
 import { RECLAMOS_REPOSITORY } from '../repository/reclamos.repository.interface';
 import type { IReclamosRepository } from '../repository/reclamos.repository.interface';
 
-const DIAS_RECLAMO = 7;
 const MAX_EVIDENCIAS = 5;
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -68,16 +69,11 @@ export class ReclamosService {
 
       if (!reserva.usuario)
         throw new ConflictException('La reserva no tiene un Inquilino asociado');
+      if (this.reservas.liquidacionResuelta(reserva))
+        throw new ConflictException('La liquidación de esta reserva ya está cerrada; no se puede abrir un reclamo');
 
-      const hoy = fechaArgentina();
-      if (hoy < reserva.fecha_inicio)
-        throw new BadRequestException(
-          'Antes del inicio usá la solicitud de cancelación; el reclamo es para una estadía iniciada o finalizada',
-        );
-      if (this.fueraDePlazo(reserva.fecha_fin, hoy))
-        throw new BadRequestException(
-          `El plazo para reclamar vence a los ${DIAS_RECLAMO} días corridos del fin de la estadía`,
-        );
+      // Se puede reclamar con el código validado, sin validar o bloqueado.
+      this.validarPeriodoReclamo(reserva);
 
       if (await reclamos.existeAbierto(reserva.id, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]))
         throw new ConflictException('La reserva ya tiene un reclamo abierto');
@@ -348,9 +344,16 @@ export class ReclamosService {
     });
   }
 
-  private fueraDePlazo(fechaFin: string, hoy: string): boolean {
-    const fin = new Date(`${fechaFin}T12:00:00Z`).getTime();
-    const actual = new Date(`${hoy}T12:00:00Z`).getTime();
-    return actual > fin + DIAS_RECLAMO * 86_400_000;
+  private validarPeriodoReclamo(reserva: Reserva): void {
+    const hoy = fechaArgentina();
+    if (reserva.fecha_inicio && hoy < reserva.fecha_inicio)
+      throw new BadRequestException(
+        `Podés reclamar desde el ${fechaParaMostrar(reserva.fecha_inicio)}, cuando empieza la estadía. Antes usá la solicitud de cancelación.`,
+      );
+    const finPlazo = this.reservas.finPlazoReclamo(reserva);
+    if (finPlazo && hoy > finPlazo)
+      throw new BadRequestException(
+        `El plazo para reclamar venció el ${fechaParaMostrar(finPlazo)}, ${DIAS_PLAZO_RECLAMO} días después del fin de la estadía.`,
+      );
   }
 }
