@@ -637,22 +637,6 @@ export class ReservasService
     return reserva;
   }
 
-  async congelarPorContracargo(reserva: Reserva, transaccion: EntityManager): Promise<void> {
-    reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO');
-    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
-    reserva.observacion_liquidacion = 'Contracargo abierto: liquidación congelada hasta su resolución';
-    const guardada = await this.reservaRepository.enTransaccion(transaccion).guardar(reserva);
-    await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
-  }
-
-  async restaurarPorContracargoGanado(reserva: Reserva, estadoPrevio: string | null, transaccion: EntityManager): Promise<Reserva> {
-    this.restaurarPagoAprobado(reserva);
-    reserva.estado_liquidacion = estadoPrevio ?? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO');
-    reserva.observacion_liquidacion = 'Contracargo resuelto a favor del Anunciante';
-    await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
-    return this.prepararRespuesta(await this.reservaRepository.enTransaccion(transaccion).guardar(reserva));
-  }
-
   /** El inquilino participante o el anunciante dueño pueden cancelar. */
   async cancelar(id: number, idUsuarioQueOpera: number): Promise<Reserva> {
     const resultado = await this.reservaRepository.conTransaccion(
@@ -717,9 +701,8 @@ export class ReservasService
   async aplicarEfectoReembolso(reembolso: Reembolso, transaccion: EntityManager, observacion?: string): Promise<Reserva> {
     const reserva = await this.obtenerReserva(reembolso.reserva.id, transaccion);
     const esReclamo = reembolso.origen === OrigenReembolso.RECLAMO;
-    const esContracargo = reembolso.origen === OrigenReembolso.CONTRACARGO;
     if (reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') &&
-        !esReclamo && !esContracargo)
+        !esReclamo)
       throw new ConflictException('La reserva ya fue pagada al propietario; requiere revisar la devolución');
 
     const pago = await this.reembolsosService.buscarPagoPorReserva(reserva.id, transaccion);
@@ -737,14 +720,11 @@ export class ReservasService
       reversionSinPago ||
       reembolso.origen === OrigenReembolso.CANCELACION ||
       (esTotal && resolucionAdmin) ||
-      (esTotal && puedeLiberarFechas && (esContracargo || ajusteAdmin))
+      (esTotal && puedeLiberarFechas && ajusteAdmin)
     );
 
     if (esTotal) this.aplicarReembolsoTotal(reserva);
-    else {
-      if (esContracargo) this.restaurarPagoAprobado(reserva);
-      this.aplicarReembolsoParcial(reserva);
-    }
+    else this.aplicarReembolsoParcial(reserva);
     if (cancelaReserva) this.marcarCancelada(reserva, 'ADMINISTRADOR', reembolso.motivo);
     if (esReclamo) reserva.observacion_liquidacion = observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
     const datos = {
@@ -1085,11 +1065,6 @@ export class ReservasService
     reserva.observacion_liquidacion =
       'Código de alojamiento validado por el anunciante';
     return true;
-  }
-
-  restaurarPagoAprobado(reserva: Reserva): void {
-    if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'CONTRACARGO'))
-      reserva.estado_pago = this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO');
   }
 
   aplicarReembolsoTotal(reserva: Reserva): void {
