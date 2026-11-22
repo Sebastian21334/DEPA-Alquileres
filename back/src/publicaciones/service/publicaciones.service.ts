@@ -345,11 +345,10 @@ export class PublicacionesService {
     const publicacion = await this.buscarPorId(id);
     if (publicacion.eliminada) throw new ConflictException('La publicación fue eliminada por su anunciante y no se puede reactivar');
     if (!publicacion.motivo_baja_admin) throw new ConflictException('La publicación no está dada de baja');
-    // La publicación nace inactiva y se activa con la primera foto: reactivarla no debe publicarla sin imágenes.
-    const activa = (publicacion.imagenes?.length ?? 0) > 0;
-    if (!await this.publicacionesRepo.reactivar(id, activa)) throw new ConflictException('La publicación cambió. Recargá e intentá nuevamente');
+    // La reactivación levanta la sanción, no republica: el anunciante decide cuándo activarla.
+    if (!await this.publicacionesRepo.reactivar(id)) throw new ConflictException('La publicación cambió. Recargá e intentá nuevamente');
     publicacion.motivo_baja_admin = null;
-    publicacion.activa = activa;
+    publicacion.activa = false;
     return this.prepararRespuesta(publicacion);
   }
 

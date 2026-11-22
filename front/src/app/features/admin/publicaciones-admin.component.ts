@@ -92,15 +92,11 @@ export class PublicacionesAdminComponent {
     this.ejecutar(
       `publication-${publicacion.id}`,
       this.api.reactivarPublicacion(publicacion.id),
-      (reactivada) => {
+      () => {
         this.loadPublications(this.publicationsPage());
-        if (reactivada.activa) {
-          this.toast.mostrar('Publicación reactivada. Ya no figura como dada de baja.', 'exito');
-          return;
-        }
         this.toast.mostrar(
-          'Publicación reactivada, pero sigue inactiva: necesita al menos una imagen para publicarse.',
-          'advertencia',
+          'Publicación reactivada. Queda inactiva hasta que el anunciante la active.',
+          'exito',
         );
       },
     );
