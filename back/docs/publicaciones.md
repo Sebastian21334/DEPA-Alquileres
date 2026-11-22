@@ -28,7 +28,7 @@ motivos.
 | Publicada | `activa = true`, `eliminada = false`, sin motivo, cuenta habilitada, actividades no pausadas y al menos una imagen | Sí | — |
 | Pausada por el anunciante | `activa = false`, `eliminada = false` y sin motivo | No | El anunciante la activa con `PATCH /publicaciones/:id` y `activa=true`, si tiene imágenes y la cuenta está habilitada; si no, sube la primera |
 | Papelera | `eliminada = true` | No | El anunciante la restaura con `PATCH /publicaciones/:id/restaurar`; vuelve inactiva |
-| Baja administrativa | `motivo_baja_admin` distinto de `null` | No | Solo el administrador con `PATCH /publicaciones/administracion/:id/reactivar` |
+| Baja administrativa | `motivo_baja_admin` distinto de `null` | No | Solo el administrador con `PATCH /publicaciones/administracion/:id/reactivar`; queda inactiva y el anunciante la activa desde su panel |
 | Oculta por cuenta | `usuario.activa = false`, `usuario.bloqueado = true` o `anunciante.actividades_pausadas = true` | No | Se revierte la causa en la cuenta o en la pausa de actividades |
 | Sin imágenes | Galería vacía, con `activa` en `true` o `false` | No | El anunciante sube una imagen |
 
@@ -123,7 +123,8 @@ filtro se resuelve en la consulta, junto con `q` y la paginación existentes.
 
 `bajas` tiene prioridad de clasificación: una publicación eliminada que
 conserva motivo aparece en ese filtro. `inactivas` no incluye bajas porque exige
-`motivo_baja_admin IS NULL`.
+`motivo_baja_admin IS NULL`. Una publicación reactivada cae en `inactivas`
+hasta que el anunciante la active.
 
 El filtro agrupa por las columnas, no por la visibilidad completa. Una cuenta
 bloqueada o con actividades pausadas no cambia `activa`: sus publicaciones
@@ -144,22 +145,23 @@ bajas se explica en la sección 8.
 | Publicación sin motivo de baja | 409; no hay nada que reactivar |
 | Cambio concurrente | 409; otro pedido modificó la publicación |
 | Motivo | Se limpia (`motivo_baja_admin = null`) |
-| `activa` | `true` si tiene al menos una imagen; `false` si no tiene |
-| Respuesta | La publicación actualizada, con `motivo_baja_admin = null` y `activa` recalculada |
+| `activa` | `false`; la publicación queda inactiva |
+| Respuesta | La publicación actualizada, con `motivo_baja_admin = null` y `activa = false` |
 | Correo | No se envía |
 | Historial | No se registra |
 | Reservas y cuenta | No se modifican |
 
-La reactivación no exige imágenes para completarse. Si la publicación no tiene
-ninguna, deja de ser una baja administrativa pero queda inactiva y no aparece
-en el catálogo hasta que el anunciante suba una imagen. Si tiene imágenes pero
-la cuenta está oculta, `activa = true` no alcanza para el catálogo: la
-visibilidad sigue dependiendo de la cuenta y de la pausa de actividades.
+La reactivación no republica ni restaura el estado anterior. Deja la publicación
+inactiva; el anunciante decide cuándo volver a publicarla desde su panel con
+`PATCH /publicaciones/:id` y `activa=true`, si tiene imágenes y la cuenta está
+habilitada. Si no tiene imágenes, debe subir una antes de activarla.
 
 El motivo anterior se pierde al reactivar. La operación no es idempotente: una
 segunda llamada sobre la misma publicación responde 409 porque ya no tiene
-motivo de baja. El anunciante no tiene una ruta equivalente: la reactivación de
-una baja administrativa es exclusiva del administrador.
+motivo de baja. El anunciante no tiene una ruta equivalente para levantar la
+sanción: la reactivación de una baja administrativa es exclusiva del
+administrador. Una vez levantada, la activación vuelve a ser decisión del
+anunciante.
 
 ## 7. Deuda declarada
 
@@ -169,6 +171,7 @@ una baja administrativa es exclusiva del administrador.
 | Sin fecha de baja | No se puede ordenar ni auditar por fecha de baja |
 | Sin actor | No se registra qué administrador aplicó la baja |
 | Sin correo de reactivación | El anunciante no recibe aviso cuando se reactiva la publicación |
+| Sin restauración del estado previo | La reactivación siempre deja `activa = false`; el anunciante decide cuándo volver a publicarla |
 | Sin migración | Todo el ciclo se apoya en columnas existentes; no hay cambios de esquema |
 
 No hay tabla de auditoría ni columnas nuevas para cubrir estas deudas.
