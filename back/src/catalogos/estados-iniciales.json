@@ -128,34 +128,6 @@
       }
     }
   },
-  "DISPUTA": {
-    "nombre": "Disputa",
-    "estados": {
-      "ABIERTA": {
-        "nombre": "Abierta"
-      },
-      "EN_REVISION": {
-        "nombre": "En revisión"
-      },
-      "GANADA": {
-        "nombre": "Ganada"
-      },
-      "PERDIDA": {
-        "nombre": "Perdida"
-      },
-      "CERRADA": {
-        "nombre": "Cerrada"
-      }
-    }
-  },
-  "DISPUTA_ORIGEN": {
-    "nombre": "DISPUTA ORIGEN",
-    "estados": {
-      "CONTRACARGO": {
-        "nombre": "CONTRACARGO"
-      }
-    }
-  },
   "RECLAMO_CATEGORIA": {
     "nombre": "RECLAMO CATEGORIA",
     "estados": {

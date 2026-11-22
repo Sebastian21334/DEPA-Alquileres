@@ -109,7 +109,7 @@ export class CatalogosService implements OnModuleInit {
     const duplicado = await this.catalogosRepo.buscarRolPorNombre(datos.nombre);
     if (duplicado && duplicado.id !== id)
       throw new ConflictException('Ya existe un rol con ese nombre');
-    const actualizado = await this.catalogosRepo.actualizarRol(id, datos);
+    const actualizado = await this.modificarSeguro(() => this.catalogosRepo.actualizarRol(id, datos), 'rol');
     if (!actualizado) throw new NotFoundException('El rol ya no existe');
     return actualizado;
   }
@@ -159,10 +159,7 @@ export class CatalogosService implements OnModuleInit {
       throw new ConflictException(
         'Ya existe un tipo de anunciante con ese nombre',
       );
-    const actualizado = await this.catalogosRepo.actualizarTipoAnunciante(
-      id,
-      datos,
-    );
+    const actualizado = await this.modificarSeguro(() => this.catalogosRepo.actualizarTipoAnunciante(id, datos), 'tipo de anunciante');
     if (!actualizado)
       throw new NotFoundException('El tipo de anunciante ya no existe');
     return actualizado;
@@ -223,10 +220,7 @@ export class CatalogosService implements OnModuleInit {
       throw new ConflictException(
         'Ya existe un tipo de propiedad con ese nombre',
       );
-    const actualizado = await this.catalogosRepo.actualizarTipoPropiedad(
-      id,
-      datos,
-    );
+    const actualizado = await this.modificarSeguro(() => this.catalogosRepo.actualizarTipoPropiedad(id, datos), 'tipo de propiedad');
     if (!actualizado)
       throw new NotFoundException('El tipo de propiedad ya no existe');
     return actualizado;
@@ -282,7 +276,7 @@ export class CatalogosService implements OnModuleInit {
     );
     if (duplicado && duplicado.id !== id)
       throw new ConflictException('Ya existe un modalidad con ese nombre');
-    const actualizado = await this.catalogosRepo.actualizarModalidad(id, datos);
+    const actualizado = await this.modificarSeguro(() => this.catalogosRepo.actualizarModalidad(id, datos), 'modalidad');
     if (!actualizado) throw new NotFoundException('El modalidad ya no existe');
     return this.prepararModalidad(actualizado);
   }
@@ -332,10 +326,7 @@ export class CatalogosService implements OnModuleInit {
     );
     if (duplicado && duplicado.id !== id)
       throw new ConflictException('Ya existe un tipo de moneda con ese nombre');
-    const actualizado = await this.catalogosRepo.actualizarTipoMoneda(
-      id,
-      datos,
-    );
+    const actualizado = await this.modificarSeguro(() => this.catalogosRepo.actualizarTipoMoneda(id, datos), 'tipo de moneda');
     if (!actualizado)
       throw new NotFoundException('El tipo de moneda ya no existe');
     return actualizado;
@@ -357,6 +348,17 @@ export class CatalogosService implements OnModuleInit {
     if (!item)
       throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
     return item;
+  }
+
+  private async modificarSeguro<T>(accion: () => Promise<T>, nombre: string): Promise<T> {
+    try {
+      return await accion();
+    } catch (error: unknown) {
+      if (error instanceof RegistroEnUsoError) {
+        throw new ConflictException(`No se puede modificar el registro de ${nombre} porque está en uso`);
+      }
+      throw error;
+    }
   }
 
   private async eliminarSeguro(accion: () => Promise<void>, nombre: string): Promise<void> {

@@ -3,7 +3,6 @@ import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { ReclamosService } from '../../reclamos/service/reclamos.service';
-import { DisputasService } from '../../disputas/service/disputas.service';
 import { OrigenReembolso } from '../../reembolsos/entity/reembolso.entity';
 
 @Injectable()
@@ -13,7 +12,7 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
   private enCurso?: Promise<void>;
   private ultimoIdAplicacion = 0;
 
-  constructor(private readonly reembolsos: ReembolsosService, private readonly reservas: ReservasService, private readonly reclamos: ReclamosService, private readonly disputas: DisputasService, private readonly notificaciones?: ReservaNotificacionesService) {}
+  constructor(private readonly reembolsos: ReembolsosService, private readonly reservas: ReservasService, private readonly reclamos: ReclamosService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
   async ejecutar(id: number, idAdmin: number) {
     const reembolso = await this.reembolsos.ejecutar(id, idAdmin);
@@ -35,8 +34,6 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
     const aplicada = await this.reembolsos.aplicarConfirmado(id, async (reembolso, transaccion) => {
       if (reembolso.origen === OrigenReembolso.RECLAMO)
         return (await this.reclamos.aplicarResolucionReembolso(reembolso, transaccion)).reserva;
-      if (reembolso.origen === OrigenReembolso.CONTRACARGO)
-        return (await this.disputas.aplicarResolucionReembolso(reembolso, transaccion)).reserva;
       return this.reservas.aplicarEfectoReembolso(reembolso, transaccion);
     });
     const reembolso = await this.reembolsos.buscar(id);

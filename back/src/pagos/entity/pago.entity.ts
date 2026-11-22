@@ -94,14 +94,6 @@ export class Pago {
   @Column({ name: 'refunded_at', type: 'timestamp', nullable: true })
   refunded_at: Date | null;
 
-  @Column({
-    name: 'chargeback_id',
-    type: 'varchar',
-    length: 100,
-    nullable: true,
-  })
-  chargeback_id: string | null;
-
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   created_at: Date;
 

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, MoreThan, Repository, type EntityManager } from 'typeorm';
-import { Reembolso } from '../entity/reembolso.entity';
+import { In, IsNull, MoreThan, Not, Repository, type EntityManager } from 'typeorm';
+import { OrigenReembolso, Reembolso } from '../entity/reembolso.entity';
 import type { IReembolsosRepository, MensajeReembolso } from './reembolsos.repository.interface';
 
 @Injectable()
@@ -54,7 +54,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
   buscarPorPago(idPago: number): Promise<Reembolso[]> {
     return this.repository.find({
       where: { pago: { id: idPago } },
-      select: { id: true, importe: true, estado: true, id_externo: true, referencia_externa: true,
+      select: { id: true, importe: true, estado: true, origen: true, id_externo: true, referencia_externa: true,
         conciliar_en: true, aplicado_en: true, revision_aplicacion: true },
       order: { id: 'DESC' },
     });
@@ -118,6 +118,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
       .addSelect('reembolso.conciliar_en')
       .where('reembolso.estado IN (:...estados)', { estados })
       .andWhere('reembolso.conciliar_en <= :hasta', { hasta })
+      .andWhere('reembolso.origen <> :origen', { origen: OrigenReembolso.CONTRACARGO })
       .orderBy('reembolso.conciliar_en', 'ASC')
       .addOrderBy('reembolso.id', 'ASC')
       .limit(50)
@@ -126,7 +127,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
 
   buscarPendientesAplicacion(estado: string, desdeId: number): Promise<Reembolso[]> {
     return this.repository.find({
-      where: { id: MoreThan(desdeId), estado, aplicado_en: IsNull(), revision_aplicacion: false },
+      where: { id: MoreThan(desdeId), estado, aplicado_en: IsNull(), revision_aplicacion: false, origen: Not(OrigenReembolso.CONTRACARGO) },
       select: { id: true },
       order: { id: 'ASC' },
       take: 50,
