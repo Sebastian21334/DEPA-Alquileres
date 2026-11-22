@@ -28,84 +28,52 @@
 
       @switch (paso()) {
         @case ('datos') {
-          <form class="acct-card form-card" [formGroup]="form" (ngSubmit)="enviarDatos()" novalidate>
-            <header class="form-section__head">
-              <h2>Datos del anunciante</h2>
-              <p>Estos datos identifican tu cuenta y permiten que un administrador valide tu perfil.</p>
-            </header>
-
-            <section class="form-section" aria-labelledby="datos-personales">
-              <div class="form-section__head">
-                <h3 id="datos-personales">Datos personales y de contacto</h3>
-                <p>El CUIT/CUIL debe pertenecer al titular de la cuenta.</p>
+          <form class="acct-card" [formGroup]="form" (ngSubmit)="enviarDatos()" novalidate>
+            <h2>Datos del anunciante</h2>
+            <div class="acct-grid">
+              <div class="acct-field acct-span">
+                <label for="tipo">Tipo de anunciante</label>
+                <select id="tipo" formControlName="idTipoAnunciante">
+                  <option [ngValue]="0" disabled>Seleccioná una opción</option>
+                  @for (t of tipos(); track t.id) { <option [ngValue]="t.id">{{ t.nombre }}</option> }
+                </select>
+                @if (form.controls.idTipoAnunciante.invalid && form.controls.idTipoAnunciante.touched) {
+                  <span class="acct-hint acct-hint--error">Elegí si sos propietario, inmobiliaria, etc.</span>
+                }
               </div>
-              <div class="acct-grid">
+              <div class="acct-field">
+                <label for="cuit">{{ esInmobiliaria() ? 'CUIT de la inmobiliaria' : 'CUIT / CUIL personal' }}</label>
+                <input id="cuit" formControlName="cuit" inputmode="numeric" placeholder="20-12345678-9"
+                  [attr.aria-invalid]="!!errorCuit() || null" (input)="errorCuit.set('')" />
+                @if (form.controls.cuit.invalid && form.controls.cuit.touched) {
+                  <span class="acct-hint acct-hint--error">Ingresá un CUIT/CUIL válido (11 dígitos).</span>
+                } @else if (errorCuit()) {
+                  <span class="acct-hint acct-hint--error" role="alert">{{ errorCuit() }}</span>
+                }
+              </div>
+              <div class="acct-field">
+                <label for="contacto">Número de contacto</label>
+                <input id="contacto" type="tel" formControlName="numero_contacto" placeholder="+54 353 400-0000" />
+                @if (form.controls.numero_contacto.invalid && form.controls.numero_contacto.touched) {
+                  <span class="acct-hint acct-hint--error">Ingresá un teléfono (máximo 20 caracteres).</span>
+                }
+              </div>
+              @if (!solicitud()) {
                 <div class="acct-field acct-span">
-                  <label for="tipo">Tipo de anunciante</label>
-                  <select id="tipo" formControlName="idTipoAnunciante">
-                    <option [ngValue]="0" disabled>Seleccioná una opción</option>
-                    @for (t of tipos(); track t.id) { <option [ngValue]="t.id">{{ t.nombre }}</option> }
-                  </select>
-                  @if (form.controls.idTipoAnunciante.invalid && form.controls.idTipoAnunciante.touched) {
-                    <span class="acct-hint acct-hint--error">Elegí si sos propietario, inmobiliaria, etc.</span>
+                  <label for="alta-cbu">CBU de la cuenta bancaria</label>
+                  <input id="alta-cbu" formControlName="cbu" inputmode="numeric" maxlength="22" autocomplete="off" aria-describedby="alta-cbu-ayuda" />
+                  <small id="alta-cbu-ayuda">Es obligatorio que la cuenta bancaria esté a nombre del mismo titular de la cuenta en DEPA. Un administrador verificará la titularidad del CBU antes de que puedas usarlo para cobrar.</small>
+                  @if (form.controls.cbu.invalid && form.controls.cbu.touched) {
+                    <span class="acct-hint acct-hint--error">Ingresá un CBU de 22 dígitos.</span>
                   }
-                </div>
-                <div class="acct-field">
-                  <label for="cuit">{{ esInmobiliaria() ? 'CUIT de la inmobiliaria' : 'CUIT / CUIL personal' }}</label>
-                  <input id="cuit" formControlName="cuit" inputmode="numeric" placeholder="20-12345678-9"
-                    [attr.aria-invalid]="!!errorCuit() || null" (input)="errorCuit.set('')" />
-                  @if (form.controls.cuit.invalid && form.controls.cuit.touched) {
-                    <span class="acct-hint acct-hint--error">Ingresá un CUIT/CUIL válido (11 dígitos).</span>
-                  } @else if (errorCuit()) {
-                    <span class="acct-hint acct-hint--error" role="alert">{{ errorCuit() }}</span>
-                  }
-                </div>
-                <div class="acct-field">
-                  <label for="contacto">Número de contacto</label>
-                  <input id="contacto" type="tel" formControlName="numero_contacto" placeholder="+54 353 400-0000" />
-                  @if (form.controls.numero_contacto.invalid && form.controls.numero_contacto.touched) {
-                    <span class="acct-hint acct-hint--error">Ingresá un teléfono (máximo 20 caracteres).</span>
-                  }
-                </div>
-              </div>
-            </section>
-
-            @if (esInmobiliaria()) {
-              <section class="form-section" aria-labelledby="datos-inmobiliaria">
-                <div class="form-section__head">
-                  <h3 id="datos-inmobiliaria">Datos de la inmobiliaria</h3>
-                  <p>La persona titular de la cuenta debe ser el corredor responsable.</p>
-                </div>
-                <ng-container [ngTemplateOutlet]="datosEmpresa" />
-              </section>
-            }
-
-            @if (!solicitud()) {
-              <section class="form-section" aria-labelledby="cuenta-bancaria">
-                <div class="form-section__head">
-                  <h3 id="cuenta-bancaria">Cuenta bancaria para cobrar</h3>
-                  <p>Usamos estos datos para transferirte los cobros de tus alquileres.</p>
-                </div>
-                <div class="acct-grid">
-                  <div class="acct-field acct-span">
-                    <label for="alta-cbu">CBU de la cuenta bancaria</label>
-                    <input id="alta-cbu" formControlName="cbu" inputmode="numeric" maxlength="22" autocomplete="off" aria-describedby="alta-cbu-ayuda" />
-                    <small id="alta-cbu-ayuda" class="acct-hint">Es obligatorio que la cuenta bancaria esté a nombre del mismo titular de la cuenta en DEPA. Un administrador verificará la titularidad del CBU antes de que puedas usarlo para cobrar.</small>
-                    @if (form.controls.cbu.invalid && form.controls.cbu.touched) {
-                      <span class="acct-hint acct-hint--error">Ingresá un CBU de 22 dígitos.</span>
-                    }
-                  </div>
-                  <label class="check-field acct-span" for="alta-titularidad">
-                    <input id="alta-titularidad" type="checkbox" formControlName="titularidad_declarada" />
-                    <span>Confirmo que la cuenta bancaria está a mi nombre.</span>
-                  </label>
+                  <label><input type="checkbox" formControlName="titularidad_declarada" /> Confirmo que la cuenta bancaria está a mi nombre.</label>
                   @if (form.controls.titularidad_declarada.invalid && form.controls.titularidad_declarada.touched) {
-                    <span class="acct-hint acct-hint--error acct-span">Confirmá que sos titular de la cuenta bancaria.</span>
+                    <span class="acct-hint acct-hint--error">Confirmá que sos titular de la cuenta bancaria.</span>
                   }
                 </div>
-              </section>
-            }
-
+              }
+            </div>
+            @if (esInmobiliaria()) { <ng-container [ngTemplateOutlet]="datosEmpresa" /> }
             <div class="acct-actions form-actions">
               <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviando()">
                 {{ enviando() ? 'Guardando…' : 'Continuar' }}
@@ -115,93 +83,63 @@
         }
 
         @case ('documentos') {
-          <section class="acct-card form-card">
-            <header class="docs-header">
-              <div class="form-section__head">
-                <h2>Documentación de identidad</h2>
-                <p>Primero vas a fotografiar el frente y el dorso del DNI. Después te guiamos con una prueba breve de movimientos y una foto de frente.</p>
-              </div>
-              @if (solicitud() && puedeEditarDatos()) {
+          <section class="acct-card">
+            <h2>Documentación de identidad</h2>
+            @if (solicitud() && puedeEditarDatos()) {
+              <div class="acct-actions">
                 <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="irAPaso('datos')">← Volver a datos</button>
-              }
-            </header>
-
+              </div>
+            }
             @if (solicitud()?.estado === 'rechazada') {
-              <div class="acct-alert acct-alert--error">
+              <div class="acct-alert acct-alert--error spaced">
                 <strong>La verificación de identidad fue rechazada.</strong>
                 @if (solicitud()?.motivo_rechazo) { <br />Motivo: {{ solicitud()?.motivo_rechazo }} }
               </div>
             }
-
-            <div class="acct-alert acct-alert--info">
-              Los documentos se conservan de forma privada hasta que se revise la identidad. Si esa verificación se rechaza, vas a tener que enviar nuevas capturas.
-            </div>
+            <p class="intro">
+              Primero vas a fotografiar el frente y el dorso del DNI. Después te guiamos con una prueba breve de movimientos y una foto de frente. Al finalizar, podés enviar la documentación para que un administrador la revise.
+            </p>
+            <p>Los documentos se conservan de forma privada hasta que se revise la identidad. Si esa verificación se rechaza, vas a tener que enviar nuevas capturas.</p>
 
             @if (esInmobiliaria()) {
-              <section class="form-section" aria-labelledby="docs-inmobiliaria">
-                <div class="form-section__head">
-                  <h3 id="docs-inmobiliaria">Datos de la inmobiliaria y del corredor</h3>
-                  <p>Revisá que coincidan con la documentación que vas a adjuntar.</p>
-                </div>
-                <dl class="company-summary">
-                  <div><dt>Nombre o razón social</dt><dd>{{ solicitud()?.razon_social || '—' }}</dd></div>
-                  <div><dt>Matrícula del corredor</dt><dd>{{ solicitud()?.matricula_profesional || '—' }}</dd></div>
-                  <div><dt>Colegio profesional</dt><dd>{{ solicitud()?.colegio_profesional || '—' }}</dd></div>
-                  <div><dt>Domicilio comercial</dt><dd>{{ solicitud()?.domicilio_comercial || '—' }}</dd></div>
-                  <div><dt>DNI del corredor</dt><dd>{{ solicitud()?.dni_corredor || '—' }}</dd></div>
-                </dl>
-                <div class="acct-grid">
-                  <div class="acct-field">
-                    <label for="constancia-matricula">Constancia de matrícula profesional</label>
-                    <input id="constancia-matricula" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'matricula')" />
-                    @if (matricula(); as archivo) {
-                      <span class="acct-hint">Archivo seleccionado: {{ archivo.name }}</span>
-                    } @else {
-                      <span class="acct-hint">PDF, JPG o PNG de hasta 5 MB.</span>
-                    }
-                  </div>
-                  <div class="acct-field">
-                    <label for="constancia-cuit">Constancia de CUIT de la inmobiliaria</label>
-                    <input id="constancia-cuit" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'cuit')" />
-                    @if (constanciaCuit(); as archivo) {
-                      <span class="acct-hint">Archivo seleccionado: {{ archivo.name }}</span>
-                    } @else {
-                      <span class="acct-hint">PDF, JPG o PNG de hasta 5 MB.</span>
-                    }
-                  </div>
-                </div>
-              </section>
-            }
-
-            <section class="form-section" aria-labelledby="verificacion-identidad">
-              <div class="form-section__head">
-                <h3 id="verificacion-identidad">Verificación de identidad</h3>
-                <p>Tené el DNI a mano, buscá buena luz y ubicáte donde estés solo.</p>
-              </div>
-
-              @if (enviando()) {
-                <div class="acct-state"><app-spinner /><p>Enviando la documentación para revisión…</p></div>
-              } @else if (!esInmobiliaria() || (matricula() && constanciaCuit())) {
-                <div class="identity-start">
-                  <p>Vamos a fotografiar ambas caras del DNI y guiarte con movimientos sencillos. La cámara se abre en una ventana centrada y vas a ver las indicaciones y el resultado en el momento.</p>
-                  <div class="acct-actions">
-                    @if (documentosPendientes(); as pendientes) {
-                      <button type="button" class="acct-btn acct-btn--primary" (click)="enviarDocumentos(pendientes)">Reintentar envío de documentación</button>
-                    }
-                    <button type="button" class="acct-btn" [class.acct-btn--primary]="!documentosPendientes()" [class.acct-btn--ghost]="!!documentosPendientes()" (click)="abrirCaptura()">{{ documentosPendientes() ? 'Hacer una nueva captura' : 'Comenzar verificación' }}</button>
-                  </div>
-                </div>
-                @if (capturaAbierta()) {
-                  <app-captura-identidad
-                    (pruebaVidaCompletada)="enviarDocumentos($event)"
-                    (cerrar)="capturaAbierta.set(false)"
-                    (reintento)="limpiarErrorCaptura()"
-                  />
-                }
-              } @else {
-                <p class="acct-hint">Completá los datos y adjuntá ambas constancias para comenzar la captura.</p>
+              <h3>Datos de la inmobiliaria y del corredor responsable</h3>
+              <p>La persona titular de esta cuenta debe ser el corredor responsable y completar la captura de su propio DNI y la prueba de vida.</p>
+              <dl class="company-summary">
+                <div><dt>Nombre o razón social</dt><dd>{{ solicitud()?.razon_social || '—' }}</dd></div>
+                <div><dt>Matrícula del corredor</dt><dd>{{ solicitud()?.matricula_profesional || '—' }}</dd></div>
+                <div><dt>Colegio profesional</dt><dd>{{ solicitud()?.colegio_profesional || '—' }}</dd></div>
+                <div><dt>Domicilio comercial</dt><dd>{{ solicitud()?.domicilio_comercial || '—' }}</dd></div>
+                <div><dt>DNI del corredor</dt><dd>{{ solicitud()?.dni_corredor || '—' }}</dd></div>
+              </dl>
+              @if (puedeEditarDatos()) {
+                <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="irAPaso('datos')">Editar datos</button>
               }
-            </section>
+              <div class="acct-grid">
+                <div class="acct-field"><label for="constancia-matricula">Constancia de matrícula profesional</label><input id="constancia-matricula" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'matricula')" /></div>
+                <div class="acct-field"><label for="constancia-cuit">Constancia de CUIT de la inmobiliaria</label><input id="constancia-cuit" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'cuit')" /></div>
+              </div>
+              <p>PDF, JPG o PNG de hasta 5 MB por constancia. El administrador revisará los datos y documentos.</p>
+            }
+            @if (enviando()) {
+              <div class="acct-state"><app-spinner /><p>Enviando la documentación para revisión…</p></div>
+            } @else if (!esInmobiliaria() || (matricula() && constanciaCuit())) {
+              <div class="identity-start">
+                <h3>Verificá tu identidad paso a paso</h3>
+                <p>Tené el DNI a mano, buscá buena luz y ubicáte donde estés solo. Vamos a fotografiar ambas caras del DNI y guiarte con movimientos sencillos.</p>
+                <p>La cámara se abre en una ventana centrada. Vas a ver las indicaciones y el resultado en el momento.</p>
+                @if (documentosPendientes(); as pendientes) {
+                  <button type="button" class="acct-btn acct-btn--primary" (click)="enviarDocumentos(pendientes)">Reintentar envío de documentación</button>
+                }
+                <button type="button" class="acct-btn" [class.acct-btn--primary]="!documentosPendientes()" [class.acct-btn--ghost]="!!documentosPendientes()" (click)="abrirCaptura()">{{ documentosPendientes() ? 'Hacer una nueva captura' : 'Comenzar verificación' }}</button>
+              </div>
+              @if (capturaAbierta()) {
+                <app-captura-identidad
+                  (pruebaVidaCompletada)="enviarDocumentos($event)"
+                  (cerrar)="capturaAbierta.set(false)"
+                  (reintento)="limpiarErrorCaptura()"
+                />
+              }
+            } @else { <p>Completá los datos y adjuntá ambas constancias para comenzar la captura.</p> }
           </section>
         }
 
@@ -253,41 +191,11 @@
   </div>
 </section>
 <ng-template #datosEmpresa>
-  <div [formGroup]="empresaForm" class="acct-grid">
-    <div class="acct-field">
-      <label for="empresa-razon_social">Nombre o razón social</label>
-      <input id="empresa-razon_social" formControlName="razon_social" maxlength="150" />
-      @if (empresaForm.controls.razon_social.invalid && empresaForm.controls.razon_social.touched) {
-        <span class="acct-hint acct-hint--error">Completá este dato.</span>
-      }
-    </div>
-    <div class="acct-field">
-      <label for="empresa-matricula_profesional">Matrícula del corredor responsable</label>
-      <input id="empresa-matricula_profesional" formControlName="matricula_profesional" maxlength="50" />
-      @if (empresaForm.controls.matricula_profesional.invalid && empresaForm.controls.matricula_profesional.touched) {
-        <span class="acct-hint acct-hint--error">Completá este dato.</span>
-      }
-    </div>
-    <div class="acct-field">
-      <label for="empresa-colegio_profesional">Colegio profesional y jurisdicción</label>
-      <input id="empresa-colegio_profesional" formControlName="colegio_profesional" maxlength="150" />
-      @if (empresaForm.controls.colegio_profesional.invalid && empresaForm.controls.colegio_profesional.touched) {
-        <span class="acct-hint acct-hint--error">Completá este dato.</span>
-      }
-    </div>
-    <div class="acct-field">
-      <label for="empresa-domicilio_comercial">Domicilio comercial</label>
-      <input id="empresa-domicilio_comercial" formControlName="domicilio_comercial" maxlength="255" />
-      @if (empresaForm.controls.domicilio_comercial.invalid && empresaForm.controls.domicilio_comercial.touched) {
-        <span class="acct-hint acct-hint--error">Completá este dato.</span>
-      }
-    </div>
-    <div class="acct-field">
-      <label for="empresa-dni_corredor">DNI del corredor responsable</label>
-      <input id="empresa-dni_corredor" formControlName="dni_corredor" maxlength="15" />
-      @if (empresaForm.controls.dni_corredor.invalid && empresaForm.controls.dni_corredor.touched) {
-        <span class="acct-hint acct-hint--error">Completá este dato con 7 u 8 dígitos.</span>
-      }
-    </div>
-  </div>
+<div [formGroup]="empresaForm" class="acct-grid">
+<div class="acct-field"><label for="empresa-razon_social">Nombre o razón social</label><input id="empresa-razon_social" formControlName="razon_social" maxlength="150" />@if (empresaForm.controls.razon_social.invalid && empresaForm.controls.razon_social.touched) { <span class="acct-hint acct-hint--error">Completá este dato.</span> }</div>
+<div class="acct-field"><label for="empresa-matricula_profesional">Matrícula del corredor responsable</label><input id="empresa-matricula_profesional" formControlName="matricula_profesional" maxlength="50" />@if (empresaForm.controls.matricula_profesional.invalid && empresaForm.controls.matricula_profesional.touched) { <span class="acct-hint acct-hint--error">Completá este dato.</span> }</div>
+<div class="acct-field"><label for="empresa-colegio_profesional">Colegio profesional y jurisdicción</label><input id="empresa-colegio_profesional" formControlName="colegio_profesional" maxlength="150" />@if (empresaForm.controls.colegio_profesional.invalid && empresaForm.controls.colegio_profesional.touched) { <span class="acct-hint acct-hint--error">Completá este dato.</span> }</div>
+<div class="acct-field"><label for="empresa-domicilio_comercial">Domicilio comercial</label><input id="empresa-domicilio_comercial" formControlName="domicilio_comercial" maxlength="255" />@if (empresaForm.controls.domicilio_comercial.invalid && empresaForm.controls.domicilio_comercial.touched) { <span class="acct-hint acct-hint--error">Completá este dato.</span> }</div>
+<div class="acct-field"><label for="empresa-dni_corredor">DNI del corredor responsable</label><input id="empresa-dni_corredor" formControlName="dni_corredor" maxlength="15" />@if (empresaForm.controls.dni_corredor.invalid && empresaForm.controls.dni_corredor.touched) { <span class="acct-hint acct-hint--error">Completá este dato con 7 u 8 dígitos.</span> }</div>
+</div>
 </ng-template>
