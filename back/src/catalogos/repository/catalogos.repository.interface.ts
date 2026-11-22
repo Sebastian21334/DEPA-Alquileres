@@ -4,10 +4,13 @@ import { TipoAnunciante } from '../entity/tipo-anunciante.entity';
 import { TipoMoneda } from '../entity/tipo-moneda.entity';
 import { TipoPropiedad } from '../entity/tipo-propiedad.entity';
 import type { Estado } from '../entity/estado.entity';
+import type { EntityManager } from 'typeorm';
 
 export const CATALOGOS_REPOSITORY = 'CATALOGOS_REPOSITORY';
 
 export interface ICatalogosRepository {
+  obtenerComision(transaccion?: EntityManager): Promise<number>;
+  actualizarComision(porcentaje: number): Promise<number>;
   listarEstados(): Promise<Estado[]>;
 
   buscarTodosRoles(): Promise<Rol[]>;
