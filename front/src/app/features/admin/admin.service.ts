@@ -86,7 +86,7 @@ export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
-export type AdminSettlement = Reserva & { fecha_disponible_pago: string | null };
+export type AdminSettlement = Reserva & { fecha_disponible_pago: string | null; porcentaje_comision_depa: number | null; importe_comision_depa: number; importe_neto_anunciante: number };
 
 export interface AdminPagoLiquidacion {
   id: string;
@@ -271,6 +271,12 @@ export class AdminService {
   }
   listarCatalogo(key: CatalogKey) {
     return this.http.get<AdminCatalogItem[]>(`${this.api}/catalogos/${key}`);
+  }
+  obtenerComisionDepa() {
+    return this.http.get<{ porcentaje: number }>(`${this.api}/catalogos/comision-depa`);
+  }
+  actualizarComisionDepa(porcentaje: number) {
+    return this.http.put<{ porcentaje: number }>(`${this.api}/catalogos/comision-depa`, { porcentaje });
   }
   crearCatalogo(key: CatalogKey, nombre: string) {
     return this.http.post<AdminCatalogItem>(`${this.api}/catalogos/${key}`, { nombre });

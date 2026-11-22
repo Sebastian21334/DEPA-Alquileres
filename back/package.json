@@ -49,7 +49,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "oxlint src/"
+    "lint": "oxlint src/",
+    "db:comision-depa": "node scripts/comision-depa.cjs"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",
