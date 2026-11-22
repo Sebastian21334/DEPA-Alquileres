@@ -13,6 +13,7 @@ import {
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { fechaParaMostrar } from '../../common/utils/fechas';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
@@ -188,6 +189,17 @@ export class OperacionesLiquidacionService {
         'No se puede pagar al propietario con una liquidación en revisión',
       );
     }
+    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
+      this.validarPlazoReclamoCerrado(reserva);
+  }
+
+  /** El pago al anunciante se retiene mientras el inquilino todavía puede reclamar. */
+  private validarPlazoReclamoCerrado(reserva: Reserva): void {
+    const finPlazo = this.reservasService.finPlazoReclamo(reserva);
+    if (finPlazo && this.reservasService.plazoReclamoAbierto(reserva))
+      throw new ConflictException(
+        `Todavía está abierto el plazo de reclamos (cierra el ${fechaParaMostrar(finPlazo)}). El pago al anunciante se puede registrar después.`,
+      );
   }
 
 }

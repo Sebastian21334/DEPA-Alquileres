@@ -224,7 +224,13 @@
               }
               <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
               @if (settlement.codigo_validado_en) {
-                <button type="button" class="button button--success" [disabled]="settlement.estado_liquidacion === 'EN_REVISION'" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+                @let retenidoHasta = pagoRetenidoHasta(settlement);
+                <button type="button" class="button button--success" [disabled]="settlement.estado_liquidacion === 'EN_REVISION' || retenidoHasta"
+                  [attr.aria-describedby]="retenidoHasta ? 'plazo-reclamo-' + settlement.id : null"
+                  (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+                @if (retenidoHasta) {
+                  <p class="settlement-hold" [id]="'plazo-reclamo-' + settlement.id">Plazo de reclamos abierto hasta el {{ retenidoHasta }}</p>
+                }
               }
             </div>
           </article>

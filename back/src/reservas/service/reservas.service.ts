@@ -576,9 +576,14 @@ export class ReservasService
     return this.reservaRepository.conTransaccion(async (reservas, transaccion) => {
       const reserva = await reservas.buscarParaReclamo(id);
       if (!reserva) throw new NotFoundException('No se encontró la reserva');
+      // El reclamo decide con el estado real de la liquidación, no con el valor sin proyectar.
+      await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
       const reclamo = await crearReclamo(reserva, transaccion);
+      const motivo = 'Reclamo del inquilino en revisión';
+      // Conserva un motivo de revisión previo, por ejemplo el código bloqueado.
+      const previo = this.liquidacionEnRevision(reserva) ? reserva.observacion_liquidacion?.trim() : null;
       reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
-      reserva.observacion_liquidacion = 'Reclamo del inquilino en revisión';
+      reserva.observacion_liquidacion = previo && !previo.includes(motivo) ? `${previo} · ${motivo}` : motivo;
       reserva.fecha_resolucion_liquidacion = null;
       await reservas.guardar(reserva);
       await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
@@ -592,6 +597,14 @@ export class ReservasService
 
   calcularEstadoEstadia(reserva: Reserva, ahora = new Date()) {
     return this.estadoService.calcularEstadoEstadia(reserva, ahora);
+  }
+
+  finPlazoReclamo(reserva: Reserva): string | null {
+    return this.estadoService.finPlazoReclamo(reserva);
+  }
+
+  plazoReclamoAbierto(reserva: Reserva, ahora = new Date()): boolean {
+    return this.estadoService.plazoReclamoAbierto(reserva, ahora);
   }
 
   esDelInquilino(reserva: Reserva, idUsuario: number): boolean {
@@ -613,9 +626,12 @@ export class ReservasService
   async resolverReclamoSinDevolucion(reserva: Reserva, observacion: string | undefined, transaccion: EntityManager): Promise<Reserva> {
     if (this.liquidacionResuelta(reserva))
       throw new ConflictException('La liquidación de la reserva ya fue resuelta');
-    reserva.estado_liquidacion = this.codigoValidado(reserva)
+    const codigoValidado = this.codigoValidado(reserva);
+    reserva.estado_liquidacion = codigoValidado
       ? this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO')
       : this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO');
+    // Al volver a RETENIDO el anunciante puede cargar el código otra vez durante la estadía.
+    if (!codigoValidado) reserva.intentos_codigo = 0;
     reserva.observacion_liquidacion =
       observacion?.trim() || 'Reclamo resuelto a favor del Anunciante';
     await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
