@@ -552,8 +552,7 @@ select {
 .claim-card > .actions { margin-top: 0; }
 .claim-card .button--ghost { border: 1px solid #10233f; color: #10233f; }
 .button--resolve-claim { background: #081b38; color: #fff; }
-.settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }
-.alert {
+.settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }.alert {
   margin: 18px 0;
   padding: 12px 16px;
   border-radius: 9px;

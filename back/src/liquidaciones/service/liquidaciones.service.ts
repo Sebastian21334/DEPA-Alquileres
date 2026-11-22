@@ -1,7 +1,7 @@
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Inject, Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
-import { esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
+import { esFechaCalendarioValida, fechaArgentina, sumarDiasCalendario } from '../../common/utils/fechas';
 import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.error';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { Liquidacion } from '../entity/liquidacion.entity';
@@ -23,7 +23,8 @@ export type DevolucionLiquidacionDatos = ResolucionLiquidacionDatos & {
   parcial?: boolean;
 };
 
-const DIAS_ESPERA_PAGO_MANUAL = 5;
+/** Días después del fin de la estadía hasta que se habilita el pago al anunciante (T35). */
+export const DIAS_ESPERA_PAGO_MANUAL = 5;
 
 /**
  * Mantiene el registro auditable de la liquidación y sincroniza la caché de
@@ -84,9 +85,7 @@ export class LiquidacionesService {
   }
 
   private desplazarFecha(fecha: string, dias: number): string {
-    const calendario = new Date(`${fecha}T00:00:00Z`);
-    calendario.setUTCDate(calendario.getUTCDate() + dias);
-    return calendario.toISOString().slice(0, 10);
+    return sumarDiasCalendario(fecha, dias);
   }
 
   async listarPagosRegistrados() {

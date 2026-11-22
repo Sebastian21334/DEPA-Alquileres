@@ -2,8 +2,9 @@ import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Injectable } from '@nestjs/common';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
 import type { EstadoEstadia, ReservaRespuestaDto } from '../dto/reserva-respuesta.dto';
-import { esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
+import { esFechaCalendarioValida, fechaArgentina, sumarDiasCalendario } from '../../common/utils/fechas';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
+import { DIAS_ESPERA_PAGO_MANUAL } from '../../liquidaciones/service/liquidaciones.service';
 
 /** Proyección compartida con los módulos que devuelven reservas en sus respuestas. */
 @Injectable()
@@ -22,7 +23,19 @@ export class ReservaEstadoService {
       reserva.fecha_resolucion_liquidacion = liquidacion?.fecha_resolucion ?? null;
     }
     delete reserva.liquidacion;
-    return Object.assign(reserva, { estado_estadia: this.calcularEstadoEstadia(reserva) });
+    return Object.assign(reserva, {
+      estado_estadia: this.calcularEstadoEstadia(reserva),
+      fin_plazo_reclamo: this.finPlazoReclamo(reserva),
+    });
+  }
+
+  /**
+   * Último día para reclamar: el anterior a que se habilite el pago al anunciante (T35).
+   * Las reservas canceladas no admiten reclamos.
+   */
+  finPlazoReclamo(reserva: Reserva): string | null {
+    if (reserva.cancelada || !esFechaCalendarioValida(reserva.fecha_fin)) return null;
+    return sumarDiasCalendario(reserva.fecha_fin, DIAS_ESPERA_PAGO_MANUAL - 1);
   }
 
   calcularEstadoEstadia(reserva: Reserva, ahora = new Date()): EstadoEstadia {

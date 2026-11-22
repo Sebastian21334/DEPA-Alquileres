@@ -15,4 +15,6 @@ export type EstadoEstadia =
 
 export class ReservaRespuestaDto extends Reserva {
   estado_estadia: EstadoEstadia;
+  /** Último día (AAAA-MM-DD) para reclamar; null si está cancelada o no tiene fechas válidas. */
+  fin_plazo_reclamo: string | null;
 }
