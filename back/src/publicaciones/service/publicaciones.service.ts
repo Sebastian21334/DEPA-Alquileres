@@ -1,4 +1,5 @@
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import {
   BadRequestException,
   ConflictException,
@@ -243,6 +244,18 @@ export class PublicacionesService {
   /** La papelera solo se entrega al dueño autenticado, nunca al listado público. */
   async listarPropias(anunciante: Anunciante) {
     const publicaciones = await this.publicacionesRepo.buscarPorAnunciante(anunciante.idUsuario, false, true);
+    return publicaciones.map((publicacion) => this.prepararRespuesta(publicacion));
+  }
+
+  /** Listado paginado de las publicaciones no eliminadas del dueño. */
+  async listarMiasPaginadas(anunciante: Anunciante, consulta: ListarMisPublicacionesDto) {
+    const pagina = await this.publicacionesRepo.buscarMiasPaginadas(anunciante.idUsuario, consulta);
+    return { ...pagina, datos: pagina.datos.map((publicacion) => this.prepararRespuesta(publicacion)) };
+  }
+
+  /** Papelera simple del dueño: sin paginación ni búsqueda. */
+  async listarPapelera(anunciante: Anunciante) {
+    const publicaciones = await this.publicacionesRepo.buscarPapeleraPorAnunciante(anunciante.idUsuario);
     return publicaciones.map((publicacion) => this.prepararRespuesta(publicacion));
   }
 

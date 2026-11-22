@@ -1,5 +1,6 @@
 import { Publicacion } from '../entity/publicacion.entity';
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import { Pagina } from '../../common/persistence/paginacion';
 import type { EntityManager } from 'typeorm';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
@@ -59,6 +60,8 @@ export interface IPublicacionesRepository {
   buscarTodasActivas(): Promise<Publicacion[]>;
   buscarTodas(): Promise<Publicacion[]>;
   buscarAdministracion(consulta: ListarPublicacionesAdministracionDto): Promise<Pagina<Publicacion>>;
+  buscarMiasPaginadas(idAnunciante: number, consulta: ListarMisPublicacionesDto): Promise<Pagina<Publicacion> & { activas: number }>;
+  buscarPapeleraPorAnunciante(idAnunciante: number): Promise<Publicacion[]>;
   buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones>;
   buscarPorAnunciante(idAnunciante: number, soloActivas: boolean, incluirEliminadas?: boolean): Promise<Publicacion[]>;
   restaurar(id: number): Promise<boolean>;
