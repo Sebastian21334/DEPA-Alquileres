@@ -6,8 +6,8 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { finalize, forkJoin, Subscription } from 'rxjs';
 import { ToastService } from '../../core/services/toast.service';
-import { Publicacion } from '../../shared/models/publicacion.model';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
+import { PublicacionesAdminComponent } from './publicaciones-admin.component';
 import {
   LucideUsers,
   LucideShieldCheck,
@@ -89,6 +89,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   standalone: true,
   imports: [
     CotizacionesAdminComponent,
+    PublicacionesAdminComponent,
     ClaimHistoryComponent,
     ConversationComposerComponent,
     ConversationPanelComponent,
@@ -132,7 +133,7 @@ export class AdminComponent {
   private readonly api = inject(AdminService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
-  private publicationsRequest?: Subscription;
+  private readonly publicacionesAdmin = viewChild(PublicacionesAdminComponent);
   private usersRequest?: Subscription;
   private bloqueadosRequest?: Subscription;
   private readonly bloqueoDialog = viewChild.required<ElementRef<HTMLDialogElement>>('bloqueoDialog');
@@ -147,14 +148,6 @@ export class AdminComponent {
   protected motivoBloqueo = '';
   protected readonly apelacionSeleccionada = signal<string | null>(null);
   protected respuestaApelacion = '';
-  protected readonly publications = signal<Publicacion[]>([]);
-  protected readonly publicationQuery = signal('');
-  protected readonly bajaId = signal<number | null>(null);
-  protected bajaReason = '';
-  protected readonly publicationsPage = signal(1);
-  protected readonly publicationsTotal = signal(0);
-  protected readonly publicationsPages = signal(1);
-  protected readonly publicationsLoading = signal(true);
   protected readonly usersPage = signal(1);
   protected readonly usersTotal = signal(0);
   protected readonly usersPages = signal(1);
@@ -230,7 +223,7 @@ export class AdminComponent {
     })),
   ]);
   protected readonly loading = computed(() =>
-    this.otherLoading() || this.publicationsLoading() || this.usersLoading(),
+    this.otherLoading() || this.usersLoading() || (this.publicacionesAdmin()?.publicationsLoading() ?? true),
   );
   protected readonly query = signal('');
   protected readonly busy = signal<string | null>(null);
@@ -269,7 +262,7 @@ export class AdminComponent {
     if (this.activeSection() === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
     this.otherLoading.set(true);
     this.summaryError.set(false);
-    this.loadPublications(this.publicationsPage());
+    this.publicacionesAdmin()?.recargar();
     this.loadUsers(this.usersPage());
     this.cargarBloqueados();
     let pending = 5;
@@ -351,39 +344,9 @@ export class AdminComponent {
     }, { injector: this.injector });
   }
 
-  protected searchPublications(value: string): void {
-    this.publicationQuery.set(value);
-    this.loadPublications(1);
-  }
-
   protected searchUsers(value: string): void {
     this.query.set(value);
     this.loadUsers(1);
-  }
-
-  protected loadPublications(page: number): void {
-    if (page < 1 || page > this.publicationsPages()) return;
-    this.publicationsRequest?.unsubscribe();
-    this.publicationsLoading.set(true);
-    this.bajaId.set(null);
-    this.publicationsRequest = this.api.listarPublicaciones(page, this.publicationQuery().trim())
-      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-        next: (result) => {
-          this.publications.set(result.datos);
-          this.publicationsPage.set(result.pagina);
-          this.publicationsTotal.set(result.total);
-          this.publicationsPages.set(result.totalPaginas);
-          this.publicationsLoading.set(false);
-        },
-        error: (e: Error) => {
-          this.publications.set([]);
-          this.publicationsTotal.set(0);
-          this.publicationsPage.set(1);
-          this.publicationsPages.set(1);
-          this.toast.mostrar(e.message, 'error');
-          this.publicationsLoading.set(false);
-        },
-      });
   }
 
   protected loadUsers(page: number): void {
@@ -409,37 +372,6 @@ export class AdminComponent {
           this.usersLoading.set(false);
         },
       });
-  }
-
-  protected openBaja(publication: Publicacion): void {
-    this.bajaReason = publication.motivo_baja_admin ?? '';
-    this.bajaId.set(publication.id);
-  }
-
-  protected confirmBaja(publication: Publicacion): void {
-    if (this.busy()) return;
-    const motivo = this.bajaReason.trim();
-    if (!motivo || motivo.length > 500) return;
-    this.run(
-      `publication-${publication.id}`,
-      () => this.api.darDeBajaPublicacion(publication.id, motivo),
-      (value) => {
-        const result = value as { publicacion: Publicacion; correoEnviado: boolean };
-        this.publications.update((items) =>
-          items.map((item) => (item.id === publication.id ? result.publicacion : item)),
-        );
-        this.bajaId.set(null);
-        if (!result.correoEnviado) {
-          this.toast.mostrar(
-            'La publicación fue desactivada, pero no se pudo enviar el correo. Podés repetir la baja para reintentar el aviso.',
-            'advertencia',
-          );
-          return;
-        }
-        this.toast.mostrar('Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.', 'exito');
-      },
-      null,
-    );
   }
 
   protected abrirPagoAnunciante(settlement: AdminSettlement): void {

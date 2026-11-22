@@ -1,0 +1,8 @@
+@use './admin-shared';
+
+:host {
+  display: block;
+}
+:host([hidden]) {
+  display: none;
+}
