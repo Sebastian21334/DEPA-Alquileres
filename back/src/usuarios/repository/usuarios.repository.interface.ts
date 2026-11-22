@@ -1,4 +1,4 @@
-import { Usuario, type DetalleBloqueo } from "../entity/usuario.entity";
+import { Usuario, type DetalleBloqueo, type BloqueoHistorico } from "../entity/usuario.entity";
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { Pagina } from '../../common/persistence/paginacion';
 import type { EntityManager } from 'typeorm';
@@ -47,6 +47,7 @@ export interface IUsuariosRepository {
   buscarParaSesion(id: number): Promise<Usuario | null>;
   buscarConBloqueo(id: number, transaccion?: EntityManager, bloquear?: boolean): Promise<Usuario | null>;
   listarBloqueados(): Promise<BloqueoAdministrativo[]>;
+  listarHistorialBloqueos(): Promise<{ usuario: BloqueoAdministrativo['usuario']; historial: BloqueoHistorico[] }[]>;
   guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean>;
   verificarCuenta(token: string): Promise<boolean>;
   guardarTokenRecuperacion(id: number, email: string, token: string, expira: Date): Promise<boolean>;

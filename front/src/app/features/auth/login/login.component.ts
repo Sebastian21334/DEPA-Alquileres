@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideEye, LucideEyeOff } from '@lucide/angular';
+import { LucideArrowLeft, LucideEye, LucideEyeOff, LucideMail } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { ApiError } from '../../../core/interceptors/api-error';
 
@@ -10,11 +10,12 @@ const MENSAJE_EMAIL_NO_VERIFICADO = 'Tenés que verificar tu email antes de inic
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, LucideArrowLeft, LucideEye, LucideEyeOff],
+  imports: [ReactiveFormsModule, RouterLink, LucideArrowLeft, LucideEye, LucideEyeOff, LucideMail],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
 })
 export class LoginComponent {
+  protected readonly mensajeEmailNoVerificado = MENSAJE_EMAIL_NO_VERIFICADO;
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);

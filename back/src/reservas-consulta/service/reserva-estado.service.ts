@@ -36,8 +36,12 @@ export class ReservaEstadoService {
       return 'CANCELADA';
     if (reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'))
       return 'PENDIENTE_PAGO';
-    // Conserva los cierres manuales existentes.
-    if (reserva.finalizada) return 'FINALIZADA';
+    // Un cierre manual no debe presentar como verificado un ingreso sin código.
+    if (reserva.finalizada) {
+      if (!reserva.codigo_validado_en && esFechaCalendarioValida(reserva.fecha_fin) &&
+          fechaArgentina(ahora) > reserva.fecha_fin) return 'INGRESO_NO_VERIFICADO';
+      return 'FINALIZADA';
+    }
     if (
       !esFechaCalendarioValida(reserva.fecha_inicio) ||
       !esFechaCalendarioValida(reserva.fecha_fin) ||

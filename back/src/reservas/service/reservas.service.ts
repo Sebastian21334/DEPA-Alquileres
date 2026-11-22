@@ -541,7 +541,10 @@ export class ReservasService
   /** Todas las reservas recibidas por publicaciones del anunciante autenticado. */
   async listarRecibidasPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]> {
     const reservas = await this.reservaRepository.buscarRecibidasPorAnunciante(
-      idUsuarioAnunciante, this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+      idUsuarioAnunciante, [
+        this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+        this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO'),
+      ],
     );
     return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva));
   }
@@ -576,6 +579,7 @@ export class ReservasService
     return this.reservaRepository.conTransaccion(async (reservas, transaccion) => {
       const reserva = await reservas.buscarParaReclamo(id);
       if (!reserva) throw new NotFoundException('No se encontró la reserva');
+      await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
       const reclamo = await crearReclamo(reserva, transaccion);
       reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
       reserva.observacion_liquidacion = 'Reclamo del inquilino en revisión';
@@ -794,9 +798,10 @@ export class ReservasService
           );
         }
         if (
-          !['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(
-            this.calcularEstadoEstadia(reserva),
-          )
+          !['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(this.calcularEstadoEstadia(reserva)) &&
+          !(this.calcularEstadoEstadia(reserva) === 'INGRESO_NO_VERIFICADO' &&
+            !!this.liquidaciones.fechaDisponiblePagoManual(reserva) &&
+            fechaArgentina() < this.liquidaciones.fechaDisponiblePagoManual(reserva)!)
         ) {
           throw new ConflictException(
             'El código no está disponible para una estadía cerrada o sin fechas verificables',
@@ -843,9 +848,13 @@ export class ReservasService
             'El código de esta reserva ya fue utilizado',
           );
         }
-        if (this.calcularEstadoEstadia(reserva) !== 'PENDIENTE_INGRESO') {
+        const estadoEstadia = this.calcularEstadoEstadia(reserva);
+        const vencimiento = this.liquidaciones.fechaDisponiblePagoManual(reserva);
+        if (estadoEstadia !== 'PENDIENTE_INGRESO' &&
+            !(estadoEstadia === 'INGRESO_NO_VERIFICADO' && vencimiento && fechaArgentina() < vencimiento &&
+              reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'))) {
           throw new ConflictException(
-            'El código solo puede validarse durante las fechas de la estadía',
+            'El código solo puede validarse durante la estadía o antes del vencimiento del plazo',
           );
         }
         if (this.codigoBloqueado(reserva)) {
@@ -890,10 +899,7 @@ export class ReservasService
   async reportarProblema(id: number, motivo: string, idUsuario: number): Promise<Reserva> {
     return this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {
-        const reserva = await reservaRepository.buscarPorId(id);
-        if (!reserva)
-          throw new NotFoundException(`No se encontró la reserva ${id}`);
-        await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
+        const reserva = await this.obtenerReserva(id, transaccion);
         if (!this.esDelInquilino(reserva, idUsuario)) {
           throw new ForbiddenException(
             'Solo el inquilino de la reserva puede reportar un problema',
@@ -909,6 +915,10 @@ export class ReservasService
             'La liquidación de esta reserva ya fue resuelta',
           );
         }
+        const vencimiento = this.liquidaciones.fechaDisponiblePagoManual(reserva);
+        const hoy = fechaArgentina();
+        if (!vencimiento || !reserva.fecha_inicio || hoy < reserva.fecha_inicio || hoy >= vencimiento)
+          throw new ConflictException('El reporte solo está disponible desde el inicio de la estadía hasta el vencimiento del plazo de reclamos');
         await this.liquidaciones.registrarRevision(
           reserva,
           Array.from(`Reclamo del inquilino: ${motivo.trim()}`).slice(0, 500).join(''),
