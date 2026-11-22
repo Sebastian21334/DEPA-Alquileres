@@ -22,6 +22,10 @@ export class AnunciantesService {
     return this.anunciantesRepo.buscarPorUsuario(idUsuario, transaccion);
   }
 
+  buscarPorId(idUsuario: number): Promise<Anunciante | null> {
+    return this.anunciantesRepo.buscarPorId(idUsuario);
+  }
+
   buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null> {
     return this.anunciantesRepo.buscarCbuValidado(idUsuario, transaccion);
   }

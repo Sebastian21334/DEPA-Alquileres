@@ -3,11 +3,11 @@
     <div class="state"><app-spinner /><p>Cargando perfil…</p></div>
   } @else if (error()) {
     <div class="state"><h1>Perfil no disponible</h1><p>{{ error() }}</p><a routerLink="/">Volver al inicio</a></div>
-  } @else if (advertiser(); as owner) {
+  } @else if (perfil(); as owner) {
     <div class="profile-layout">
       <aside>
         <section class="owner-card" appReveal="left">
-          <app-avatar class="avatar" [foto]="owner.usuario?.foto_url" [nombre]="name()" />
+          <app-avatar class="avatar" [foto]="owner.foto_url" [nombre]="name()" />
           <h1>{{ name() }}</h1>
           @if (owner.verificado) {
             <span class="verified"><svg lucideBadgeCheck [size]="13"></svg> Dueño Verificado</span>
@@ -29,36 +29,42 @@
 
       <main>
         <div class="heading" #publicationsHeading appReveal="right">
-          <h2>Publicaciones de {{ owner.usuario?.nombre ?? name() }}</h2>
+          <h2>Publicaciones de {{ name() }}</h2>
         </div>
-        <div class="publication-search" role="search" aria-label="Publicaciones del anunciante">
-          <label for="advertiser-publication-search">Buscar publicaciones</label>
-          <div class="publication-search__field">
-            <svg lucideSearch [size]="18" aria-hidden="true"></svg>
-            <input #searchInput id="advertiser-publication-search" type="search" placeholder="Buscá por título o descripción"
-              [value]="searchText()" (input)="updateSearch(searchInput.value)" />
+        @if (publicationsError()) {
+          <p class="publications-empty" role="status">No pudimos cargar las publicaciones de este anunciante.</p>
+        } @else if (!publications().length) {
+          <p class="publications-empty" role="status">Este anunciante no tiene publicaciones activas.</p>
+        } @else {
+          <div class="publication-search" role="search" aria-label="Publicaciones del anunciante">
+            <label for="advertiser-publication-search">Buscar publicaciones</label>
+            <div class="publication-search__field">
+              <svg lucideSearch [size]="18" aria-hidden="true"></svg>
+              <input #searchInput id="advertiser-publication-search" type="search" placeholder="Buscá por título o descripción"
+                [value]="searchText()" (input)="updateSearch(searchInput.value)" />
+            </div>
           </div>
-        </div>
-        <p class="listings-range" role="status">
-          @if (!matchingPublications().length) {
-            No encontramos publicaciones que coincidan con tu búsqueda.
-          } @else if (totalPages() > 1) {
-            Mostrando {{ firstPublication() }}-{{ lastPublication() }} de {{ matchingPublications().length }} publicaciones
-          } @else {
-            {{ matchingPublications().length }} {{ matchingPublications().length === 1 ? 'publicación' : 'publicaciones' }}
+          <p class="listings-range" role="status">
+            @if (!matchingPublications().length) {
+              No encontramos publicaciones que coincidan con tu búsqueda.
+            } @else if (totalPages() > 1) {
+              Mostrando {{ firstPublication() }}-{{ lastPublication() }} de {{ matchingPublications().length }} publicaciones
+            } @else {
+              {{ matchingPublications().length }} {{ matchingPublications().length === 1 ? 'publicación' : 'publicaciones' }}
+            }
+          </p>
+          <div class="listings">
+            @for (item of visiblePublications(); track item.id; let i = $index) {
+              <app-listing-card [publicacion]="item" appReveal="zoom" [revealDelay]="(i % 3) * 100" />
+            }
+          </div>
+          @if (totalPages() > 1) {
+            <nav class="pagination" aria-label="Paginación de publicaciones del anunciante">
+              <button type="button" (click)="goToPage(page() - 1)" [disabled]="page() === 1">Anterior</button>
+              <span>Página {{ page() }} de {{ totalPages() }}</span>
+              <button type="button" (click)="goToPage(page() + 1)" [disabled]="page() === totalPages()">Siguiente</button>
+            </nav>
           }
-        </p>
-        <div class="listings">
-          @for (item of visiblePublications(); track item.id; let i = $index) {
-            <app-listing-card [publicacion]="item" appReveal="zoom" [revealDelay]="(i % 3) * 100" />
-          }
-        </div>
-        @if (totalPages() > 1) {
-          <nav class="pagination" aria-label="Paginación de publicaciones del anunciante">
-            <button type="button" (click)="goToPage(page() - 1)" [disabled]="page() === 1">Anterior</button>
-            <span>Página {{ page() }} de {{ totalPages() }}</span>
-            <button type="button" (click)="goToPage(page() + 1)" [disabled]="page() === totalPages()">Siguiente</button>
-          </nav>
         }
       </main>
     </div>
