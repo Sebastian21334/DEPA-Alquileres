@@ -232,7 +232,7 @@ export class AdminService {
       visible_para: 'TODOS',
     });
   }
-  resolverReclamo(id: number, resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL', importe?: number, observacion?: string) {
+  resolverReclamo(id: number, resolucion: NonNullable<Reclamo['resolucion']>, importe?: number, observacion?: string) {
     return this.http.patch<Reclamo>(`${this.api}/reclamos/${id}/resolver`, {
       resolucion,
       importe,

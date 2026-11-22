@@ -52,6 +52,7 @@ async function main() {
         '20261113-reconciliar-liquidaciones.sql',
         '20261113-aplicacion-reembolsos.sql',
         '20261113-catalogos-de-expedientes.sql',
+        '20261122-reinicio-codigo-alojamiento.sql',
         '20261113-retirar-liquidacion-de-reserva.sql',
         '20261116-historial-pagos-anunciantes.sql',
         '20261116-chat-reembolsos.sql',

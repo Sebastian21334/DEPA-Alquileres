@@ -443,6 +443,24 @@ export class MisReservasComponent {
     this.errorReclamo.set('');
   }
 
+  /** T34: por qué el anunciante no puede pedir el reinicio del código; vacío si puede. */
+  protected motivoPedidoReinicioNoDisponible(reserva: Reserva): string {
+    if (this.tieneReclamoAbierto(reserva))
+      return 'Ya hay un pedido o un reclamo abierto para esta reserva. Seguilo desde la pestaña Reclamos.';
+    if (!this.plazoReclamoAbierto(reserva))
+      return 'Venció el plazo para pedir el reinicio. Si no hubo reclamos, la liquidación queda pendiente de pago a tu favor.';
+    return '';
+  }
+
+  protected abrirPedidoReinicio(reserva: Reserva): void {
+    if (this.reclamoEnviando() || this.motivoPedidoReinicioNoDisponible(reserva)) return;
+    this.reclamoAbierto.set(reserva);
+    this.reclamoCategoria.set('CODIGO_BLOQUEADO');
+    this.reclamoDescripcion.set('');
+    this.reclamoArchivos.set([]);
+    this.errorReclamo.set('');
+  }
+
   protected cerrarReclamo(): void {
     if (this.reclamoEnviando()) return;
     this.reclamoAbierto.set(null);
@@ -572,11 +590,14 @@ export class MisReservasComponent {
   }
 
   private finalizarReclamo(advertencia?: string): void {
+    const pedido = this.reclamoCategoria() === 'CODIGO_BLOQUEADO';
     this.reclamoEnviando.set(false);
     this.reclamoAbierto.set(null);
     this.reclamoArchivos.set([]);
     this.mensaje.set(
-      advertencia ?? 'Reclamo enviado. Podés seguirlo y responder desde esta sección.',
+      advertencia ?? (pedido
+        ? 'Pedido enviado. Administración lo va a revisar; podés seguirlo y responder desde esta sección.'
+        : 'Reclamo enviado. Podés seguirlo y responder desde esta sección.'),
     );
     this.vista.set('reclamos');
     this.cargarReservas(true);

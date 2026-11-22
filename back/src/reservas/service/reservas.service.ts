@@ -575,14 +575,17 @@ export class ReservasService
     return this.liquidaciones.proyectarEnReserva(reserva, transaccion);
   }
 
-  conReservaParaReclamo<T>(id: number, crearReclamo: (reserva: Reserva, transaccion: EntityManager) => Promise<T>): Promise<T> {
+  conReservaParaReclamo<T>(
+    id: number,
+    crearReclamo: (reserva: Reserva, transaccion: EntityManager) => Promise<T>,
+    motivo = 'Reclamo del inquilino en revisión',
+  ): Promise<T> {
     return this.reservaRepository.conTransaccion(async (reservas, transaccion) => {
       const reserva = await reservas.buscarParaReclamo(id);
       if (!reserva) throw new NotFoundException('No se encontró la reserva');
       // El reclamo decide con el estado real de la liquidación, no con el valor sin proyectar.
       await this.liquidaciones.proyectarEnReserva(reserva, transaccion);
       const reclamo = await crearReclamo(reserva, transaccion);
-      const motivo = 'Reclamo del inquilino en revisión';
       // Conserva un motivo de revisión previo, por ejemplo el código bloqueado.
       const previo = this.liquidacionEnRevision(reserva) ? reserva.observacion_liquidacion?.trim() : null;
       reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
@@ -633,6 +636,20 @@ export class ReservasService
     if (!codigoValidado) reserva.intentos_codigo = 0;
     reserva.observacion_liquidacion =
       observacion?.trim() || 'Reclamo resuelto a favor del Anunciante';
+    await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
+    return reserva;
+  }
+
+  /**
+   * T34: Administración da por bueno el ingreso sin el código. La liquidación queda
+   * pendiente de pago y el pago se habilita en la fecha habitual (T35).
+   */
+  async confirmarIngresoSinCodigo(reserva: Reserva, observacion: string | undefined, transaccion: EntityManager): Promise<Reserva> {
+    if (this.liquidacionResuelta(reserva))
+      throw new ConflictException('La liquidación de la reserva ya fue resuelta');
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
+    reserva.observacion_liquidacion =
+      observacion?.trim() || 'Ingreso confirmado por Administración sin el código de alojamiento';
     await this.liquidaciones.sincronizarDesdeReserva(reserva, transaccion);
     return reserva;
   }
@@ -973,7 +990,7 @@ export class ReservasService
   }
 
   private mensajeCodigoBloqueado(): string {
-    return `El código se bloqueó tras ${MAX_INTENTOS_CODIGO} intentos incorrectos. Contactá a Administración para que revise la reserva.`;
+    return `El código se bloqueó tras ${MAX_INTENTOS_CODIGO} intentos incorrectos. Pedí el reinicio a Administración desde la reserva.`;
   }
 
   /** T34: dice desde o hasta cuándo se puede cargar el código. */
