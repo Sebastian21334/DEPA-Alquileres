@@ -403,12 +403,23 @@ export class MisReservasComponent {
     });
   }
 
+  /** El plazo lo calcula el back (`fin_plazo_reclamo`): el front solo lo compara con hoy. */
+  private plazoReclamoAbierto(reserva: Reserva): boolean {
+    return !!reserva.fin_plazo_reclamo && this.hoy() <= reserva.fin_plazo_reclamo;
+  }
+
   protected motivoReclamoNoDisponible(reserva: Reserva): string {
-    const hoy = this.hoy();
-    if (!reserva.fecha_inicio || !reserva.fecha_fin) return 'La reserva no tiene fechas válidas.';
-    if (hoy < reserva.fecha_inicio) return 'Podés reclamar desde el inicio de la estadía. Antes, usá Solicitar cancelación.';
-    const plazo = Date.parse(reserva.fecha_fin) + 5 * 86_400_000;
-    return Date.parse(hoy) >= plazo ? 'El plazo para reclamar terminó cinco días después de la estadía.' : '';
+    if (!reserva.fecha_inicio || !reserva.fin_plazo_reclamo) return 'La reserva no tiene fechas válidas.';
+    if (this.hoy() < reserva.fecha_inicio)
+      return `Podés reclamar desde el ${this.fecha(reserva.fecha_inicio)}, cuando empieza la estadía. Antes, usá Solicitar cancelación.`;
+    if (!this.plazoReclamoAbierto(reserva))
+      return `El plazo para reclamar terminó el ${this.fecha(reserva.fin_plazo_reclamo)}, antes de que se habilite el pago al anunciante.`;
+    if (this.tieneReclamoAbierto(reserva)) return 'Ya tenés un reclamo abierto para esta reserva. Seguilo desde la pestaña Reclamos.';
+    return '';
+  }
+
+  private tieneReclamoAbierto(reserva: Reserva): boolean {
+    return this.reclamos().some(reclamo => reclamo.reserva?.id === reserva.id && ['ABIERTO', 'EN_REVISION'].includes(reclamo.estado));
   }
 
   protected abrirReclamo(reserva: Reserva): void {

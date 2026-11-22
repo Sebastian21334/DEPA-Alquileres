@@ -298,7 +298,7 @@
   @let portada = reserva.publicacion?.imagenes?.[0]?.url;
   @let puedeReportar = !recibida && !reserva.cancelada && reserva.estado_pago === 'APROBADO'
     && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO'
-    && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION';
+    && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO';
   @let cancelarDirecto = !recibida && !reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE';
   @let cambiarFechas = !recibida && !devolucionPendiente && puedeReprogramar(reserva);
   @let solicitarBaja = puedeSolicitarCancelacion(reserva, recibida);

@@ -1,9 +1,15 @@
 import { ConversationPanelComponent } from '../conversation-panel/conversation-panel.component';
 import { AuthService } from '../../../core/services/auth.service';
-import { CurrencyPipe, DatePipe } from '@angular/common';
-import { Component, computed, inject, input, output } from '@angular/core';
+import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
+import { Component, computed, effect, inject, input, output, PLATFORM_ID, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { EMPTY, catchError, exhaustMap, timer } from 'rxjs';
+import { ReservationService } from '../../services/reservation.service';
 import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
+import { puedeValidarCodigo } from '../../utils/reservation-state';
+
+/** Mismo ritmo que los chats de mensajes y de reembolsos. */
+const INTERVALO_CHAT_MS = 5000;
 
 @Component({
   selector: 'app-claim-history',
@@ -29,6 +35,10 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
         <p class="resolution__title">Reclamo resuelto</p>
         @if (item.resolucion === 'SIN_DEVOLUCION') {
           <p>A favor del anunciante: sin devolución al inquilino.</p>
+          <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
+          @if (item.reserva && puedeValidarCodigo(item.reserva)) {
+            <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
+          }
         } @else {
           <p>
             A favor del inquilino: {{ resoluciones[item.resolucion].toLowerCase() }}
@@ -159,6 +169,9 @@ export class ClaimHistoryComponent {
   /** Cada pantalla decide a dónde lleva el reembolso; este componente solo lo ofrece si hubo devolución. */
   readonly mostrarVerReembolso = input(false);
   readonly verReembolso = output<Reclamo>();
+  /** El admin la apaga mientras la sección Reclamos está oculta, para no consultar en segundo plano. */
+  readonly actualizar = input(true);
+  protected readonly puedeValidarCodigo = puedeValidarCodigo;
   protected readonly participantes = computed(() => [
     { rol: 'Anunciante', usuario: this.reclamo().anunciante },
     { rol: 'Inquilino', usuario: this.reclamo().inquilino },
@@ -186,7 +199,34 @@ export class ClaimHistoryComponent {
   }
   readonly verArchivo = output<ReclamoEvidencia>();
   private readonly auth = inject(AuthService);
-  protected readonly mensajes = computed(() => [...(this.reclamo().mensajes ?? [])]
+  private readonly reservas = inject(ReservationService);
+  private readonly esNavegador = isPlatformBrowser(inject(PLATFORM_ID));
+  private readonly idReclamo = computed(() => this.reclamo().id);
+  private readonly abierto = computed(() => ['ABIERTO', 'EN_REVISION'].includes(this.reclamo().estado));
+  /** Mensajes traídos por la consulta periódica; se combinan con los que llegaron en el listado. */
+  private readonly mensajesRecibidos = signal<ReclamoMensaje[]>([]);
+  private idConsultado?: number;
+
+  constructor() {
+    // T48: el hilo de un reclamo abierto se actualiza solo, como los chats de mensajes y reembolsos.
+    effect(onCleanup => {
+      const id = this.idReclamo();
+      if (id !== this.idConsultado) {
+        this.idConsultado = id;
+        this.mensajesRecibidos.set([]);
+      }
+      if (!this.esNavegador || !this.abierto() || !this.actualizar()) return;
+      const consulta = timer(INTERVALO_CHAT_MS, INTERVALO_CHAT_MS).pipe(
+        // Un fallo puntual no corta la actualización: se reintenta en el próximo intervalo.
+        exhaustMap(() => this.reservas.claimMessages(id).pipe(catchError(() => EMPTY))),
+      ).subscribe(mensajes => this.mensajesRecibidos.set(mensajes));
+      onCleanup(() => consulta.unsubscribe());
+    });
+  }
+
+  protected readonly mensajes = computed(() => [
+    ...new Map([...(this.reclamo().mensajes ?? []), ...this.mensajesRecibidos()].map(mensaje => [mensaje.id, mensaje])).values(),
+  ]
     .sort((a, b) => a.id - b.id)
     .map(mensaje => ({
       id: mensaje.id, autor: this.nombreCompleto(mensaje.autor) || 'Usuario',

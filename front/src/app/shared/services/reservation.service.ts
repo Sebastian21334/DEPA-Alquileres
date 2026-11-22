@@ -65,6 +65,8 @@ export interface Reserva {
   codigo_generado_en: string | null;
   codigo_validado_en: string | null;
   intentos_codigo: number;
+  /** Último día (AAAA-MM-DD) para reclamar; hasta entonces se retiene el pago al anunciante. */
+  fin_plazo_reclamo?: string | null;
   fecha_resolucion_liquidacion: string | null;
   referencia_liquidacion: string | null;
   observacion_liquidacion: string | null;
@@ -187,6 +189,9 @@ export interface Reclamo {
     id: number;
     monto_pago?: number | string;
     moneda_contratada?: string | null;
+    estado_estadia?: EstadoEstadia;
+    estado_liquidacion?: Reserva['estado_liquidacion'];
+    fecha_fin?: string | null;
     publicacion?: { id?: number; titulo?: string; imagenes?: { url: string }[] } | null;
   } | null;
   anunciante?: ParticipanteReclamo | null;

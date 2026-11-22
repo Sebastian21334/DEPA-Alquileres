@@ -70,11 +70,14 @@ export function puedeConsultarCodigo(reserva: Reserva): boolean {
   return (estadiaActiva(reserva) || ingresoEnPlazo(reserva)) && !reserva.codigo_validado_en;
 }
 
-export function puedeValidarCodigo(reserva: Reserva): boolean {
+/** Solo los datos que decide la carga del código, para usarla también desde un reclamo. */
+type EstadoCodigo = Partial<Pick<Reserva, 'estado_estadia' | 'estado_liquidacion' | 'fecha_fin'>>;
+
+export function puedeValidarCodigo(reserva: EstadoCodigo): boolean {
   return (reserva.estado_estadia === 'PENDIENTE_INGRESO' || ingresoEnPlazo(reserva)) && reserva.estado_liquidacion !== 'EN_REVISION';
 }
 
-function ingresoEnPlazo(reserva: Reserva): boolean {
+function ingresoEnPlazo(reserva: EstadoCodigo): boolean {
   if (reserva.estado_estadia !== 'INGRESO_NO_VERIFICADO' || reserva.estado_liquidacion !== 'RETENIDO' || !reserva.fecha_fin) return false;
   const vencimiento = new Date(`${reserva.fecha_fin}T00:00:00Z`);
   if (!Number.isFinite(vencimiento.getTime())) return false;
