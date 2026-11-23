@@ -67,6 +67,8 @@ export interface Reserva {
   intentos_codigo: number;
   /** Último día (AAAA-MM-DD) para reclamar; hasta entonces se retiene el pago al anunciante. */
   fin_plazo_reclamo?: string | null;
+  /** Intentos que le quedan al anunciante antes de que se bloquee el código (T34). */
+  intentos_codigo_restantes?: number;
   fecha_resolucion_liquidacion: string | null;
   referencia_liquidacion: string | null;
   observacion_liquidacion: string | null;
@@ -196,10 +198,11 @@ export interface Reclamo {
   } | null;
   anunciante?: ParticipanteReclamo | null;
   inquilino?: ParticipanteReclamo | null;
-  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO';
+  /** CODIGO_BLOQUEADO: pedido de reinicio del código que abre el anunciante (T34). */
+  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'CODIGO_BLOQUEADO';
   descripcion: string;
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
-  resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | null;
+  resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | 'REINICIAR_CODIGO' | 'CONFIRMAR_INGRESO' | null;
   importe_reembolso: number | null;
   creado_en: string;
   resuelto_en: string | null;
@@ -258,6 +261,11 @@ export class ReservationService {
 
   byPublication(idPublicacion: number): Observable<Reserva[]> {
     return this.http.get<Reserva[]>(`${this.baseUrl}/publicacion/${idPublicacion}`);
+  }
+
+  /** GET /reservas/:id: una sola reserva, para el inquilino o el anunciante. */
+  byId(id: number): Observable<Reserva> {
+    return this.http.get<Reserva>(`${this.baseUrl}/${id}`);
   }
 
   cancel(id: number): Observable<Reserva> {

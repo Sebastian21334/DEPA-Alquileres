@@ -6,6 +6,7 @@ import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.er
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { Liquidacion } from '../entity/liquidacion.entity';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
+import type { ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
 import {
   type ILiquidacionRepository,
   LIQUIDACION_REPOSITORY,
@@ -16,6 +17,8 @@ export type ResolucionLiquidacionDatos = {
   moneda?: string | null;
   referencia?: string | null;
   observacion?: string | null;
+  /** T56: comprobante de la transferencia al anunciante. */
+  comprobante?: ComprobanteSubido | null;
 };
 
 export type DevolucionLiquidacionDatos = ResolucionLiquidacionDatos & {
@@ -60,9 +63,17 @@ export class LiquidacionesService {
     );
   }
 
-  listarIngresosNoVerificadosVencidos(ahora: Date): Promise<number[]> {
+  /**
+   * Ingresos sin código cuyo plazo venció: retenidos y, desde T34, en revisión solo
+   * porque el código se bloqueó (`maxIntentosCodigo` intentos incorrectos).
+   */
+  listarIngresosNoVerificadosVencidos(ahora: Date, maxIntentosCodigo: number): Promise<number[]> {
     return this.liquidaciones.listarIngresosNoVerificadosVencidos(
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'),
+      {
+        retenido: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'),
+        revision: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
+        maxIntentosCodigo,
+      },
       this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
       this.desplazarFecha(fechaArgentina(ahora), -DIAS_ESPERA_PAGO_MANUAL),
     );
@@ -95,14 +106,23 @@ export class LiquidacionesService {
     return this.formatearPagosRegistrados(pagos);
   }
 
-  async listarPagosDelAnunciante(idUsuario: number, idPublicacion: number) {
+  /** Sin `idPublicacion` devuelve los pagos de todas las publicaciones del anunciante (T55). */
+  async listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
     const pagos = await this.liquidaciones.listarPagosRegistrados(
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
       { idUsuario, idPublicacion },
     );
-    return this.formatearPagosRegistrados(pagos).map(({ id, reservaId, fecha, importe, moneda, referencia, observacion }) => ({
-      id, reservaId, fecha, importe, moneda, referencia, observacion,
+    // El anunciante no recibe datos del administrador que registró el pago.
+    return this.formatearPagosRegistrados(pagos).map(({ id, reservaId, indice, publicacion, fecha, importe, moneda, referencia, observacion, comprobante }) => ({
+      id, reservaId, indice, publicacion, fecha, importe, moneda, referencia, observacion, comprobante,
     }));
+  }
+
+  /** T56: comprobante de un pago registrado, con el anunciante para que el llamador verifique el acceso. */
+  async buscarComprobantePago(idReserva: number, indice: number): Promise<{ url: string; idAnunciante: number | null } | null> {
+    const registro = await this.liquidaciones.buscarPagosConAnunciante(idReserva);
+    const url = registro?.pagos[indice]?.comprobanteUrl;
+    return registro && url ? { url, idAnunciante: registro.idAnunciante } : null;
   }
 
   private formatearPagosRegistrados(pagos: Liquidacion[]) {
@@ -121,6 +141,7 @@ export class LiquidacionesService {
       return registros.map((registro, indice) => ({
         id: `${pago.id}-${indice}`,
         reservaId: pago.reserva.id,
+        indice,
         publicacion: publicacion?.titulo ?? null,
         anunciante: anunciante ? [anunciante.nombre, anunciante.apellido].filter(Boolean).join(' ') : null,
         administrador: administrador && administrador.id === registro.administradorId
@@ -131,6 +152,8 @@ export class LiquidacionesService {
         moneda: registro.moneda,
         referencia: registro.referencia,
         observacion: registro.observacion,
+        // Solo el nombre: el enlace se pide aparte y vence (T56).
+        comprobante: registro.comprobanteNombre ?? null,
       }));
     }).sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? ''));
   }
@@ -266,6 +289,8 @@ export class LiquidacionesService {
         referencia: liquidacion.referencia,
         observacion: datos.observacion?.trim() || null,
         administradorId: idAdmin,
+        comprobanteUrl: datos.comprobante?.url ?? null,
+        comprobanteNombre: datos.comprobante?.nombre ?? null,
       }];
     }
     this.sincronizarReserva(reserva, liquidacion);

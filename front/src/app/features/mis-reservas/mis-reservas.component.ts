@@ -16,7 +16,7 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
+import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedePedirReinicioCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -49,6 +49,7 @@ export class MisReservasComponent {
   protected readonly imagenesConError = signal<Record<number, string>>({});
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
   protected readonly puedeValidarCodigo = puedeValidarCodigo;
+  protected readonly puedePedirReinicioCodigo = puedePedirReinicioCodigo;
   protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   protected readonly esAnunciante = computed(() => this.accesoLimitado()
     ? this.auth.currentUser()?.anuncianteVerificado === true
@@ -382,23 +383,31 @@ export class MisReservasComponent {
     });
   }
 
+  /** T34: el mensaje del código se muestra en la tarjeta de esa reserva, junto al campo. */
+  protected readonly avisoCodigo = signal<{ id: number; tipo: 'error' | 'exito'; texto: string } | null>(null);
+
   protected validarCodigo(reserva: Reserva): void {
     if (!puedeValidarCodigo(reserva)) return;
     const codigo = (this.codigoIngresado[reserva.id] ?? '').trim().toUpperCase();
     if (codigo.length !== 8) {
-      this.error.set('El código debe tener ocho caracteres.');
+      this.avisoCodigo.set({ id: reserva.id, tipo: 'error', texto: 'El código tiene 8 caracteres. Revisá el que te pasó el huésped.' });
       return;
     }
     this.iniciarOperacion(reserva.id);
-    this.error.set('');
+    this.avisoCodigo.set(null);
     this.reservasApi.validateLodgingCode(reserva.id, codigo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (actualizada) => {
         this.codigoIngresado[reserva.id] = '';
         this.reemplazar(actualizada);
+        this.avisoCodigo.set({ id: reserva.id, tipo: 'exito', texto: 'Ingreso validado. Le avisamos al huésped por correo.' });
       },
       error: (err: ApiError) => {
-        this.error.set(err.message);
-        this.ocupada.set(null);
+        this.avisoCodigo.set({ id: reserva.id, tipo: 'error', texto: err.message });
+        // El back guardó el intento: se actualiza la tarjeta para mostrar los intentos o el bloqueo.
+        this.reservasApi.byId(reserva.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+          next: (actualizada) => this.reemplazar(actualizada),
+          error: () => this.ocupada.set(null),
+        });
       },
     });
   }
@@ -426,6 +435,24 @@ export class MisReservasComponent {
     if (this.reclamoEnviando() || this.motivoReclamoNoDisponible(reserva)) return;
     this.reclamoAbierto.set(reserva);
     this.reclamoCategoria.set('OTRO');
+    this.reclamoDescripcion.set('');
+    this.reclamoArchivos.set([]);
+    this.errorReclamo.set('');
+  }
+
+  /** T34: por qué el anunciante no puede pedir el reinicio del código; vacío si puede. */
+  protected motivoPedidoReinicioNoDisponible(reserva: Reserva): string {
+    if (this.tieneReclamoAbierto(reserva))
+      return 'Ya hay un pedido o un reclamo abierto para esta reserva. Seguilo desde la pestaña Reclamos.';
+    if (!this.plazoReclamoAbierto(reserva))
+      return 'Venció el plazo para pedir el reinicio. Si no hubo reclamos, la liquidación queda pendiente de pago a tu favor.';
+    return '';
+  }
+
+  protected abrirPedidoReinicio(reserva: Reserva): void {
+    if (this.reclamoEnviando() || this.motivoPedidoReinicioNoDisponible(reserva)) return;
+    this.reclamoAbierto.set(reserva);
+    this.reclamoCategoria.set('CODIGO_BLOQUEADO');
     this.reclamoDescripcion.set('');
     this.reclamoArchivos.set([]);
     this.errorReclamo.set('');
@@ -560,11 +587,14 @@ export class MisReservasComponent {
   }
 
   private finalizarReclamo(advertencia?: string): void {
+    const pedido = this.reclamoCategoria() === 'CODIGO_BLOQUEADO';
     this.reclamoEnviando.set(false);
     this.reclamoAbierto.set(null);
     this.reclamoArchivos.set([]);
     this.mensaje.set(
-      advertencia ?? 'Reclamo enviado. Podés seguirlo y responder desde esta sección.',
+      advertencia ?? (pedido
+        ? 'Pedido enviado. Administración lo va a revisar; podés seguirlo y responder desde esta sección.'
+        : 'Reclamo enviado. Podés seguirlo y responder desde esta sección.'),
     );
     this.vista.set('reclamos');
     this.cargarReservas(true);
@@ -583,7 +613,10 @@ export class MisReservasComponent {
     const etiquetas: Partial<Record<Reserva['estado_liquidacion'], string>> = {
       NO_APLICA: 'Sin liquidación',
       RETENIDO: 'Dinero retenido hasta el ingreso',
-      PENDIENTE_PAGO_PROPIETARIO: 'Ingreso confirmado · pago administrativo pendiente',
+      // Sin ingreso validado (venció el plazo de T36) no se habla de «ingreso confirmado», igual que la etiqueta de la estadía.
+      PENDIENTE_PAGO_PROPIETARIO: reserva.codigo_validado_en
+        ? 'Ingreso confirmado · pago administrativo pendiente'
+        : 'Ingreso no verificado · pago administrativo pendiente',
       EN_REVISION: 'En revisión administrativa',
       PAGADO_PROPIETARIO: 'Pago al propietario registrado',
     };

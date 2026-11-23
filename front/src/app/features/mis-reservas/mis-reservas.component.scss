@@ -34,6 +34,12 @@
 .code-entry label { font-size: .82rem; font-weight: 750; }
 .code-entry > div { display: flex; gap: .5rem; flex-wrap: wrap; }
 .code-entry input { width: 170px; padding: .65rem .75rem; border: 1px solid var(--color-border); border-radius: 7px; text-transform: uppercase; font-weight: 800; letter-spacing: .12em; }
+.code-entry input[aria-invalid="true"] { border-color: #b42318; }
+.code-entry__hint, .code-entry__aviso { margin: .35rem 0 0; font-size: .85rem; }
+.code-entry__hint { color: var(--color-text-muted); }
+.code-entry__aviso { padding: .5rem .7rem; border-radius: 7px; background: #e9f7ef; color: #1d5e3b; font-weight: 650; }
+.code-entry__aviso--error { background: #fdecea; color: #8a1c13; }
+.code-entry__pedido { justify-self: start; margin-top: .5rem; }
 
 @media (max-width: 600px) {
     .reservation-tabs { flex-direction: column; }

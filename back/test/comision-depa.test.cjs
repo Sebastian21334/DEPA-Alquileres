@@ -9,6 +9,7 @@ const { validate } = require('class-validator');
 const { CatalogosController } = require('../dist/catalogos/controller/catalogos.controller');
 const { GUARDS_METADATA } = require('@nestjs/common/constants');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
+const { comprobantePdf, almacenamientoDePrueba } = require('./soporte/comprobantes-pruebas.cjs');
 
 test('migración conserva reservas anteriores y configuración al repetirse', async () => {
   const db = new PGlite();
@@ -49,10 +50,12 @@ test('configuración rechaza valores inválidos y protege lectura y escritura', 
 test('al registrar el pago total se guarda el neto con la comisión de la reserva', async () => {
   let datosGuardados;
   const reserva = { id: 1, monto_pago: 100000, porcentaje_comision_depa: 10, estado_pago: 'APROBADO', estado_liquidacion: 'PENDIENTE_PAGO_PROPIETARIO', fecha_inicio: '2020-01-01', fecha_fin: '2020-01-02', publicacion: { anunciante: { idUsuario: 2 } } };
-  const reservas = { conReservaBloqueada: async (_, fn) => { await fn(reserva, {}); return reserva; }, pagoAprobado: () => true, liquidacionResuelta: () => false, liquidacionEnRevision: () => false };
+  const reservas = { obtenerReserva: async () => reserva, conReservaBloqueada: async (_, fn) => { await fn(reserva, {}); return reserva; }, pagoAprobado: () => true, liquidacionResuelta: () => false, liquidacionEnRevision: () => false };
   const liquidaciones = { fechaDisponiblePagoManual: () => '2020-01-07', registrarResolucion: async (_, __, datos) => { datosGuardados = datos; } };
   const reembolsos = { listarPorReserva: async () => [], buscarPagoPorReserva: async () => ({ amount: 100000, amount_refunded: 0, currency: 'ARS' }), saldoReembolsable: () => 100000 };
-  const servicio = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => '123' }, { tieneReclamoAbierto: async () => false });
-  await servicio.resolverLiquidacion(1, { estado: 'PAGADO_PROPIETARIO' }, 3);
+  const { almacenamiento } = almacenamientoDePrueba();
+  const servicio = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => '123' }, { tieneReclamoAbierto: async () => false }, undefined, almacenamiento);
+  await servicio.registrarPagoAnunciante(1, {}, comprobantePdf(), 3);
   assert.equal(datosGuardados.importe, 90000);
+  assert.equal(datosGuardados.comprobante.nombre, 'transferencia.pdf');
 });

@@ -50,7 +50,8 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "oxlint src/",
-    "db:comision-depa": "node scripts/comision-depa.cjs"
+    "db:comision-depa": "node scripts/comision-depa.cjs",
+    "db:comprobante-reembolso": "node scripts/comprobante-reembolso.cjs --aplicar"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",

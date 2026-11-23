@@ -435,6 +435,9 @@
 .refund-threads { display: grid; gap: 14px; }
 .refund-threads__head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; color: #121b36; }
 .refund-threads__head h2, .refund-threads__head p { margin: 0; }
+.refund-threads__receipt { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; color: #52607a; }
+.refund-threads__detail { margin: 6px 0 0; color: #52607a; overflow-wrap: anywhere; }
+.refund-threads__note { white-space: pre-wrap; }
 .refund-threads__head h2 { font-size: clamp(1rem, 2.2vw, 1.3rem); }
 .refund-threads__head p { color: #52607a; }
 .refund-threads__head strong { border-inline-start: 1px solid #d5deee; padding-inline: 12px; font-size: 1.2rem; }

@@ -28,6 +28,13 @@ export class ReembolsosController {
     return this.reembolsosService.listarConversaciones(id, req.user.id);
   }
 
+  /** T44: enlace firmado del comprobante de la transferencia (admin o inquilino de la reserva). */
+  @PermitirAccesoLimitado()
+  @Get(':id/comprobante')
+  urlComprobante(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
+    return this.reembolsosService.urlComprobante(id, req.user);
+  }
+
   @PermitirAccesoLimitado()
   @Get(':id/conversacion')
   leerConversacion(@Param('id', ParseIntPipe) id: number, @Query('despuesDe', new DefaultValuePipe(0), ParseIntPipe) despuesDe: number, @Req() req: AuthenticatedRequest) {
