@@ -11,6 +11,7 @@ import { GestionPublicacionesService } from '../../shared/services/gestion-publi
 import { Reserva, ReservationService } from '../../shared/services/reservation.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
+import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
 import { normalizarTexto } from '../../shared/utils/texto';
 
 interface SerieMensual {
@@ -30,7 +31,7 @@ interface RendimientoPublicacion {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, PaginadorComponent],
+  imports: [RouterLink, SpinnerComponent, PaginadorComponent, SearchFieldComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })

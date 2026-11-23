@@ -1,0 +1,28 @@
+:host { display: block; }
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: min(330px, 100%);
+  padding: 9px 12px;
+  border: 1px solid #ccd6db;
+  border-radius: 9px;
+  background: #fff;
+}
+.search:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+}
+
+@media (max-width: 560px) {
+  .search { min-width: 100%; }
+}

@@ -89,9 +89,12 @@
             <a routerLink="/mis-publicaciones">Ver todas →</a>
           </div>
           <div class="performance-search">
-            <label for="dashboard-performance-search">Buscar publicación</label>
-            <input #rendimientoBusqueda id="dashboard-performance-search" type="search" maxlength="200"
-              placeholder="Buscar por título" [value]="busquedaRendimiento()" (input)="buscarRendimiento(rendimientoBusqueda.value)" />
+            <app-search-field
+              [value]="busquedaRendimiento()"
+              placeholder="Buscar por título"
+              ariaLabel="Buscar publicación"
+              (valueChange)="buscarRendimiento($event)"
+            />
           </div>
           <div class="performance-table">
             <div class="performance-table__head"><span>Publicación</span><span>Vistas</span><span>Reservas</span><span>Ingresos</span><span></span></div>
