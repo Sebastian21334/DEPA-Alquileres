@@ -95,10 +95,10 @@
               <p>La persona titular de esta cuenta debe ser el corredor responsable y completar la captura de su propio DNI y la prueba de vida.</p>
               <ng-container [ngTemplateOutlet]="datosEmpresa" />
               <div class="acct-grid">
-                <div class="acct-field"><label for="constancia-matricula">Constancia de matrícula profesional</label><input id="constancia-matricula" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'matricula')" /></div>
-                <div class="acct-field"><label for="constancia-cuit">Constancia de CUIT de la inmobiliaria</label><input id="constancia-cuit" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'cuit')" /></div>
+                <app-carga-comprobante etiqueta="Constancia de matrícula profesional" accion="Elegí o arrastrá la constancia" [(archivo)]="matricula" [deshabilitado]="enviando()" />
+                <app-carga-comprobante etiqueta="Constancia de CUIT de la inmobiliaria" accion="Elegí o arrastrá la constancia" [(archivo)]="constanciaCuit" [deshabilitado]="enviando()" />
               </div>
-              <p>PDF, JPG o PNG de hasta 5 MB por constancia. El administrador revisará los datos y documentos.</p>
+              <p>El administrador revisará los datos y documentos.</p>
             }
             @if (enviando()) {
               <div class="acct-state"><app-spinner /><p>Enviando la documentación para revisión…</p></div>

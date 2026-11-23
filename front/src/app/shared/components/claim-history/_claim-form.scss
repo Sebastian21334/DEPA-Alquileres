@@ -40,5 +40,4 @@
 .claim-availability { flex-basis: 100%; margin: .15rem 0 0; }
 .reservation.claim-card, .settlement-card.claim-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: .85rem; align-items: stretch; }
 .claim-card > button { justify-self: start; }
-.claim-files { margin: 0; padding-inline-start: 1.25rem; overflow-wrap: anywhere; }
 .claim-error { padding: .65rem .8rem; border-radius: .5rem; color: #8f2323; background: #fff0ee; }
