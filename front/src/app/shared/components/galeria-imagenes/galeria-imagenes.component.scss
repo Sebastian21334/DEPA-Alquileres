@@ -1,10 +1,13 @@
 :host { display: block; min-width: 0; }
 .help { margin: 0 0 14px; color: var(--color-text-muted, #667085); font-size: .85rem; }
 .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
-.photo { margin: 0; overflow: hidden; border: 1px solid #dfe5ed; border-radius: 10px; background: white; }
+.photo-slot { min-width: 0; }
+.photo { position: relative; height: 100%; box-sizing: border-box; margin: 0; transition: opacity .18s ease, border-color .18s ease, box-shadow .18s ease; overflow: hidden; border: 1px solid #dfe5ed; border-radius: 10px; background: white; }
 .photo[draggable='true'] { cursor: grab; }
 .photo--cover { border-color: var(--color-primary, #e14414); }
-.photo--dragging { opacity: .5; }
+.photo--dragging { opacity: .5; z-index: 2; }
+.photo--target { border-color: var(--color-secondary, #124aa6); box-shadow: 0 0 0 2px var(--color-secondary, #124aa6); }
+.photo--target .preview::after { content: 'Soltar aquí'; position: absolute; inset: 0; display: grid; place-items: center; background: #0e47a166; color: #fff; font-weight: 800; text-shadow: 0 1px 3px #0008; pointer-events: none; }
 .preview { position: relative; }
 img { display: block; width: 100%; height: 140px; object-fit: cover; }
 .badge { position: absolute; left: 8px; top: 8px; padding: 4px 8px; border-radius: 5px; background: #102a3ae8; color: white; font-size: .75rem; font-weight: 700; }
@@ -26,3 +29,5 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   img { height: 190px; }
   .photos--compacta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+@media (prefers-reduced-motion: reduce) { .photo { transition: none; } }

@@ -12,7 +12,7 @@ export interface IReclamosRepository {
   transaccion<T>(trabajo: (reclamos: IReclamosRepository) => Promise<T>): Promise<T>;
   /** Bloquea la fila del reclamo hasta el fin de la transacción, para controlar el cupo de imágenes. */
   bloquear(idReclamo: number): Promise<void>;
-  existeAbierto(idReserva: number, estados: string[]): Promise<boolean>;
+  existeAbierto(idReserva: number, estados: string[], excluirCategoria?: Reclamo['categoria']): Promise<boolean>;
   guardar(reclamo: Partial<Reclamo>): Promise<Reclamo>;
   listarPorParticipante(idUsuario: number): Promise<Reclamo[]>;
   listarAdministracion(): Promise<Reclamo[]>;

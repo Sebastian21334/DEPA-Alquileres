@@ -47,7 +47,7 @@ test('el propietario y dos administradores comparten el chat y terceros quedan e
   await assert.rejects(servicio.conversar(1, { id: 7 }, 0, 'Mensaje externo'), { status: 404 });
 });
 
-test('la tarjeta se gestiona por transferencia, con comprobante, y solo se registra una vez', async () => {
+test('una tarjeta ya asignada a transferencia exige comprobante y solo se registra una vez', async () => {
   const { servicio, reembolso, pago, archivos, intentos } = escenario();
   await assert.rejects(servicio.ejecutar(1, 10), { status: 409 });
   assert.equal(intentos(), 0);

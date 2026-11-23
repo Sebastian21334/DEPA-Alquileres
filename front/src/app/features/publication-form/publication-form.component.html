@@ -155,12 +155,14 @@
         <label class="image-upload">
           Agregar fotos
           <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            [disabled]="saving() || imagesBusy() || form.disabled" (change)="uploadImages($event)" />
+            [disabled]="saving() || imagesBusy() || imageOrderSaving() || form.disabled" (change)="uploadImages($event)" />
         </label>
-        @if (imagesBusy()) { <p role="status">Procesando fotos…</p> }
         <app-galeria-imagenes [fotos]="images()" [minimo]="1"
-          [disabled]="saving() || imagesBusy() || form.disabled"
+          [disabled]="saving() || imagesBusy() || form.disabled" [quitarDeshabilitado]="imageOrderSaving()"
           (reordenar)="reorderImages($event)" (quitar)="removeImage($event)" />
+        @if (imagesBusy() || imageOrderSaving()) {
+          <p role="status">{{ imagesBusy() ? 'Procesando fotos…' : 'Guardando orden… Podés seguir acomodando las fotos.' }}</p>
+        }
         @if (imageError()) { <p class="form-error" role="alert">{{ imageError() }}</p> }
       </section>
 
@@ -200,7 +202,7 @@
       }
       <footer class="form-actions">
         <a routerLink="/">Cancelar</a
-        ><button type="submit" [disabled]="saving() || imagesBusy() || form.disabled">
+        ><button type="submit" [disabled]="saving() || imagesBusy() || imageOrderSaving() || form.disabled">
           {{ saving() ? 'Guardando…' : 'Guardar cambios' }}
         </button>
       </footer>

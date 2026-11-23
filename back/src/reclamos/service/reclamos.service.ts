@@ -1,3 +1,4 @@
+import type { DemoraAdministrativaDto } from '../dto/reclamo-demora-administrativa.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   BadRequestException,
@@ -12,6 +13,8 @@ import { randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import sharp from 'sharp';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { CancelacionesService } from '../../cancelaciones/service/cancelaciones.service';
+import type { FaltanteCancelacionDto, ReclamoRespuestaDto, ReclamarFaltanteCancelacionDto } from '../dto/reclamo-faltante-cancelacion.dto';
 import { fechaArgentina, fechaParaMostrar } from '../../common/utils/fechas';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
@@ -38,7 +41,7 @@ import {
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
-import type { AutorReclamo, ImagenReclamo, MensajeReclamoRespuesta, ReclamoRespuesta } from '../dto/reclamo-respuesta.dto';
+import type { AutorReclamo, ImagenReclamo, MensajeReclamoRespuesta } from '../dto/reclamo-respuesta.dto';
 import { RECLAMOS_REPOSITORY } from '../repository/reclamos.repository.interface';
 import type { IReclamosRepository } from '../repository/reclamos.repository.interface';
 import type { Usuario } from '../../usuarios/entity/usuario.entity';
@@ -47,6 +50,7 @@ import type { Usuario } from '../../usuarios/entity/usuario.entity';
 export const MAX_IMAGENES_POR_ENVIO = 10;
 export const MAX_IMAGENES_POR_RECLAMO = 30;
 export const MAX_BYTES_IMAGEN = 5 * 1024 * 1024;
+const DIAS_RECLAMO_DEMORA = 7;
 
 interface ImagenPreparada { nombre: string; contenido: Buffer; }
 interface ImagenSubida { nombre: string; url: string; }
@@ -61,26 +65,74 @@ function autorRespuesta(usuario: Usuario | null | undefined): AutorReclamo | nul
 export class ReclamosService {
   private readonly logger = new Logger(ReclamosService.name);
 
-  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
+  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly cancelaciones: CancelacionesService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
+  async listarDemorasMias(idUsuario: number): Promise<DemoraAdministrativaDto[]> {
+    const solicitudes = await this.cancelaciones.listarDemorasParaReclamo(idUsuario);
+    const elegibles = solicitudes.filter(({ reserva }) => !reserva.cancelada && this.reservas.pagoAprobado(reserva) && reserva.fecha_fin && !this.fueraDePlazo(reserva.fecha_fin, fechaArgentina()));
+    return Promise.all(elegibles.map(async solicitud => ({ solicitudId: solicitud.id, reservaId: solicitud.reserva.id,
+      titulo: solicitud.reserva.publicacion?.titulo ?? 'Alojamiento', fechaInicio: solicitud.reserva.fecha_inicio, fechaSolicitud: solicitud.creada_en,
+      reclamoAbierto: await this.reclamos.existeAbierto(solicitud.reserva.id, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]) })));
+  }
+
+  async consultarFaltanteCancelacion(idReserva: number, idUsuario: number): Promise<FaltanteCancelacionDto> {
+    const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
+    this.verificarInquilino(reserva, idUsuario);
+    return {
+      devolucion: await this.cancelaciones.saldoDevolucion(reserva),
+      reclamoAbierto: await this.reclamos.existeAbierto(idReserva, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]),
+    };
+  }
+
+  async reclamarFaltanteCancelacion(idReserva: number, dto: ReclamarFaltanteCancelacionDto, idUsuario: number): Promise<ReclamoRespuestaDto> {
+    let idReclamo = 0;
+    await this.reservas.conReservaBloqueada(idReserva, async (reserva, transaccion) => {
+      this.verificarInquilino(reserva, idUsuario);
+      const repo = this.reclamos.enTransaccion(transaccion);
+      const saldo = await this.cancelaciones.saldoDevolucion(reserva, transaccion);
+      if (!saldo || saldo.importeReclamable <= 0)
+        throw new ConflictException('No hay un importe faltante para reclamar; revisá lo devuelto y lo que sigue en gestión');
+      if (await repo.existeAbierto(idReserva, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]))
+        throw new ConflictException('La reserva ya tiene un reclamo abierto');
+      const reclamo = await repo.guardar({
+        reserva, inquilino: referenciaUsuario(idUsuario), anunciante: reserva.publicacion?.anunciante?.usuario,
+        categoria: 'OTRO', descripcion: dto.descripcion.trim(), solicitud_cancelacion_id: saldo.solicitudId,
+        estado: this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), resolucion: null,
+        importe_reembolso: null, administrador_resolucion: null, resuelto_en: null,
+      });
+      idReclamo = reclamo.id;
+    });
+    const reclamo = await this.obtener(idReclamo, idUsuario, false);
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo por reembolso faltante', 'Se abrió un reclamo por el importe faltante de una cancelación. Consultá el expediente en DEPA.');
+    return reclamo;
+  }
+
+  private verificarInquilino(reserva: Reserva, idUsuario: number): void {
+    if (!this.reservas.esDelInquilino(reserva, idUsuario))
+      throw new ForbiddenException('Solo el Inquilino de la reserva puede reclamar el faltante');
+  }
+
+  /** Reclamos que bloquean la liquidación: los de demora administrativa se tramitan sin retenerla. */
   tieneReclamoAbierto(idReserva: number, transaccion: EntityManager): Promise<boolean> {
     return this.reclamos.enTransaccion(transaccion).existeAbierto(idReserva, [
       this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
       this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION'),
-    ]);
+    ], CategoriaReclamo.DEMORA_ADMINISTRATIVA);
   }
 
-  async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
-    // T34: el anunciante con el código bloqueado pide el reinicio con un reclamo propio.
+  async crear(dto: CrearReclamoDto, idUsuario: number): Promise<ReclamoRespuestaDto> {
+    if (dto.descripcion.trim().length < 20) throw new BadRequestException('La descripción debe tener al menos 20 caracteres de contenido');
+    const porDemora = dto.categoria === CategoriaReclamo.DEMORA_ADMINISTRATIVA;
     const pedidoDeCodigo = dto.categoria === CategoriaReclamo.CODIGO_BLOQUEADO;
-    const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
+    let reclamo!: Reclamo;
+    const crear = async (reserva: Reserva, transaccion: EntityManager): Promise<Reclamo> => {
       const reclamos = this.reclamos.enTransaccion(transaccion);
       if (pedidoDeCodigo) this.validarPedidoDeCodigo(reserva, idUsuario);
-      else if (!this.reservas.esDelInquilino(reserva, idUsuario))
+      else if (!porDemora && !this.reservas.esDelInquilino(reserva, idUsuario))
         throw new ForbiddenException(
           'Solo el Inquilino de la reserva puede iniciar un reclamo',
         );
-      if (this.reservas.liquidacionResuelta(reserva))
+      if (!porDemora && this.reservas.liquidacionResuelta(reserva))
         throw new ConflictException('La liquidación de esta reserva ya fue resuelta');
       if (reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))
         throw new ConflictException('La reserva no tiene un pago aprobado');
@@ -96,17 +148,28 @@ export class ReclamosService {
       if (!reserva.usuario)
         throw new ConflictException('La reserva no tiene un Inquilino asociado');
 
-      // Se puede reclamar con el código validado, sin validar o bloqueado.
-      this.validarPeriodoReclamo(reserva);
+      if (porDemora) {
+        const hoy = fechaArgentina();
+        if (hoy < reserva.fecha_inicio)
+          throw new BadRequestException(
+            'Antes del inicio usá la solicitud de cancelación; el reclamo es para una estadía iniciada o finalizada',
+          );
+        if (this.fueraDePlazo(reserva.fecha_fin, hoy))
+          throw new BadRequestException(
+            `El plazo para reclamar vence a los ${DIAS_RECLAMO_DEMORA} días corridos del fin de la estadía`,
+          );
+      } else this.validarPeriodoReclamo(reserva);
 
       if (await reclamos.existeAbierto(reserva.id, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]))
         throw new ConflictException('La reserva ya tiene un reclamo abierto');
 
-      return reclamos.guardar({
+      const solicitudDemorada = porDemora ? await this.cancelaciones.buscarSolicitudParaReclamoDemora(reserva, idUsuario, transaccion) : null;
+      reclamo = await reclamos.guardar({
         reserva,
         inquilino: reserva.usuario,
         anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
         categoria: dto.categoria,
+        solicitud_cancelacion_id: solicitudDemorada?.id ?? null,
         descripcion: dto.descripcion.trim(),
         estado: this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
         resolucion: null,
@@ -114,12 +177,12 @@ export class ReclamosService {
         administrador_resolucion: null,
         resuelto_en: null,
       });
-    }, pedidoDeCodigo ? 'Pedido de reinicio del código en revisión' : undefined);
-    if (pedidoDeCodigo)
-      await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Pedido de reinicio del código de alojamiento', 'El anunciante pidió a la administración reiniciar el código de alojamiento de la reserva. Podés seguirlo en DEPA.');
-    else
-      await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
-    return this.prepararRespuesta(reclamo);
+      return reclamo;
+    };
+    if (porDemora) await this.reservas.conReservaBloqueada(dto.id_reserva, async (reserva, tx) => { await crear(reserva, tx); });
+    else await this.reservas.conReservaParaReclamo(dto.id_reserva, crear, pedidoDeCodigo ? 'Pedido de reinicio del código en revisión' : undefined);
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], porDemora ? 'Reclamo por demora administrativa' : pedidoDeCodigo ? 'Pedido de reinicio del código de alojamiento' : 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
+    return this.responder(reclamo, false);
   }
 
   private validarPedidoDeCodigo(reserva: Reserva, idUsuario: number): void {
@@ -131,17 +194,17 @@ export class ReclamosService {
       throw new ConflictException('El código no está bloqueado: todavía podés cargarlo desde la reserva');
   }
 
-  async listarMios(idUsuario: number): Promise<ReclamoRespuesta[]> {
+  async listarMios(idUsuario: number): Promise<ReclamoRespuestaDto[]> {
     const reclamos = await this.reclamos.listarPorParticipante(idUsuario);
     return Promise.all(reclamos.map((reclamo) => this.responder(reclamo, false)));
   }
 
-  async listarAdministracion(): Promise<ReclamoRespuesta[]> {
+  async listarAdministracion(): Promise<ReclamoRespuestaDto[]> {
     const reclamos = await this.reclamos.listarAdministracion();
     return Promise.all(reclamos.map((reclamo) => this.responder(reclamo, true)));
   }
 
-  async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<ReclamoRespuesta> {
+  async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<ReclamoRespuestaDto> {
     return this.responder(await this.buscarComoParticipante(id, idUsuario, esAdmin), esAdmin);
   }
 
@@ -191,7 +254,7 @@ export class ReclamosService {
     return (await this.obtener(id, idUsuario, esAdmin)).mensajes;
   }
 
-  async resolver(id: number, dto: ResolverReclamoDto, idAdmin: number): Promise<ReclamoRespuesta> {
+  async resolver(id: number, dto: ResolverReclamoDto, idAdmin: number): Promise<ReclamoRespuestaDto> {
     const reclamo = await this.buscarComoParticipante(id, idAdmin, true);
     const estadosCerrados: string[] = [
       this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO'),
@@ -211,10 +274,15 @@ export class ReclamosService {
       if (!expediente || estadosCerrados.includes(expediente.estado))
         throw new ConflictException('El reclamo ya fue resuelto');
       const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
+      if (expediente.solicitud_cancelacion_id != null && expediente.categoria !== CategoriaReclamo.DEMORA_ADMINISTRATIVA) {
+        resultado.reembolso = await this.resolverFaltanteCancelacion(expediente, actual, dto, idAdmin, previo, transaccion);
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, resultado.reembolso ? Number(resultado.reembolso.importe) : null, idAdmin));
+        return;
+      }
       if (this.esAFavorDelAnunciante(dto.resolucion)) {
         if (previo) throw new ConflictException('El reclamo tiene una devolución registrada');
         // Sin devolución y reinicio del código vuelven a RETENIDO con los intentos en 0 si falta el código.
-        expediente.reserva = dto.resolucion === ResolucionReclamo.CONFIRMAR_INGRESO
+        expediente.reserva = expediente.categoria === CategoriaReclamo.DEMORA_ADMINISTRATIVA ? actual : dto.resolucion === ResolucionReclamo.CONFIRMAR_INGRESO
           ? await this.reservas.confirmarIngresoSinCodigo(actual, dto.observacion, transaccion)
           : await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion ?? (
             dto.resolucion === ResolucionReclamo.REINICIAR_CODIGO
@@ -292,6 +360,27 @@ export class ReclamosService {
    * T34: el pedido de reinicio del código se resuelve habilitando intentos, confirmando
    * el ingreso o devolviendo el total con motivo. Los demás reclamos conservan sus opciones.
    */
+  private async resolverFaltanteCancelacion(reclamo: Reclamo, reserva: Reserva, dto: ResolverReclamoDto, idAdmin: number, previo: Reembolso | null, transaccion: EntityManager): Promise<Reembolso | undefined> {
+    if (previo) throw new ConflictException('El reclamo ya tiene una devolución registrada');
+    if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) return undefined;
+    const saldo = await this.cancelaciones.saldoDevolucion(reserva, transaccion);
+    if (!saldo || saldo.solicitudId !== reclamo.solicitud_cancelacion_id || saldo.importeReclamable <= 0)
+      throw new ConflictException('El faltante ya está cubierto por devoluciones confirmadas o en gestión');
+    const importe = dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL ? saldo.importeReclamable : Number(dto.importe);
+    if (!Number.isFinite(importe) || importe <= 0 || importe > saldo.importeReclamable)
+      throw new BadRequestException('El importe debe ser positivo y no superar el faltante disponible');
+    if (dto.resolucion === ResolucionReclamo.DEVOLUCION_PARCIAL && importe >= saldo.importeReclamable)
+      throw new BadRequestException('Para completar el faltante elegí "Completar faltante"');
+    const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
+    if (!pago) throw new ConflictException('La reserva no tiene un pago registrado');
+    const referencia = `rec:${reclamo.id}`;
+    return this.reembolsos.crearSolicitud({
+      reserva, pago, importe, tipo: importe >= this.reembolsos.saldoReembolsable(pago) ? TipoReembolso.TOTAL : TipoReembolso.PARCIAL,
+      origen: OrigenReembolso.RECLAMO, motivo: `Reclamo #${reclamo.id}: ${dto.observacion ?? 'faltante de cancelación'}`,
+      idSolicitadoPor: idAdmin, idempotencyKey: referencia, referenciaInterna: referencia,
+    }, transaccion);
+  }
+
   private validarResolucionSegunCategoria(reclamo: Reclamo, dto: ResolverReclamoDto): void {
     const pedidoDeCodigo = reclamo.categoria === CategoriaReclamo.CODIGO_BLOQUEADO;
     const permitidas: ResolucionReclamo[] = pedidoDeCodigo
@@ -381,15 +470,18 @@ export class ReclamosService {
    * Respuesta de un reclamo: sin notas internas para las partes y con los datos mínimos de cada autor.
    * T49: cada imagen va en su mensaje o, si no tiene, en la descripción, con un enlace firmado de 15 minutos.
    */
-  private async responder(reclamo: Reclamo, esAdmin: boolean): Promise<ReclamoRespuesta> {
+  private async responder(reclamo: Reclamo, esAdmin: boolean): Promise<ReclamoRespuestaDto> {
     const mensajes = (reclamo.mensajes ?? [])
       .filter((mensaje) => esAdmin || mensaje.visible_para === VisibilidadMensajeReclamo.TODOS)
       .sort((a, b) => a.id - b.id);
     const imagenes = await this.imagenesRespuesta((reclamo.evidencias ?? []).filter((evidencia) => esAdmin || this.visibleParaLasPartes(evidencia)));
-    return Object.assign(this.prepararRespuesta(reclamo), {
+    const respuesta: ReclamoRespuestaDto = Object.assign(this.prepararRespuesta(reclamo), {
       evidencias: imagenes.filter((imagen) => imagen.id_mensaje === null),
       mensajes: mensajes.map((mensaje) => this.mensajeRespuesta(mensaje, imagenes.filter((imagen) => imagen.id_mensaje === mensaje.id))),
     });
+    if (reclamo.solicitud_cancelacion_id != null && reclamo.categoria !== CategoriaReclamo.DEMORA_ADMINISTRATIVA)
+      respuesta.devolucion_cancelacion = await this.cancelaciones.saldoDevolucion(reclamo.reserva);
+    return respuesta;
   }
 
   private mensajeRespuesta(mensaje: ReclamoMensaje, evidencias: ImagenReclamo[]): MensajeReclamoRespuesta {
@@ -503,5 +595,10 @@ export class ReclamosService {
       throw new BadRequestException(
         `El plazo para reclamar terminó el ${fechaParaMostrar(finPlazo)}, antes de que se habilite el pago al anunciante.`,
       );
+  }
+  private fueraDePlazo(fechaFin: string, hoy: string): boolean {
+    const fin = new Date(`${fechaFin}T12:00:00Z`).getTime();
+    const actual = new Date(`${hoy}T12:00:00Z`).getTime();
+    return actual > fin + DIAS_RECLAMO_DEMORA * 86_400_000;
   }
 }

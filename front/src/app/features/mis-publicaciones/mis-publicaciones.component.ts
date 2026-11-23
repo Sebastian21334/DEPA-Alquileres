@@ -1,25 +1,21 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { concatMap, forkJoin, from, type Subscription } from 'rxjs';
-import { LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
+import { forkJoin, type Subscription } from 'rxjs';
+import { LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
 import { GestionPublicacionesService, type PaginaMisPublicaciones, type PagoPublicacion } from '../../shared/services/gestion-publicaciones.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
-import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
+import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
 import { HistorialLiquidacionesComponent } from '../../shared/components/historial-liquidaciones/historial-liquidaciones.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
-import { moverImagen } from '../../shared/utils/orden-imagenes';
-
-const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-const MAX_IMAGEN = 10 * 1024 * 1024;
 
 // Panel del anunciante verificado para administrar sus publicaciones: ver,
-// activar, desactivar, mover a la papelera, restaurar y gestionar sus imágenes.
+// activar, desactivar, mover a la papelera y restaurar. Las imágenes se gestionan en Editar.
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, GaleriaImagenesComponent, HistorialLiquidacionesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, HistorialLiquidacionesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
@@ -37,12 +33,12 @@ export class MisPublicacionesComponent {
   protected readonly totalPublicaciones = signal(0);
   protected readonly paginasPublicaciones = signal(1);
   protected readonly activas = signal(0);
+  protected readonly esTemporaria = admiteReservasPorFecha;
   protected readonly cargando = signal(true);
   protected readonly cargandoPublicaciones = signal(false);
   protected readonly error = signal('');
   protected readonly aviso = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('aviso') ?? '');
   protected readonly resultado = signal('');
-  protected readonly expandida = signal<number | null>(null);
   protected readonly liquidacionesAbiertas = signal<number | null>(null);
   protected readonly liquidaciones = signal<PagoPublicacion[] | null>(null);
   protected readonly errorLiquidaciones = signal(false);
@@ -105,10 +101,6 @@ export class MisPublicacionesComponent {
     this.cargarPublicaciones(1);
   }
 
-  protected alternarImagenes(id: number): void {
-    this.expandida.update((actual) => (actual === id ? null : id));
-    this.errorFila.set(null);
-  }
 
   protected alternarLiquidaciones(id: number): void {
     if (this.liquidacionesAbiertas() === id) {
@@ -140,7 +132,6 @@ export class MisPublicacionesComponent {
     this.gestion.eliminar(pub.id).subscribe({
       next: () => {
         this.confirmandoBorrado.set(null);
-        if (this.expandida() === pub.id) this.expandida.set(null);
         this.resultado.set('La publicación se movió a la Papelera. Podés restaurarla desde allí.');
         this.ocupada.set(null);
         this.cargar();
@@ -174,58 +165,6 @@ export class MisPublicacionesComponent {
         this.resultado.set(actualizada.activa ? 'Publicación activada.' : 'Publicación desactivada. Ya no aparece en el feed.');
         this.ocupada.set(null);
         this.cargarPublicaciones(this.paginaPublicaciones());
-      },
-      error: (err: Error) => this.fallo(pub.id, err),
-    });
-  }
-
-  protected subirImagenes(pub: Publicacion, event: Event): void {
-    if (this.ocupada() !== null) return;
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    input.value = '';
-    const validos = archivos.filter((a) => TIPOS_IMAGEN.includes(a.type) && a.size <= MAX_IMAGEN);
-    this.errorFila.set(
-      validos.length < archivos.length
-        ? { id: pub.id, mensaje: 'Algunos archivos se descartaron: solo imágenes de hasta 10 MB.' }
-        : null,
-    );
-    if (!validos.length) return;
-
-    this.ocupada.set(pub.id);
-    from(validos)
-      .pipe(concatMap((archivo) => this.gestion.subirImagen(pub.id, archivo)))
-      .subscribe({
-        error: (err: Error) => this.fallo(pub.id, err),
-        // La primera imagen puede activar la publicación; recargar mantiene el contador.
-        complete: () => {
-          this.ocupada.set(null);
-          this.cargarPublicaciones(this.paginaPublicaciones());
-        },
-      });
-  }
-
-  protected eliminarImagen(pub: Publicacion, idImagen: number): void {
-    if (this.ocupada() !== null) return;
-    this.ocupada.set(pub.id);
-    this.gestion.eliminarImagen(idImagen).subscribe({
-      next: () => {
-        this.actualizar(pub.id, (p) => ({ ...p, imagenes: (p.imagenes ?? []).filter((i) => i.id !== idImagen) }));
-        this.ocupada.set(null);
-      },
-      error: (err: Error) => this.fallo(pub.id, err),
-    });
-  }
-
-  protected ordenarImagenes(pub: Publicacion, cambio: { desde: number; hasta: number }): void {
-    if (this.ocupada() !== null) return;
-    const imagenes = moverImagen(pub.imagenes ?? [], cambio.desde, cambio.hasta);
-    this.ocupada.set(pub.id);
-    this.errorFila.set(null);
-    this.gestion.ordenarImagenes(pub.id, imagenes.map((imagen) => imagen.id)).subscribe({
-      next: (ordenadas) => {
-        this.actualizar(pub.id, (p) => ({ ...p, imagenes: ordenadas }));
-        this.ocupada.set(null);
       },
       error: (err: Error) => this.fallo(pub.id, err),
     });

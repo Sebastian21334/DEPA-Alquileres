@@ -3,11 +3,15 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { fechaArgentina } from '../../common/utils/fechas';
+import { decimalEntero, importeTexto } from '../../common/utils/importes';
 import {
   OrigenReembolso,
   Reembolso,
@@ -18,7 +22,7 @@ import type { ActorCancelacion, Reserva } from '../../reservas/entity/reserva.en
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
-import type { CondicionesCancelacionDto, DevolucionCancelacionDto } from '../dto/condiciones-cancelacion.dto';
+import type { CondicionesCancelacionDto, DevolucionCancelacionDto, SaldoDevolucionCancelacionDto, SolicitudCancelacionAdministracionDto } from '../dto/condiciones-cancelacion.dto';
 import { ResolverSolicitudCancelacionDto } from '../dto/resolver-solicitud-cancelacion.dto';
 import { SolicitarCancelacionDto } from '../dto/solicitar-cancelacion.dto';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
@@ -39,8 +43,76 @@ type ResultadoResolucion =
  * efectos sobre la estadía y el dinero.
  */
 @Injectable()
-export class CancelacionesService {
+export class CancelacionesService implements OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(CancelacionesService.name);
+  private temporizador?: ReturnType<typeof setInterval>;
+  private venciendo = false;
+  private readonly motivoDemora = 'Solicitud rechazada por falta de resolución administrativa antes de la fecha de ingreso';
   constructor(@Inject(CANCELACIONES_REPOSITORY) private readonly cancelaciones: ICancelacionesRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    await this.rechazarSolicitudesVencidas();
+    this.temporizador = setInterval(() => void this.rechazarSolicitudesVencidas(), 60_000);
+    this.temporizador.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.temporizador) clearInterval(this.temporizador);
+  }
+
+  async rechazarSolicitudesVencidas(): Promise<void> {
+    if (this.venciendo) return;
+    this.venciendo = true;
+    try {
+      let despuesDe = 0;
+      for (;;) {
+        const filas = await this.cancelaciones.listarVencibles(fechaArgentina(), despuesDe);
+        if (!filas.length) break;
+        for (const fila of filas) {
+          despuesDe = fila.id;
+          await this.cancelaciones.conTransaccion(async (repo, tx) => {
+            const reserva = await this.reservas.obtenerReserva(fila.reserva.id, tx);
+            const solicitud = await repo.buscarParaResolver(fila.id, reserva.id);
+            if (solicitud?.estado === 'PENDIENTE' && reserva.fecha_inicio && reserva.fecha_inicio <= fechaArgentina())
+              await this.rechazarPorDemora(solicitud, repo);
+          });
+        }
+      }
+    } catch (error) {
+      this.logger.error('No se pudieron rechazar las cancelaciones fuera de plazo; se reintentará', error);
+    } finally { this.venciendo = false; }
+  }
+
+  private async rechazarPorDemora(solicitud: SolicitudCancelacion, repo: ICancelacionesRepository): Promise<SolicitudCancelacion> {
+    solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'RECHAZADA');
+    solicitud.decidida_por = null;
+    solicitud.decidida_en = new Date();
+    solicitud.observacion = this.motivoDemora;
+    return repo.guardar(solicitud);
+  }
+
+  private esDemoraAdministrativa(solicitud: SolicitudCancelacion, reserva: Reserva): boolean {
+    if (!reserva.fecha_inicio || reserva.fecha_inicio > fechaArgentina() || fechaArgentina(solicitud.creada_en) >= reserva.fecha_inicio) return false;
+    return solicitud.estado === 'PENDIENTE' || (solicitud.estado === 'VENCIDA' && (!solicitud.decidida_en || fechaArgentina(solicitud.decidida_en) >= reserva.fecha_inicio)) ||
+      (solicitud.estado === 'RECHAZADA' && !solicitud.decidida_por && solicitud.observacion === this.motivoDemora);
+  }
+
+  async buscarSolicitudParaReclamoDemora(reserva: Reserva, idUsuario: number, transaccion: EntityManager): Promise<SolicitudCancelacion> {
+    await this.reservas.buscarPorId(reserva.id, idUsuario, transaccion);
+    const repo = this.cancelaciones.enTransaccion(transaccion);
+    const candidata = await repo.buscarDemorada(reserva.id, idUsuario);
+    const solicitud = candidata ? await repo.buscarParaResolver(candidata.id, reserva.id) : null;
+    if (!solicitud || !this.esDemoraAdministrativa(solicitud, reserva))
+      throw new ConflictException('No tenés una solicitud de cancelación sin resolver antes del ingreso para reclamar por demora administrativa');
+    if (solicitud.estado === 'PENDIENTE') await this.rechazarPorDemora(solicitud, repo);
+    return solicitud;
+  }
+
+  async listarDemorasParaReclamo(idUsuario: number): Promise<SolicitudCancelacion[]> {
+    await this.rechazarSolicitudesVencidas();
+    const solicitudes = await this.cancelaciones.listarDemoradasDelSolicitante(idUsuario, fechaArgentina());
+    return solicitudes.filter(solicitud => this.esDemoraAdministrativa(solicitud, solicitud.reserva)).filter((solicitud, indice, filas) => filas.findIndex(fila => fila.reserva.id === solicitud.reserva.id) === indice);
+  }
 
   /**
    * Crea el pedido de cancelación de una reserva pagada. La reserva no se
@@ -118,7 +190,7 @@ export class CancelacionesService {
     const actor = this.actorDeCancelacion(reserva, solicitud ? solicitud.solicitante?.id : idUsuario);
     const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor) ?? this.impedimentoReserva(reserva, hoy)?.message ?? null;
     const devolucion = pago && (!motivoBloqueo || solicitud)
-      ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica), moneda: pago.currency }
+      ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica, pago.amount), moneda: pago.currency }
       : null;
     return {
       solicitud,
@@ -128,7 +200,7 @@ export class CancelacionesService {
         ? `Faltan menos de ${politica.diasDevolucionParcial} días para el ingreso. Si se aprueba la cancelación, no recibirás devolución del importe pagado (0 %).`
         : null,
       admiteReembolso: pago != null,
-      devolucionPorTransferencia: pago != null && pago.payment_method_id !== 'account_money',
+      devolucionPorTransferencia: pago != null && this.reembolsos.requiereTransferencia(pago),
       devolucion,
     };
   }
@@ -172,9 +244,48 @@ export class CancelacionesService {
       throw new ConflictException('La reserva ya tiene una devolución por cancelación en curso');
   }
 
-  async listarPendientes(): Promise<SolicitudCancelacion[]> {
+  async listarPendientes(): Promise<SolicitudCancelacionAdministracionDto[]> {
     const solicitudes = await this.cancelaciones.listarPorEstado(this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'));
-    return solicitudes.map((solicitud) => this.prepararRespuesta(solicitud));
+    return Promise.all(solicitudes.map(async (solicitud) => {
+      const reserva = solicitud.reserva;
+      const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id);
+      let devolucion: DevolucionCancelacionDto | null = null;
+      if (pago) {
+        const politica = await this.politicaAplicable(this.cancelaciones, reserva);
+        const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+        devolucion = {
+          ...this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica, pago.amount),
+          moneda: pago.currency,
+        };
+      }
+      return { ...this.prepararRespuesta(solicitud), devolucion };
+    }));
+  }
+
+  async saldoDevolucion(reserva: Reserva, transaccion?: EntityManager): Promise<SaldoDevolucionCancelacionDto | null> {
+    const repo = transaccion ? this.cancelaciones.enTransaccion(transaccion) : this.cancelaciones;
+    const solicitud = await repo.buscarActiva(reserva.id, this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA'));
+    if (!solicitud) return null;
+    const pago = transaccion
+      ? await this.reembolsos.buscarPagoParaReembolsoReserva(reserva.id, transaccion)
+      : await this.reembolsos.buscarPagoPorReserva(reserva.id);
+    if (!pago) throw new ConflictException('La reserva no tiene un pago registrado');
+    const politica = await this.politicaAplicable(repo, reserva);
+    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+    const devolucion = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica, pago.amount);
+    const reembolsos = await this.reembolsos.listarPorReserva(reserva.id, transaccion);
+    const estadosReservados: string[] = (['PENDIENTE', 'EN_PROCESO', 'FALLIDO'] as const).map(estado => this.catalogos.codigoEstado('REEMBOLSO', estado));
+    const enGestion = reembolsos.filter(actual => estadosReservados.includes(actual.estado))
+      .reduce((total, actual) => total + decimalEntero(actual.importe, 2), 0n);
+    const esperado = decimalEntero(devolucion.importe, 2);
+    const devuelto = decimalEntero(pago.amount_refunded ?? 0, 2);
+    const faltante = esperado > devuelto ? esperado - devuelto : 0n;
+    return {
+      solicitudId: solicitud.id, porcentaje: devolucion.porcentaje, moneda: pago.currency,
+      esperado: devolucion.importe, devuelto: Number(importeTexto(devuelto)),
+      enGestion: Number(importeTexto(enGestion)), faltante: Number(importeTexto(faltante)),
+      importeReclamable: Number(importeTexto(faltante > enGestion ? faltante - enGestion : 0n)),
+    };
   }
 
   /**
@@ -194,7 +305,7 @@ export class CancelacionesService {
 
     await this.notificarResolucion(resultado);
     if (resultado.vencida)
-      throw new ConflictException(`${resultado.motivo}; la solicitud quedó vencida`);
+      throw new ConflictException(resultado.motivo === this.motivoDemora ? `${resultado.motivo}; la reserva sigue en curso y podés reclamar por demora administrativa` : `${resultado.motivo}; la solicitud quedó vencida`);
 
     return {
       solicitud: this.prepararRespuesta(resultado.solicitud),
@@ -214,6 +325,11 @@ export class CancelacionesService {
     const hoy = fechaArgentina();
     solicitud.decidida_por = referenciaUsuario(idAdmin);
     solicitud.decidida_en = new Date();
+
+    if (reserva.fecha_inicio && reserva.fecha_inicio <= hoy) {
+      await this.rechazarPorDemora(solicitud, cancelaciones);
+      return { vencida: true, reserva, motivo: this.motivoDemora, idSolicitante: solicitud.solicitante?.id };
+    }
 
     const motivoVencimiento = this.reservas.codigoValidado(reserva)
       ? 'El código de ingreso fue validado antes de resolver la solicitud'
@@ -244,12 +360,10 @@ export class CancelacionesService {
     await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
     const politica = await this.politicaAplicable(cancelaciones, reserva);
 
-    const { porcentaje, importe } = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica);
+    const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
+    const { porcentaje, importe } = this.calcularDevolucion(reserva, actor, fechaArgentina(solicitud.creada_en), politica, pago?.amount ?? null);
     solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'APROBADA');
 
-    const pago = importe > 0 ? await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion) : null;
-    if (importe > 0 && !pago)
-      throw new ConflictException('La reserva no tiene un pago registrado');
     if (importe > 0 && pago) {
       // El reembolso y la aprobación se confirman juntos: no queda una
       // solicitud aprobada sin registro económico ni un registro sin decisión.
@@ -284,7 +398,7 @@ export class CancelacionesService {
     const solicitante = destinatario === 'ANUNCIANTE' ? ['anunciante'] as const
       : destinatario === 'INQUILINO' ? ['inquilino'] as const : [] as const;
     if (resultado.vencida) {
-      await this.notificaciones?.avisarCambio(resultado.reserva, solicitante, 'Solicitud de cancelación vencida', `${resultado.motivo}. Consultá el detalle en DEPA.`);
+      await this.notificaciones?.avisarCambio(resultado.reserva, solicitante, resultado.motivo === this.motivoDemora ? 'Solicitud de cancelación rechazada por demora' : 'Solicitud de cancelación vencida', `${resultado.motivo}. La reserva sigue en curso. Consultá en Mis reservas la opción de reclamo por demora administrativa.`);
       return;
     }
     if (resultado.solicitud.estado === this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'RECHAZADA'))
@@ -318,13 +432,18 @@ export class CancelacionesService {
     return politica.porcentajeFueraDePlazo;
   }
 
-  private calcularDevolucion(reserva: Reserva, actor: ActorCancelacion, fechaSolicitud: string, politica: PoliticaCancelacion): Omit<DevolucionCancelacionDto, 'moneda'> {
+  private calcularDevolucion(reserva: Reserva, actor: ActorCancelacion, fechaSolicitud: string, politica: PoliticaCancelacion, importePagado: number | string | null): Omit<DevolucionCancelacionDto, 'moneda'> {
     const porcentaje = this.porcentajeDevolucion(reserva, actor, fechaSolicitud, politica);
+    if (importePagado == null && porcentaje > 0)
+      throw new ConflictException('La reserva no tiene un pago registrado');
+    const centavosPagados = decimalEntero(importePagado ?? 0, 2);
+    // Redondea una sola vez, al centavo más cercano; medio centavo se redondea hacia arriba.
+    const centavosDevolucion = (centavosPagados * BigInt(porcentaje) + 50n) / 100n;
     return {
       fechaSolicitud,
       diasAnticipacion: this.diasHastaIngreso(reserva, fechaSolicitud),
       porcentaje,
-      importe: this.redondear((Number(reserva.monto_pago) * porcentaje) / 100),
+      importe: Number(importeTexto(centavosDevolucion)),
     };
   }
 
@@ -333,10 +452,6 @@ export class CancelacionesService {
     const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
     const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
     return (inicio - ahora) / 86_400_000;
-  }
-
-  private redondear(valor: number): number {
-    return Math.round((valor + Number.EPSILON) * 100) / 100;
   }
 
   private prepararRespuesta(solicitud: SolicitudCancelacion): SolicitudCancelacion {

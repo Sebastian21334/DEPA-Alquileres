@@ -160,6 +160,15 @@ export interface CondicionesCancelacion {
   };
 }
 
+export interface DemoraAdministrativa {
+  solicitudId: number;
+  reservaId: number;
+  titulo: string;
+  fechaInicio: string | null;
+  fechaSolicitud: string;
+  reclamoAbierto: boolean;
+}
+
 export interface SolicitudCancelacion {
   id: number;
   motivo: string;
@@ -167,6 +176,22 @@ export interface SolicitudCancelacion {
   decidida_en: string | null;
   observacion: string | null;
   creada_en: string;
+}
+
+export interface SaldoDevolucionCancelacion {
+  solicitudId: number;
+  porcentaje: number;
+  moneda: string;
+  esperado: number;
+  devuelto: number;
+  enGestion: number;
+  faltante: number;
+  importeReclamable: number;
+}
+
+export interface FaltanteCancelacion {
+  devolucion: SaldoDevolucionCancelacion | null;
+  reclamoAbierto: boolean;
 }
 
 export interface Reembolso {
@@ -187,6 +212,8 @@ export interface ParticipanteReclamo {
 }
 
 export interface Reclamo {
+  solicitud_cancelacion_id?: number | null;
+  devolucion_cancelacion?: SaldoDevolucionCancelacion | null;
   id: number;
   reserva?: {
     id: number;
@@ -195,12 +222,13 @@ export interface Reclamo {
     estado_estadia?: EstadoEstadia;
     estado_liquidacion?: Reserva['estado_liquidacion'];
     fecha_fin?: string | null;
+    intentos_codigo_restantes?: number;
     publicacion?: { id?: number; titulo?: string; imagenes?: { url: string }[] } | null;
   } | null;
   anunciante?: ParticipanteReclamo | null;
   inquilino?: ParticipanteReclamo | null;
   /** CODIGO_BLOQUEADO: pedido de reinicio del código que abre el anunciante (T34). */
-  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'CODIGO_BLOQUEADO';
+  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'DEMORA_ADMINISTRATIVA' | 'CODIGO_BLOQUEADO';
   descripcion: string;
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
   resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | 'REINICIAR_CODIGO' | 'CONFIRMAR_INGRESO' | null;
@@ -320,8 +348,20 @@ export class ReservationService {
     return this.http.get<Reembolso[]>(`${this.baseUrl}/${id}/reembolsos`);
   }
 
+  myAdministrativeDelays(): Observable<DemoraAdministrativa[]> {
+    return this.http.get<DemoraAdministrativa[]>(`${environment.apiUrl}/reclamos/demoras/mias`);
+  }
+
   createClaim(payload: { id_reserva: number; categoria: Reclamo['categoria']; descripcion: string; }): Observable<Reclamo> {
     return this.http.post<Reclamo>(`${environment.apiUrl}/reclamos`, payload);
+  }
+
+  cancellationRefundBalance(id: number): Observable<FaltanteCancelacion> {
+    return this.http.get<FaltanteCancelacion>(`${environment.apiUrl}/reclamos/cancelacion/${id}`);
+  }
+
+  claimMissingRefund(id: number, descripcion: string): Observable<Reclamo> {
+    return this.http.post<Reclamo>(`${environment.apiUrl}/reclamos/cancelacion/${id}`, { descripcion });
   }
 
   myClaims(): Observable<Reclamo[]> {

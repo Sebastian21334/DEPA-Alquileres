@@ -38,7 +38,14 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
         }
       </div>
     </header>
-    <p class="meta">{{ categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    <p class="meta">{{ (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Reembolso faltante de cancelación' : categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    @if (item.devolucion_cancelacion; as saldo) {
+      <div class="resolution">
+        <p>Correspondía devolver: <strong>{{ saldo.esperado | currency:saldo.moneda:'code' }}</strong> ({{ saldo.porcentaje }} %)</p>
+        <p>Ya devuelto: {{ saldo.devuelto | currency:saldo.moneda:'code' }} · En gestión: {{ saldo.enGestion | currency:saldo.moneda:'code' }}</p>
+        <p>Falta recibir: {{ saldo.faltante | currency:saldo.moneda:'code' }} · Disponible para completar: <strong>{{ saldo.importeReclamable | currency:saldo.moneda:'code' }}</strong></p>
+      </div>
+    }
     @if (item.reserva?.monto_pago; as monto) {
       <p class="meta">Importe de la reserva: <strong class="amount">{{ monto | currency:(item.reserva?.moneda_contratada || 'ARS') }}</strong></p>
     }
@@ -48,7 +55,9 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
         @if (item.resolucion === 'SIN_DEVOLUCION' || item.resolucion === 'REINICIAR_CODIGO') {
           <p>{{ item.resolucion === 'REINICIAR_CODIGO'
             ? 'A favor del anunciante: la administración habilitó nuevos intentos para cargar el código.'
-            : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
+            : (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA')
+              ? 'No se aprobó una devolución adicional.'
+              : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
           <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
           @if (item.reserva && puedeValidarCodigo(item.reserva)) {
             <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
@@ -57,8 +66,8 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
           <p>A favor del anunciante: la administración confirmó el ingreso sin el código. El pago sigue los plazos habituales.</p>
         } @else {
           <p>
-            A favor del inquilino: {{ resoluciones[item.resolucion].toLowerCase() }}
-            @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.reserva?.moneda_contratada || 'ARS') }}</span>}.
+            A favor del inquilino: {{ (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'devolución del faltante' : resoluciones[item.resolucion].toLowerCase() }}
+            @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.devolucion_cancelacion?.moneda || item.reserva?.moneda_contratada || 'ARS') }}</span>}.
             {{ administracion() ? 'La devolución se gestiona en Reembolsos.' : 'La devolución se sigue desde el detalle de la reserva.' }}
           </p>
         }
@@ -287,7 +296,7 @@ export class ClaimHistoryComponent {
     })));
   protected readonly categorias = {
     LIMPIEZA: 'Limpieza', MANTENIMIENTO: 'Mantenimiento', INGRESO: 'Problemas de ingreso',
-    DESCRIPCION: 'La propiedad no coincide', OTRO: 'Otro motivo',
+    DESCRIPCION: 'La propiedad no coincide', OTRO: 'Otro motivo', DEMORA_ADMINISTRATIVA: 'Demora administrativa',
     CODIGO_BLOQUEADO: 'Pedido de reinicio del código de alojamiento',
   };
   protected readonly estados = {

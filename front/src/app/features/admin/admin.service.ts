@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import {
+  CondicionesCancelacion,
   Reclamo,
   ReclamoMensaje,
   Reserva,
@@ -161,6 +162,7 @@ export interface AdminCancellationRequest {
   motivo: string;
   estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'VENCIDA';
   creada_en: string;
+  devolucion: CondicionesCancelacion['devolucion'];
   reserva?: {
     id: number;
     monto_pago: number;
@@ -233,7 +235,7 @@ export class AdminService {
   }
   resolverSolicitudCancelacion(idReserva: number, idSolicitud: number, decision: 'APROBADA' | 'RECHAZADA', observacion?: string) {
     return this.http.patch<{
-      solicitud: AdminCancellationRequest;
+      solicitud: Omit<AdminCancellationRequest, 'devolucion'>;
       reembolso: AdminReembolso | null;
     }>(`${this.api}/reservas/${idReserva}/cancelacion/${idSolicitud}`, {
       decision,

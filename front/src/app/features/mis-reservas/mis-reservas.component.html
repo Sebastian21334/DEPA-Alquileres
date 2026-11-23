@@ -11,6 +11,42 @@
       </div>
     </div>
 
+    @if (errorDemorasAdministrativas()) { <p class="cancellation-error" role="alert">{{ errorDemorasAdministrativas() }}</p> }
+    @if (demorasAdministrativas().length) {
+      <section class="administrative-delays" aria-labelledby="administrative-delays-title">
+        <h2 id="administrative-delays-title">Solicitudes sin respuesta antes del ingreso</h2>
+        @for (item of demorasAdministrativas(); track item.solicitudId) {
+          <article class="administrative-delay">
+            <h3>Reserva #{{ item.reservaId }} · {{ item.titulo }}</h3>
+            <p>Tu solicitud de cancelación no fue respondida antes de la fecha de ingreso y se considera rechazada. La reserva sigue en curso.</p>
+            @if (item.reclamoAbierto) {
+              <p>Ya hay un reclamo abierto para esta reserva.</p>
+              <button type="button" class="booking-button" (click)="vista.set('reclamos')">Ver reclamos</button>
+            } @else {
+              <button type="button" class="booking-button booking-button--primary" (click)="abrirDemora(item)">Reclamar por demora administrativa</button>
+            }
+          </article>
+        }
+      </section>
+    }
+    <dialog #dialogoDemora class="cancellation-dialog" aria-labelledby="administrative-delay-title" (cancel)="cerrarDemora($event)">
+      <h2 id="administrative-delay-title">Reclamar por demora administrativa</h2>
+      @if (demoraSeleccionada(); as item) {
+        <p>Reserva #{{ item.reservaId }} · {{ item.titulo }}</p>
+        <p>Contanos qué inconvenientes te generó la falta de respuesta a tu solicitud. Administración revisará el caso. Enviar el reclamo no cancela la reserva ni genera automáticamente un reembolso.</p>
+        <form (ngSubmit)="enviarDemora()" [attr.aria-busy]="enviandoDemora()">
+          <label for="descripcion-demora">Descripción de los inconvenientes</label>
+          <textarea id="descripcion-demora" name="descripcionDemora" [(ngModel)]="descripcionDemora" rows="5" required minlength="20" maxlength="1000" [disabled]="enviandoDemora()" autofocus></textarea>
+          <small>Entre 20 y 1000 caracteres. Podrás adjuntar evidencias y seguir el caso desde Reclamos.</small>
+          @if (errorDemora()) { <p class="cancellation-error" role="alert">{{ errorDemora() }}</p> }
+          <div class="cancellation-actions">
+            <button type="button" class="booking-button" [disabled]="enviandoDemora()" (click)="cerrarDemora()">Volver</button>
+            <button type="submit" class="booking-button booking-button--primary" [disabled]="enviandoDemora() || descripcionDemora.trim().length < 20">{{ enviandoDemora() ? 'Enviando…' : 'Enviar reclamo' }}</button>
+          </div>
+        </form>
+      }
+    </dialog>
+
     <dialog #dialogoCancelacion class="cancellation-dialog" aria-labelledby="cancel-title"
       (cancel)="cerrarCancelacion($event)" (close)="limpiarCancelacion()">
       <button type="button" class="cancellation-close" aria-label="Cerrar" autofocus
@@ -48,9 +84,9 @@
                 }
               </p>
               @if (cancelacionComoAnunciante() && !condicionesCancelacion()?.solicitud) {
-                <p>Como anunciante podés solicitar la cancelación hasta el día anterior al ingreso. Si se aprueba, se devuelve el 100 % al inquilino.</p>
+                <p>Como anunciante podés solicitar la cancelación antes de la fecha de ingreso, hasta el día anterior inclusive. Si se aprueba antes del ingreso, se devuelve el 100 % al inquilino.</p>
               }
-              <p>El porcentaje se determina al enviar la solicitud. La demora en aprobarla no lo reduce.</p>
+              <p>El porcentaje se determina al enviar la solicitud. La demora en aprobarla no lo reduce, siempre que se apruebe antes de la fecha de ingreso.</p>
             </div>
           }
           @if (condicionesCancelacion()?.advertencia; as advertencia) {
@@ -94,12 +130,12 @@
             <details class="cancellation-terms">
               <summary>Términos y condiciones de cancelación</summary>
               <ul>
-                <li>Como inquilino podés solicitar la cancelación hasta el día anterior al ingreso, inclusive. Si faltan menos de {{ politica.diasDevolucionParcial }} días, no hay devolución. Desde la fecha de ingreso no se permite cancelar; podés abrir un reclamo. Se cuentan días calendario de Argentina.</li>
-                <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Si el pago fue con tarjeta u otro medio distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por transferencia con administración.</li>
+                <li>Como inquilino podés solicitar la cancelación en cualquier momento antes de la fecha de ingreso, incluso el día anterior. Si faltan menos de {{ politica.diasDevolucionParcial }} días, no hay devolución. Desde la fecha de ingreso no se permite cancelar; podés abrir un reclamo. Se cuentan días calendario de Argentina.</li>
+                <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Las tarjetas y el dinero en cuenta utilizan el mismo circuito de devolución por Mercado Pago. Si falta el medio del pago o Mercado Pago rechaza definitivamente la devolución, administración coordina una transferencia.</li>
                 <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al enviar la solicitud.</li>
                 <li>Si al solicitar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
-                <li>El anunciante puede solicitar la cancelación hasta el día anterior al ingreso, con devolución del 100 % al inquilino si se aprueba antes de la fecha de ingreso.</li>
-                <li>Si la cancelación la solicita el administrador, la política prevé una devolución del {{ politica.porcentajeOtrosActores }} % si se aprueba antes del ingreso.</li>
+                <li>El anunciante puede solicitar la cancelación hasta el día anterior al ingreso, inclusive, con devolución del 100 % al inquilino si se aprueba antes de la fecha de ingreso.</li>
+                <li>Un Administrador debe aprobar la solicitud antes de la fecha de ingreso. Si no recibís una respuesta antes de esa fecha, tu solicitud se considera rechazada y la reserva sigue en curso. Se habilitará la opción «Reclamar por demora administrativa» para que informes los inconvenientes generados y administración evalúe el caso. Presentar el reclamo no cancela la reserva ni genera automáticamente devoluciones o compensaciones. El reclamo puede presentarse desde la fecha de ingreso y hasta siete días corridos después de finalizar la estadía.</li>
               </ul>
             </details>
             @if (estadoCancelacion() === 'formulario') {
@@ -124,6 +160,40 @@
           </div>
         </form>
       }
+    </dialog>
+
+    <dialog #dialogoFaltante class="cancellation-dialog" aria-labelledby="faltante-titulo" (cancel)="cerrarFaltante($event)">
+      <h2 id="faltante-titulo">Reclamar reembolso faltante</h2>
+      <p>Reserva #{{ reservaFaltante()?.id }}. Revisá cuánto corresponde por la cancelación y cuánto ya se devolvió.</p>
+      @if (cargandoFaltante()) { <p role="status">Consultando la devolución…</p> }
+      @if (saldoFaltante(); as saldo) {
+        @if (saldo.devolucion; as devolucion) {
+          <div class="cancellation-refund">
+            <p>Correspondía devolver ({{ devolucion.porcentaje }} %): <strong>{{ devolucion.moneda }} {{ monto(devolucion.esperado, devolucion.moneda) }}</strong></p>
+            <p>Ya devuelto: {{ devolucion.moneda }} {{ monto(devolucion.devuelto, devolucion.moneda) }}</p>
+            <p>En gestión: {{ devolucion.moneda }} {{ monto(devolucion.enGestion, devolucion.moneda) }}</p>
+            <p>Falta recibir: {{ devolucion.moneda }} {{ monto(devolucion.faltante, devolucion.moneda) }}</p>
+            <p><strong>Disponible para reclamar: {{ devolucion.moneda }} {{ monto(devolucion.importeReclamable, devolucion.moneda) }}</strong></p>
+          </div>
+          @if (saldo.reclamoAbierto) {
+            <p role="status">Ya tenés un reclamo abierto para esta reserva. Podés seguirlo en la pestaña Reclamos.</p>
+          } @else if (devolucion.importeReclamable > 0) {
+            <form class="claim-form" (ngSubmit)="enviarFaltante()" [attr.aria-busy]="enviandoFaltante()">
+              <label for="faltante-descripcion">Contanos qué falta recibir</label>
+              <textarea id="faltante-descripcion" name="descripcionFaltante" [(ngModel)]="descripcionFaltante" rows="4" required
+                minlength="20" maxlength="1000" [disabled]="enviandoFaltante()" aria-describedby="faltante-ayuda"></textarea>
+              <small id="faltante-ayuda">Entre 20 y 1000 caracteres. Administración revisará el reclamo antes de devolver la diferencia.</small>
+              <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviandoFaltante() || descripcionFaltante.trim().length < 20">{{ enviandoFaltante() ? 'Enviando…' : 'Enviar reclamo por el faltante' }}</button>
+            </form>
+          } @else if (devolucion.faltante > 0) {
+            <p role="status">La diferencia ya está en gestión. Podés seguir la devolución desde el detalle de la reserva.</p>
+          } @else {
+            <p role="status">No falta dinero según la política de cancelación. La parte retenida no constituye un faltante.</p>
+          }
+        } @else { <p>No hay una cancelación aprobada con devolución para esta reserva.</p> }
+      }
+      @if (errorFaltante()) { <p class="cancellation-error" role="alert">{{ errorFaltante() }}</p> }
+      <button type="button" class="acct-btn acct-btn--ghost" [disabled]="enviandoFaltante()" (click)="cerrarFaltante()">Volver</button>
     </dialog>
 
     @if (mensaje()) { <div class="acct-alert acct-alert--info" role="status">{{ mensaje() }}</div> }
@@ -324,6 +394,9 @@
           <button type="button" class="booking-button" [disabled]="ocupada() !== null" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
         }
         <a class="booking-button booking-button--primary" routerLink="/reserva/resultado" [queryParams]="detalleReserva(reserva)">{{ recibida ? 'Ver detalle y contactar' : 'Ver detalle' }}</a>
+        @if (!recibida && (reserva.cancelada || devolucionPendiente)) {
+          <button type="button" class="booking-button" (click)="abrirFaltante(reserva)">Reclamar reembolso faltante</button>
+        }
         @if (reserva.publicacion || cambiarFechas || puedeReportar || solicitarBaja || cancelarDirecto) {
           <button type="button" class="booking-button booking-button--more" #accionesReserva [attr.popovertarget]="menuId" [attr.aria-label]="'Más acciones para la reserva ' + reserva.id">
             <svg lucideEllipsis [size]="19" aria-hidden="true"></svg>
