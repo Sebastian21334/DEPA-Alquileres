@@ -272,6 +272,14 @@ aplicó la versión de T44, volver a correrla agrega solo la observación.
 El comprobante del pago al anunciante (T56) se guarda dentro de `liquidacion.pagos_anunciante`
 (jsonb) y no requiere migración.
 
+# Imágenes adjuntas a los mensajes de un reclamo (T49)
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:imagenes-mensajes-reclamo`
+desde `back`. La migración `20261123-imagenes-mensajes-reclamo.sql` agrega a
+`reclamo_evidencia` la columna `id_mensaje`, que une cada imagen al mensaje del chat con
+el que se envió. Las imágenes existentes quedan sin mensaje y se muestran con la
+descripción del reclamo. Es reejecutable.
+
 # Pedido de reinicio del código de alojamiento (T34)
 
 Antes de iniciar esta versión del backend, ejecutar `npm run db:cancelaciones-devoluciones`

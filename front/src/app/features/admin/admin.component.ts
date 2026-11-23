@@ -42,6 +42,7 @@ import {
   VerificationRequest,
 } from './admin.service';
 import { Reclamo } from '../../shared/services/reservation.service';
+import { imagenesDisponibles } from '../../shared/utils/reclamo-imagenes';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
 import { CargaComprobanteComponent } from '../../shared/components/carga-comprobante/carga-comprobante.component';
@@ -218,6 +219,9 @@ export class AdminComponent {
   protected readonly errorReclamos = signal('');
   protected readonly gestionReclamo = signal<{ id: number; accion: 'mensaje' | 'resolver' } | null>(null);
   protected textoReclamo = '';
+  /** T49: imágenes del próximo mensaje del reclamo. */
+  protected readonly imagenesReclamo = signal<File[]>([]);
+  protected readonly imagenesDisponibles = imagenesDisponibles;
   protected resolucionReclamo: NonNullable<Reclamo['resolucion']> = 'SIN_DEVOLUCION';
   protected importeReclamo: number | null = null;
   protected observacionReclamo = '';
@@ -671,13 +675,6 @@ export class AdminComponent {
     });
   }
 
-  protected verEvidencia(reclamo: Reclamo, evidencia: { id: number; nombre_archivo: string }): void {
-    this.api.urlEvidenciaReclamo(reclamo.id, evidencia.id).subscribe({
-      next: ({ url }) => window.open(url, '_blank', 'noopener'),
-      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
-    });
-  }
-
   protected abrirAprobacionCancelacion(solicitud: AdminCancellationRequest): void {
     this.solicitudPorAprobar.set(solicitud);
     this.observacionAprobacion = '';
@@ -826,6 +823,7 @@ export class AdminComponent {
   protected abrirGestionReclamo(id: number, accion: 'mensaje' | 'resolver'): void {
     if (this.busy()) return;
     this.textoReclamo = '';
+    this.imagenesReclamo.set([]);
     const pedidoDeCodigo = this.claims().find(reclamo => reclamo.id === id)?.categoria === 'CODIGO_BLOQUEADO';
     this.resolucionReclamo = pedidoDeCodigo ? 'REINICIAR_CODIGO' : 'SIN_DEVOLUCION';
     this.importeReclamo = null;
@@ -833,12 +831,14 @@ export class AdminComponent {
     this.gestionReclamo.set({ id, accion });
   }
 
+  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   protected responderReclamo(reclamo: Reclamo): void {
     const texto = this.textoReclamo.trim();
-    if (!texto || texto.length > 1000 || this.busy()) return;
+    const imagenes = this.imagenesReclamo();
+    if ((!texto && !imagenes.length) || texto.length > 1000 || this.busy()) return;
     this.run(
       `claim-${reclamo.id}`,
-      () => this.api.responderReclamo(reclamo.id, texto),
+      () => this.api.responderReclamo(reclamo.id, texto, imagenes),
       (value) => {
         const mensaje = value as NonNullable<Reclamo['mensajes']>[number];
         this.claims.update((items) => items.map((item) => item.id === reclamo.id ? {
@@ -846,6 +846,7 @@ export class AdminComponent {
           estado: item.estado === 'ABIERTO' ? 'EN_REVISION' : item.estado,
           mensajes: [...(item.mensajes ?? []).filter((previo) => previo.id !== mensaje.id), mensaje],
         } : item));
+        this.imagenesReclamo.set([]);
         this.gestionReclamo.set(null);
       },
       'Mensaje enviado al hilo del reclamo.',

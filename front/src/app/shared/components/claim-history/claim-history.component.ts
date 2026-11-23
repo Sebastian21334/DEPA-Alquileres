@@ -5,11 +5,13 @@ import { Component, computed, effect, inject, input, output, PLATFORM_ID, signal
 import { RouterLink } from '@angular/router';
 import { EMPTY, catchError, exhaustMap, timer } from 'rxjs';
 import { ReservationService } from '../../services/reservation.service';
-import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
+import type { AutorReclamo, ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
 import { puedeValidarCodigo } from '../../utils/reservation-state';
 
 /** Mismo ritmo que los chats de mensajes y de reembolsos. */
 const INTERVALO_CHAT_MS = 5000;
+/** T49: los enlaces de las imágenes vencen a los 15 minutos; se renuevan antes. */
+const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
 
 @Component({
   selector: 'app-claim-history',
@@ -96,11 +98,17 @@ const INTERVALO_CHAT_MS = 5000;
       <p class="body">{{ item.descripcion }}</p>
     }
     @if (item.evidencias?.length) {
-      <div class="attachments" aria-label="Imágenes adjuntas">
-        @for (archivo of item.evidencias; track archivo.id) {
-          <button type="button" (click)="verArchivo.emit(archivo)">{{ archivo.nombre_archivo }}</button>
+      <!-- T49: imágenes de la descripción (las que se subieron al crear el reclamo), cada una con su autor. -->
+      <ul class="imagenes-reclamo" aria-label="Imágenes del reclamo">
+        @for (imagen of item.evidencias; track imagen.id) {
+          <li>
+            <a [href]="urlImagen(imagen)" target="_blank" rel="noopener noreferrer" [attr.aria-label]="'Abrir ' + imagen.nombre_archivo" [title]="imagen.nombre_archivo">
+              <img [src]="urlImagen(imagen)" [alt]="imagen.nombre_archivo" loading="lazy" />
+            </a>
+            <span>Subida por {{ autorImagen(imagen) }}</span>
+          </li>
         }
-      </div>
+      </ul>
     }
     <app-conversation-panel titulo="Conversación del reclamo" [mensajes]="mensajes()">
       <ng-content />
@@ -116,8 +124,11 @@ const INTERVALO_CHAT_MS = 5000;
     .status { background: #fff1d8; color: #74470a; padding: .25rem .65rem; border-radius: 1rem; font-size: .8rem; font-weight: 700; }
     .status--resolved, .resolution { background: #edf6f2; color: #205c46; }
     .body { white-space: pre-wrap; overflow-wrap: anywhere; }
-    .attachments { display: flex; flex-wrap: wrap; gap: .45rem; }
-    .attachments button { max-width: 100%; overflow-wrap: anywhere; padding: .4rem .65rem; border: 1px solid #d9e3ea; border-radius: .45rem; background: #fff; color: #204b66; cursor: pointer; }
+    .imagenes-reclamo { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; padding: 0; list-style: none; }
+    .imagenes-reclamo li { display: grid; gap: .25rem; width: 7.5rem; color: #526475; font-size: .78rem; overflow-wrap: anywhere; }
+    .imagenes-reclamo a { display: block; border-radius: .5rem; }
+    .imagenes-reclamo a:focus-visible { outline: 2px solid #1640f5; outline-offset: 2px; }
+    .imagenes-reclamo img { display: block; width: 100%; aspect-ratio: 1; border-radius: .5rem; object-fit: cover; background: #e3eaff; }
     .resolution { display: grid; gap: .3rem; justify-items: start; padding: .75rem .9rem; border-radius: .6rem; border: 1px solid #b9dccb; }
     .resolution__title { font-weight: 800; }
     .resolution__action {
@@ -189,8 +200,7 @@ export class ClaimHistoryComponent {
     return [usuario?.nombre, usuario?.apellido].map((nombre) => nombre?.trim().charAt(0)).join('').toUpperCase() || '?';
   }
 
-  protected rolMensaje(mensaje: ReclamoMensaje): string {
-    const autor = mensaje.autor;
+  private rolDe(autor?: AutorReclamo | null): string {
     if (!autor) return '';
     if (autor.rol?.nombre === 'Administrador') return 'Admin';
     if (autor.id === this.reclamo().inquilino?.id) return 'Inquilino';
@@ -198,10 +208,27 @@ export class ClaimHistoryComponent {
     return '';
   }
 
+  /** T49: cada imagen dice quién la subió. */
+  protected autorImagen(imagen: ReclamoEvidencia): string {
+    const rol = this.rolDe(imagen.autor);
+    return [this.nombreCompleto(imagen.autor) || 'un usuario', rol].filter(Boolean).join(' · ');
+  }
+
+  /**
+   * T49: el chat se consulta cada 5 segundos y cada respuesta trae un enlace firmado nuevo. Se conserva el primero
+   * para no volver a descargar las miniaturas y se cambia por el más reciente antes de que venza (15 minutos).
+   */
+  protected urlImagen(imagen: ReclamoEvidencia): string {
+    const guardada = this.urlsImagenes.get(imagen.id);
+    if (guardada && Date.now() - guardada.desde < RENOVAR_ENLACE_MS) return guardada.url;
+    this.urlsImagenes.set(imagen.id, { url: imagen.url, desde: Date.now() });
+    return imagen.url;
+  }
+
   protected ocultarPortada(evento: Event): void {
     (evento.target as HTMLImageElement).hidden = true;
   }
-  readonly verArchivo = output<ReclamoEvidencia>();
+  private readonly urlsImagenes = new Map<number, { url: string; desde: number }>();
   private readonly auth = inject(AuthService);
   private readonly reservas = inject(ReservationService);
   private readonly esNavegador = isPlatformBrowser(inject(PLATFORM_ID));
@@ -235,8 +262,9 @@ export class ClaimHistoryComponent {
     .map(mensaje => ({
       id: mensaje.id, autor: this.nombreCompleto(mensaje.autor) || 'Usuario',
       texto: mensaje.texto, fecha: mensaje.creado_en,
-      rol: this.rolMensaje(mensaje), interno: mensaje.visible_para === 'ADMIN',
+      rol: this.rolDe(mensaje.autor), interno: mensaje.visible_para === 'ADMIN',
       propio: mensaje.autor?.id === Number(this.auth.currentUser()?.sub),
+      imagenes: (mensaje.evidencias ?? []).map((imagen) => ({ url: this.urlImagen(imagen), nombre: imagen.nombre_archivo })),
     })));
   protected readonly categorias = {
     LIMPIEZA: 'Limpieza', MANTENIMIENTO: 'Mantenimiento', INGRESO: 'Problemas de ingreso',

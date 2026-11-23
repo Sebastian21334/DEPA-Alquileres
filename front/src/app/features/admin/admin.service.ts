@@ -7,6 +7,7 @@ import {
   Reserva,
 } from '../../shared/services/reservation.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import { cuerpoMensajeReclamo } from '../../shared/utils/reclamo-imagenes';
 
 export interface AdminUser {
   id: number;
@@ -261,16 +262,8 @@ export class AdminService {
   listarReclamos() {
     return this.http.get<Reclamo[]>(`${this.api}/reclamos/administracion`);
   }
-  urlEvidenciaReclamo(idReclamo: number, idEvidencia: number) {
-    return this.http.get<{ url: string }>(
-      `${this.api}/reclamos/${idReclamo}/evidencias/${idEvidencia}/url`,
-    );
-  }
-  responderReclamo(id: number, texto: string) {
-    return this.http.post<ReclamoMensaje>(`${this.api}/reclamos/${id}/mensajes`, {
-      texto,
-      visible_para: 'TODOS',
-    });
+  responderReclamo(id: number, texto: string, imagenes: readonly File[] = []) {
+    return this.http.post<ReclamoMensaje>(`${this.api}/reclamos/${id}/mensajes`, cuerpoMensajeReclamo(texto, imagenes));
   }
   resolverReclamo(id: number, resolucion: NonNullable<Reclamo['resolucion']>, importe?: number, observacion?: string) {
     return this.http.patch<Reclamo>(`${this.api}/reclamos/${id}/resolver`, {

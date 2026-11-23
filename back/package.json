@@ -51,7 +51,8 @@
     "start:prod": "node dist/main",
     "lint": "oxlint src/",
     "db:comision-depa": "node scripts/comision-depa.cjs",
-    "db:comprobante-reembolso": "node scripts/comprobante-reembolso.cjs --aplicar"
+    "db:comprobante-reembolso": "node scripts/comprobante-reembolso.cjs --aplicar",
+    "db:imagenes-mensajes-reclamo": "node scripts/imagenes-mensajes-reclamo.cjs --aplicar"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",

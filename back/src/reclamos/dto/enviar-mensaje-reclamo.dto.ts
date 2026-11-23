@@ -1,11 +1,12 @@
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { VisibilidadMensajeReclamo } from '../entity/reclamo-mensaje.entity';
 
+/** T49: llega como JSON o como multipart con imágenes; sin imágenes, el texto es obligatorio (lo valida el servicio). */
 export class EnviarMensajeReclamoDto {
+  @IsOptional()
   @IsString()
-  @MinLength(1)
   @MaxLength(1000)
-  texto: string;
+  texto?: string;
 
   @IsOptional()
   @IsEnum(VisibilidadMensajeReclamo)
