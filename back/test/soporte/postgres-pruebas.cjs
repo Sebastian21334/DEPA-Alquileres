@@ -69,7 +69,10 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     if (estadosPorAmbito && aplicacionReembolsos)
       await db.exec(leerMigracion('20261113-aplicacion-reembolsos.sql'));
     await db.exec('SET search_path TO public');
-    if (estadosPorAmbito) await db.exec(leerMigracion('20261113-catalogos-de-expedientes.sql'));
+    if (estadosPorAmbito) {
+      await db.exec(leerMigracion('20261113-catalogos-de-expedientes.sql'));
+      await db.exec(leerMigracion('20261122-reinicio-codigo-alojamiento.sql'));
+    }
     if (estadosPorAmbito) {
       await db.exec('BEGIN;\n' + leerMigracion('20261113-retirar-liquidacion-de-reserva.sql') + '\nCOMMIT;');
       await db.exec(leerMigracion('20261116-historial-pagos-anunciantes.sql'));
@@ -79,6 +82,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await db.exec(leerMigracion('20261116-cbu-anunciantes.sql'));
     await db.exec(leerMigracion('20261122-comision-depa.sql'));
+    await db.exec(leerMigracion('20261123-comprobante-reembolso.sql'));
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };
   } catch (error) {

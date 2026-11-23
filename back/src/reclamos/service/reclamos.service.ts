@@ -25,9 +25,11 @@ import {
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import {
+  CategoriaReclamo,
   Reclamo,
   ResolucionReclamo,
 } from '../entity/reclamo.entity';
+import { MAX_INTENTOS_CODIGO } from '../../reservas-consulta/service/reserva-estado.service';
 import { ReclamoEvidencia } from '../entity/reclamo-evidencia.entity';
 import {
   ReclamoMensaje,
@@ -56,9 +58,12 @@ export class ReclamosService {
   }
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
+    // T34: el anunciante con el código bloqueado pide el reinicio con un reclamo propio.
+    const pedidoDeCodigo = dto.categoria === CategoriaReclamo.CODIGO_BLOQUEADO;
     const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
       const reclamos = this.reclamos.enTransaccion(transaccion);
-      if (!this.reservas.esDelInquilino(reserva, idUsuario))
+      if (pedidoDeCodigo) this.validarPedidoDeCodigo(reserva, idUsuario);
+      else if (!this.reservas.esDelInquilino(reserva, idUsuario))
         throw new ForbiddenException(
           'Solo el Inquilino de la reserva puede iniciar un reclamo',
         );
@@ -96,9 +101,21 @@ export class ReclamosService {
         administrador_resolucion: null,
         resuelto_en: null,
       });
-    });
-    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
+    }, pedidoDeCodigo ? 'Pedido de reinicio del código en revisión' : undefined);
+    if (pedidoDeCodigo)
+      await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Pedido de reinicio del código de alojamiento', 'El anunciante pidió a la administración reiniciar el código de alojamiento de la reserva. Podés seguirlo en DEPA.');
+    else
+      await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
     return this.prepararRespuesta(reclamo);
+  }
+
+  private validarPedidoDeCodigo(reserva: Reserva, idUsuario: number): void {
+    if (!this.reservas.esDelAnunciante(reserva, idUsuario))
+      throw new ForbiddenException('Solo el anunciante de la reserva puede pedir el reinicio del código');
+    if (this.reservas.codigoValidado(reserva))
+      throw new ConflictException('El ingreso ya se validó: no hace falta reiniciar el código');
+    if (!this.reservas.codigoBloqueado(reserva))
+      throw new ConflictException('El código no está bloqueado: todavía podés cargarlo desde la reserva');
   }
 
   async listarMios(idUsuario: number): Promise<Reclamo[]> {
@@ -215,6 +232,7 @@ export class ReclamosService {
     ];
     if (estadosCerrados.includes(reclamo.estado))
       throw new ConflictException('El reclamo ya fue resuelto');
+    this.validarResolucionSegunCategoria(reclamo, dto);
     const reserva = reclamo.reserva;
 
     const referencia = `rec:${id}`;
@@ -225,10 +243,15 @@ export class ReclamosService {
       if (!expediente || estadosCerrados.includes(expediente.estado))
         throw new ConflictException('El reclamo ya fue resuelto');
       const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
-      if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
+      if (this.esAFavorDelAnunciante(dto.resolucion)) {
         if (previo) throw new ConflictException('El reclamo tiene una devolución registrada');
-        expediente.reserva = await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion, transaccion);
-        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, ResolucionReclamo.SIN_DEVOLUCION, null, idAdmin));
+        // Sin devolución y reinicio del código vuelven a RETENIDO con los intentos en 0 si falta el código.
+        expediente.reserva = dto.resolucion === ResolucionReclamo.CONFIRMAR_INGRESO
+          ? await this.reservas.confirmarIngresoSinCodigo(actual, dto.observacion, transaccion)
+          : await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion ?? (
+            dto.resolucion === ResolucionReclamo.REINICIAR_CODIGO
+              ? `Administración habilitó ${MAX_INTENTOS_CODIGO} intentos más del código` : undefined), transaccion);
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, null, idAdmin));
         return;
       }
       const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
@@ -265,7 +288,8 @@ export class ReclamosService {
       resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, Number(resultado.reembolso.importe), idAdmin));
     });
     if (!resultado.reembolso) {
-      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto', 'La administración resolvió el reclamo sin devolución. Consultá el expediente en DEPA.');
+      const [asunto, mensaje] = this.avisoSinDevolucion(dto.resolucion);
+      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], asunto, mensaje);
       return this.prepararRespuesta(resultado.reclamo);
     }
     const aplicado = await this.ejecutarDevolucion(resultado.reembolso, idAdmin);
@@ -296,9 +320,41 @@ export class ReclamosService {
     }
   }
 
+  /**
+   * T34: el pedido de reinicio del código se resuelve habilitando intentos, confirmando
+   * el ingreso o devolviendo el total con motivo. Los demás reclamos conservan sus opciones.
+   */
+  private validarResolucionSegunCategoria(reclamo: Reclamo, dto: ResolverReclamoDto): void {
+    const pedidoDeCodigo = reclamo.categoria === CategoriaReclamo.CODIGO_BLOQUEADO;
+    const permitidas: ResolucionReclamo[] = pedidoDeCodigo
+      ? [ResolucionReclamo.REINICIAR_CODIGO, ResolucionReclamo.CONFIRMAR_INGRESO, ResolucionReclamo.DEVOLUCION_TOTAL]
+      : [ResolucionReclamo.SIN_DEVOLUCION, ResolucionReclamo.DEVOLUCION_TOTAL, ResolucionReclamo.DEVOLUCION_PARCIAL];
+    if (!permitidas.includes(dto.resolucion))
+      throw new BadRequestException(pedidoDeCodigo
+        ? 'Un pedido de reinicio del código se resuelve habilitando más intentos, confirmando el ingreso o devolviendo el total'
+        : 'Esa resolución solo corresponde a un pedido de reinicio del código');
+    if (pedidoDeCodigo && dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL && !dto.observacion?.trim())
+      throw new BadRequestException('Indicá el motivo de la devolución al inquilino');
+  }
+
+  private esAFavorDelAnunciante(resolucion: ResolucionReclamo): boolean {
+    const aFavorDelAnunciante: ResolucionReclamo[] = [
+      ResolucionReclamo.SIN_DEVOLUCION, ResolucionReclamo.REINICIAR_CODIGO, ResolucionReclamo.CONFIRMAR_INGRESO,
+    ];
+    return aFavorDelAnunciante.includes(resolucion);
+  }
+
+  private avisoSinDevolucion(resolucion: ResolucionReclamo): [string, string] {
+    if (resolucion === ResolucionReclamo.REINICIAR_CODIGO)
+      return ['Código de alojamiento reiniciado', `La administración habilitó ${MAX_INTENTOS_CODIGO} intentos más para validar el código de alojamiento. Consultá el detalle en DEPA.`];
+    if (resolucion === ResolucionReclamo.CONFIRMAR_INGRESO)
+      return ['Ingreso confirmado por la administración', 'La administración confirmó el ingreso sin el código de alojamiento. El pago al anunciante sigue los plazos habituales. Consultá el detalle en DEPA.'];
+    return ['Reclamo resuelto', 'La administración resolvió el reclamo sin devolución. Consultá el expediente en DEPA.'];
+  }
+
   /** Registra la decisión del administrador sobre el reclamo; las asignaciones viven en el servicio. */
   private registrarDecision(reclamo: Reclamo, resolucion: ResolucionReclamo, importe: number | null, idAdmin: number | null): Reclamo {
-    reclamo.estado = resolucion === ResolucionReclamo.SIN_DEVOLUCION
+    reclamo.estado = this.esAFavorDelAnunciante(resolucion)
       ? this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE')
       : this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
     reclamo.resolucion = resolucion;

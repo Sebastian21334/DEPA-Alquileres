@@ -43,6 +43,18 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
+  /** T44: la URL privada del comprobante y el inquilino que puede verlo. */
+  async buscarComprobante(id: number): Promise<{ url: string | null; idInquilino: number | null } | null> {
+    const fila = await this.repository.createQueryBuilder('reembolso')
+      .leftJoin('reembolso.reserva', 'reserva')
+      .leftJoin('reserva.usuario', 'inquilino')
+      .select('reembolso.comprobante_url', 'url')
+      .addSelect('inquilino.id', 'idInquilino')
+      .where('reembolso.id = :id', { id })
+      .getRawOne<{ url: string | null; idInquilino: number | null }>();
+    return fila ? { url: fila.url, idInquilino: fila.idInquilino == null ? null : Number(fila.idInquilino) } : null;
+  }
+
   buscarPorIdempotencyKey(clave: string): Promise<Reembolso | null> {
     return this.repository.findOne({ where: { idempotency_key: clave } });
   }
@@ -178,9 +190,9 @@ export class ReembolsosRepository implements IReembolsosRepository {
     );
   }
 
-  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado'>[]> {
+  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado' | 'comprobante_nombre' | 'referencia_externa' | 'observacion_transferencia'>[]> {
     return this.repository.find({
-      select: { id: true, importe: true, moneda: true, estado: true },
+      select: { id: true, importe: true, moneda: true, estado: true, comprobante_nombre: true, referencia_externa: true, observacion_transferencia: true },
       where: { transferencia_manual: true, reserva: { id: idReserva, usuario: { id: idInquilino } } },
       order: { id: 'DESC' },
     });

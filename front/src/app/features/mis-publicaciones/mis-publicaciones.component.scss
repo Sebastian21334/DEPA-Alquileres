@@ -40,16 +40,6 @@
   border-top: 1px solid var(--color-border);
 }
 .item__liquidaciones h3 { margin: 0 0 0.75rem; font-size: 1rem; }
-.liquidaciones-lista { display: grid; gap: 0.6rem; padding: 0; margin: 0; list-style: none; }
-.liquidaciones-lista li {
-  padding: 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  overflow-wrap: anywhere;
-}
-.liquidaciones-lista header { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.liquidaciones-lista p { margin: 0.35rem 0 0; font-size: 0.9rem; }
-.liquidacion-observacion { white-space: pre-wrap; }
 
 .gallery {
   display: grid;

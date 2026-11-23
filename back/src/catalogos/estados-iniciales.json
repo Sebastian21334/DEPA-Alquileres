@@ -145,6 +145,9 @@
       },
       "OTRO": {
         "nombre": "OTRO"
+      },
+      "CODIGO_BLOQUEADO": {
+        "nombre": "CODIGO BLOQUEADO"
       }
     }
   },
@@ -159,6 +162,12 @@
       },
       "DEVOLUCION_PARCIAL": {
         "nombre": "DEVOLUCION PARCIAL"
+      },
+      "REINICIAR_CODIGO": {
+        "nombre": "REINICIAR CODIGO"
+      },
+      "CONFIRMAR_INGRESO": {
+        "nombre": "CONFIRMAR INGRESO"
       }
     }
   },

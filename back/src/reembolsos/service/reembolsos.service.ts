@@ -6,7 +6,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AlmacenamientoService, type ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
 import { createHash, randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import type { Pago } from '../../pagos/entity/pago.entity';
@@ -53,7 +55,7 @@ export class ReembolsosService {
 
   private readonly logger = new Logger(ReembolsosService.name);
 
-  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, private readonly pasarela: MercadoPagoService, private readonly pagos: PagosService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService) {}
+  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, private readonly pasarela: MercadoPagoService, private readonly pagos: PagosService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService, @Optional() private readonly almacenamiento?: AlmacenamientoService) {}
 
   /**
    * Con `transaccion`, el registro participa de la operación del servicio que
@@ -156,10 +158,46 @@ export class ReembolsosService {
     });
   }
 
-  async registrarTransferencia(id: number, referencia: string, idActor: number): Promise<Reembolso> {
-    if (!referencia.trim() || referencia.trim().length > 150)
-      throw new BadRequestException('Ingresá una referencia de transferencia de hasta 150 caracteres');
-    return this.confirmar(id, { referencia: referencia.trim(), idActor, idExterno: null, transferencia: true });
+  /**
+   * T44: el admin registra la transferencia con el comprobante obligatorio; la referencia y la observación son opcionales.
+   * El archivo se sube antes de confirmar y se borra si el registro no lo termina guardando.
+   */
+  async registrarTransferencia(id: number, datos: { referencia?: string; observacion?: string }, archivo: Express.Multer.File | undefined, idActor: number): Promise<Reembolso> {
+    const texto = datos.referencia?.trim() ?? '';
+    const observacion = datos.observacion?.trim() || null;
+    if (texto.length > 150)
+      throw new BadRequestException('La referencia de la transferencia admite hasta 150 caracteres');
+    if ((observacion?.length ?? 0) > 500)
+      throw new BadRequestException('La observación de la transferencia admite hasta 500 caracteres');
+    const actual = await this.reembolsos.buscarRegistro(id);
+    if (!actual) throw new NotFoundException('Reembolso no encontrado');
+    if (!actual.transferencia_manual)
+      throw new ConflictException('El reembolso no está habilitado para transferencia');
+    if (actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
+      throw new ConflictException('Otro administrador ya registró esta devolución');
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    const comprobante = await this.almacenamiento.subirComprobante(`reembolsos/${id}`, archivo);
+    let guardado = false;
+    try {
+      return await this.confirmar(id, {
+        referencia: texto, idActor, idExterno: null, transferencia: true,
+        comprobante, observacion, alGuardarComprobante: () => { guardado = true; },
+      });
+    } finally {
+      if (!guardado)
+        await this.almacenamiento.eliminarComprobante(comprobante.url).catch(() =>
+          this.logger.warn(`No se pudo borrar el comprobante sin usar del reembolso ${id}`));
+    }
+  }
+
+  /** T44: enlace firmado del comprobante, solo para el admin y el inquilino de la reserva. */
+  async urlComprobante(id: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
+    const comprobante = await this.reembolsos.buscarComprobante(id);
+    const autorizado = actor.rol === 'Administrador' || comprobante?.idInquilino === actor.id;
+    if (!comprobante || !autorizado || !comprobante.url)
+      throw new NotFoundException('Comprobante no encontrado');
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    return { url: await this.almacenamiento.firmarComprobante(comprobante.url) };
   }
 
   async conversar(id: number, actor: { id: number; rol?: string }, despuesDe: number, texto?: string) {
@@ -343,7 +381,7 @@ export class ReembolsosService {
     }
   }
 
-  private async confirmar(id: number, datos: { referencia: string; idActor: number | null; idExterno: string | null; transferencia?: boolean }): Promise<Reembolso> {
+  private async confirmar(id: number, datos: { referencia: string; idActor: number | null; idExterno: string | null; transferencia?: boolean; comprobante?: ComprobanteSubido; observacion?: string | null; alGuardarComprobante?: () => void }): Promise<Reembolso> {
     const guardado = await this.reembolsos.conTransaccion(async (repo, transaccion) => {
       const reembolso = await repo.buscarRegistro(id, { bloquear: true, idsRelaciones: true });
       if (!reembolso) throw new NotFoundException('Reembolso no encontrado');
@@ -351,7 +389,8 @@ export class ReembolsosService {
       if (datos.transferencia && !reembolso.transferencia_manual)
         throw new ConflictException('El reembolso no está habilitado para transferencia');
       if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) {
-        if (datos.transferencia && reembolso.referencia_externa !== datos.referencia)
+        // Con comprobante, cada registro es único: si ya se aprobó, este archivo no se usa.
+        if (datos.transferencia && (datos.comprobante || (reembolso.referencia_externa ?? '') !== datos.referencia))
           throw new ConflictException('Otro administrador ya registró esta devolución');
         return reembolso;
       }
@@ -383,9 +422,12 @@ export class ReembolsosService {
         resuelto_por: reembolso.resuelto_por,
         error_detalle: null,
         conciliar_en: null,
+        ...(datos.comprobante ? { comprobante_url: datos.comprobante.url, comprobante_nombre: datos.comprobante.nombre, observacion_transferencia: datos.observacion ?? null } : {}),
       });
       return reembolso;
     });
+    // Recién con la transacción confirmada el comprobante queda en uso; si algo falló, quien lo subió lo borra.
+    if (datos.comprobante) datos.alGuardarComprobante?.();
     return this.buscar(guardado.id);
   }
 
