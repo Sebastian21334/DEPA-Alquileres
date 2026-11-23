@@ -125,6 +125,12 @@ export interface AdminReembolso {
   } | null;
 }
 
+export interface AdminResumenReembolsos {
+  pendientes: number;
+  fallidos: number;
+  total: number;
+}
+
 export interface AdminCancellationRequest {
   id: number;
   motivo: string;
@@ -192,6 +198,9 @@ export class AdminService {
   }
   listarReembolsos() {
     return this.http.get<AdminReembolso[]>(`${this.api}/reembolsos/administracion`);
+  }
+  resumenReembolsos() {
+    return this.http.get<AdminResumenReembolsos>(`${this.api}/reembolsos/administracion/resumen`);
   }
   listarSolicitudesCancelacion() {
     return this.http.get<AdminCancellationRequest[]>(

@@ -26,6 +26,7 @@ import {
   AdminCancellationRequest,
   AdminCatalogItem,
   AdminReembolso,
+  AdminResumenReembolsos,
   AdminPagoLiquidacion,
   AdminSettlement,
   AdminCity,
@@ -196,9 +197,22 @@ export class AdminComponent {
   protected readonly openClaims = computed(() =>
     this.claims().filter(({ estado }) => estado === 'ABIERTO' || estado === 'EN_REVISION'),
   );
+  protected readonly resumenReembolsos = signal<AdminResumenReembolsos | null>(null);
   protected readonly pendingRefunds = computed(() => this.refunds().filter(({ estado }) =>
-    estado === 'PENDIENTE' || estado === 'EN_PROCESO' || estado === 'FALLIDO',
+    estado === 'PENDIENTE' || estado === 'EN_PROCESO',
   ));
+  protected readonly failedRefunds = computed(() => this.refunds().filter(({ estado }) =>
+    estado === 'FALLIDO',
+  ));
+  protected readonly conteoPendientes = computed(() =>
+    this.resumenReembolsos()?.pendientes ?? this.pendingRefunds().length,
+  );
+  protected readonly conteoFallidos = computed(() =>
+    this.resumenReembolsos()?.fallidos ?? this.failedRefunds().length,
+  );
+  protected readonly totalReembolsos = computed(() =>
+    this.resumenReembolsos()?.total ?? this.refunds().length,
+  );
   protected readonly pendingCases = computed(() => [
     ...this.cancellations().slice(0, 2).map((item) => ({
       section: 'cancelaciones' as const, id: item.id,
@@ -265,7 +279,7 @@ export class AdminComponent {
     this.publicacionesAdmin()?.recargar();
     this.loadUsers(this.usersPage());
     this.cargarBloqueados();
-    let pending = 5;
+    let pending = 6;
     const done = () => {
       if (--pending === 0) this.otherLoading.set(false);
     };
@@ -319,6 +333,18 @@ export class AdminComponent {
         done();
       },
       error: (e: Error) => {
+        this.summaryError.set(true);
+        this.toast.mostrar(e.message, 'error');
+        done();
+      },
+    });
+    this.api.resumenReembolsos().subscribe({
+      next: (v) => {
+        this.resumenReembolsos.set(v);
+        done();
+      },
+      error: (e: Error) => {
+        this.resumenReembolsos.set(null);
         this.summaryError.set(true);
         this.toast.mostrar(e.message, 'error');
         done();
