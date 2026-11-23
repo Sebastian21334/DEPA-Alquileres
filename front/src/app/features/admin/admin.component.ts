@@ -78,10 +78,10 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   'historial-liquidaciones': 'Consultá los pagos ya registrados a anunciantes, con su importe, fecha y referencia.',
   verificaciones: 'Revisá las solicitudes de verificación de identidad.',
   publicaciones: 'Consultá y moderá los alojamientos publicados.',
-  usuarios: 'Buscá cuentas y administrá sus roles y estado.',
+  usuarios: 'Buscá cuentas y consultá su rol y estado.',
   bloqueos: 'Consultá las cuentas bloqueadas, sus motivos y las apelaciones.',
-  catalogos: 'Administrá las opciones que usa el sistema en los formularios.',
-  ubicaciones: 'Administrá las provincias y ciudades disponibles para las publicaciones.',
+  catalogos: 'Consultá las opciones que usa el sistema. Se cargan por seed o migración.',
+  ubicaciones: 'Consultá las provincias y ciudades disponibles. Se cargan por seed o migración.',
   cotizaciones: 'Consultá y administrá las cotizaciones que usa el sistema para convertir importes.',
 };
 
@@ -243,7 +243,6 @@ export class AdminComponent {
   protected readonly busy = signal<string | null>(null);
   protected readonly rejectId = signal<number | null>(null);
   protected readonly catalogs = signal<CatalogSection[]>([
-    { key: 'roles', label: 'Roles', items: [] },
     { key: 'tipos-anunciante', label: 'Tipos de anunciante', items: [] },
     { key: 'tipos-propiedad', label: 'Tipos de propiedad', items: [] },
     { key: 'modalidades', label: 'Modalidades', items: [] },
@@ -252,18 +251,10 @@ export class AdminComponent {
   protected readonly provinces = signal<AdminProvince[]>([]);
   protected readonly cities = signal<AdminCity[]>([]);
   protected readonly selectedProvince = signal<number | null>(null);
-  protected editing = '';
-  protected draft = '';
-  protected newValues: Record<string, string> = {};
   protected rejectReason = '';
   protected rechazarIdentidad = false;
   protected rechazarCbu = false;
   protected titularCbuConfirmado: number | null = null;
-  // Opciones del select de rol: salen del catálogo de roles de la BD, así que
-  // crear o renombrar un rol en la sección Catálogos se refleja al instante.
-  protected readonly roles = computed(
-    () => this.catalogs().find((s) => s.key === 'roles')?.items ?? [],
-  );
 
   constructor() {
     if (this.isBrowser) {
@@ -812,19 +803,6 @@ export class AdminComponent {
         },
       });
   }
-  protected changeRole(user: AdminUser, select: HTMLSelectElement): void {
-    const role = select.value;
-    if (role === user.rol?.nombre) return;
-    this.run(
-      `user-${user.id}`,
-      () => this.api.cambiarRol(user.id, role),
-      (updated) =>
-        this.users.update((v) => v.map((u) => (u.id === user.id ? (updated as AdminUser) : u))),
-      'Rol actualizado.',
-      // Si el backend lo rechaza, el select vuelve a mostrar el rol que realmente tiene.
-      () => (select.value = user.rol?.nombre ?? ''),
-    );
-  }
   protected approve(request: VerificationRequest): void {
     if (!this.puedeResolverVerificacion(request, false, false)) return;
     const id = request.anunciante.idUsuario;
@@ -902,59 +880,6 @@ export class AdminComponent {
       error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
   }
-  protected addCatalog(s: CatalogSection): void {
-    const n = (this.newValues[s.key] || '').trim();
-    if (!n) return;
-    this.run(
-      `catalog-${s.key}`,
-      () => this.api.crearCatalogo(s.key, n),
-      (v) => {
-        this.setCatalog(s.key, [...s.items, v as AdminCatalogItem]);
-        this.newValues[s.key] = '';
-      },
-      `${s.label}: elemento creado.`,
-    );
-  }
-  protected edit(key: string, item: AdminCatalogItem): void {
-    this.editing = `${key}-${item.id}`;
-    this.draft = item.nombre;
-  }
-  protected cancelEdit(): void {
-    this.editing = '';
-    this.draft = '';
-  }
-  protected saveCatalog(s: CatalogSection, item: AdminCatalogItem): void {
-    const n = this.draft.trim();
-    if (!n) return;
-    this.run(
-      `catalog-${s.key}`,
-      () => this.api.actualizarCatalogo(s.key, item.id, n),
-      (v) => {
-        this.setCatalog(
-          s.key,
-          s.items.map((x) => (x.id === item.id ? (v as AdminCatalogItem) : x)),
-        );
-        this.cancelEdit();
-      },
-      `${s.label}: elemento actualizado.`,
-    );
-  }
-  protected deleteCatalog(s: CatalogSection, item: AdminCatalogItem): void {
-    if (!confirm(`¿Eliminar “${item.nombre}”?`)) return;
-    this.run(
-      `catalog-${s.key}`,
-      () => this.api.eliminarCatalogo(s.key, item.id),
-      () =>
-        this.setCatalog(
-          s.key,
-          s.items.filter((x) => x.id !== item.id),
-        ),
-      `${s.label}: elemento eliminado.`,
-    );
-  }
-  private setCatalog(key: CatalogKey, items: AdminCatalogItem[]): void {
-    this.catalogs.update((v) => v.map((s) => (s.key === key ? { ...s, items } : s)));
-  }
   protected loadProvinces(): void {
     this.api.listarProvincias().subscribe({
       next: (v) => {
@@ -969,83 +894,5 @@ export class AdminComponent {
       next: (v) => this.cities.set(v),
       error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
-  }
-  protected addProvince(): void {
-    const n = (this.newValues['province'] || '').trim();
-    if (!n) return;
-    this.run(
-      'province',
-      () => this.api.crearProvincia(n),
-      (v) => {
-        this.provinces.update((x) => [...x, v as AdminProvince]);
-        this.newValues['province'] = '';
-      },
-      'Provincia creada.',
-    );
-  }
-  protected saveProvince(item: AdminProvince): void {
-    const n = this.draft.trim();
-    if (!n) return;
-    this.run(
-      'province',
-      () => this.api.actualizarProvincia(item.id, n),
-      (v) => {
-        this.provinces.update((x) => x.map((p) => (p.id === item.id ? (v as AdminProvince) : p)));
-        this.cancelEdit();
-      },
-      'Provincia actualizada.',
-    );
-  }
-  protected deleteProvince(item: AdminProvince): void {
-    if (!confirm(`¿Eliminar “${item.nombre}”?`)) return;
-    this.run(
-      'province',
-      () => this.api.eliminarProvincia(item.id),
-      () => {
-        this.provinces.update((x) => x.filter((p) => p.id !== item.id));
-        if (this.selectedProvince() === item.id) {
-          this.selectedProvince.set(null);
-          this.cities.set([]);
-        }
-      },
-      'Provincia eliminada.',
-    );
-  }
-  protected addCity(): void {
-    const id = this.selectedProvince(),
-      n = (this.newValues['city'] || '').trim();
-    if (!id || !n) return;
-    this.run(
-      'city',
-      () => this.api.crearCiudad(n, id),
-      (v) => {
-        this.cities.update((x) => [...x, v as AdminCity]);
-        this.newValues['city'] = '';
-      },
-      'Ciudad creada.',
-    );
-  }
-  protected saveCity(item: AdminCity): void {
-    const id = this.selectedProvince(),
-      n = this.draft.trim();
-    if (!id || !n) return;
-    this.run(
-      'city',
-      () => this.api.actualizarCiudad(item.id, n, id),
-      (v) => {
-        this.cities.update((x) => x.map((c) => (c.id === item.id ? (v as AdminCity) : c)));
-        this.cancelEdit();
-      },
-      'Ciudad actualizada.',
-    );
-  }
-  protected deleteCity(item: AdminCity): void {
-    if (!confirm(`¿Eliminar “${item.nombre}”?`)) return;
-    this.run(
-      'city',
-      () => this.api.eliminarCiudad(item.id),
-      () => this.cities.update((x) => x.filter((c) => c.id !== item.id)),
-      'Ciudad eliminada.',
-    );
   }
 }

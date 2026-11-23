@@ -697,20 +697,7 @@
                   <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
                 }
               </td>
-              <td data-label="Rol">
-                <select
-                  (change)="changeRole(user, $any($event.target))"
-                  [disabled]="busy() === 'user-' + user.id || !roles().length"
-                  [attr.aria-label]="'Rol de ' + (user.email ?? user.email_historico)"
-                >
-                  @if (!user.rol) {
-                    <option value="" selected disabled>Sin rol</option>
-                  }
-                  @for (role of roles(); track role.id) {
-                    <option [value]="role.nombre" [selected]="role.id === user.rol?.id">{{ role.nombre }}</option>
-                  }
-                </select>
-              </td>
+              <td data-label="Rol">{{ user.rol?.nombre ?? 'Sin rol' }}</td>
               <td data-label="Estado">
                 @if (!user.activa) {
                   <span class="status status--deleted">Dada de baja</span>
@@ -810,57 +797,16 @@
     <div class="panel__title">
       <div>
         <h2>Catálogos</h2>
-        <p>Alta, baja, modificación y consulta de los catálogos del sistema.</p>
+        <p>Consulta de las opciones del sistema. Se cargan por seed o migración.</p>
       </div>
     </div>
     <div class="catalog-grid">
       @for (section of catalogs(); track section.key) {
         <article class="catalog-card">
           <h3>{{ section.label }}</h3>
-          <form class="inline-form" (ngSubmit)="addCatalog(section)">
-            <input
-              [(ngModel)]="newValues[section.key]"
-              [name]="'new-' + section.key"
-              maxlength="100"
-              placeholder="Nuevo elemento"
-            /><button class="button button--primary" type="submit">Agregar</button>
-          </form>
           <ul class="crud-list">
             @for (item of section.items; track item.id) {
-              <li>
-                @if (editing === section.key + '-' + item.id) {
-                  <input
-                    [(ngModel)]="draft"
-                    maxlength="100"
-                    (keyup.enter)="saveCatalog(section, item)"
-                  /><button
-                    class="link-button link-button--save"
-                    type="button"
-                    (click)="saveCatalog(section, item)"
-                  >
-                    Guardar</button
-                  ><button class="link-button" type="button" (click)="cancelEdit()">
-                    Cancelar
-                  </button>
-                } @else {
-                  <span>{{ item.nombre }}</span
-                  ><span class="crud-actions"
-                    ><button
-                      class="link-button link-button--edit"
-                      type="button"
-                      (click)="edit(section.key, item)"
-                    >
-                      Editar</button
-                    ><button
-                      class="link-button"
-                      type="button"
-                      (click)="deleteCatalog(section, item)"
-                    >
-                      Eliminar
-                    </button></span
-                  >
-                }
-              </li>
+              <li><span>{{ item.nombre }}</span></li>
             } @empty {
               <li class="empty-row">Sin elementos</li>
             }
@@ -874,50 +820,16 @@
     <div class="panel__title">
       <div>
         <h2>Ubicaciones</h2>
-        <p>Administrá provincias y sus ciudades.</p>
+        <p>Consulta de provincias y ciudades cargadas por seed o migración.</p>
       </div>
     </div>
     <div class="location-grid">
       <article class="catalog-card">
         <h3>Provincias</h3>
-        <form class="inline-form" (ngSubmit)="addProvince()">
-          <input
-            [(ngModel)]="newValues['province']"
-            name="new-province"
-            maxlength="100"
-            placeholder="Nueva provincia"
-          /><button class="button button--primary" type="submit">Agregar</button>
-        </form>
         <ul class="crud-list">
           @for (item of provinces(); track item.id) {
             <li [class.selected]="selectedProvince() === item.id">
-              @if (editing === 'province-' + item.id) {
-                <input
-                  [(ngModel)]="draft"
-                  maxlength="100"
-                  (keyup.enter)="saveProvince(item)"
-                /><button
-                  class="link-button link-button--save"
-                  type="button"
-                  (click)="saveProvince(item)"
-                >
-                  Guardar</button
-                ><button class="link-button" type="button" (click)="cancelEdit()">Cancelar</button>
-              } @else {
-                <button class="location-name" type="button" (click)="selectProvince(item.id)">
-                  {{ item.nombre }}</button
-                ><span class="crud-actions"
-                  ><button
-                    class="link-button link-button--edit"
-                    type="button"
-                    (click)="edit('province', item)"
-                  >
-                    Editar</button
-                  ><button class="link-button" type="button" (click)="deleteProvince(item)">
-                    Eliminar
-                  </button></span
-                >
-              }
+              <button class="location-name" type="button" (click)="selectProvince(item.id)">{{ item.nombre }}</button>
             </li>
           } @empty {
             <li class="empty-row">Sin provincias</li>
@@ -926,58 +838,11 @@
       </article>
       <article class="catalog-card">
         <h3>Ciudades</h3>
-        <form class="inline-form" (ngSubmit)="addCity()">
-          <select
-            [ngModel]="selectedProvince()"
-            name="city-province"
-            aria-label="Provincia de la nueva ciudad"
-            (ngModelChange)="selectProvince($event)"
-          >
-            <option [ngValue]="null" disabled>Seleccioná una provincia</option>
-            @for (province of provinces(); track province.id) {
-              <option [ngValue]="province.id">{{ province.nombre }}</option>
-            }
-          </select>
-          <input
-            [(ngModel)]="newValues['city']"
-            name="new-city"
-            maxlength="100"
-            placeholder="Nueva ciudad"
-            [disabled]="!selectedProvince()"
-          /><button class="button button--primary" type="submit" [disabled]="!selectedProvince()">
-            Agregar
-          </button>
-        </form>
         <ul class="crud-list">
           @for (item of cities(); track item.id) {
-            <li>
-              @if (editing === 'city-' + item.id) {
-                <input [(ngModel)]="draft" maxlength="100" (keyup.enter)="saveCity(item)" /><button
-                  class="link-button link-button--save"
-                  type="button"
-                  (click)="saveCity(item)"
-                >
-                  Guardar</button
-                ><button class="link-button" type="button" (click)="cancelEdit()">Cancelar</button>
-              } @else {
-                <span>{{ item.nombre }}</span
-                ><span class="crud-actions"
-                  ><button
-                    class="link-button link-button--edit"
-                    type="button"
-                    (click)="edit('city', item)"
-                  >
-                    Editar</button
-                  ><button class="link-button" type="button" (click)="deleteCity(item)">
-                    Eliminar
-                  </button></span
-                >
-              }
-            </li>
+            <li><span>{{ item.nombre }}</span></li>
           } @empty {
-            <li class="empty-row">
-              {{ selectedProvince() ? 'Sin ciudades' : 'Seleccioná una provincia' }}
-            </li>
+            <li class="empty-row">{{ selectedProvince() ? 'Sin ciudades' : 'Seleccioná una provincia' }}</li>
           }
         </ul>
       </article>
