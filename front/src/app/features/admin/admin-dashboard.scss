@@ -18,7 +18,11 @@
   padding: 0 12px 20px;
   font-weight: 750;
   font-size: 1.15rem;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 8px;
 }
+.admin-brand:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 4px; }
 .admin-brand img { width: 128px; height: auto; }
 .admin-nav { display: grid; gap: 10px; }
 .admin-nav-group {
