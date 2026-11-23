@@ -1,7 +1,7 @@
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository, type EntityManager } from 'typeorm';
+import { In, LessThan, Repository, type EntityManager } from 'typeorm';
 import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
@@ -179,12 +179,11 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, aprobado: string): Promise<Reserva[]> {
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, estados: string[]): Promise<Reserva[]> {
     return this.repository.find({
       where: {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
-        estado_pago: aprobado,
-        cancelada: false,
+        estado_pago: In(estados),
       },
       relations: {
         reprogramaciones: true,

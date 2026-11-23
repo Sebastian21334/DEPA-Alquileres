@@ -3,14 +3,18 @@
     @if (cargando()) {
       <div class="receipt-state">
         <app-spinner />
-        <p>Estamos verificando tu reserva…</p>
+        <p>{{ administracion ? 'Cargando la reserva…' : 'Estamos verificando tu reserva…' }}</p>
       </div>
     } @else if (error()) {
       <section class="receipt-card receipt-error">
         <span class="status-icon">!</span>
         <h1>No pudimos mostrar la reserva</h1>
         <p>{{ error() }}</p>
-        <a class="acct-btn acct-btn--primary" routerLink="/mis-reservas">Ir a Mis reservas</a>
+        @if (administracion) {
+          <a class="acct-btn acct-btn--primary" routerLink="/admin" [fragment]="seccionOrigen ?? undefined">{{ textoVolver }}</a>
+        } @else {
+          <a class="acct-btn acct-btn--primary" routerLink="/mis-reservas">Ir a Mis reservas</a>
+        }
       </section>
     } @else if (reserva(); as item) {
       @if (esInquilino() && conversacionesReembolso().length) {
@@ -29,6 +33,19 @@
                 {{ conversacionAbierta() === reembolso.id ? 'Ocultar conversación' : 'Ver conversación' }}
               </button>
             </header>
+            @if (reembolso.comprobante_nombre) {
+              <!-- T44: el inquilino ve el comprobante de la transferencia que recibió. -->
+              <p class="refund-threads__receipt">Comprobante de la transferencia:
+                <app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(reembolso.id)" [etiqueta]="'Ver ' + reembolso.comprobante_nombre" />
+              </p>
+              <!-- T56: el número de operación y la observación que cargó el admin con el comprobante. -->
+              @if (reembolso.referencia_externa) {
+                <p class="refund-threads__detail">Número de operación: {{ reembolso.referencia_externa }}</p>
+              }
+              @if (reembolso.observacion_transferencia) {
+                <p class="refund-threads__detail refund-threads__note">Observación: {{ reembolso.observacion_transferencia }}</p>
+              }
+            }
             @if (conversacionAbierta() === reembolso.id) {
               <app-reembolso-chat [reembolsoId]="reembolso.id" [vistaInquilino]="true" />
             }
@@ -85,7 +102,11 @@
             </button>
           }
         </div>
-        <a class="acct-btn acct-btn--ghost" routerLink="/mis-reservas">Ver todas mis reservas</a>
+        @if (administracion) {
+          <a class="acct-btn acct-btn--ghost" routerLink="/admin" [fragment]="seccionOrigen ?? undefined">← {{ textoVolver }}</a>
+        } @else {
+          <a class="acct-btn acct-btn--ghost" routerLink="/mis-reservas">Ver todas mis reservas</a>
+        }
       </header>
       }
       @if (errorVerificacion() && item.estado_pago !== 'APROBADO') {
@@ -107,7 +128,7 @@
           <div class="stay-location">
             <p class="address">{{ direccion(item) }}</p>
             @if (item.publicacion) {
-              <a class="text-link" [routerLink]="['/publicaciones', item.publicacion.id]"
+              <a class="text-link" [routerLink]="[administracion ? '/admin/publicaciones' : '/publicaciones', item.publicacion.id]"
                 >Ver publicación</a
               >
             }
@@ -227,15 +248,27 @@
         </aside>
       </div>
 
-      @if (item.estado_pago === 'APROBADO') {
+      @if (administracion) {
+        <!-- T53: el admin ve a las dos partes de la reserva, con enlace a su perfil. -->
+        <section class="receipt-card admin-parties" aria-label="Partes de la reserva">
+          @for (parte of partes(); track parte.rol) {
+            <div>
+              <span class="eyebrow">{{ parte.rol }}</span>
+              <h2>{{ parte.nombre }}</h2>
+              <p>{{ parte.email }} · {{ parte.telefono }}</p>
+              @if (parte.id) { <a class="text-link" [routerLink]="['/admin/usuarios', parte.id]">Ver perfil</a> }
+            </div>
+          }
+        </section>
+      } @else if (item.estado_pago === 'APROBADO') {
         <section class="receipt-card contact-card">
           <div>
             <span class="eyebrow">Comunicación de la reserva</span>
             <h2>Contactá a {{ nombreContacto() }}</h2>
             @if (accesoLimitado()) {
-              <p>Para responder en una conversación existente, abrí Mis chats desde el menú.</p>
+              <p>Podés comunicarte con la otra persona por el chat de DEPA.</p>
             } @else if (contactoSuspendido()) {
-              <p>La cuenta tiene restricciones de contacto. Si ya tenían una conversación, podés consultarla en Mis chats. Para otras gestiones, contactá a soporte.</p>
+              <p>Esta cuenta fue dada de baja. Para otras gestiones, contactá a soporte.</p>
             } @else {
               <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
             }

@@ -303,28 +303,29 @@ const persona = (id, datos = {}) =>
   Object.assign(new Usuario(), { id, nombre: `U${id}`, apellido: '', email: `u${id}@depa.test`, activa: true, ...datos });
 
 for (const bloqueado of [1, 2]) {
-  test(`no guarda ni notifica mensajes cuando la cuenta ${bloqueado} está bloqueada`, async () => {
-    const { servicio, guardados, correos } = servicioMensajes({
+  test(`permite iniciar y responder mensajes con la cuenta ${bloqueado} bloqueada`, async () => {
+    const personas = {
       1: persona(1, { bloqueado: bloqueado === 1 }),
       2: persona(2, { bloqueado: bloqueado === 2 }),
-    });
-    await assert.rejects(
-      servicio.enviar({ id_publicacion: 10, id_destino_usuario: 2, texto: 'hola' }, 1),
-      (error) => error instanceof ConflictException && /bloqueada/.test(error.message),
-    );
-    assert.equal(guardados.length, 0);
-    assert.equal(correos.length, 0);
+    };
+    const { servicio, guardados, correos } = servicioMensajes(personas, { conversacionExistente: false });
+    await servicio.enviar({ id_publicacion: 10, id_destino_usuario: 2, texto: 'Consulta' }, 1);
+    await servicio.enviar({ id_publicacion: 10, id_destino_usuario: 1, texto: 'Respuesta' }, 2);
+    assert.equal(guardados.length, 2);
+    assert.deepEqual(correos, ['u2@depa.test', 'u1@depa.test']);
   });
 }
 
-test('una cuenta con acceso limitado puede responder en un chat existente pero no abrir otro', async () => {
-  const personas = { 1: persona(1), 2: persona(2, { bloqueado: true }) };
-  const existente = servicioMensajes(personas, { accesoLimitado: true });
-  await existente.servicio.enviar({ id_publicacion: 10, id_destino_usuario: 1, texto: 'Respuesta' }, 2);
-  assert.equal(existente.guardados.length, 1);
-  const nuevo = servicioMensajes(personas, { accesoLimitado: true, conversacionExistente: false });
-  await assert.rejects(nuevo.servicio.enviar({ id_publicacion: 10, id_destino_usuario: 2, texto: 'Consulta' }, 1), ConflictException);
-  assert.equal(nuevo.guardados.length, 0);
+test('un anunciante y un inquilino bloqueados pueden iniciar y responder un chat de su reserva', async () => {
+  const personas = {
+    1: persona(1, { bloqueado: true }),
+    2: persona(2, { bloqueado: true }),
+  };
+  const { servicio, guardados, correos } = servicioMensajes(personas, { conversacionExistente: false });
+  await servicio.enviar({ id_publicacion: 10, id_destino_usuario: 1, texto: 'Hola' }, 2);
+  await servicio.enviar({ id_publicacion: 10, id_destino_usuario: 2, texto: 'Respuesta' }, 1);
+  assert.equal(guardados.length, 2);
+  assert.deepEqual(correos, ['u1@depa.test', 'u2@depa.test']);
 });
 
 test('no se le puede escribir a una cuenta dada de baja ni le llega el correo', async () => {

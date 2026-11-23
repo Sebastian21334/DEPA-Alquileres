@@ -16,6 +16,7 @@ describe('CP-03 · Formato de correo electrónico · PDF Pruebas Unitarias - TP'
       apellido: 'Gomez',
       telefono: '3534000000',
       contrasenia: 'ClavePrueba2026!',
+      aceptaTerminos: true,
       email,
     };
     const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true });

@@ -186,13 +186,15 @@ incluida en el comando existente de preparación de cancelaciones y devoluciones
 
 ### Problemas de una estadía
 
-- El Inquilino puede reclamar desde el inicio de la estadía hasta 7 días corridos
-  después de `fecha_fin` (23:59:59 de Argentina).
+- El Inquilino puede reclamar por problemas de la estadía hasta el final del cuarto día
+  calendario posterior a `fecha_fin`, antes de habilitarse el pago al anunciante.
+  El reclamo por demora administrativa conserva su plazo específico de siete días.
 - El reclamo pasa `reserva.estado_liquidacion` a `EN_REVISION`.
 - El Administrador puede escribir al Inquilino y al Anunciante, dejar notas
   internas (`visible_para = ADMIN`) y revisar la evidencia.
-- La evidencia admite hasta 5 imágenes JPEG/PNG de 5 MB cada una. Se guardan en
-  el contenedor privado `reclamos` y se consultan con URLs firmadas por 15 minutos.
+- La evidencia admite hasta 10 imágenes JPEG/PNG por envío, 30 por reclamo y 5 MB
+  por imagen. La descripción y los mensajes conservan sus adjuntos y su autor.
+  Se guardan en el contenedor privado `reclamos`, con URLs firmadas por 15 minutos.
 - El reclamo no cancela la reserva ni libera fechas.
 - La resolución puede ser sin devolución, con devolución total o con devolución
   parcial. Si hay devolución, se crea un `reembolso` con origen `RECLAMO`.

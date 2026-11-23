@@ -122,9 +122,10 @@ test('los índices inválidos y las operaciones bloqueadas no escriben ni altera
   assert.equal(peticiones.length, 0);
 });
 
-function galeria(reducirMovimiento = false) {
+function galeria(reducirMovimiento = false, ordenable = true, deshabilitada = false) {
   let renderizar;
   const animaciones = [];
+  const movimientos = [];
   const espacios = [0, 110, 220, 330].map(left => ({ left, right: left + 100, top: 0, bottom: 100 }));
   const tarjetas = espacios.map((rect, index) => ({ nativeElement: {
     getBoundingClientRect: () => rect,
@@ -141,7 +142,7 @@ function galeria(reducirMovimiento = false) {
   input.required = () => signal([]);
   const contexto = { exports: {}, require(modulo) {
     if (modulo === '@angular/core') return {
-      Component: () => clase => clase, signal, input, output: () => ({ emit() {} }),
+      Component: () => clase => clase, signal, input, output: () => ({ emit: cambio => movimientos.push(cambio) }),
       viewChildren: nombre => () => nombre === 'tarjetaFoto' ? tarjetas : espacios.map(rect => ({ nativeElement: { getBoundingClientRect: () => rect } })),
       afterRenderEffect: callback => { renderizar = callback; }, inject: () => ({ onDestroy() {} }),
     };
@@ -154,13 +155,15 @@ function galeria(reducirMovimiento = false) {
   } };
   vm.runInNewContext(codigo, contexto);
   const componente = new contexto.exports.GaleriaImagenesComponent();
+  componente.ordenable.set(ordenable);
+  componente.disabled.set(deshabilitada);
   componente.fotos.set([1, 2, 3, 4].map(id => ({ url: `${id}.jpg` })));
   renderizar();
   componente.iniciar({ preventDefault() {} }, 0);
   renderizar();
   componente.permitir({ clientX: 250, clientY: 50, preventDefault() {} }, 2);
   renderizar();
-  return { animaciones };
+  return { animaciones, componente, movimientos };
 }
 
 test('al arrastrar se desplazan juntas la foto elegida y las dos fotos intermedias', () => {
@@ -177,4 +180,31 @@ test('movimiento reducido conserva la vista previa del orden sin transición', (
   const { animaciones } = galeria(true);
   assert.equal(animaciones.length, 3);
   for (const animacion of animaciones) assert.equal(animacion.opciones.duration, 0);
+});
+
+test('la galería de adjuntos conserva nombres y no permite arrastrar ni reordenar', () => {
+  const { componente, animaciones, movimientos } = galeria(false, false);
+  let bloqueado = false;
+  componente.iniciar({ preventDefault() { bloqueado = true; } }, 0);
+  componente.mover(0, 2);
+  assert.equal(bloqueado, true);
+  assert.equal(componente.arrastrada(), null);
+  assert.equal(componente.destino(), null);
+  assert.equal(animaciones.length, 0);
+  assert.equal(movimientos.length, 0);
+  assert.equal(componente.textoAlternativo({ url: 'foto.jpg', nombre: 'Comprobante.jpg' }, 0), 'Comprobante.jpg');
+  assert.equal(componente.textoAlternativo({ url: 'foto.jpg' }, 1), 'imagen 2');
+});
+
+test('las publicaciones mantienen portada, controles de orden y el bloqueo al deshabilitar', () => {
+  const { componente, movimientos } = galeria();
+  assert.equal(componente.textoAlternativo({ url: 'foto.jpg', nombre: 'Comprobante.jpg' }, 0), 'Foto 1, portada');
+  componente.mover(0, 2);
+  assert.equal(movimientos.length, 1);
+  assert.equal(movimientos[0].desde, 0);
+  assert.equal(movimientos[0].hasta, 2);
+  const bloqueada = galeria(false, true, true);
+  bloqueada.componente.mover(0, 2);
+  assert.equal(bloqueada.movimientos.length, 0);
+  assert.equal(bloqueada.animaciones.length, 0);
 });

@@ -221,63 +221,7 @@
             <article class="acct-card booking-card">
               <ng-container *ngTemplateOutlet="tarjetaReserva; context: { $implicit: reserva, recibida: false }" />
               @if (reclamoAbierto()?.id === reserva.id) {
-                <form class="claim-form" (ngSubmit)="enviarReclamo()" [attr.aria-busy]="reclamoEnviando()">
-                  <h4>Reportar un problema en la reserva #{{ reserva.id }}</h4>
-                  <p class="muted">La liquidación quedará en revisión. Podés adjuntar hasta cinco imágenes JPEG o PNG de hasta 5 MB.</p>
-                  <label for="categoria-reclamo-{{ reserva.id }}">¿Qué tipo de problema tuviste?
-                    <select
-                      id="categoria-reclamo-{{ reserva.id }}"
-                      name="categoriaReclamo"
-                      [ngModel]="reclamoCategoria()"
-                      (ngModelChange)="reclamoCategoria.set($event)"
-                      [disabled]="reclamoEnviando()"
-                    >
-                      <option value="LIMPIEZA">Limpieza</option>
-                      <option value="MANTENIMIENTO">Mantenimiento</option>
-                      <option value="INGRESO">Ingreso</option>
-                      <option value="DESCRIPCION">La propiedad no coincide</option>
-                      <option value="OTRO">Otro</option>
-                    </select>
-                  </label>
-                  <label for="descripcion-reclamo-{{ reserva.id }}">Contanos qué pasó
-                    <textarea
-                      id="descripcion-reclamo-{{ reserva.id }}"
-                      name="descripcionReclamo"
-                      placeholder="Describí qué pasó, cuándo ocurrió y cómo afectó tu estadía."
-                      aria-describedby="ayuda-descripcion-{{ reserva.id }}"
-                      rows="4"
-                      minlength="20"
-                      maxlength="1000"
-                      required
-                      [ngModel]="reclamoDescripcion()"
-                      (ngModelChange)="reclamoDescripcion.set($event)"
-                      [disabled]="reclamoEnviando()"
-                    ></textarea>
-                    <small id="ayuda-descripcion-{{ reserva.id }}">Mínimo 20 caracteres · {{ reclamoDescripcion().length }}/1000</small>
-                  </label>
-                  <label for="evidencias-reclamo-{{ reserva.id }}">Imágenes (opcional)
-                    <input
-                      id="evidencias-reclamo-{{ reserva.id }}"
-                      type="file"
-                      accept="image/jpeg,image/png"
-                      multiple
-                      (change)="seleccionarArchivos($event)"
-                      [disabled]="reclamoEnviando()"
-                    />
-                  </label>
-                  @if (reclamoArchivos().length) {
-                    <ul class="claim-files">
-                      @for (archivo of reclamoArchivos(); track $index) { <li>{{ archivo.name }}</li> }
-                    </ul>
-                  }
-                  @if (errorReclamo()) { <p class="claim-error" role="alert">{{ errorReclamo() }}</p> }
-                  <div class="reschedule-form__actions">
-                    <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="reclamoEnviando()">
-                      {{ reclamoEnviando() ? 'Enviando reclamo…' : 'Enviar reclamo' }}
-                    </button>
-                    <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="reclamoEnviando()" (click)="cerrarReclamo()">Cerrar</button>
-                  </div>
-                </form>
+                <ng-container *ngTemplateOutlet="formularioReclamo; context: { $implicit: reserva }" />
               }
             </article>
           } @empty {
@@ -286,12 +230,41 @@
         </section>
       } @else if (vista() === 'recibidas' && esAnunciante()) {
         <section class="reservation-section" role="tabpanel">
-          @for (reserva of recibidas(); track reserva.id) {
+          <div class="reservation-filters">
+            <label>Estado
+              <select [ngModel]="filtroEstadoRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('estado', $event)">
+                <option value="todos">Todos</option>
+                <option value="codigo">Ingreso pendiente</option>
+                <option value="liquidacion">Liquidación pendiente o en revisión</option>
+                <option value="confirmada">Confirmadas</option>
+                <option value="terminada">Terminadas</option>
+                <option value="historial">Canceladas y otras</option>
+              </select>
+            </label>
+            <label>Publicación
+              <input type="search" placeholder="Buscar publicación" [ngModel]="filtroPublicacionRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('publicacion', $event)" />
+            </label>
+            <label>Ingreso desde <input type="date" [ngModel]="filtroDesdeRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('desde', $event)" /></label>
+            <label>Ingreso hasta <input type="date" [ngModel]="filtroHastaRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('hasta', $event)" /></label>
+          </div>
+          @for (reserva of recibidasPagina(); track reserva.id) {
             <article class="acct-card booking-card">
               <ng-container *ngTemplateOutlet="tarjetaReserva; context: { $implicit: reserva, recibida: true }" />
+              @if (reclamoAbierto()?.id === reserva.id) {
+                <ng-container *ngTemplateOutlet="formularioReclamo; context: { $implicit: reserva }" />
+              }
             </article>
           } @empty {
-            <div class="acct-card empty">No recibiste reservas todavía.</div>
+            <div class="acct-card empty">{{ recibidas().length ? 'No hay reservas que coincidan con los filtros.' : 'No recibiste reservas todavía.' }}</div>
+          }
+          @if (paginasRecibidas() > 1) {
+            <nav class="reservation-pagination" aria-label="Paginación de reservas recibidas">
+              <span role="status">{{ recibidasFiltradas().length }} reservas · Página {{ paginaRecibidas() }} de {{ paginasRecibidas() }}</span>
+              <div>
+                <button type="button" class="booking-button" [disabled]="paginaRecibidas() <= 1" (click)="paginaRecibidas.set(paginaRecibidas() - 1)">Anterior</button>
+                <button type="button" class="booking-button" [disabled]="paginaRecibidas() >= paginasRecibidas()" (click)="paginaRecibidas.set(paginaRecibidas() + 1)">Siguiente</button>
+              </div>
+            </nav>
           }
         </section>
       } @else {
@@ -302,14 +275,25 @@
           </div>
           @if (errorHistorial()) { <p class="claim-error" role="alert">{{ errorHistorial() }}</p> }
           @if (errorAccionReclamo()) { <p class="claim-error" role="alert">{{ errorAccionReclamo() }}</p> }
-          @for (reclamo of reclamos(); track reclamo.id) {
+          <!-- T53: los reclamos como inquilino y como anunciante van separados; sin subpestañas si no es anunciante. -->
+          @if (separarReclamos()) {
+            <div class="reservation-tabs reservation-tabs--sub" role="tablist" aria-label="Rol en los reclamos">
+              <button type="button" role="tab" [attr.aria-selected]="vistaReclamos() === 'inquilino'" [class.is-active]="vistaReclamos() === 'inquilino'" (click)="vistaReclamos.set('inquilino')">
+                Como inquilino <span>{{ reclamosComoInquilino().length }}</span>
+              </button>
+              <button type="button" role="tab" [attr.aria-selected]="vistaReclamos() === 'anunciante'" [class.is-active]="vistaReclamos() === 'anunciante'" (click)="vistaReclamos.set('anunciante')">
+                Como anunciante <span>{{ reclamosComoAnunciante().length }}</span>
+              </button>
+            </div>
+          }
+          @for (reclamo of reclamosVisibles(); track reclamo.id) {
             <article class="acct-card reservation claim-card">
               <app-claim-history [reclamo]="reclamo" [mostrarVerReembolso]="esInquilinoDelReclamo(reclamo)"
-                (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)" (verReembolso)="verReembolsoReclamo(reclamo)">
+                (verReembolso)="verReembolsoReclamo(reclamo)">
                 @if (reclamo.estado !== 'CERRADO') {
                   @if (respuestaReclamo() === reclamo.id) {
-                    <app-conversation-composer [(texto)]="textoRespuesta" etiqueta="Mensaje para el reclamo"
-                      [deshabilitado]="enviandoRespuesta()" (enviar)="responderReclamo(reclamo)" />
+                    <app-conversation-composer [(texto)]="textoRespuesta" [(imagenes)]="imagenesRespuesta" [adjuntos]="imagenesDisponibles(reclamo)"
+                      etiqueta="Mensaje para el reclamo" [deshabilitado]="enviandoRespuesta()" (enviar)="responderReclamo(reclamo)" />
                     <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="respuestaReclamo.set(null)"
                       [disabled]="enviandoRespuesta()">Cancelar</button>
                   } @else {
@@ -318,17 +302,11 @@
                   }
                 }
               </app-claim-history>
-              @if ((reclamo.estado === 'ABIERTO' || reclamo.estado === 'EN_REVISION') && (reclamo.evidencias?.length ?? 0) < 5) {
-                <div class="claim-form">
-                  <label>{{ subiendoEvidencia() === reclamo.id ? 'Subiendo imágenes…' : 'Adjuntar imágenes al reclamo' }}
-                    <input type="file" accept="image/jpeg,image/png" multiple (change)="adjuntarEvidencias(reclamo, $event)" [disabled]="subiendoEvidencia() !== null" />
-                    <small>JPEG o PNG · Hasta 5 MB por imagen</small>
-                  </label>
-                </div>
-              }
             </article>
           } @empty {
-            @if (!errorHistorial()) { <div class="acct-card empty">No tenés reclamos registrados.</div> }
+            @if (!errorHistorial()) {
+              <div class="acct-card empty">{{ separarReclamos() ? 'No tenés reclamos como ' + vistaReclamos() + '.' : 'No tenés reclamos registrados.' }}</div>
+            }
           }
         </section>
       }
@@ -342,7 +320,7 @@
   @let portada = reserva.publicacion?.imagenes?.[0]?.url;
   @let puedeReportar = !recibida && !reserva.cancelada && reserva.estado_pago === 'APROBADO'
     && reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO' && reserva.estado_liquidacion !== 'DEVUELTO_INQUILINO'
-    && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO' && reserva.estado_liquidacion !== 'EN_REVISION';
+    && reserva.estado_liquidacion !== 'DEVUELTO_PARCIAL_INQUILINO';
   @let cancelarDirecto = !recibida && !reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'PENDIENTE';
   @let cambiarFechas = !recibida && !devolucionPendiente && puedeReprogramar(reserva);
   @let solicitarBaja = puedeSolicitarCancelacion(reserva, recibida);
@@ -369,11 +347,34 @@
           <p class="booking-card__settlement">Tu devolución está en gestión. Podés seguirla desde el detalle.</p>
         } @else if (devolucionRegistrada(reserva); as devolucion) {
           <p class="booking-card__settlement">{{ devolucion.mensaje }}</p>
-        } @else if (reserva.estado_pago === 'APROBADO') {
+        } @else if (recibida && reserva.estado_pago === 'APROBADO') {
           <p class="booking-card__settlement">
             @if (reserva.estado_liquidacion === 'RETENIDO') { <svg lucideLockKeyhole [size]="15" aria-hidden="true"></svg> }
             {{ estadoLiquidacion(reserva) }}
           </p>
+          @if (reserva.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO') {
+            @if (fechaHabilitacion(reserva); as fechaPago) {
+              <p class="booking-card__settlement">{{ fechaPago > hoy() ? 'Pago disponible desde el ' : 'Pago habilitado desde el ' }}{{ fechaTarjeta(fechaPago) }}.</p>
+            } @else {
+              <p class="booking-card__settlement">Fecha de pago pendiente de revisión.</p>
+            }
+          }
+          @if (reserva.estado_estadia === 'INGRESO_NO_VERIFICADO' && reserva.estado_liquidacion === 'RETENIDO') {
+            @let dias = diasHastaVencimiento(reserva);
+            @if (dias !== null && dias > 0) {
+              <p class="booking-card__settlement">Si no se valida el código, en {{ dias }} {{ dias === 1 ? 'día' : 'días' }} la liquidación quedará pendiente de pago a tu favor.</p>
+            } @else if (dias === 0) {
+              <p class="booking-card__settlement">El plazo venció. La liquidación está pendiente de procesamiento a tu favor.</p>
+            }
+          }
+          @if (reserva.estado_liquidacion === 'PAGADO_PROPIETARIO') {
+            @if (reserva.fecha_resolucion_liquidacion) {
+              <p class="booking-card__settlement">Pago registrado el {{ fechaTarjeta(reserva.fecha_resolucion_liquidacion) }}.</p>
+            }
+            @if (reserva.referencia_liquidacion) {
+              <p class="booking-card__settlement">Referencia de pago: {{ reserva.referencia_liquidacion }}</p>
+            }
+          }
         }
       </div>
       <div class="booking-card__total">
@@ -429,7 +430,8 @@
       @if (recibida) {
         <p><strong>{{ inquilino(reserva) }}</strong> · {{ reserva.usuario_email ?? reserva.usuario?.email ?? 'Sin email' }} · {{ reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'Sin teléfono' }}</p>
       }
-      @if (reserva.estado_estadia === 'PENDIENTE_INGRESO') {
+      <!-- Al anunciante solo se le pide el código mientras lo pueda cargar (sin bloqueo ni decisión sobre el pago). -->
+      @if (reserva.estado_estadia === 'PENDIENTE_INGRESO' && (!recibida || puedeValidarCodigo(reserva))) {
         <p class="muted">{{ recibida ? 'Validá el código que te entregue el huésped al ingresar.' : 'El propietario todavía no validó el código de alojamiento.' }}</p>
       }
       @if (reserva.estado_estadia === 'INGRESO_NO_VERIFICADO') { <p class="muted">El período terminó sin un código de ingreso validado.</p> }
@@ -452,15 +454,92 @@
           <span>No lo compartas hasta estar físicamente en la propiedad.</span>
         </div>
       }
+      @let aviso = avisoCodigo()?.id === reserva.id ? avisoCodigo() : null;
       @if (recibida && puedeValidarCodigo(reserva)) {
+        @let restantes = reserva.intentos_codigo_restantes;
         <form class="code-entry" (ngSubmit)="validarCodigo(reserva)">
           <label [for]="'code-' + reserva.id">Código entregado por el inquilino</label>
           <div>
-            <input [id]="'code-' + reserva.id" [name]="'code-' + reserva.id" [(ngModel)]="codigoIngresado[reserva.id]" maxlength="8" autocomplete="off" placeholder="Ej.: K7M4P9Q2" />
+            <input [id]="'code-' + reserva.id" [name]="'code-' + reserva.id" [(ngModel)]="codigoIngresado[reserva.id]" maxlength="8" autocomplete="off" placeholder="Ej.: K7M4P9Q2"
+              [attr.aria-invalid]="aviso?.tipo === 'error'" [attr.aria-describedby]="'code-feedback-' + reserva.id" />
             <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="ocupada() !== null">Validar ingreso</button>
           </div>
+          <div [id]="'code-feedback-' + reserva.id">
+            @if (aviso) {
+              <p class="code-entry__aviso" [class.code-entry__aviso--error]="aviso.tipo === 'error'" [attr.role]="aviso.tipo === 'error' ? 'alert' : 'status'">{{ aviso.texto }}</p>
+            } @else if (restantes !== undefined && reserva.intentos_codigo > 0) {
+              <p class="code-entry__hint">Te {{ restantes === 1 ? 'queda 1 intento' : 'quedan ' + restantes + ' intentos' }} antes de que el código se bloquee.</p>
+            }
+          </div>
         </form>
+      } @else if (recibida && aviso) {
+        <!-- Después de validar o de bloquear, el campo desaparece y el aviso queda en la tarjeta. -->
+        <p class="code-entry__aviso" [class.code-entry__aviso--error]="aviso.tipo === 'error'" [attr.role]="aviso.tipo === 'error' ? 'alert' : 'status'">{{ aviso.texto }}</p>
+      }
+      @if (recibida && puedePedirReinicioCodigo(reserva)) {
+        <!-- T34: con el código bloqueado, el anunciante le pide el reinicio a Administración. -->
+        @if (motivoPedidoReinicioNoDisponible(reserva); as motivo) {
+          <p class="code-entry__hint">{{ motivo }}</p>
+        } @else {
+          @if (!aviso) {
+            <p class="code-entry__aviso code-entry__aviso--error">El código se bloqueó por demasiados intentos incorrectos.</p>
+          }
+          <button type="button" class="acct-btn acct-btn--primary acct-btn--sm code-entry__pedido" [disabled]="reclamoEnviando()"
+            (click)="abrirPedidoReinicio(reserva)">Pedir reinicio a Administración</button>
+        }
       }
     </div>
   }
+</ng-template>
+
+<!-- Formulario de reclamo: lo usan el inquilino (problema en la reserva) y el anunciante (pedido de reinicio del código). -->
+<ng-template #formularioReclamo let-reserva>
+  @let pedido = reclamoCategoria() === 'CODIGO_BLOQUEADO';
+  <form class="claim-form" (ngSubmit)="enviarReclamo()" [attr.aria-busy]="reclamoEnviando()">
+    <h4>{{ pedido ? 'Pedir el reinicio del código de la reserva #' : 'Reportar un problema en la reserva #' }}{{ reserva.id }}</h4>
+    <p class="muted">{{ pedido
+      ? 'Contale a Administración qué pasó con el código. El huésped también ve el pedido y lo podés seguir desde la pestaña Reclamos.'
+      : 'La liquidación quedará en revisión.' }}</p>
+    @if (!pedido) {
+      <label for="categoria-reclamo-{{ reserva.id }}">¿Qué tipo de problema tuviste?
+        <select
+          id="categoria-reclamo-{{ reserva.id }}"
+          name="categoriaReclamo"
+          [ngModel]="reclamoCategoria()"
+          (ngModelChange)="reclamoCategoria.set($event)"
+          [disabled]="reclamoEnviando()"
+        >
+          <option value="LIMPIEZA">Limpieza</option>
+          <option value="MANTENIMIENTO">Mantenimiento</option>
+          <option value="INGRESO">Ingreso</option>
+          <option value="DESCRIPCION">La propiedad no coincide</option>
+          <option value="OTRO">Otro</option>
+        </select>
+      </label>
+    }
+    <label for="descripcion-reclamo-{{ reserva.id }}">Contanos qué pasó
+      <textarea
+        id="descripcion-reclamo-{{ reserva.id }}"
+        name="descripcionReclamo"
+        [placeholder]="pedido ? 'Por ejemplo: el huésped me dictó el código y no lo toma.' : 'Describí qué pasó, cuándo ocurrió y cómo afectó tu estadía.'"
+        aria-describedby="ayuda-descripcion-{{ reserva.id }}"
+        rows="4"
+        minlength="20"
+        maxlength="1000"
+        required
+        [ngModel]="reclamoDescripcion()"
+        (ngModelChange)="reclamoDescripcion.set($event)"
+        [disabled]="reclamoEnviando()"
+      ></textarea>
+      <small id="ayuda-descripcion-{{ reserva.id }}">Mínimo 20 caracteres · {{ reclamoDescripcion().length }}/1000</small>
+    </label>
+    <app-carga-imagenes [(archivos)]="reclamoArchivos" [maximo]="maxImagenesPorEnvio" [deshabilitado]="reclamoEnviando()" />
+    @if (errorReclamo()) { <p class="claim-error" role="alert">{{ errorReclamo() }}</p> }
+    <div class="reschedule-form__actions">
+      <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="reclamoEnviando()">
+        {{ reclamoEnviando() ? 'Enviando…' : pedido ? 'Enviar pedido' : 'Enviar reclamo' }}
+      </button>
+      <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" [disabled]="reclamoEnviando()" (click)="cerrarReclamo()">Cerrar</button>
+    </div>
+  </form>
 </ng-template>

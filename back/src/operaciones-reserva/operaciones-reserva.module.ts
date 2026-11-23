@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { CatalogosModule } from '../catalogos/catalogos.module';
+import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { CotizacionesModule } from '../cotizaciones/cotizaciones.module';
 import { DisponibilidadModule } from '../disponibilidad/disponibilidad.module';
-import { DisputasModule } from '../disputas/disputas.module';
 import { MercadoPagoModule } from '../mercado-pago/mercado-pago.module';
 import { PagosModule } from '../pagos/pagos.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
@@ -25,11 +25,11 @@ import { LiquidacionesReservaController } from './controller/liquidaciones-reser
 @Module({
   imports: [
     ConfigModule,
+    AlmacenamientoModule,
     AnunciantesModule,
     CatalogosModule,
     CotizacionesModule,
     DisponibilidadModule,
-    DisputasModule,
     MercadoPagoModule,
     PagosModule,
     PublicacionesModule,

@@ -16,10 +16,30 @@ import { CatalogosService } from '../service/catalogos.service';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
+import { ComisionDto } from '../dto/comision.dto';
 
 @Controller('catalogos')
 export class CatalogosController {
   constructor(private readonly catalogosService: CatalogosService) {}
+
+  @Get('comision-vigente')
+  async obtenerComisionVigente() {
+    return { porcentaje: await this.catalogosService.obtenerComision() };
+  }
+
+  @Get('comision-depa')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  async obtenerComision() {
+    return { porcentaje: await this.catalogosService.obtenerComision() };
+  }
+
+  @Put('comision-depa')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  async actualizarComision(@Body() datos: ComisionDto) {
+    return { porcentaje: await this.catalogosService.actualizarComision(datos.porcentaje) };
+  }
 
   // Los GET son consultas públicas; las operaciones de escritura se protegen abajo.
 

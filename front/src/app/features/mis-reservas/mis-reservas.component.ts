@@ -1,7 +1,7 @@
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
-import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, linkedSignal, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, finalize, forkJoin, of, Subscription, switchMap } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -18,18 +18,21 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
+import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedePedirReinicioCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
+import { CargaImagenesComponent } from '../../shared/components/carga-imagenes/carga-imagenes.component';
+import { imagenesDisponibles, MAX_IMAGENES_POR_ENVIO } from '../../shared/utils/reclamo-imagenes';
+import { rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol';
 
 @Component({
   selector: 'app-mis-reservas',
   standalone: true,
   imports: [
-    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, NgTemplateOutlet, DatePipe,
+    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, NgTemplateOutlet, DatePipe,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
   ],
@@ -51,6 +54,7 @@ export class MisReservasComponent {
   protected readonly imagenesConError = signal<Record<number, string>>({});
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
   protected readonly puedeValidarCodigo = puedeValidarCodigo;
+  protected readonly puedePedirReinicioCodigo = puedePedirReinicioCodigo;
   protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   protected readonly esAnunciante = computed(() => this.accesoLimitado()
     ? this.auth.currentUser()?.anuncianteVerificado === true
@@ -86,10 +90,10 @@ export class MisReservasComponent {
     this.enviandoDemora.set(true);
     this.errorDemora.set('');
     this.reservasApi.createClaim({ id_reserva: item.reservaId, categoria: 'DEMORA_ADMINISTRATIVA', descripcion }).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.enviandoDemora.set(false))).subscribe({
-      next: () => {
+      next: (reclamo) => {
         this.enviandoDemora.set(false);
         this.cerrarDemora();
-        this.finalizarReclamo('Reclamo por demora administrativa enviado. La reserva sigue en curso; administración revisará los inconvenientes informados.');
+        this.finalizarReclamo(reclamo, 'Reclamo por demora administrativa enviado. La reserva sigue en curso; administración revisará los inconvenientes informados.');
       },
       error: (error: ApiError) => this.errorDemora.set(error.message),
     });
@@ -97,18 +101,66 @@ export class MisReservasComponent {
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
+  protected readonly filtroEstadoRecibidas = signal('todos');
+  protected readonly filtroPublicacionRecibidas = signal('');
+  protected readonly filtroDesdeRecibidas = signal('');
+  protected readonly filtroHastaRecibidas = signal('');
+  protected readonly recibidasFiltradas = computed(() => {
+    const estado = this.filtroEstadoRecibidas();
+    const busqueda = this.filtroPublicacionRecibidas().trim().toLocaleLowerCase('es-AR');
+    const desde = this.filtroDesdeRecibidas();
+    const hasta = this.filtroHastaRecibidas();
+    return this.recibidas().filter(reserva => {
+      const categoria = this.categoriaRecibida(reserva);
+      const fecha = reserva.fecha_inicio?.slice(0, 10);
+      const terminada = !reserva.cancelada && (reserva.finalizada || reserva.estado_estadia === 'FINALIZADA');
+      return (estado === 'todos' || categoria === estado || (estado === 'terminada' && terminada)) &&
+        (!busqueda || (reserva.publicacion?.titulo ?? '').toLocaleLowerCase('es-AR').includes(busqueda)) &&
+        (!desde || (!!fecha && fecha >= desde)) && (!hasta || (!!fecha && fecha <= hasta));
+    }).sort((a, b) => {
+      const orden = ['codigo', 'liquidacion', 'confirmada', 'terminada', 'historial'];
+      const categoriaA = this.categoriaRecibida(a);
+      const categoriaB = this.categoriaRecibida(b);
+      const prioridad = orden.indexOf(categoriaA) - orden.indexOf(categoriaB);
+      const fechaA = categoriaA === 'liquidacion' ? this.fechaHabilitacion(a) : a.fecha_inicio;
+      const fechaB = categoriaB === 'liquidacion' ? this.fechaHabilitacion(b) : b.fecha_inicio;
+      return prioridad || (fechaA ?? '9999').localeCompare(fechaB ?? '9999') || a.id - b.id;
+    });
+  });
+  protected readonly paginasRecibidas = computed(() => Math.max(1, Math.ceil(this.recibidasFiltradas().length / 10)));
+  protected readonly paginaRecibidas = linkedSignal<number, number>({
+    source: this.paginasRecibidas,
+    computation: (paginas, anterior) => Math.min(anterior?.value ?? 1, paginas),
+  });
+  protected readonly recibidasPagina = computed(() => {
+    const inicio = (this.paginaRecibidas() - 1) * 10;
+    return this.recibidasFiltradas().slice(inicio, inicio + 10);
+  });
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
   protected readonly ocupada = signal<number | null>(null);
   protected readonly vista = signal<'realizadas' | 'recibidas' | 'reclamos'>('realizadas');
   protected readonly reclamos = signal<Reclamo[]>([]);
+  /** T53: subpestaña de Reclamos según el rol en cada uno. */
+  protected readonly vistaReclamos = signal<RolEnReclamo>('inquilino');
+  protected readonly reclamosComoInquilino = computed(() => this.reclamosConRol('inquilino'));
+  protected readonly reclamosComoAnunciante = computed(() => this.reclamosConRol('anunciante'));
+  /** Sin subpestañas si no es anunciante, salvo que tenga reclamos de cuando lo era. */
+  protected readonly separarReclamos = computed(() => this.esAnunciante() || this.reclamosComoAnunciante().length > 0);
+  protected readonly reclamosVisibles = computed(() => {
+    if (!this.separarReclamos()) return this.reclamos();
+    return this.vistaReclamos() === 'anunciante' ? this.reclamosComoAnunciante() : this.reclamosComoInquilino();
+  });
   protected readonly errorHistorial = signal('');
   protected readonly errorAccionReclamo = signal('');
   protected readonly errorReclamo = signal('');
   protected readonly respuestaReclamo = signal<number | null>(null);
   protected readonly enviandoRespuesta = signal(false);
-  protected readonly subiendoEvidencia = signal<number | null>(null);
   protected textoRespuesta = '';
+  /** T49: imágenes del próximo mensaje del reclamo. */
+  protected readonly imagenesRespuesta = signal<File[]>([]);
+  protected readonly imagenesDisponibles = imagenesDisponibles;
+  protected readonly maxImagenesPorEnvio = MAX_IMAGENES_POR_ENVIO;
   protected readonly codigos = signal<Record<number, string>>({});
   protected codigoIngresado: Record<number, string> = {};
   protected readonly mensaje = signal('');
@@ -174,10 +226,10 @@ export class MisReservasComponent {
     this.errorFaltante.set('');
     this.reservasApi.claimMissingRefund(reserva.id, descripcion).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.enviandoFaltante.set(false)))
       .subscribe({
-        next: () => {
+        next: (reclamo) => {
           this.enviandoFaltante.set(false);
           this.cerrarFaltante();
-          this.finalizarReclamo('Reclamo por el faltante enviado. Administración revisará la diferencia.');
+          this.finalizarReclamo(reclamo, 'Reclamo por el faltante enviado. Administración revisará la diferencia.');
         },
         error: (error: ApiError) => this.errorFaltante.set(error.message),
       });
@@ -243,6 +295,38 @@ export class MisReservasComponent {
     return new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
     }).format(new Date());
+  }
+
+  protected cambiarFiltroRecibidas(filtro: 'estado' | 'publicacion' | 'desde' | 'hasta', valor: string): void {
+    const filtros = { estado: this.filtroEstadoRecibidas, publicacion: this.filtroPublicacionRecibidas,
+      desde: this.filtroDesdeRecibidas, hasta: this.filtroHastaRecibidas };
+    filtros[filtro].set(valor);
+    this.paginaRecibidas.set(1);
+  }
+
+  protected categoriaRecibida(reserva: Reserva): string {
+    if (reserva.estado_pago === 'APROBADO' && !reserva.cancelada &&
+        ['PENDIENTE_PAGO_PROPIETARIO', 'EN_REVISION'].includes(reserva.estado_liquidacion)) return 'liquidacion';
+    if (!reserva.cancelada && reserva.estado_pago === 'APROBADO' &&
+        ['PENDIENTE_INGRESO', 'INGRESO_NO_VERIFICADO'].includes(reserva.estado_estadia)) return 'codigo';
+    if (!reserva.cancelada && !reserva.finalizada && reserva.estado_pago === 'APROBADO' &&
+        reserva.estado_estadia === 'CONFIRMADA') return 'confirmada';
+    if (!reserva.cancelada && (reserva.finalizada || reserva.estado_estadia === 'FINALIZADA')) return 'terminada';
+    return 'historial';
+  }
+
+  protected fechaHabilitacion(reserva: Reserva): string | null {
+    if (!reserva.fecha_fin || !/^\d{4}-\d{2}-\d{2}$/.test(reserva.fecha_fin)) return null;
+    const fecha = new Date(`${reserva.fecha_fin}T00:00:00Z`);
+    if (!Number.isFinite(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== reserva.fecha_fin ||
+        !reserva.fecha_inicio || reserva.fecha_inicio > reserva.fecha_fin) return null;
+    fecha.setUTCDate(fecha.getUTCDate() + 5);
+    return fecha.toISOString().slice(0, 10);
+  }
+
+  protected diasHastaVencimiento(reserva: Reserva): number | null {
+    const fecha = this.fechaHabilitacion(reserva);
+    return fecha ? Math.max(0, Math.round((Date.parse(fecha) - Date.parse(this.hoy())) / 86_400_000)) : null;
   }
 
   protected ultimoCambio(reserva: Reserva): ReprogramacionReserva | undefined {
@@ -414,33 +498,52 @@ export class MisReservasComponent {
     });
   }
 
+  /** T34: el mensaje del código se muestra en la tarjeta de esa reserva, junto al campo. */
+  protected readonly avisoCodigo = signal<{ id: number; tipo: 'error' | 'exito'; texto: string } | null>(null);
+
   protected validarCodigo(reserva: Reserva): void {
     if (!puedeValidarCodigo(reserva)) return;
     const codigo = (this.codigoIngresado[reserva.id] ?? '').trim().toUpperCase();
     if (codigo.length !== 8) {
-      this.error.set('El código debe tener ocho caracteres.');
+      this.avisoCodigo.set({ id: reserva.id, tipo: 'error', texto: 'El código tiene 8 caracteres. Revisá el que te pasó el huésped.' });
       return;
     }
     this.iniciarOperacion(reserva.id);
-    this.error.set('');
+    this.avisoCodigo.set(null);
     this.reservasApi.validateLodgingCode(reserva.id, codigo).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (actualizada) => {
         this.codigoIngresado[reserva.id] = '';
         this.reemplazar(actualizada);
+        this.avisoCodigo.set({ id: reserva.id, tipo: 'exito', texto: 'Ingreso validado. Le avisamos al huésped por correo.' });
       },
       error: (err: ApiError) => {
-        this.error.set(err.message);
-        this.ocupada.set(null);
+        this.avisoCodigo.set({ id: reserva.id, tipo: 'error', texto: err.message });
+        // El back guardó el intento: se actualiza la tarjeta para mostrar los intentos o el bloqueo.
+        this.reservasApi.byId(reserva.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+          next: (actualizada) => this.reemplazar(actualizada),
+          error: () => this.ocupada.set(null),
+        });
       },
     });
   }
 
+  /** El plazo lo calcula el back (`fin_plazo_reclamo`): el front solo lo compara con hoy. */
+  private plazoReclamoAbierto(reserva: Reserva): boolean {
+    return !!reserva.fin_plazo_reclamo && this.hoy() <= reserva.fin_plazo_reclamo;
+  }
+
   protected motivoReclamoNoDisponible(reserva: Reserva): string {
-    const hoy = this.hoy();
-    if (!reserva.fecha_inicio || !reserva.fecha_fin) return 'La reserva no tiene fechas válidas.';
-    if (hoy < reserva.fecha_inicio) return 'Podés reclamar desde el inicio de la estadía. Antes, usá Solicitar cancelación.';
-    const plazo = Date.parse(reserva.fecha_fin) + 7 * 86_400_000;
-    return Date.parse(hoy) > plazo ? 'El plazo para reclamar terminó siete días después de la estadía.' : '';
+    if (!reserva.fecha_inicio || !reserva.fin_plazo_reclamo) return 'La reserva no tiene fechas válidas.';
+    if (this.hoy() < reserva.fecha_inicio)
+      return `Podés reclamar desde el ${this.fecha(reserva.fecha_inicio)}, cuando empieza la estadía. Antes, usá Solicitar cancelación.`;
+    if (!this.plazoReclamoAbierto(reserva))
+      return `El plazo para reclamar terminó el ${this.fecha(reserva.fin_plazo_reclamo)}, antes de que se habilite el pago al anunciante.`;
+    if (this.tieneReclamoAbierto(reserva)) return 'Ya tenés un reclamo abierto para esta reserva. Seguilo desde la pestaña Reclamos.';
+    return '';
+  }
+
+  private tieneReclamoAbierto(reserva: Reserva): boolean {
+    return this.reclamos().some(reclamo => reclamo.reserva?.id === reserva.id && ['ABIERTO', 'EN_REVISION'].includes(reclamo.estado));
   }
 
   protected abrirReclamo(reserva: Reserva): void {
@@ -452,29 +555,27 @@ export class MisReservasComponent {
     this.errorReclamo.set('');
   }
 
+  /** T34: por qué el anunciante no puede pedir el reinicio del código; vacío si puede. */
+  protected motivoPedidoReinicioNoDisponible(reserva: Reserva): string {
+    if (this.tieneReclamoAbierto(reserva))
+      return 'Ya hay un pedido o un reclamo abierto para esta reserva. Seguilo desde la pestaña Reclamos.';
+    if (!this.plazoReclamoAbierto(reserva))
+      return 'Venció el plazo para pedir el reinicio. Si no hubo reclamos, la liquidación queda pendiente de pago a tu favor.';
+    return '';
+  }
+
+  protected abrirPedidoReinicio(reserva: Reserva): void {
+    if (this.reclamoEnviando() || this.motivoPedidoReinicioNoDisponible(reserva)) return;
+    this.reclamoAbierto.set(reserva);
+    this.reclamoCategoria.set('CODIGO_BLOQUEADO');
+    this.reclamoDescripcion.set('');
+    this.reclamoArchivos.set([]);
+    this.errorReclamo.set('');
+  }
+
   protected cerrarReclamo(): void {
     if (this.reclamoEnviando()) return;
     this.reclamoAbierto.set(null);
-  }
-
-  protected seleccionarArchivos(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    const error = this.validarEvidencias(archivos, 5);
-    if (error) input.value = '';
-    this.errorReclamo.set(error);
-    this.reclamoArchivos.set(error ? [] : archivos);
-  }
-
-  private validarEvidencias(archivos: File[], disponibles: number): string {
-    if (archivos.length > disponibles) return 'Cada reclamo admite hasta cinco imágenes.';
-    if (archivos.some((archivo) => !['image/jpeg', 'image/png'].includes(archivo.type))) {
-      return 'Solo se admiten imágenes JPEG o PNG.';
-    }
-    if (archivos.some((archivo) => archivo.size > 5 * 1024 * 1024)) {
-      return 'Cada imagen puede pesar hasta 5 MB.';
-    }
-    return '';
   }
 
   protected enviarReclamo(): void {
@@ -498,16 +599,16 @@ export class MisReservasComponent {
         next: (reclamo) => {
           const archivos = this.reclamoArchivos();
           if (!archivos.length) {
-            this.finalizarReclamo();
+            this.finalizarReclamo(reclamo);
             return;
           }
           this.reservasApi
             .uploadClaimEvidence(reclamo.id, archivos)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({
-              next: () => this.finalizarReclamo(),
+              next: () => this.finalizarReclamo(reclamo),
               error: (err: ApiError) => {
-                this.finalizarReclamo(`El reclamo #${reclamo.id} se registró. La carga de imágenes quedó incompleta: ${err.message}`);
+                this.finalizarReclamo(reclamo, `El reclamo #${reclamo.id} se registró. La carga de imágenes quedó incompleta: ${err.message}`);
               },
             });
         },
@@ -521,55 +622,26 @@ export class MisReservasComponent {
   protected abrirRespuestaReclamo(id: number): void {
     this.errorAccionReclamo.set('');
     this.textoRespuesta = '';
+    this.imagenesRespuesta.set([]);
     this.respuestaReclamo.set(id);
   }
 
-  protected adjuntarEvidencias(reclamo: Reclamo, event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    input.value = '';
-    if (!archivos.length || this.subiendoEvidencia() !== null) return;
-    const error = this.validarEvidencias(archivos, 5 - (reclamo.evidencias?.length ?? 0));
-    if (error) {
-      this.errorAccionReclamo.set(error);
-      return;
-    }
-    this.errorAccionReclamo.set('');
-    this.subiendoEvidencia.set(reclamo.id);
-    this.reservasApi.uploadClaimEvidence(reclamo.id, archivos).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
-        this.subiendoEvidencia.set(null);
-        this.mensaje.set('Imágenes adjuntadas al reclamo.');
-        this.cargarReservas(true);
-      },
-      error: (err: ApiError) => {
-        this.subiendoEvidencia.set(null);
-        this.errorAccionReclamo.set(err.message);
-        this.cargarReservas(true);
-      },
-    });
-  }
-
-  protected verEvidenciaReclamo(id: number, evidencia: number): void {
-    this.reservasApi.claimEvidenceUrl(id, evidencia).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ url }) => window.open(url, '_blank', 'noopener'),
-      error: (err: ApiError) => this.errorAccionReclamo.set(err.message),
-    });
-  }
-
+  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   protected responderReclamo(reclamo: Reclamo): void {
     const texto = this.textoRespuesta.trim();
-    if (!texto || texto.length > 1000 || this.enviandoRespuesta()) return;
+    const imagenes = this.imagenesRespuesta();
+    if ((!texto && !imagenes.length) || texto.length > 1000 || this.enviandoRespuesta()) return;
     this.errorAccionReclamo.set('');
     this.enviandoRespuesta.set(true);
     this.reservasApi
-      .sendClaimMessage(reclamo.id, texto)
+      .sendClaimMessage(reclamo.id, texto, imagenes)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.enviandoRespuesta.set(false);
           this.respuestaReclamo.set(null);
           this.textoRespuesta = '';
+          this.imagenesRespuesta.set([]);
           this.mensaje.set('Mensaje enviado al hilo del reclamo.');
           this.cargarReservas(true);
         },
@@ -580,14 +652,19 @@ export class MisReservasComponent {
       });
   }
 
-  private finalizarReclamo(advertencia?: string): void {
+  private finalizarReclamo(reclamo: Reclamo, advertencia?: string): void {
+    const pedido = reclamo.categoria === 'CODIGO_BLOQUEADO';
     this.reclamoEnviando.set(false);
     this.reclamoAbierto.set(null);
     this.reclamoArchivos.set([]);
     this.mensaje.set(
-      advertencia ?? 'Reclamo enviado. Podés seguirlo y responder desde esta sección.',
+      advertencia ?? (pedido
+        ? 'Pedido enviado. Administración lo va a revisar; podés seguirlo y responder desde esta sección.'
+        : 'Reclamo enviado. Podés seguirlo y responder desde esta sección.'),
     );
     this.vista.set('reclamos');
+    // La demora puede reclamarla cualquiera de las partes; se muestra el rol del reclamo creado.
+    this.vistaReclamos.set(rolEnReclamo(reclamo, this.idUsuario()) ?? (pedido ? 'anunciante' : 'inquilino'));
     this.cargarReservas(true);
   }
 
@@ -604,7 +681,10 @@ export class MisReservasComponent {
     const etiquetas: Partial<Record<Reserva['estado_liquidacion'], string>> = {
       NO_APLICA: 'Sin liquidación',
       RETENIDO: 'Dinero retenido hasta el ingreso',
-      PENDIENTE_PAGO_PROPIETARIO: 'Ingreso confirmado · pago administrativo pendiente',
+      // Sin ingreso validado (venció el plazo de T36) no se habla de «ingreso confirmado», igual que la etiqueta de la estadía.
+      PENDIENTE_PAGO_PROPIETARIO: reserva.codigo_validado_en
+        ? 'Ingreso confirmado · pago administrativo pendiente'
+        : 'Ingreso no verificado · pago administrativo pendiente',
       EN_REVISION: 'En revisión administrativa',
       PAGADO_PROPIETARIO: 'Pago al propietario registrado',
     };
@@ -652,7 +732,16 @@ export class MisReservasComponent {
 
   /** La devolución la sigue el inquilino; el anunciante no gestiona reembolsos. */
   protected esInquilinoDelReclamo(reclamo: Reclamo): boolean {
-    return reclamo.inquilino?.id === Number(this.auth.currentUser()?.sub);
+    return rolEnReclamo(reclamo, this.idUsuario()) === 'inquilino';
+  }
+
+  private reclamosConRol(rol: RolEnReclamo): Reclamo[] {
+    const idUsuario = this.idUsuario();
+    return this.reclamos().filter((reclamo) => rolEnReclamo(reclamo, idUsuario) === rol);
+  }
+
+  private idUsuario(): number {
+    return Number(this.auth.currentUser()?.sub);
   }
 
   /** El estado y el chat de la devolución están en el detalle de la reserva. */

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Not, Repository, type EntityManager } from 'typeorm';
+import { In, Repository, type EntityManager, type SelectQueryBuilder } from 'typeorm';
 import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
-import { Liquidacion } from '../entity/liquidacion.entity';
+import { Liquidacion, type PagoAnuncianteRegistrado } from '../entity/liquidacion.entity';
 import { ILiquidacionRepository } from './liquidacion.repository.interface';
 
 @Injectable()
@@ -21,16 +21,51 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     });
   }
 
-  listarPagosRegistrados(estadoPagado: string, propietario?: { idUsuario: number; idPublicacion: number }): Promise<Liquidacion[]> {
-    const reserva = propietario ? {
-      publicacion: { id: propietario.idPublicacion, anunciante: { usuario: { id: propietario.idUsuario } } },
-    } : undefined;
-    return this.repository.find({
-      where: [{ estado: estadoPagado, reserva }, { pagos_anunciante: Not(IsNull()), reserva }],
-      relations: propietario
-        ? { reserva: true }
-        : { reserva: { publicacion: { anunciante: { usuario: true } } }, admin_resolucion: true },
-    });
+  async listarReservasPendientesDeAviso(estadoLiquidacion: string, estadoPago: string, fechaFinLimite: string): Promise<number[]> {
+    const filas = await this.repository.createQueryBuilder('liquidacion')
+      .innerJoin('liquidacion.reserva', 'reserva')
+      .select('reserva.id', 'id')
+      .where('liquidacion.estado = :estadoLiquidacion', { estadoLiquidacion })
+      .andWhere('(liquidacion.aviso_pago_admin_en IS NULL OR liquidacion.aviso_pago_anunciante_en IS NULL)')
+      .andWhere('reserva.estado_pago = :estadoPago', { estadoPago })
+      .andWhere('reserva.cancelada = false')
+      .andWhere('reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite', { fechaFinLimite })
+      .orderBy('reserva.id', 'ASC')
+      .getRawMany<{ id: number }>();
+    return filas.map(({ id }) => id);
+  }
+
+  async listarIngresosNoVerificadosVencidos(estados: { retenido: string; revision: string; maxIntentosCodigo: number }, estadoPago: string, fechaFinLimite: string): Promise<number[]> {
+    const filas = await this.repository.createQueryBuilder('liquidacion')
+      .innerJoin('liquidacion.reserva', 'reserva')
+      .select('reserva.id', 'id')
+      // En revisión solo entra la que se bloqueó por el código; las otras revisiones siguen esperando al admin.
+      .where('(liquidacion.estado = :retenido OR (liquidacion.estado = :revision AND reserva.intentos_codigo >= :maxIntentosCodigo))', estados)
+      .andWhere('reserva.estado_pago = :estadoPago', { estadoPago })
+      .andWhere('reserva.cancelada = false AND reserva.codigo_validado_en IS NULL')
+      .andWhere('reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite', { fechaFinLimite })
+      .getRawMany<{ id: number }>();
+    return filas.map(({ id }) => id);
+  }
+
+  listarPagosRegistrados(estadoPagado: string, propietario?: { idUsuario: number; idPublicacion?: number }): Promise<Liquidacion[]> {
+    const consulta = this.repository.createQueryBuilder('liquidacion')
+      .addSelect('liquidacion.pagos_anunciante')
+      .innerJoinAndSelect('liquidacion.reserva', 'reserva')
+      .where('(liquidacion.estado = :estadoPagado OR liquidacion.pagos_anunciante IS NOT NULL)', { estadoPagado });
+    if (!propietario)
+      return consulta.leftJoinAndSelect('reserva.publicacion', 'publicacion')
+        .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
+        .leftJoinAndSelect('anunciante.usuario', 'usuarioAnunciante')
+        .leftJoinAndSelect('liquidacion.admin_resolucion', 'administrador')
+        .getMany();
+    // Sin publicación, el anunciante ve los pagos de todas sus publicaciones.
+    consulta.innerJoinAndSelect('reserva.publicacion', 'publicacion')
+      .innerJoin('publicacion.anunciante', 'anunciante')
+      .andWhere('anunciante.idUsuario = :idUsuario', { idUsuario: propietario.idUsuario });
+    if (propietario.idPublicacion !== undefined)
+      consulta.andWhere('publicacion.id = :idPublicacion', { idPublicacion: propietario.idPublicacion });
+    return consulta.getMany();
   }
 
   crear(datos: Partial<Liquidacion>): Liquidacion {
@@ -44,21 +79,33 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     );
   }
 
+  // Incluyen los pagos registrados para que una resolución los conserve al agregar uno nuevo.
   buscarPorReserva(idReserva: number, transaccion?: EntityManager): Promise<Liquidacion | null> {
-    return this.repositorio(transaccion).findOne({
-      where: { reserva: { id: idReserva } },
-    });
+    return this.conPagos(idReserva, transaccion).getOne();
   }
 
   async buscarPorReservaConBloqueo(idReserva: number, transaccion?: EntityManager): Promise<Liquidacion | null> {
-    const repositorio = this.repositorio(transaccion);
-    if (!repositorio.manager.queryRunner?.isTransactionActive)
-      return repositorio.findOne({ where: { reserva: { id: idReserva } } });
-    return repositorio
-      .createQueryBuilder('liquidacion')
-      .where('liquidacion.id_reserva = :idReserva', { idReserva })
-      .setLock('pessimistic_write')
-      .getOne();
+    const consulta = this.conPagos(idReserva, transaccion);
+    if (!this.repositorio(transaccion).manager.queryRunner?.isTransactionActive) return consulta.getOne();
+    return consulta.setLock('pessimistic_write').getOne();
+  }
+
+  async buscarPagosConAnunciante(idReserva: number): Promise<{ pagos: PagoAnuncianteRegistrado[]; idAnunciante: number | null } | null> {
+    const fila = await this.repository.createQueryBuilder('liquidacion')
+      .innerJoin('liquidacion.reserva', 'reserva')
+      .leftJoin('reserva.publicacion', 'publicacion')
+      .leftJoin('publicacion.anunciante', 'anunciante')
+      .select('liquidacion.pagos_anunciante', 'pagos')
+      .addSelect('anunciante.idUsuario', 'idAnunciante')
+      .where('reserva.id = :idReserva', { idReserva })
+      .getRawOne<{ pagos: PagoAnuncianteRegistrado[] | null; idAnunciante: number | null }>();
+    return fila ? { pagos: fila.pagos ?? [], idAnunciante: fila.idAnunciante } : null;
+  }
+
+  private conPagos(idReserva: number, transaccion?: EntityManager): SelectQueryBuilder<Liquidacion> {
+    return this.repositorio(transaccion).createQueryBuilder('liquidacion')
+      .addSelect('liquidacion.pagos_anunciante')
+      .where('liquidacion.id_reserva = :idReserva', { idReserva });
   }
 
   private repositorio(transaccion?: EntityManager): Repository<Liquidacion> {

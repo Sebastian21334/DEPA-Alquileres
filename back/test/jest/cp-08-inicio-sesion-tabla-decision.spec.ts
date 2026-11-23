@@ -46,6 +46,7 @@ describe('CP-08 · Inicio de sesión con tablas de decisión', () => {
       email: DATA.emailUsuario1,
       telefono: '6942067',
       contrasenia: DATA.contraseniaUsuario1,
+      aceptaTerminos: true,
     });
     expect(registro.status).toBe(201);
     idUsuario1 = ctx.usuarios.porEmail(DATA.emailUsuario1)!.id;

@@ -1,7 +1,7 @@
 import { IsString, MaxLength, MinLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import type { SaldoDevolucionCancelacionDto } from '../../cancelaciones/dto/condiciones-cancelacion.dto';
-import type { Reclamo } from '../entity/reclamo.entity';
+import type { ReclamoRespuesta } from './reclamo-respuesta.dto';
 
 export class ReclamarFaltanteCancelacionDto {
   @Transform(({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value)
@@ -16,6 +16,6 @@ export interface FaltanteCancelacionDto {
   reclamoAbierto: boolean;
 }
 
-export interface ReclamoRespuestaDto extends Reclamo {
+export interface ReclamoRespuestaDto extends ReclamoRespuesta {
   devolucion_cancelacion?: SaldoDevolucionCancelacionDto | null;
 }

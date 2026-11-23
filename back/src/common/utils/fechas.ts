@@ -12,6 +12,19 @@ export function fechaArgentina(ahora = new Date()): string {
   return `${parte('year')}-${parte('month')}-${parte('day')}`;
 }
 
+/** Suma días corridos a una fecha `AAAA-MM-DD`, sin depender del huso horario. */
+export function sumarDiasCalendario(fecha: string, dias: number): string {
+  const valor = new Date(`${fecha}T00:00:00Z`);
+  valor.setUTCDate(valor.getUTCDate() + dias);
+  return valor.toISOString().slice(0, 10);
+}
+
+/** `AAAA-MM-DD` → `DD/MM/AAAA` para los mensajes al usuario. */
+export function fechaParaMostrar(fecha: string): string {
+  const [anio, mes, dia] = fecha.split('-');
+  return `${dia}/${mes}/${anio}`;
+}
+
 export function esFechaCalendarioValida(fecha: string | null): fecha is string {
   if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
   const valor = new Date(`${fecha}T00:00:00Z`);
