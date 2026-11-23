@@ -504,6 +504,9 @@
           @if (item.referencia_externa) {
             <div><dt>Referencia de devolución</dt><dd>{{ item.referencia_externa }}</dd></div>
           }
+          @if (item.comprobante_nombre) {
+            <div><dt>Comprobante</dt><dd><app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(item.id)" [etiqueta]="'Ver ' + item.comprobante_nombre" /></dd></div>
+          }
           @if (item.resuelto_en) {
             <div><dt>Resuelto</dt><dd>{{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
           }
@@ -524,10 +527,11 @@
           <app-reembolso-chat [reembolsoId]="item.id" />
         }
         @if (puedeRegistrarTransferencia(item)) {
-          <label for="refund-bank-reference">Referencia del comprobante de transferencia</label>
+          <app-carga-comprobante [(archivo)]="comprobanteReembolso" [deshabilitado]="guardandoReembolso()" />
+          <label for="refund-bank-reference">Número de operación (opcional)</label>
           <input id="refund-bank-reference" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
-            required maxlength="150" [disabled]="guardandoReembolso()" />
-          <p class="refund-help">Registrá el comprobante después de transferir el importe al inquilino.</p>
+            maxlength="150" [disabled]="guardandoReembolso()" />
+          <p class="refund-help">Registrá la transferencia después de transferir el importe al inquilino. El inquilino va a poder ver el comprobante.</p>
         } @else if (puedeConciliarReembolso(item)) {
           <label for="refund-external-id">ID del reembolso en Mercado Pago</label>
           <input id="refund-external-id" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"

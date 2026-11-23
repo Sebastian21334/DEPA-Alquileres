@@ -137,6 +137,13 @@ export class Reembolso {
   @Column({ name: 'transferencia_manual', type: 'boolean', default: false })
   transferencia_manual: boolean;
 
+  /** T44: URL privada del comprobante; no viaja en las respuestas, se pide un enlace firmado. */
+  @Column({ name: 'comprobante_url', type: 'varchar', length: 1000, nullable: true, select: false })
+  comprobante_url: string | null;
+
+  @Column({ name: 'comprobante_nombre', type: 'varchar', length: 255, nullable: true })
+  comprobante_nombre: string | null;
+
   @Column({
     name: 'error_detalle',
     type: 'varchar',

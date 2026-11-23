@@ -5,6 +5,7 @@ import { EMPTY, Subscription, catchError, exhaustMap, timer } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
+import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
@@ -25,7 +26,7 @@ import {
 @Component({
   selector: 'app-reserva-resultado',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, ReservaReprogramacionComponent, ReembolsoChatComponent],
+  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, ReservaReprogramacionComponent, ReembolsoChatComponent, VerComprobanteComponent],
   templateUrl: './reserva-resultado.component.html',
   styleUrl: './reserva-resultado.component.scss',
 })
@@ -37,7 +38,10 @@ export class ReservaResultadoComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
   private readonly actividadReembolsos = inject(ActividadReembolsosService);
-  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string }[]>([]);
+  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string; comprobante_nombre?: string | null }[]>([]);
+  /** T44: enlace firmado del comprobante de la transferencia del reembolso. */
+  protected readonly urlComprobanteReembolso = (id: number) => () =>
+    this.http.get<{ url: string }>(`${environment.apiUrl}/reembolsos/${id}/comprobante`);
   protected readonly conversacionAbierta = signal<number | null>(null);
   private consultaResumen?: Subscription;
 

@@ -15,6 +15,7 @@ const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { PagosRepository } = require('../dist/pagos/repository/pagos.repository');
 const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolsos/entity/reembolso.entity');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
+const { AlmacenamientoService } = require('../dist/almacenamiento/service/almacenamiento.service');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
@@ -62,7 +63,7 @@ beforeEach(async () => {
     new ReembolsosRepository(source.getRepository(Reembolso)),
     pasarela,
     new PagosService(new PagosRepository(source.getRepository(Pago))),
-    estadoReserva, catalogosDePrueba(),
+    estadoReserva, catalogosDePrueba(), almacenamientoDePrueba(),
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   disponibilidad = { liberarReserva: async () => {} };
@@ -82,6 +83,20 @@ beforeEach(async () => {
 after(async () => {
   if (base) await base.cerrar();
 });
+
+// T44: almacenamiento privado de prueba para los comprobantes de transferencia.
+function almacenamientoDePrueba() {
+  return new AlmacenamientoService({
+    subir: async (_contenedor, nombre) => `https://privado.example/${nombre}`,
+    firmarArchivo: async (_contenedor, url) => `${url}?firmado`,
+    eliminarArchivo: async () => {},
+  });
+}
+
+const comprobantePdf = () => {
+  const buffer = Buffer.from('%PDF-1.7 comprobante de prueba');
+  return { buffer, size: buffer.length, originalname: 'transferencia.pdf', mimetype: 'application/pdf' };
+};
 
 async function escenario(fechaInicio = '2099-01-10') {
   const reserva = await source.getRepository(Reserva).save({
@@ -1221,7 +1236,14 @@ test('la devolución total por transferencia deja el reclamo resuelto al decidir
 
   const decidido = await source.getRepository(Reclamo).findOneOrFail({ where: { id: reclamo.id }, relations: { administrador_resolucion: true } });
   // Otro administrador registra la transferencia.
-  await operacionesReembolso.registrarTransferencia(pendiente.id, 'trf-inquilino', 4);
+  await operacionesReembolso.registrarTransferencia(pendiente.id, 'trf-inquilino', comprobantePdf(), 4);
+  const conComprobante = await source.getRepository(Reembolso).findOneOrFail({
+    where: { id: pendiente.id }, select: { id: true, comprobante_url: true, comprobante_nombre: true },
+  });
+  assert.deepEqual([conComprobante.comprobante_nombre, /comprobantes\/reembolsos\/\d+\/.+\.pdf$/.test(conComprobante.comprobante_url)],
+    ['transferencia.pdf', true]);
+  assert.match((await reembolsos.urlComprobante(pendiente.id, { id: 1 })).url, /\?firmado$/);
+  await assert.rejects(reembolsos.urlComprobante(pendiente.id, { id: 2 }), { status: 404 });
   assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'REEMBOLSADO');
   const final = await source.getRepository(Reclamo).findOneOrFail({ where: { id: reclamo.id }, relations: { administrador_resolucion: true } });
   assert.deepEqual([final.estado, final.resolucion, Number(final.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
@@ -1282,7 +1304,7 @@ test('un reclamo con la devolución pedida antes de este cambio se completa al c
     motivo: `Reclamo #${reclamo.id}: decisión previa`, idSolicitadoPor: 3,
     idempotencyKey: `rec:${reclamo.id}`, referenciaInterna: `rec:${reclamo.id}`,
   });
-  await operacionesReembolso.registrarTransferencia(anterior.id, 'trf-previa', 3);
+  await operacionesReembolso.registrarTransferencia(anterior.id, 'trf-previa', comprobantePdf(), 3);
   const completo = await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id });
   assert.deepEqual([completo.estado, completo.resolucion, Number(completo.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_PARCIAL', 30]);
   assert.ok(completo.resuelto_en);

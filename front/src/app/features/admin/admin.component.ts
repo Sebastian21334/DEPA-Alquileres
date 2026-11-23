@@ -43,6 +43,8 @@ import {
 import { Reclamo } from '../../shared/services/reservation.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
+import { CargaComprobanteComponent } from '../../shared/components/carga-comprobante/carga-comprobante.component';
+import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
 
 interface CatalogSection {
   key: CatalogKey;
@@ -110,6 +112,8 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     ConversationComposerComponent,
     ConversationPanelComponent,
     ReembolsoChatComponent,
+    CargaComprobanteComponent,
+    VerComprobanteComponent,
     CurrencyPipe,
     DatePipe,
     FormsModule,
@@ -690,9 +694,14 @@ export class AdminComponent {
       });
   }
 
+  /** T44: comprobante elegido para registrar la transferencia del reembolso. */
+  protected readonly comprobanteReembolso = signal<File | null>(null);
+  protected readonly urlComprobanteReembolso = (id: number) => () => this.api.urlComprobanteReembolso(id);
+
   protected abrirReembolso(reembolso: AdminReembolso): void {
     this.reembolsoSeleccionado.set(reembolso);
     this.referenciaReembolso = '';
+    this.comprobanteReembolso.set(null);
     this.errorReembolso.set('');
     this.dialogoReembolso().nativeElement.showModal();
   }
@@ -716,7 +725,8 @@ export class AdminComponent {
 
   protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
     const referencia = this.referenciaReembolso.trim();
-    if (this.puedeRegistrarTransferencia(reembolso)) return referencia.length > 0 && referencia.length <= 150;
+    // T44: el comprobante es obligatorio y la referencia, opcional.
+    if (this.puedeRegistrarTransferencia(reembolso)) return !!this.comprobanteReembolso() && referencia.length <= 150;
     if (this.puedeConciliarReembolso(reembolso)) return /^\d{1,100}$/.test(referencia);
     return this.puedeSolicitarReembolso(reembolso);
   }
@@ -727,8 +737,9 @@ export class AdminComponent {
 
     this.errorReembolso.set('');
     this.guardandoReembolso.set(true);
-    const operacion = this.puedeRegistrarTransferencia(reembolso)
-      ? this.api.registrarTransferenciaReembolso(reembolso.id, referencia)
+    const comprobante = this.comprobanteReembolso();
+    const operacion = this.puedeRegistrarTransferencia(reembolso) && comprobante
+      ? this.api.registrarTransferenciaReembolso(reembolso.id, comprobante, referencia)
       : this.puedeConciliarReembolso(reembolso)
       ? this.api.conciliarReembolso(reembolso.id, referencia)
       : this.api.solicitarReembolso(reembolso.id);
