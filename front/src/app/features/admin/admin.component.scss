@@ -78,20 +78,6 @@
   margin: 0 0 14px;
   font-size: 1rem;
 }
-.inline-form {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.inline-form input,
-.crud-list input {
-  min-width: 0;
-  width: 100%;
-  padding: 9px 10px;
-  border: 1px solid #ccd6db;
-  border-radius: 8px;
-  font: inherit;
-}
 .button--primary {
   background: #e14414;
   color: white;
@@ -116,15 +102,6 @@
 .crud-list li > span:first-child {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.crud-actions {
-  display: flex;
-  gap: 7px;
-  margin-left: auto;
-}
-.link-button--edit,
-.link-button--save {
-  color: #12529b;
 }
 .location-name {
   min-width: 0;
@@ -157,10 +134,6 @@
   .location-grid {
     grid-template-columns: 1fr;
     padding: 14px;
-  }
-  .inline-form {
-    align-items: stretch;
-    flex-direction: column;
   }
 }
 .link-button:disabled {

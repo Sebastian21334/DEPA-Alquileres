@@ -147,7 +147,6 @@ export interface AdminCancellationRequest {
   } | null;
 }
 export type CatalogKey =
-  | 'roles'
   | 'tipos-anunciante'
   | 'tipos-propiedad'
   | 'modalidades'
@@ -259,9 +258,6 @@ export class AdminService {
   responderApelacion(id: number, bloqueoId: string, texto: string) {
     return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/${id}/bloqueo/responder`, { bloqueoId, texto });
   }
-  cambiarRol(id: number, nombreRol: string) {
-    return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });
-  }
   aprobar(id: number, numero_revision: number, revisar_cbu: boolean, titular_cbu_confirmado: boolean) {
     return this.http.patch(`${this.api}/anunciantes/${id}/aprobar`, { numero_revision, revisar_cbu, titular_cbu_confirmado });
   }
@@ -271,40 +267,10 @@ export class AdminService {
   listarCatalogo(key: CatalogKey) {
     return this.http.get<AdminCatalogItem[]>(`${this.api}/catalogos/${key}`);
   }
-  crearCatalogo(key: CatalogKey, nombre: string) {
-    return this.http.post<AdminCatalogItem>(`${this.api}/catalogos/${key}`, { nombre });
-  }
-  actualizarCatalogo(key: CatalogKey, id: number, nombre: string) {
-    return this.http.put<AdminCatalogItem>(`${this.api}/catalogos/${key}/${id}`, { nombre });
-  }
-  eliminarCatalogo(key: CatalogKey, id: number) {
-    return this.http.delete(`${this.api}/catalogos/${key}/${id}`);
-  }
   listarProvincias() {
     return this.http.get<AdminProvince[]>(`${this.api}/ubicacion/provincias`);
   }
   listarCiudades(id: number) {
     return this.http.get<AdminCity[]>(`${this.api}/ubicacion/provincias/${id}/ciudades`);
-  }
-  crearProvincia(nombre: string) {
-    return this.http.post<AdminProvince>(`${this.api}/ubicacion/provincias`, { nombre });
-  }
-  actualizarProvincia(id: number, nombre: string) {
-    return this.http.put<AdminProvince>(`${this.api}/ubicacion/provincias/${id}`, { nombre });
-  }
-  eliminarProvincia(id: number) {
-    return this.http.delete(`${this.api}/ubicacion/provincias/${id}`);
-  }
-  crearCiudad(nombre: string, idProvincia: number) {
-    return this.http.post<AdminCity>(`${this.api}/ubicacion/ciudades`, { nombre, idProvincia });
-  }
-  actualizarCiudad(id: number, nombre: string, idProvincia: number) {
-    return this.http.put<AdminCity>(`${this.api}/ubicacion/ciudades/${id}`, {
-      nombre,
-      idProvincia,
-    });
-  }
-  eliminarCiudad(id: number) {
-    return this.http.delete(`${this.api}/ubicacion/ciudades/${id}`);
   }
 }
