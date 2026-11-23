@@ -7,19 +7,18 @@
           <p>{{ totalPublicaciones() }} en total · {{ activas() }} activas</p>
         }
       </div>
-      <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">
-        <svg lucideSquarePlus [size]="18"></svg> Nueva publicación
-      </a>
-    </div>
-
-    <form class="mis-publicaciones-search" role="search" aria-label="Buscar en mis publicaciones" (ngSubmit)="buscar(busquedaInput.value)">
-      <label for="mis-publicaciones-busqueda">Buscar publicaciones</label>
-      <div>
-        <input #busquedaInput id="mis-publicaciones-busqueda" type="search" maxlength="200"
-          placeholder="Título, dirección, ciudad o ID" [value]="busqueda()" />
-        <button type="submit" class="acct-btn acct-btn--ghost acct-btn--sm">Buscar</button>
+      <div class="acct-heading__tools">
+        <app-search-field
+          [value]="busqueda()"
+          placeholder="Buscar por título, dirección, ciudad o ID"
+          ariaLabel="Buscar en mis publicaciones"
+          (valueChange)="buscar($event)"
+        />
+        <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">
+          <svg lucideSquarePlus [size]="18"></svg> Nueva publicación
+        </a>
       </div>
-    </form>
+    </div>
 
     @if (aviso()) {
       <div class="acct-alert acct-alert--info notice" role="status">

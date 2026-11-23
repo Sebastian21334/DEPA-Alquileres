@@ -1,6 +1,5 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { concatMap, forkJoin, from, type Subscription } from 'rxjs';
 import { LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
@@ -9,6 +8,7 @@ import { Publicacion } from '../../shared/models/publicacion.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
+import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
 import { moverImagen } from '../../shared/utils/orden-imagenes';
 
 const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
@@ -19,7 +19,7 @@ const MAX_IMAGEN = 10 * 1024 * 1024;
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, FormsModule, SpinnerComponent, GaleriaImagenesComponent, PaginadorComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, SpinnerComponent, GaleriaImagenesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
