@@ -1,0 +1,14 @@
+// Zona punteada para elegir o arrastrar archivos (T04 comprobantes, T05 imágenes de formularios).
+.carga__etiqueta { font-weight: 700; }
+.carga__zona {
+  position: relative; display: grid; justify-items: center; gap: .2rem; padding: .9rem .75rem;
+  border: 1.5px dashed #9baab4; border-radius: .6rem; background: #f8fafb; color: #172b45;
+  text-align: center; cursor: pointer;
+}
+.carga__zona:hover, .carga__zona--arrastrando { border-color: #146c43; background: #eef8f2; }
+.carga__zona:focus-within { outline: 2px solid #146c43; outline-offset: 2px; }
+.carga__zona--deshabilitada, .carga__zona--deshabilitada:hover { border-color: #9baab4; background: #f8fafb; opacity: .6; cursor: not-allowed; }
+.carga__entrada { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.carga__accion { font-weight: 650; }
+.carga__ayuda { color: #52607a; font-size: .82rem; }
+.carga__error { margin: 0; color: #8a1c13; font-size: .85rem; font-weight: 650; }

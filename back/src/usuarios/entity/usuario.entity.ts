@@ -17,7 +17,10 @@ export interface DetalleBloqueo {
   accesoLimitado?: boolean;
   apelacion?: { texto: string; fecha: string };
   respuesta?: { texto: string; fecha: string; administradorId: number };
+  mensajes?: { id: string; autor: 'usuario' | 'administracion'; texto: string; fecha: string; administradorId?: number; imagen?: string }[];
 }
+
+export type BloqueoHistorico = DetalleBloqueo & { fechaDesbloqueo: string | null; desbloqueadoPorId: number | null };
 
 @Entity('usuario')
 export class Usuario {
@@ -61,6 +64,9 @@ export class Usuario {
 
   @Column({ name: 'bloqueo_detalle', type: 'jsonb', nullable: true, select: false })
   bloqueoDetalle?: DetalleBloqueo | null;
+
+  @Column({ name: 'historial_bloqueos', type: 'jsonb', default: () => "'[]'::jsonb", select: false })
+  historialBloqueos?: BloqueoHistorico[];
 
   // Baja lógica: la cuenta se conserva, pero no puede iniciar sesión.
   @Column({ name: 'activa', type: 'boolean', default: true })

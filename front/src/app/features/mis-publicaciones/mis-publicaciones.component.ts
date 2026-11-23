@@ -7,13 +7,14 @@ import { GestionPublicacionesService, type PagoPublicacion } from '../../shared/
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { HistorialLiquidacionesComponent } from '../../shared/components/historial-liquidaciones/historial-liquidaciones.component';
 
 // Panel del anunciante verificado para administrar sus publicaciones: ver,
 // activar, desactivar, mover a la papelera y restaurar. Las imágenes se gestionan en Editar.
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, SpinnerComponent, HistorialLiquidacionesComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
@@ -76,16 +77,6 @@ export class MisPublicacionesComponent {
       next: pagos => this.liquidaciones.set(pagos),
       error: () => this.errorLiquidaciones.set(true),
     });
-  }
-
-  protected importeLiquidacion(pago: PagoPublicacion): string {
-    if (pago.importe === null) return 'Importe sin registrar';
-    const importe = pago.importe.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return [pago.moneda, importe].filter(Boolean).join(' ');
-  }
-
-  protected fechaLiquidacion(valor: string): string {
-    return new Date(valor).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
   }
 
   protected eliminar(pub: Publicacion): void {

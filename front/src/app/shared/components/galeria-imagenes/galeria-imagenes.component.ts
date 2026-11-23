@@ -1,6 +1,8 @@
 import { Component, DestroyRef, ElementRef, afterRenderEffect, inject, input, output, signal, viewChildren } from '@angular/core';
 import { moverImagen } from '../../utils/orden-imagenes';
 
+export interface FotoGaleria { url: string; nombre?: string; }
+
 @Component({
   selector: 'app-galeria-imagenes',
   standalone: true,
@@ -8,10 +10,12 @@ import { moverImagen } from '../../utils/orden-imagenes';
   styleUrl: './galeria-imagenes.component.scss',
 })
 export class GaleriaImagenesComponent {
-  readonly fotos = input.required<readonly { url: string }[]>();
+  readonly fotos = input.required<readonly FotoGaleria[]>();
   readonly disabled = input(false);
   readonly minimo = input(0);
   readonly quitarDeshabilitado = input(false);
+  /** T05: en false (adjuntos de un formulario) no hay portada ni orden; solo la miniatura, el nombre y «Quitar». */
+  readonly ordenable = input(true);
   readonly reordenar = output<{ desde: number; hasta: number }>();
   readonly quitar = output<number>();
   protected readonly arrastrada = signal<number | null>(null);
@@ -25,6 +29,11 @@ export class GaleriaImagenesComponent {
     afterRenderEffect(() => {
       const fotos = this.fotos();
       const tarjetas = this.tarjetas();
+      if (!this.ordenable()) {
+        this.cancelarAnimaciones();
+        this.posiciones.clear();
+        return;
+      }
       const espacios = this.espacios().map(espacio => espacio.nativeElement.getBoundingClientRect());
       const desde = this.arrastrada(), hasta = this.destino();
       const vistaPrevia = desde !== null && hasta !== null;
@@ -54,8 +63,13 @@ export class GaleriaImagenesComponent {
     inject(DestroyRef).onDestroy(() => this.cancelarAnimaciones());
   }
 
+  protected textoAlternativo(foto: FotoGaleria, index: number): string {
+    if (!this.ordenable()) return foto.nombre ?? `imagen ${index + 1}`;
+    return `Foto ${index + 1}${index === 0 ? ', portada' : ''}`;
+  }
+
   protected iniciar(event: DragEvent, index: number): void {
-    if (this.disabled()) { event.preventDefault(); return; }
+    if (this.disabled() || !this.ordenable()) { event.preventDefault(); return; }
     this.posiciones = this.capturarPosiciones();
     this.arrastrada.set(index);
     this.destino.set(null);
@@ -66,7 +80,7 @@ export class GaleriaImagenesComponent {
   }
 
   protected permitir(event: DragEvent, index: number): void {
-    if (this.disabled() || this.arrastrada() === null) return;
+    if (this.disabled() || !this.ordenable() || this.arrastrada() === null) return;
     event.preventDefault();
     const hasta = this.indiceDestino(event, index);
     const destino = hasta === this.arrastrada() ? null : hasta;
@@ -103,7 +117,7 @@ export class GaleriaImagenesComponent {
   }
 
   protected mover(desde: number, hasta: number): void {
-    if (this.disabled() || desde === hasta) return;
+    if (this.disabled() || !this.ordenable() || desde === hasta) return;
     this.posiciones = this.capturarPosiciones();
     this.reordenar.emit({ desde, hasta });
   }

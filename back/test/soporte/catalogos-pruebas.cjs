@@ -6,6 +6,7 @@ const datos = require('../../src/catalogos/estados-iniciales.json');
 
 function catalogosDePrueba(implementacion = {}) {
   const catalogos = new CatalogosService();
+  catalogos.obtenerComision = async () => 10;
   catalogos.obtenerEstado = (codigoAmbito, codigo) => {
     const ambito = datos[codigoAmbito];
     const estado = ambito?.estados[codigo];

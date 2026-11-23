@@ -3,6 +3,7 @@ require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
+const sinReclamos = { tieneReclamoAbierto: async () => false };
 
 function crearReserva(extra = {}) {
   return {
@@ -80,6 +81,14 @@ function liquidacionesService() {
   };
 }
 
+test('el pago manual exige liquidación pendiente aunque el código esté validado', async () => {
+  const reserva = crearReserva({ codigo_validado_en: new Date(), estado_liquidacion: 'RETENIDO' });
+  const servicio = new OperacionesLiquidacionService({}, reservasService(reserva, repositorio(reserva)), liquidacionesService(), catalogosDePrueba(), {}, sinReclamos);
+  // T56: se rechaza antes de subir el comprobante.
+  await assert.rejects(servicio.registrarPagoAnunciante(1, {}, undefined, 3), /todavía no está pendiente/i);
+  assert.equal(reserva.estado_liquidacion, 'RETENIDO');
+});
+
 test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro importe', async () => {
   const reserva = crearReserva();
   const pago = { id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' };
@@ -102,7 +111,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
   const service = new OperacionesLiquidacionService(
     reembolsos,
     reservasService(reserva, repositorio(reserva)),
-    liquidacionesService(), catalogosDePrueba(),
+    liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', importe: 1 }, 7);
@@ -136,7 +145,7 @@ test('deriva la liquidación y conserva el estado de revisión hasta confirmar l
   const service = new OperacionesLiquidacionService(
     reembolsos,
     reservasService(reserva, repo),
-    liquidacionesService(), catalogosDePrueba(),
+    liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_PARCIAL_INQUILINO', importe: 30 }, 7);
@@ -162,7 +171,7 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
   const service = new OperacionesLiquidacionService(
     reembolsos,
     reservasService(reserva, repositorio(reserva)),
-    liquidacionesService(), catalogosDePrueba(),
+    liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
@@ -189,7 +198,7 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
   const service = new OperacionesLiquidacionService(
     reembolsos,
     reservasService(reserva, repositorio(reserva)),
-    liquidacionesService(), catalogosDePrueba(),
+    liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
   await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);

@@ -249,7 +249,7 @@ export class UsuariosRepository implements IUsuariosRepository {
 
   buscarConBloqueo(id: number, transaccion?: EntityManager, bloquear = true): Promise<Usuario | null> {
     const consulta = (transaccion?.getRepository(Usuario) ?? this.repo)
-      .createQueryBuilder('u').addSelect('u.bloqueoDetalle').leftJoinAndSelect('u.rol', 'rol')
+      .createQueryBuilder('u').addSelect(['u.bloqueoDetalle', 'u.historialBloqueos']).leftJoinAndSelect('u.rol', 'rol')
       .where('u.id = :id', { id });
     if (transaccion && bloquear) consulta.setLock('pessimistic_write', undefined, ['u']);
     return consulta.getOne();
@@ -264,6 +264,14 @@ export class UsuariosRepository implements IUsuariosRepository {
       .where('u.activa = true AND u.bloqueado = true AND u.bloqueo_detalle IS NOT NULL')
       .orderBy('u.id', 'DESC')
       .getRawMany<BloqueoAdministrativo>();
+  }
+
+  async listarHistorialBloqueos(): Promise<{ usuario: BloqueoAdministrativo['usuario']; historial: import('../entity/usuario.entity').BloqueoHistorico[] }[]> {
+    const usuarios = await this.repo.createQueryBuilder('u')
+      .select(['u.id', 'u.nombre', 'u.apellido', 'u.email', 'u.historialBloqueos'])
+      .where("jsonb_array_length(u.historial_bloqueos) > 0")
+      .orderBy('u.id', 'DESC').getMany();
+    return usuarios.map(usuario => ({ usuario: { id: usuario.id, nombre: usuario.nombre, apellido: usuario.apellido, email: usuario.email }, historial: usuario.historialBloqueos ?? [] }));
   }
 
   async guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean> {

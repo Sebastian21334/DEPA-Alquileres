@@ -1,32 +1,41 @@
-<p class="help">Elegí una portada y ordená las fotos arrastrándolas o usando las flechas.</p>
-<div class="photos" role="list" aria-label="Fotos de la publicación, en orden">
+@if (ordenable()) {
+  <p class="help">Elegí una portada y ordená las fotos arrastrándolas o usando las flechas.</p>
+}
+<div class="photos" [class.photos--compacta]="!ordenable()" role="list"
+  [attr.aria-label]="ordenable() ? 'Fotos de la publicación, en orden' : 'Imágenes elegidas'">
   @for (foto of fotos(); track foto.url; let i = $index) {
     <div #espacioFoto class="photo-slot" role="listitem" (dragover)="permitir($event, i)" (drop)="soltar($event, i)">
-    <figure #tarjetaFoto class="photo" [class.photo--cover]="i === 0"
-      [class.photo--dragging]="arrastrada() === i" [class.photo--target]="arrastrada() === i && destino() !== null" [draggable]="!disabled()"
-      (dragstart)="iniciar($event, i)" (dragend)="finalizar()">
-      <div class="preview">
-        <img [src]="foto.url" [alt]="'Foto ' + (i + 1) + (i === 0 ? ', portada' : '')" draggable="false" />
-        <span class="badge">{{ i === 0 ? 'Portada' : 'Foto ' + (i + 1) }}</span>
-      </div>
-      <figcaption>
-        <button type="button" class="cover" [disabled]="disabled() || i === 0"
-          [attr.aria-label]="'Elegir foto ' + (i + 1) + ' como portada'"
-          (click)="mover(i, 0)">{{ i === 0 ? 'Portada elegida' : 'Elegir portada' }}</button>
-        <div class="actions">
-          <button type="button" [disabled]="disabled() || i === 0"
-            [attr.aria-label]="'Mover foto ' + (i + 1) + ' antes'"
-            (click)="mover(i, i - 1)">←</button>
-          <button type="button" [disabled]="disabled() || i === fotos().length - 1"
-            [attr.aria-label]="'Mover foto ' + (i + 1) + ' después'"
-            (click)="mover(i, i + 1)">→</button>
-          <button type="button" class="remove" [disabled]="disabled() || quitarDeshabilitado() || fotos().length <= minimo()"
-            [attr.aria-label]="'Quitar foto ' + (i + 1)" (click)="quitar.emit(i)">Quitar</button>
+      <figure #tarjetaFoto class="photo" [class.photo--cover]="ordenable() && i === 0"
+        [class.photo--dragging]="ordenable() && arrastrada() === i" [class.photo--target]="ordenable() && arrastrada() === i && destino() !== null" [draggable]="ordenable() && !disabled()"
+        (dragstart)="iniciar($event, i)" (dragend)="finalizar()">
+        <div class="preview">
+          <img [src]="foto.url" [alt]="textoAlternativo(foto, i)" draggable="false" />
+          @if (ordenable()) { <span class="badge">{{ i === 0 ? 'Portada' : 'Foto ' + (i + 1) }}</span> }
         </div>
-      </figcaption>
-    </figure>
+        <figcaption>
+          @if (ordenable()) {
+            <button type="button" class="cover" [disabled]="disabled() || i === 0"
+              [attr.aria-label]="'Elegir foto ' + (i + 1) + ' como portada'"
+              (click)="mover(i, 0)">{{ i === 0 ? 'Portada elegida' : 'Elegir portada' }}</button>
+            <div class="actions">
+              <button type="button" [disabled]="disabled() || i === 0"
+                [attr.aria-label]="'Mover foto ' + (i + 1) + ' antes'"
+                (click)="mover(i, i - 1)">←</button>
+              <button type="button" [disabled]="disabled() || i === fotos().length - 1"
+                [attr.aria-label]="'Mover foto ' + (i + 1) + ' después'"
+                (click)="mover(i, i + 1)">→</button>
+              <button type="button" class="remove" [disabled]="disabled() || quitarDeshabilitado() || fotos().length <= minimo()"
+                [attr.aria-label]="'Quitar foto ' + (i + 1)" (click)="quitar.emit(i)">Quitar</button>
+            </div>
+          } @else {
+            @if (foto.nombre) { <span class="name" [title]="foto.nombre">{{ foto.nombre }}</span> }
+            <button type="button" class="remove" [disabled]="disabled() || quitarDeshabilitado() || fotos().length <= minimo()"
+              [attr.aria-label]="'Quitar ' + textoAlternativo(foto, i)" (click)="quitar.emit(i)">Quitar</button>
+          }
+        </figcaption>
+      </figure>
     </div>
   } @empty {
-    <p class="help">Todavía no hay fotos cargadas.</p>
+    <p class="help">{{ ordenable() ? 'Todavía no hay fotos cargadas.' : 'Todavía no elegiste imágenes.' }}</p>
   }
 </div>

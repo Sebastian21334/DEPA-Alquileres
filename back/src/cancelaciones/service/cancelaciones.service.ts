@@ -207,12 +207,21 @@ export class CancelacionesService implements OnApplicationBootstrap, OnModuleDes
 
   private bloqueoPorPlazo(reserva: Reserva, hoy: string, politica: PoliticaCancelacion, actor: ActorCancelacion): string | null {
     if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
-      return 'Desde la fecha de ingreso no se puede solicitar la cancelación. Para una devolución, abrí un reclamo.';
-    if (actor === 'INQUILINO' || actor === 'ANUNCIANTE') return null;
+      return actor === 'ANUNCIANTE'
+        ? 'Desde la fecha de ingreso el anunciante ya no puede solicitar la cancelación.'
+        : 'Desde la fecha de ingreso no se puede solicitar la cancelación. Para una devolución, abrí un reclamo.';
+    if (actor === 'ANUNCIANTE') return null;
+    if (actor === 'INQUILINO') return null;
     const diasMinimos = politica.diasDevolucionParcial;
     return this.diasHastaIngreso(reserva, hoy) < diasMinimos
       ? `El plazo venció. Tenés que solicitar la cancelación al menos ${diasMinimos} días antes del ingreso.`
       : null;
+  }
+
+  async obtenerPoliticaVigente(): Promise<PoliticaCancelacion> {
+    const politica = await this.cancelaciones.buscarPolitica(fechaArgentina());
+    if (!politica) throw new InternalServerErrorException('No hay una política de cancelación vigente');
+    return politica;
   }
 
   private async politicaAplicable(cancelaciones: ICancelacionesRepository, reserva: Reserva): Promise<PoliticaCancelacion> {

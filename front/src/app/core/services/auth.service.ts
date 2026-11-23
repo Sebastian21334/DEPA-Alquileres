@@ -23,6 +23,7 @@ interface EstadoSesion {
 
 // DTOs alineados con back/src/auth/dto/register.dto.ts y login.dto.ts.
 export interface RegisterDto {
+  aceptaTerminos: boolean;
   nombre: string;
   apellido: string;
   email: string;
@@ -49,6 +50,7 @@ export interface VistaBloqueo {
   fecha: string | null;
   apelacion: { texto: string; fecha: string } | null;
   respuesta: { texto: string; fecha: string } | null;
+  mensajes?: { id: string; autor: 'usuario' | 'administracion'; texto: string; fecha: string; imagen?: string }[] | null;
 }
 
 const TOKEN_KEY = 'auth_token';
@@ -159,10 +161,12 @@ export class AuthService {
       : this.http.get<VistaBloqueo>(`${this.baseUrl}/bloqueo/actual`);
   }
 
-  apelarBloqueo(token: string | null, texto: string): Observable<VistaBloqueo> {
-    return token
-      ? this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/apelar`, { token, texto })
-      : this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/actual`, { texto });
+  apelarBloqueo(token: string | null, texto: string, imagen?: File | null): Observable<VistaBloqueo> {
+    const datos = new FormData();
+    datos.append('texto', texto);
+    if (token) datos.append('token', token);
+    if (imagen) datos.append('imagen', imagen);
+    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/${token ? 'mensajes' : 'actual/mensajes'}`, datos);
   }
 
   /** POST /auth/reenviar-verificacion — solicita un nuevo mail para una cuenta pendiente. */

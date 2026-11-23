@@ -64,6 +64,14 @@ export class UsuariosController {
     return this.usuariosService.listarBloqueados();
   }
 
+  @Get('administracion/historial-bloqueos')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  listarHistorialBloqueos() {
+    return this.usuariosService.listarHistorialBloqueos();
+  }
+
   @Get('administracion/:id')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -77,6 +85,15 @@ export class UsuariosController {
   @Roles('Administrador')
   responderApelacion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true })) dto: ResponderApelacionDto, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto);
+  }
+
+  @Post(':id/bloqueo/mensajes')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  @UseInterceptors(FileInterceptor('imagen', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  enviarMensajeApelacion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true })) dto: ResponderApelacionDto, @Req() req: AuthenticatedRequest, @UploadedFile() archivo?: Express.Multer.File) {
+    return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto, archivo);
   }
 
   @PermitirAccesoLimitado()

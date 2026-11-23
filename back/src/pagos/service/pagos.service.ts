@@ -88,23 +88,13 @@ export class PagosService {
     return Math.max(0, Number(pago.amount) - Number(pago.amount_refunded ?? 0));
   }
 
-  aplicarReembolso(pago: Pago, importe: number, resuelveContracargo: boolean, transaccion: EntityManager): Promise<Pago> {
+  aplicarReembolso(pago: Pago, importe: number, transaccion: EntityManager): Promise<Pago> {
     pago.amount_refunded = Number(pago.amount_refunded ?? 0) + importe;
     if (pago.amount_refunded >= Number(pago.amount)) {
       pago.amount_refunded = Number(pago.amount);
       pago.status = 'refunded';
       pago.refunded_at = new Date();
-    } else if (resuelveContracargo && pago.status !== 'refunded') {
-      pago.status = 'approved';
     }
     return this.pagosRepo.guardar(pago, transaccion);
-  }
-
-  marcarContracargo(idPago: number, chargebackId: string, transaccion: EntityManager): Promise<void> {
-    return this.pagosRepo.actualizar(idPago, { status: 'charged_back', chargeback_id: chargebackId }, transaccion);
-  }
-
-  restaurarPagoAprobado(idPago: number, transaccion: EntityManager): Promise<void> {
-    return this.pagosRepo.actualizar(idPago, { status: 'approved', chargeback_id: null }, transaccion);
   }
 }

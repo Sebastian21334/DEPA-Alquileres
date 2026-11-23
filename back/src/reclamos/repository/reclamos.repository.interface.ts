@@ -8,13 +8,16 @@ export const RECLAMOS_REPOSITORY = 'RECLAMOS_REPOSITORY';
 
 export interface IReclamosRepository {
   enTransaccion(transaccion: EntityManager): IReclamosRepository;
-  existeAbierto(idReserva: number, estados: string[]): Promise<boolean>;
+  /** Abre una transacción propia del reclamo (T49: mensaje e imágenes se guardan juntos). */
+  transaccion<T>(trabajo: (reclamos: IReclamosRepository) => Promise<T>): Promise<T>;
+  /** Bloquea la fila del reclamo hasta el fin de la transacción, para controlar el cupo de imágenes. */
+  bloquear(idReclamo: number): Promise<void>;
+  existeAbierto(idReserva: number, estados: string[], excluirCategoria?: Reclamo['categoria']): Promise<boolean>;
   guardar(reclamo: Partial<Reclamo>): Promise<Reclamo>;
   listarPorParticipante(idUsuario: number): Promise<Reclamo[]>;
   listarAdministracion(): Promise<Reclamo[]>;
   buscarPorId(id: number): Promise<Reclamo | null>;
   contarEvidencias(idReclamo: number): Promise<number>;
-  guardarEvidencia(evidencia: Partial<ReclamoEvidencia>): Promise<ReclamoEvidencia>;
-  buscarEvidencia(idReclamo: number, idEvidencia: number): Promise<ReclamoEvidencia | null>;
+  guardarEvidencias(evidencias: Partial<ReclamoEvidencia>[]): Promise<ReclamoEvidencia[]>;
   guardarMensaje(mensaje: Omit<Partial<ReclamoMensaje>, 'autor'> & { autor: Pick<Usuario, 'id'> }): Promise<ReclamoMensaje>;
 }

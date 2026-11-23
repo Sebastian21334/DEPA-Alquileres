@@ -15,9 +15,13 @@ const { PagosService } = require('../dist/pagos/service/pagos.service');
 const { PagosRepository } = require('../dist/pagos/repository/pagos.repository');
 const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolsos/entity/reembolso.entity');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
+const { AlmacenamientoService } = require('../dist/almacenamiento/service/almacenamiento.service');
+// T44/T56: almacenamiento privado de prueba para los comprobantes de transferencia.
+const { comprobantePdf, almacenamientoDePrueba, imagenPng } = require('./soporte/comprobantes-pruebas.cjs');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
+const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
 const { SolicitudCancelacion } = require('../dist/cancelaciones/entity/solicitud-cancelacion.entity');
@@ -61,7 +65,7 @@ beforeEach(async () => {
     new ReembolsosRepository(source.getRepository(Reembolso)),
     pasarela,
     new PagosService(new PagosRepository(source.getRepository(Pago))),
-    estadoReserva, catalogosDePrueba(),
+    estadoReserva, catalogosDePrueba(), almacenamientoDePrueba().almacenamiento,
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   disponibilidad = { liberarReserva: async () => {} };
@@ -81,6 +85,7 @@ beforeEach(async () => {
 after(async () => {
   if (base) await base.cerrar();
 });
+
 
 async function escenario(fechaInicio = '2099-01-10') {
   const reserva = await source.getRepository(Reserva).save({
@@ -108,7 +113,7 @@ async function cancelacionConFaltante(recibido = 30) {
   if (recibido > 0) {
     // Reproduce una devolución histórica incompleta sin falsificar el saldo agregado del pago.
     await source.getRepository(Reembolso).update(reembolso.id, { importe: recibido });
-    await operacionesReembolso.registrarTransferencia(reembolso.id, 'comprobante-original', 3);
+    await operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'comprobante-original' }, comprobantePdf(), 3);
   }
   return { reserva, pago, solicitud, reembolso };
 }
@@ -133,7 +138,7 @@ test('T43: reclama y completa solo los 20 faltantes de una devolución del 50 %,
   assert.equal(Number(complemento.importe), 20);
   assert.equal(complemento.tipo, 'PARCIAL');
   assert.equal((await reclamos.consultarFaltanteCancelacion(reserva.id, 1)).devolucion.importeReclamable, 0);
-  await operacionesReembolso.registrarTransferencia(complemento.id, 'comprobante-complemento', 3);
+  await operacionesReembolso.registrarTransferencia(complemento.id, { referencia: 'comprobante-complemento' }, comprobantePdf(), 3);
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 50);
   assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, true);
   assert.equal((await reclamos.consultarFaltanteCancelacion(reserva.id, 1)).devolucion.faltante, 0);
@@ -248,6 +253,382 @@ test('T43: la migración es repetible y conserva expedientes de la versión ante
     assert.equal(rows.length, 1);
     assert.equal(rows[0].id_solicitud_cancelacion, null);
   } finally { await anterior.cerrar(); }
+});
+
+test('el vencimiento se revierte ante un error y se puede reintentar sin validar el código', async () => {
+  const { reserva } = await escenario('2026-11-10');
+  await source.getRepository(Reserva).update(reserva.id, { fecha_fin: '2026-11-16' });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  const leer = () => source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-20T12:00:00Z'));
+  assert.equal((await leer()).estado, 'RETENIDO');
+  const registrar = liquidaciones.registrarVencimientoIngreso.bind(liquidaciones);
+  liquidaciones.registrarVencimientoIngreso = async (...args) => { await registrar(...args); throw new Error('fallo simulado'); };
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal((await leer()).estado, 'RETENIDO');
+  liquidaciones.registrarVencimientoIngreso = registrar;
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal((await leer()).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).codigo_validado_en, null);
+  assert.equal(await source.getRepository(Liquidacion).count(), 1);
+});
+
+test('T47-Extra: el código bloqueado con la estadía terminada llega al pago del anunciante', async (t) => {
+  // Estadía del 10 al 20/01/2099: el pago se habilita el 25/01.
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: 'K7M4P9Q2', codigo_generado_en: new Date() });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(
+    reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => '0010000700000000000017' }, reclamos, undefined, almacenamientoDePrueba().almacenamiento,
+  );
+  const liquidacion = () => source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  const actual = () => source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
+
+  // 1. Durante la estadía el anunciante falla 5 veces y el código se bloquea.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-15T15:00:00Z') });
+  for (let intento = 0; intento < 5; intento++)
+    await assert.rejects(reservas.validarCodigoAlojamiento(reserva.id, 'AAAAAAAA', 2), /Código incorrecto/);
+  assert.equal((await liquidacion()).estado, 'EN_REVISION');
+
+  // 2. Terminada la estadía, el admin cierra la revisión: vuelve a RETENIDO con los intentos en 0.
+  t.mock.timers.setTime(new Date('2099-01-22T15:00:00Z').getTime());
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO', observacion: 'Revisión cerrada' }, 3);
+  assert.equal((await liquidacion()).estado, 'RETENIDO');
+  assert.equal((await actual()).intentos_codigo, 0);
+
+  // 3. Antes de que venza el plazo no se puede pagar ni se adelanta el vencimiento.
+  t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles();
+  assert.equal((await liquidacion()).estado, 'RETENIDO');
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'pago-anticipado' }, comprobantePdf(), 3),
+    (error) => error.getStatus() === 409);
+
+  // 4. Al vencer el plazo, T36 lo deja pendiente de pago a favor del anunciante y el admin paga sin código.
+  t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles();
+  assert.equal((await liquidacion()).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'transferencia-1' }, comprobantePdf(), 3);
+  const pagada = await liquidacion();
+  assert.equal(pagada.estado, 'PAGADO_PROPIETARIO');
+  assert.equal(Number(pagada.importe), 100);
+  assert.equal((await actual()).codigo_validado_en, null);
+});
+
+test('T34: cada caso del código de alojamiento tiene su mensaje y la reserva informa los intentos restantes', async (t) => {
+  // Estadía del 10 al 20/01/2099: el código se puede cargar hasta el 24/01.
+  const codigo = 'K7M4P9Q2';
+  const conCodigo = async () => {
+    const reserva = await reservaParaReclamo({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' }, { estado: 'RETENIDO' });
+    await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: codigo, codigo_generado_en: new Date() });
+    return reserva;
+  };
+  const validar = (reserva, valor = 'AAAAAAAA') => reservas.validarCodigoAlojamiento(reserva.id, valor, 2);
+  const restantes = async (reserva) => reservas.prepararRespuesta(await reservas.obtenerReserva(reserva.id)).intentos_codigo_restantes;
+  const rechaza = (promesa, estado, mensaje) => assert.rejects(promesa, (error) => {
+    assert.equal(error.getStatus(), estado);
+    assert.match(error.message, mensaje);
+    return true;
+  });
+  const reserva = await conCodigo();
+  const vencida = await conCodigo();
+
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  await rechaza(validar(reserva, codigo), 409, /Vas a poder validar el código desde el 10\/01\/2099/);
+
+  t.mock.timers.setTime(new Date('2099-01-15T15:00:00Z').getTime());
+  assert.equal(await restantes(reserva), 5);
+  await rechaza(validar(reserva), 400, /^Código incorrecto\. Te quedan 4 intentos de 5\.$/);
+  for (let intento = 0; intento < 2; intento++) await rechaza(validar(reserva), 400, /Código incorrecto/);
+  await rechaza(validar(reserva), 400, /Te queda 1 intento de 5\./);
+  await rechaza(validar(reserva), 400, /^Código incorrecto\. El código se bloqueó tras 5 intentos incorrectos/);
+  assert.equal(await restantes(reserva), 0);
+  // Bloqueado, el código correcto tampoco pasa y el mensaje sigue siendo el del bloqueo.
+  await rechaza(validar(reserva, codigo), 409, /^El código se bloqueó tras 5 intentos incorrectos\. Pedí el reinicio a Administración desde la reserva\.$/);
+
+  t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
+  await rechaza(validar(vencida, codigo), 409, /El plazo para validar el código terminó el 24\/01\/2099/);
+
+  t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
+  await validar(vencida, codigo);
+  await rechaza(validar(vencida, codigo), 409, /El ingreso ya se validó el 24\/01\/2099/);
+});
+
+async function codigoBloqueado(datos = {}) {
+  const reserva = await reservaParaReclamo(datos, {
+    estado: 'EN_REVISION', observacion: 'Código bloqueado después de cinco intentos incorrectos',
+  });
+  await source.getRepository(Reserva).update(reserva.id, { intentos_codigo: 5 });
+  return reserva;
+}
+
+const pedirReinicio = (servicio, reserva, idUsuario = 2) => servicio.crear({
+  id_reserva: reserva.id, categoria: 'CODIGO_BLOQUEADO', descripcion: 'El huésped me dictó el código y no lo toma',
+}, idUsuario);
+
+test('T34: solo el anunciante con el código bloqueado puede pedir el reinicio', async () => {
+  const { servicio, avisos } = reclamosConAvisos();
+  const sinBloqueo = await reservaParaReclamo({}, { estado: 'RETENIDO' });
+  await assert.rejects(pedirReinicio(servicio, sinBloqueo), /no está bloqueado/);
+
+  const bloqueada = await codigoBloqueado();
+  await assert.rejects(pedirReinicio(servicio, bloqueada, 1), (error) => error.getStatus() === 403);
+  await assert.rejects(servicio.crear({ id_reserva: bloqueada.id, categoria: 'OTRO', descripcion: 'Quiero reclamar como anunciante' }, 2),
+    /Solo el Inquilino/);
+
+  const pedido = await pedirReinicio(servicio, bloqueada);
+  assert.equal(pedido.estado, 'ABIERTO');
+  assert.equal(pedido.categoria, 'CODIGO_BLOQUEADO');
+  assert.equal((await liquidacionDe(bloqueada)).observacion,
+    'Código bloqueado después de cinco intentos incorrectos · Pedido de reinicio del código en revisión');
+  assert.deepEqual(avisos.map(aviso => aviso.asunto), ['Pedido de reinicio del código de alojamiento']);
+  await assert.rejects(pedirReinicio(servicio, bloqueada), /ya tiene un reclamo abierto/);
+});
+
+test('T34: el admin habilita intentos sin límite de reinicios o confirma el ingreso sin código', async () => {
+  const { servicio, avisos } = reclamosConAvisos();
+  const reserva = await codigoBloqueado();
+  const primero = await pedirReinicio(servicio, reserva);
+  await assert.rejects(servicio.resolver(primero.id, { resolucion: 'SIN_DEVOLUCION' }, 3), /pedido de reinicio del código se resuelve/);
+
+  const reiniciado = await servicio.resolver(primero.id, { resolucion: 'REINICIAR_CODIGO' }, 3);
+  assert.deepEqual([reiniciado.estado, reiniciado.resolucion], ['RESUELTO_ANUNCIANTE', 'REINICIAR_CODIGO']);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).intentos_codigo, 0);
+  assert.equal((await liquidacionDe(reserva)).estado, 'RETENIDO');
+  assert.equal(avisos.at(-1).asunto, 'Código de alojamiento reiniciado');
+
+  // Vuelve a bloquearse: se puede pedir otro reinicio, y esta vez el admin confirma el ingreso.
+  await source.getRepository(Reserva).update(reserva.id, { intentos_codigo: 5 });
+  await source.getRepository(Liquidacion).update({ reserva: { id: reserva.id } }, { estado: 'EN_REVISION' });
+  const segundo = await pedirReinicio(servicio, reserva);
+  const confirmado = await servicio.resolver(segundo.id, { resolucion: 'CONFIRMAR_INGRESO' }, 3);
+  assert.deepEqual([confirmado.estado, confirmado.resolucion], ['RESUELTO_ANUNCIANTE', 'CONFIRMAR_INGRESO']);
+  assert.equal((await liquidacionDe(reserva)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  // El ingreso queda validado: la estadía se ve como con el código (En curso / Finalizada).
+  const confirmada = await reservas.obtenerReserva(reserva.id);
+  assert.ok(confirmada.codigo_validado_en);
+  assert.notEqual(reservas.calcularEstadoEstadia(confirmada), 'PENDIENTE_INGRESO');
+  assert.notEqual(reservas.calcularEstadoEstadia(confirmada), 'INGRESO_NO_VERIFICADO');
+  assert.equal(avisos.at(-1).asunto, 'Ingreso confirmado por la administración');
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+  // Con el ingreso confirmado, el código sigue bloqueado pero ya no se puede pedir otro reinicio.
+  await assert.rejects(pedirReinicio(servicio, reserva), /ya se validó/);
+  assert.equal((await liquidacionDe(reserva)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+
+  // Las salidas del pedido no se usan en otros reclamos.
+  const otra = await reservaParaReclamo({}, { estado: 'RETENIDO' });
+  const comun = await reclamoAbierto(otra);
+  await assert.rejects(servicio.resolver(comun.id, { resolucion: 'REINICIAR_CODIGO' }, 3), /solo corresponde a un pedido de reinicio/);
+});
+
+test('T34: rechazar el pedido devuelve el total al inquilino y exige el motivo', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'EN_REVISION', moneda: 'ARS' });
+  await source.getRepository(Reserva).update(reserva.id, { intentos_codigo: 5 });
+  const { servicio } = reclamosConAvisos();
+  const pedido = await pedirReinicio(servicio, reserva);
+  await assert.rejects(servicio.resolver(pedido.id, { resolucion: 'DEVOLUCION_TOTAL' }, 3), /Indicá el motivo/);
+  const rechazado = await servicio.resolver(pedido.id, { resolucion: 'DEVOLUCION_TOTAL', observacion: 'El huésped no pudo entrar' }, 3);
+  assert.deepEqual([rechazado.estado, rechazado.resolucion, Number(rechazado.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
+});
+
+test('T34: T36 deja a favor del anunciante el código bloqueado sin pedido ni reclamo', async () => {
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  const fechas = { fecha_inicio: '2026-11-10', fecha_fin: '2026-11-16' };
+  const bloqueada = await codigoBloqueado(fechas);
+  const conPedido = await codigoBloqueado(fechas);
+  const otraRevision = await reservaParaReclamo(fechas, { estado: 'EN_REVISION', observacion: 'Pago tardío en revisión' });
+  await source.getRepository(Reclamo).save({
+    reserva: conPedido, inquilino: { id: 1 }, anunciante: { id: 2 }, categoria: 'CODIGO_BLOQUEADO',
+    descripcion: 'Pedido de reinicio abierto', estado: 'ABIERTO',
+  });
+
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-20T12:00:00Z'));
+  assert.equal((await liquidacionDe(bloqueada)).estado, 'EN_REVISION');
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal((await liquidacionDe(bloqueada)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal((await liquidacionDe(conPedido)).estado, 'EN_REVISION');
+  assert.equal((await liquidacionDe(otraRevision)).estado, 'EN_REVISION');
+});
+
+test('T55: el historial del anunciante junta los pagos de todas sus publicaciones, una vez cada uno', async (t) => {
+  await db.exec(`INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante)
+    VALUES (900,'Segunda publicación','Integración',CURRENT_DATE,100,'Dirección',1,30,2)`);
+  t.after(() => db.exec('DELETE FROM publicacion WHERE id_publicacion = 900'));
+  const pagar = async (idPublicacion, referencia) => {
+    const reserva = await source.getRepository(Reserva).save({
+      monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: idPublicacion },
+      fecha_inicio: '2026-01-01', fecha_fin: '2026-01-05',
+    });
+    await source.getRepository(Liquidacion).save({
+      reserva, estado: 'PAGADO_PROPIETARIO', importe: 100, moneda: 'ARS', referencia, fecha_pago_propietario: new Date(),
+    });
+    return reserva;
+  };
+  const primera = await pagar(1, 'transferencia-1');
+  const segunda = await pagar(900, 'transferencia-2');
+  await source.getRepository(Reserva).save({ monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: 1 } });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+
+  const todos = await liquidaciones.listarPagosDelAnunciante(2);
+  assert.deepEqual(todos.map(pago => [pago.reservaId, pago.publicacion, pago.referencia]).sort(), [
+    [primera.id, 'Publicación de prueba', 'transferencia-1'],
+    [segunda.id, 'Segunda publicación', 'transferencia-2'],
+  ]);
+  assert.equal(Object.hasOwn(todos[0], 'administrador'), false);
+  assert.deepEqual((await liquidaciones.listarPagosDelAnunciante(2, 900)).map(pago => pago.reservaId), [segunda.id]);
+  assert.deepEqual(await liquidaciones.listarPagosDelAnunciante(4), []);
+});
+
+test('un reclamo no puede sobrescribir una liquidación ya pagada al anunciante', async () => {
+  const { reserva } = await escenario('2026-01-01');
+  const fecha = new Date();
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(fecha);
+  await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: '2026-01-01', fecha_fin: hoy });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PAGADO_PROPIETARIO', importe: 100, moneda: 'ARS' });
+  await assert.rejects(
+    reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 2),
+    /Solo el Inquilino/,
+  );
+  await assert.rejects(
+    reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1),
+    /liquidación de esta reserva ya fue resuelta/i,
+  );
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(liquidacion.estado, 'PAGADO_PROPIETARIO');
+  assert.equal(Number(liquidacion.importe), 100);
+  assert.equal(await source.getRepository(Reclamo).count(), 0);
+});
+
+test('se puede reclamar antes del vencimiento y el reclamo congela la liquidación', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T02:59:59Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'EN_REVISION');
+});
+
+test('el reclamo vence al comienzo del quinto día después del fin de la estadía', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T03:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await assert.rejects(reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1), /plazo para reclamar terminó el 24\/01\/2099/i);
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'RETENIDO');
+  assert.equal(await source.getRepository(Reclamo).count(), 0);
+});
+
+test('un reclamo abierto mantiene la liquidación en revisión incluso después del vencimiento', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'EN_REVISION');
+});
+
+test('administración y el vencimiento no liberan una reserva con reclamo abierto', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /reclamo abierto/i);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PENDIENTE_PAGO_PROPIETARIO' }, 3), /reclamo abierto/i);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /reclamo abierto/i);
+  await source.getRepository(Liquidacion).update({ reserva: { id: reserva.id } }, { estado: 'RETENIDO' });
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'RETENIDO');
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'PENDIENTE_PAGO_PROPIETARIO');
+});
+
+test('el reporte anterior respeta el plazo y la identidad del inquilino', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await assert.rejects(reservas.reportarProblema(reserva.id, 'Problema', 2), /Solo el inquilino/);
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await assert.rejects(reservas.reportarProblema(reserva.id, 'Problema', 1), /plazo de reclamos/);
+  assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'RETENIDO');
+});
+
+test('una estadía sin código vence y permite registrar el pago sin marcar el ingreso como validado', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T03:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const { almacenamiento, archivos } = almacenamientoDePrueba();
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos, undefined, almacenamiento);
+  await operaciones.avisarLiquidacionesDisponibles(new Date());
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+  // T56: el endpoint genérico ya no registra pagos; hace falta el comprobante.
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), { status: 400 });
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, undefined, 3), /Adjuntá el comprobante/);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'pago-prueba', observacion: 'Banco Nación' }, comprobantePdf('pago.pdf'), 3);
+  const actual = await reservas.obtenerReserva(reserva.id);
+  assert.equal(actual.estado_liquidacion, 'PAGADO_PROPIETARIO');
+  assert.equal(actual.codigo_validado_en, null);
+  assert.equal(reservas.prepararRespuesta(actual).estado_estadia, 'INGRESO_NO_VERIFICADO');
+  const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+  assert.equal(Number(liquidacion.importe), 100);
+  assert.equal(liquidacion.referencia, 'pago-prueba');
+  // Las relaciones de otros módulos (reclamos, reembolsos) no traen los pagos ni la URL privada.
+  assert.equal(liquidacion.pagos_anunciante, undefined);
+  const [pago] = await operaciones.listarPagosDelAnunciante(2);
+  assert.deepEqual({ indice: pago.indice, comprobante: pago.comprobante, referencia: pago.referencia, observacion: pago.observacion },
+    { indice: 0, comprobante: 'pago.pdf', referencia: 'pago-prueba', observacion: 'Banco Nación' });
+  assert.equal(JSON.stringify(await operaciones.listarPagosRegistrados()).includes('privado.example'), false);
+  // El comprobante lo ven el admin y el anunciante; el inquilino y terceros, no.
+  assert.match((await operaciones.urlComprobantePago(reserva.id, 0, { id: 3, rol: 'Administrador' })).url, /comprobantes\/liquidaciones\/\d+\/.+\.pdf\?firmado$/);
+  assert.match((await operaciones.urlComprobantePago(reserva.id, 0, { id: 2 })).url, /\?firmado$/);
+  for (const actor of [{ id: 1 }, { id: 4 }])
+    await assert.rejects(operaciones.urlComprobantePago(reserva.id, 0, actor), { status: 404 });
+  await assert.rejects(operaciones.urlComprobantePago(reserva.id, 1, { id: 3, rol: 'Administrador' }), { status: 404 });
+  // Un segundo registro se rechaza antes de subir otro archivo.
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), { status: 409 });
+  assert.equal(archivos.subidos.length, 1);
+  assert.deepEqual(archivos.borrados, []);
+});
+
+test('T56: si el pago no queda registrado, el comprobante subido se borra', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T03:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const { almacenamiento, archivos } = almacenamientoDePrueba();
+  // Sin CBU validado el registro falla dentro de la transacción, después de subir el archivo.
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => null }, reclamos, undefined, almacenamiento);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /CBU validado/);
+  assert.equal(archivos.subidos.length, 1);
+  assert.deepEqual(archivos.borrados, [`https://privado.example/${archivos.subidos[0]}`]);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+});
+
+test('un reclamo en una estadía con ingreso validado bloquea el pago hasta resolverse y vencer el plazo', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-15T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2);
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos, undefined, almacenamientoDePrueba().almacenamiento);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /pendiente|revisión/i);
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /cinco días/i);
+  t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'transferencia' }, comprobantePdf(), 3);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PAGADO_PROPIETARIO');
 });
 
 test('la migración de estados por ámbito es repetible y conserva reservas y pagos', async () => {
@@ -812,7 +1193,7 @@ for (const medio of ['account_money', 'visa', 'master', 'amex', 'debvisa']) {
       const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
       assert.equal(reembolso.transferencia_manual, false);
       assert.equal(reembolso.estado, 'PENDIENTE');
-      await assert.rejects(operacionesReembolso.registrarTransferencia(reembolso.id, 'no-corresponde', 3), /no está habilitado para transferencia/);
+      await assert.rejects(operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'no-corresponde' }, comprobantePdf(), 3), /no está habilitado para transferencia/);
       const llamadas = [];
       pasarela.reembolsar = async (...args) => {
         llamadas.push(args);
@@ -841,8 +1222,8 @@ test('T45: un rechazo definitivo con tarjeta habilita la transferencia sin crear
   assert.equal(rechazado.reembolso.estado, 'PENDIENTE');
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
   assert.equal((await reembolsos.conversar(reembolso.id, { id: 1 }, 0)).abierta, true);
-  await operacionesReembolso.registrarTransferencia(reembolso.id, 'comprobante-tarjeta', 3);
-  await operacionesReembolso.registrarTransferencia(reembolso.id, 'comprobante-tarjeta', 3);
+  await operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'comprobante-tarjeta' }, comprobantePdf(), 3);
+  await assert.rejects(operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'comprobante-tarjeta' }, comprobantePdf(), 3), { status: 409 });
   assert.equal(intentos, 1);
   assert.equal(await source.getRepository(Reembolso).count(), 1);
   assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, true);
@@ -862,7 +1243,7 @@ test('T45: un timeout con tarjeta conserva la vía automática y reintenta con l
   const incierto = await reembolsos.buscar(reembolso.id);
   assert.equal(incierto.estado, 'FALLIDO');
   assert.equal(incierto.transferencia_manual, false);
-  await assert.rejects(operacionesReembolso.registrarTransferencia(reembolso.id, 'no-duplicar', 3), /no está habilitado para transferencia/);
+  await assert.rejects(operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'no-duplicar' }, comprobantePdf(), 3), /no está habilitado para transferencia/);
   await source.getRepository(Reembolso).update(reembolso.id, { conciliar_en: new Date(Date.now() - 1000) });
   await operacionesReembolso.ejecutar(reembolso.id, 3);
   assert.deepEqual(claves, [reembolso.idempotency_key, reembolso.idempotency_key]);
@@ -1085,6 +1466,98 @@ test('las notas internas de reclamos solo se entregan al administrador', async (
   assert.doesNotMatch(avisos[0][3], /Respuesta pública/);
 });
 
+/** T49: servicio de reclamos con almacenamiento de prueba, para subir imágenes. */
+function reclamosConImagenes() {
+  const { almacenamiento, archivos } = almacenamientoDePrueba();
+  const servicio = new ReclamosService(
+    new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia), source.getRepository(ReclamoMensaje)),
+    reservas, reembolsos, almacenamiento, catalogosDePrueba(), cancelaciones, { avisarCambio: async () => {} },
+  );
+  return { servicio, archivos };
+}
+
+async function reclamoDePrueba() {
+  const { reserva } = await escenario();
+  return source.getRepository(Reclamo).save({
+    reserva, inquilino: { id: 1 }, anunciante: { id: 2 }, categoria: 'OTRO', descripcion: 'Reclamo de prueba',
+  });
+}
+
+test('T49: las imágenes de un mensaje quedan en ese mensaje, con su autor y sin datos de más', async () => {
+  const { servicio, archivos } = reclamosConImagenes();
+  const reclamo = await reclamoDePrueba();
+  const enviado = await servicio.enviarMensaje(reclamo.id, {}, 1, false, [await imagenPng('living.png'), await imagenPng('baño.png')]);
+  assert.equal(enviado.texto, '');
+  assert.equal(Object.hasOwn(enviado, 'reclamo'), false);
+  assert.deepEqual(enviado.evidencias.map(({ nombre_archivo, id_mensaje }) => [nombre_archivo, id_mensaje]),
+    [['living.png', enviado.id], ['baño.png', enviado.id]]);
+  assert.equal(archivos.subidos.length, 2);
+  for (const imagen of enviado.evidencias) {
+    assert.match(imagen.url, /\?firmado$/);
+    assert.equal(imagen.autor.id, 1);
+    assert.ok(imagen.autor.nombre);
+  }
+
+  // Las imágenes que se suben al crear el reclamo quedan con la descripción.
+  await servicio.subirEvidencias(reclamo.id, 1, false, [await imagenPng('frente.png')]);
+  const visto = JSON.parse(JSON.stringify(await servicio.obtener(reclamo.id, 2, false)));
+  assert.deepEqual(visto.evidencias.map((imagen) => [imagen.nombre_archivo, imagen.id_mensaje, imagen.autor.id]), [['frente.png', null, 1]]);
+  assert.deepEqual(Object.keys(visto.evidencias[0]).sort(), ['autor', 'creado_en', 'id', 'id_mensaje', 'nombre_archivo', 'url']);
+  assert.deepEqual(Object.keys(visto.evidencias[0].autor).sort(), ['apellido', 'id', 'nombre', 'rol']);
+  assert.deepEqual(Object.keys(visto.mensajes[0].autor).sort(), ['apellido', 'id', 'nombre', 'rol']);
+  assert.equal(visto.mensajes[0].evidencias.length, 2);
+  assert.deepEqual((await servicio.listarMensajes(reclamo.id, 1, false))[0].evidencias.map((imagen) => imagen.nombre_archivo), ['living.png', 'baño.png']);
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: '   ' }, 1, false), /Escribí un mensaje o adjuntá/);
+});
+
+test('T49: hasta 10 imágenes por envío y 30 por reclamo; una nota interna no lleva imágenes', async () => {
+  const { servicio, archivos } = reclamosConImagenes();
+  const reclamo = await reclamoDePrueba();
+  const imagen = await imagenPng();
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, {}, 1, false, Array(11).fill(imagen)), /hasta 10 imágenes por envío/);
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: 'Nota', visible_para: 'ADMIN' }, 3, true, [imagen]), /notas internas no admiten imágenes/);
+  await source.getRepository(ReclamoEvidencia).save(Array.from({ length: 26 }, (_, i) => ({
+    reclamo, url: `https://privado.example/anterior-${i}.jpg`, nombre_archivo: `anterior-${i}.jpg`,
+  })));
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, {}, 2, false, Array(5).fill(imagen)), /podés adjuntar 4 más/);
+  assert.equal(archivos.subidos.length, 0);
+  // El admin también puede adjuntar imágenes en un mensaje visible para las partes.
+  const delAdmin = await servicio.enviarMensaje(reclamo.id, { texto: 'Adjunto el inventario' }, 3, true, Array(4).fill(imagen));
+  assert.equal(delAdmin.evidencias.length, 4);
+  await assert.rejects(servicio.subirEvidencias(reclamo.id, 1, false, [imagen]), /ya tiene las 30 imágenes permitidas/);
+});
+
+test('T49: si el mensaje no se guarda, no queda a medias y se borran las imágenes subidas', async (t) => {
+  const { servicio, archivos } = reclamosConImagenes();
+  const reclamo = await reclamoDePrueba();
+  t.mock.method(ReclamosRepository.prototype, 'guardarEvidencias', async () => { throw new Error('Fallo simulado al guardar'); });
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: 'Con fotos' }, 1, false, [await imagenPng(), await imagenPng()]), /Fallo simulado/);
+  assert.equal(archivos.subidos.length, 2);
+  assert.deepEqual([...archivos.borrados].sort(), archivos.subidos.map((nombre) => `https://privado.example/${nombre}`).sort());
+  assert.equal(await source.getRepository(ReclamoMensaje).countBy({ reclamo: { id: reclamo.id } }), 0);
+});
+
+test('T49: la migración une imágenes y mensajes, conserva las imágenes existentes y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261123-imagenes-mensajes-reclamo.sql'), 'utf8');
+  const base = new PGlite();
+  try {
+    await base.exec(`CREATE TABLE reclamo_mensaje (id_mensaje_reclamo integer PRIMARY KEY);
+      CREATE TABLE reclamo_evidencia (id_evidencia integer PRIMARY KEY, nombre_archivo varchar(255) NOT NULL);
+      INSERT INTO reclamo_mensaje VALUES (1);
+      INSERT INTO reclamo_evidencia VALUES (1, 'anterior.jpg');`);
+    await base.exec(migracion);
+    await base.exec(migracion);
+    assert.deepEqual((await base.query('SELECT nombre_archivo, id_mensaje FROM reclamo_evidencia')).rows, [{ nombre_archivo: 'anterior.jpg', id_mensaje: null }]);
+    await base.exec("INSERT INTO reclamo_evidencia VALUES (2, 'del-chat.jpg', 1)");
+    await assert.rejects(base.exec("INSERT INTO reclamo_evidencia VALUES (3, 'sin-mensaje.jpg', 99)"), /foreign key/);
+    await base.exec('DELETE FROM reclamo_mensaje WHERE id_mensaje_reclamo = 1');
+    assert.deepEqual((await base.query('SELECT id_mensaje FROM reclamo_evidencia WHERE id_evidencia = 2')).rows, [{ id_mensaje: null }]);
+  } finally {
+    await base.close();
+  }
+});
+
 for (const [dias, porcentaje] of [[7, 100], [2, 50], [1, 0]]) {
   test(`cancelar con ${dias} días de anticipación aplica ${porcentaje}% de devolución`, async () => {
     const { reserva } = await escenario(fechaEnDias(dias));
@@ -1137,6 +1610,77 @@ async function reclamoAbierto(reserva) {
   return reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }, 1);
 }
 
+async function reservaParaReclamo(datos = {}, liquidacion = null) {
+  const reserva = await source.getRepository(Reserva).save({
+    monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: 1 },
+    fecha_inicio: '2026-01-01', fecha_fin: '2099-01-20', ...datos,
+  });
+  if (liquidacion) await source.getRepository(Liquidacion).save({ reserva, moneda: 'ARS', ...liquidacion });
+  return reserva;
+}
+
+const liquidacionDe = reserva => source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
+
+test('T47: se puede reclamar durante la estadía sin código, con el código validado o bloqueado', async () => {
+  const sinCodigo = await reservaParaReclamo();
+  assert.equal((await reclamoAbierto(sinCodigo)).estado, 'ABIERTO');
+
+  const conCodigo = await reservaParaReclamo({ codigo_validado_en: new Date() }, { estado: 'PENDIENTE_PAGO_PROPIETARIO' });
+  assert.equal((await reclamoAbierto(conCodigo)).estado, 'ABIERTO');
+  assert.equal((await liquidacionDe(conCodigo)).estado, 'EN_REVISION');
+
+  const bloqueado = await reservaParaReclamo({ intentos_codigo: 5 }, {
+    estado: 'EN_REVISION', observacion: 'Código bloqueado después de cinco intentos incorrectos',
+  });
+  const reclamo = await reclamoAbierto(bloqueado);
+  assert.equal((await liquidacionDe(bloqueado)).observacion,
+    'Código bloqueado después de cinco intentos incorrectos · Reclamo del inquilino en revisión');
+
+  // Resuelto a favor del anunciante, el código vuelve a poder cargarse.
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
+  const actual = await reservas.obtenerReserva(bloqueado.id);
+  assert.equal(actual.intentos_codigo, 0);
+  assert.equal(actual.estado_liquidacion, 'RETENIDO');
+});
+
+test('T47: el reclamo respeta el período de la estadía hasta el día anterior al pago (T35)', async (t) => {
+  const reserva = await reservaParaReclamo({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' });
+  const vencida = await reservaParaReclamo({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' });
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  await assert.rejects(reclamoAbierto(reserva), (error) => {
+    assert.equal(error.getStatus(), 400);
+    assert.match(error.message, /Podés reclamar desde el 10\/01\/2099/);
+    return true;
+  });
+  // Fin 20/01: se puede reclamar hasta el 24/01; el pago se habilita el 25/01.
+  t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
+  assert.equal((await reclamoAbierto(reserva)).estado, 'ABIERTO');
+  t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
+  await assert.rejects(reclamoAbierto(vencida), (error) => {
+    assert.equal(error.getStatus(), 400);
+    assert.match(error.message, /terminó el 24\/01\/2099, antes de que se habilite el pago/);
+    return true;
+  });
+});
+
+test('T47: no se abre un reclamo sobre una liquidación ya pagada y no se pisa su estado', async () => {
+  const reserva = await reservaParaReclamo({ codigo_validado_en: new Date() }, { estado: 'PAGADO_PROPIETARIO' });
+  await assert.rejects(reclamoAbierto(reserva), (error) => {
+    assert.equal(error.getStatus(), 409);
+    assert.match(error.message, /ya fue resuelta/);
+    return true;
+  });
+  assert.equal((await liquidacionDe(reserva)).estado, 'PAGADO_PROPIETARIO');
+  assert.equal(await source.getRepository(Reclamo).count(), 0);
+});
+
+test('T47: la respuesta de la reserva informa el fin del plazo de reclamos', async () => {
+  const reserva = await reservaParaReclamo({ fecha_fin: '2099-01-28' });
+  const respuesta = reservas.prepararRespuesta(await reservas.obtenerReserva(reserva.id));
+  assert.equal(respuesta.fin_plazo_reclamo, '2099-02-01');
+  assert.equal(reservas.finPlazoReclamo({ ...reserva, cancelada: true }), null);
+});
+
 test('la devolución total por transferencia deja el reclamo resuelto al decidir y el reembolso pendiente', async () => {
   const { reserva, pago } = await escenario('2026-01-01');
   await source.getRepository(Pago).update(pago.id, { payment_method_id: null });
@@ -1155,7 +1699,14 @@ test('la devolución total por transferencia deja el reclamo resuelto al decidir
 
   const decidido = await source.getRepository(Reclamo).findOneOrFail({ where: { id: reclamo.id }, relations: { administrador_resolucion: true } });
   // Otro administrador registra la transferencia.
-  await operacionesReembolso.registrarTransferencia(pendiente.id, 'trf-inquilino', 4);
+  await operacionesReembolso.registrarTransferencia(pendiente.id, { referencia: 'trf-inquilino' }, comprobantePdf(), 4);
+  const conComprobante = await source.getRepository(Reembolso).findOneOrFail({
+    where: { id: pendiente.id }, select: { id: true, comprobante_url: true, comprobante_nombre: true },
+  });
+  assert.deepEqual([conComprobante.comprobante_nombre, /comprobantes\/reembolsos\/\d+\/.+\.pdf$/.test(conComprobante.comprobante_url)],
+    ['transferencia.pdf', true]);
+  assert.match((await reembolsos.urlComprobante(pendiente.id, { id: 1 })).url, /\?firmado$/);
+  await assert.rejects(reembolsos.urlComprobante(pendiente.id, { id: 2 }), { status: 404 });
   assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'REEMBOLSADO');
   const final = await source.getRepository(Reclamo).findOneOrFail({ where: { id: reclamo.id }, relations: { administrador_resolucion: true } });
   assert.deepEqual([final.estado, final.resolucion, Number(final.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
@@ -1217,7 +1768,7 @@ test('un reclamo con la devolución pedida antes de este cambio se completa al c
     idempotencyKey: `rec:${reclamo.id}`, referenciaInterna: `rec:${reclamo.id}`,
   });
   await source.getRepository(Reembolso).update(anterior.id, { transferencia_manual: true });
-  await operacionesReembolso.registrarTransferencia(anterior.id, 'trf-previa', 3);
+  await operacionesReembolso.registrarTransferencia(anterior.id, { referencia: 'trf-previa' }, comprobantePdf(), 3);
   const completo = await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id });
   assert.deepEqual([completo.estado, completo.resolucion, Number(completo.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_PARCIAL', 30]);
   assert.ok(completo.resuelto_en);
@@ -1242,72 +1793,49 @@ test('si falla la escritura de la liquidación se revierte la reserva y se puede
   assert.equal(liquidacion.estado, 'DEVUELTO_PARCIAL_INQUILINO');
 });
 
-for (const resultado of ['GANADA', 'PERDIDA']) {
-  test(`el contracargo ${resultado} integra la disputa, el pago y la reserva sin duplicaciones`, async (t) => {
-    const { Disputa } = require('../dist/disputas/entity/disputa.entity');
-    const { DisputasService } = require('../dist/disputas/service/disputas.service');
-    const { DisputasRepository } = require('../dist/disputas/repository/disputas.repository');
-    const { PagosRepository } = require('../dist/pagos/repository/pagos.repository');
-    const { CatalogosService } = require('../dist/catalogos/service/catalogos.service');
-    const { Estado } = require('../dist/catalogos/entity/estado.entity');
-    const { reserva, pago } = await escenario();
-    const estados = source.getRepository(Estado);
-    const catalogos = new CatalogosService({
-      buscarTodosRoles: async () => [{ nombre: 'Administrador' }, { nombre: 'Inquilino' }],
-      listarEstados: () => estados.find({ relations: { ambito: true } }),
-    });
-    await catalogos.onModuleInit();
-    const disputasRepo = new DisputasRepository(source.getRepository(Disputa));
-    const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
-    const disputas = new DisputasService(disputasRepo, pagos, reembolsos, reservas, catalogos);
-    let llamadasPasarela = 0;
-    pasarela.reembolsar = async () => { llamadasPasarela++; throw new Error('El contracargo ya movió el dinero'); };
-    const datos = { idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-prueba', importe: 100 };
-    const disputa = await disputas.registrarContracargo(datos);
-    assert.equal(disputa.estado.codigo, 'ABIERTA');
-    assert.equal((await disputas.registrarContracargo(datos)).id, disputa.id);
-    assert.equal(await source.getRepository(Disputa).count(), 1);
-    assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).estado_pago, 'CONTRACARGO');
-    assert.equal((await disputas.listarAdministracion())[0].estado, 'ABIERTA');
-    if (resultado === 'GANADA') {
-      const guardar = t.mock.method(DisputasRepository.prototype, 'guardar', async () => { throw new Error('fallo al cerrar disputa'); });
-      await assert.rejects(disputas.resolver(disputa.id, { resultado }, 3), /fallo al cerrar disputa/);
-      assert.equal((await pagos.buscarPorId(pago.id)).status, 'charged_back');
-      assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'CONTRACARGO');
-      guardar.mock.restore();
-    }
-    assert.equal((await disputas.resolver(disputa.id, { resultado }, 3)).estado, resultado);
-    await assert.rejects(disputas.resolver(disputa.id, { resultado }, 3), /ya fue resuelta/);
-    assert.equal((await disputasRepo.buscarPorId(disputa.id)).estado.codigo, resultado);
-    const actual = await reservas.obtenerReserva(reserva.id);
-    assert.equal(actual.estado_pago, resultado === 'GANADA' ? 'APROBADO' : 'REEMBOLSADO');
-    assert.equal(actual.cancelada, resultado === 'PERDIDA');
-    assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), resultado === 'GANADA' ? 0 : 100);
-    const pagoResuelto = await pagos.buscarPorId(pago.id);
-    await disputas.registrarContracargo(datos);
-    assert.equal((await pagos.buscarPorId(pago.id)).status, pagoResuelto.status);
-    assert.equal(llamadasPasarela, 0);
-  });
-}
-
-test('si falla el contracargo revierte el pago y la liquidación, y el aviso permite reintentar', async (t) => {
-  const { Disputa } = require('../dist/disputas/entity/disputa.entity');
-  const { DisputasService } = require('../dist/disputas/service/disputas.service');
-  const { DisputasRepository } = require('../dist/disputas/repository/disputas.repository');
+test('recibir un contracargo no cambia el pago, la reserva ni la liquidación', async () => {
+  const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
   const { reserva, pago } = await escenario();
-  const repo = new DisputasRepository(source.getRepository(Disputa));
+  const referencia = 'reserva:' + reserva.id;
+  await source.getRepository(Pago).update(pago.id, { external_reference: referencia, payment_id: '123' });
   const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
-  const disputas = new DisputasService(repo, pagos, reembolsos, reservas, catalogosDePrueba());
-  const guardar = t.mock.method(DisputasRepository.prototype, 'guardar', async () => { throw new Error('fallo de escritura'); });
-  const datos = { idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-con-reintento', importe: 100 };
-  await assert.rejects(disputas.registrarContracargo(datos), /fallo de escritura/);
-  assert.equal((await pagos.buscarPorId(pago.id)).status, 'approved');
-  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_pago, 'APROBADO');
-  assert.equal(await source.getRepository(Liquidacion).count(), 0);
-  guardar.mock.restore();
-  assert.equal((await disputas.registrarContracargo(datos)).estado.codigo, 'ABIERTA');
-  assert.equal((await pagos.buscarPorId(pago.id)).status, 'charged_back');
-  assert.equal(await source.getRepository(Liquidacion).count(), 1);
+  const pagoAntes = await pagos.buscarPorId(pago.id);
+  const reservaAntes = await reservas.obtenerReserva(reserva.id);
+  const pasarela = {
+    validarWebhook: () => {},
+    consultarPago: async () => ({
+      id: 123, external_reference: referencia, status: 'charged_back', transaction_amount: 100, currency_id: 'ARS',
+      refunds: [{ id: 321, payment_id: 123, amount: 100, status: 'approved' }],
+    }),
+  };
+  const operaciones = new OperacionesPagoService({}, pagos, reservas, reembolsos, {}, pasarela,
+    catalogosDePrueba(), operacionesReembolso);
+  const entrada = { body: { type: 'payment' }, dataId: '123' };
+
+  assert.deepEqual(await operaciones.procesarWebhook(entrada), { received: true });
+  assert.deepEqual(await operaciones.procesarWebhook(entrada), { received: true });
+  assert.deepEqual(await pagos.buscarPorId(pago.id), pagoAntes);
+  assert.deepEqual(await reservas.obtenerReserva(reserva.id), reservaAntes);
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+});
+
+test('los reembolsos históricos de contracargos quedan fuera de la conciliación y la aplicación', async () => {
+  const { pago, crearReembolso } = await escenario();
+  const pendiente = await crearReembolso();
+  await source.query(
+    "UPDATE reembolso SET estado = 'FALLIDO', origen = 'CONTRACARGO', conciliar_en = now(), primer_intento_en = now() WHERE id_reembolso = $1",
+    [pendiente.id],
+  );
+  let llamadas = 0;
+  pasarela.reembolsar = async () => { llamadas++; };
+  await reembolsos.reconciliarPendientes();
+  await assert.rejects(reembolsos.ejecutar(pendiente.id, 3), /fuera de la aplicación/);
+  assert.equal(llamadas, 0);
+
+  await source.query("UPDATE reembolso SET estado = 'APROBADO' WHERE id_reembolso = $1", [pendiente.id]);
+  assert.deepEqual(await reembolsos.listarPendientesAplicacion(0), []);
+  await assert.rejects(operacionesReembolso.aplicarReembolsoConfirmado(pendiente.id), /fuera de la aplicación/);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 0);
 });
 
 test('el webhook de reembolso permite recuperar la aplicación tras un fallo sin registrar otro movimiento', async (t) => {
@@ -1320,7 +1848,7 @@ test('el webhook de reembolso permite recuperar la aplicación tras un fallo sin
     refunds: [{ id: 321, payment_id: 123, amount: 100, status: 'approved' }],
   });
   const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
-  const operaciones = new OperacionesPagoService({}, pagos, reservas, reembolsos, {}, {},
+  const operaciones = new OperacionesPagoService({}, pagos, reservas, reembolsos, {},
     { consultarPago, validarWebhook: () => {} }, catalogosDePrueba(), operacionesReembolso);
   const aplicar = t.mock.method(operacionesReembolso, 'aplicarReembolsoConfirmado', async () => { throw new Error('fallo de aplicación'); });
   const entrada = { body: { type: 'payment' }, dataId: '123' };
@@ -1457,6 +1985,42 @@ test('demora administrativa: la migración se detiene si existen compensaciones 
   } finally { await db.exec('DROP TABLE compensacion_demora'); }
 });
 
+test('integración: la demora conserva siete días y no modifica una liquidación ya pagada', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-01T15:00:00Z') });
+  const caso = await solicitudSinRespuesta();
+  await source.getRepository(Liquidacion).save({ reserva: caso.reserva, estado: 'PAGADO_PROPIETARIO', moneda: 'ARS', importe: 100 });
+  t.mock.timers.setTime(new Date('2099-01-08T15:00:00Z').getTime());
+  const reclamo = await reclamos.crear({ id_reserva: caso.reserva.id, categoria: 'DEMORA_ADMINISTRATIVA', descripcion: descripcionDemora }, 1);
+  assert.equal(reclamo.categoria, 'DEMORA_ADMINISTRATIVA');
+  assert.equal((await reservas.obtenerReserva(caso.reserva.id)).estado_liquidacion, 'PAGADO_PROPIETARIO');
+  assert.equal(await source.getRepository(Reembolso).count(), 0);
+  await reclamos.resolver(reclamo.id, { resolucion: 'SIN_DEVOLUCION' }, 3);
+  assert.equal((await reservas.obtenerReserva(caso.reserva.id)).estado_liquidacion, 'PAGADO_PROPIETARIO');
+});
+
+test('integración: la demora no admite solicitudes después de sus siete días', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-01T15:00:00Z') });
+  const caso = await solicitudSinRespuesta();
+  t.mock.timers.setTime(new Date('2099-01-09T15:00:00Z').getTime());
+  assert.equal((await reclamos.listarDemorasMias(1)).length, 0);
+  await assert.rejects(reclamos.crear({ id_reserva: caso.reserva.id, categoria: 'DEMORA_ADMINISTRATIVA', descripcion: descripcionDemora }, 1), /plazo para reclamar/);
+  assert.equal(await source.getRepository(Reclamo).count(), 0);
+});
+
+test('integración: una demora abierta no impide el pago habitual al anunciante', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-01T15:00:00Z') });
+  const caso = await solicitudSinRespuesta();
+  await source.getRepository(Liquidacion).save({ reserva: caso.reserva, estado: 'RETENIDO', moneda: 'ARS' });
+  await reclamos.crear({ id_reserva: caso.reserva.id, categoria: 'DEMORA_ADMINISTRATIVA', descripcion: descripcionDemora }, 1);
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos, undefined, almacenamientoDePrueba().almacenamiento);
+  t.mock.timers.setTime(new Date('2099-01-06T15:00:00Z').getTime());
+  await operaciones.avisarLiquidacionesDisponibles();
+  await operaciones.registrarPagoAnunciante(caso.reserva.id, {}, comprobantePdf(), 3);
+  assert.equal((await reservas.obtenerReserva(caso.reserva.id)).estado_liquidacion, 'PAGADO_PROPIETARIO');
+  assert.equal((await source.getRepository(Reclamo).findOneByOrFail({ reserva: { id: caso.reserva.id } })).estado, 'ABIERTO');
+});
+
 test('la API integra pagos, firma del webhook, permisos, cancelación y devolución por Mercado Pago', async (t) => {
   const { Test } = require('@nestjs/testing');
   const { ConfigModule, ConfigService } = require('@nestjs/config');
@@ -1466,9 +2030,9 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
   const request = require('supertest');
   const { AuthModule } = require('../dist/auth/auth.module');
   const { OperacionesReservaModule } = require('../dist/operaciones-reserva/operaciones-reserva.module');
+  const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
   const { CancelacionesModule } = require('../dist/cancelaciones/cancelaciones.module');
   const { ReclamosModule } = require('../dist/reclamos/reclamos.module');
-  const { DisputasService } = require('../dist/disputas/service/disputas.service');
   const { MercadoPagoAdapter } = require('../dist/mercado-pago/proveedor/mercado-pago.adapter');
   const { Estado } = require('../dist/catalogos/entity/estado.entity');
   const { CLIENTE_CORREO } = require('../dist/mail/proveedor/cliente-correo.interface');
@@ -1484,6 +2048,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     return ajustes[clave];
   } };
   const correos = [];
+  let fallaAvisoAnunciante = false;
   const modulo = await Test.createTestingModule({ imports: [
     ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
     TypeOrmModule.forRoot(source.options), AuthModule, OperacionesReservaModule, CancelacionesModule, ReclamosModule,
@@ -1491,22 +2056,27 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     .overrideProvider(DataSource).useValue(source)
     .overrideProvider(ConfigService).useValue(config)
     .overrideProvider(CLIENTE_CORREO).useValue({ beginSend: async (mensaje) => {
+      if (fallaAvisoAnunciante && mensaje.content.subject === 'Liquidación disponible para pago manual' &&
+          mensaje.recipients.to[0].address === 'usuario2@example.invalid') {
+        throw new Error('Fallo simulado para el anunciante');
+      }
       correos.push(mensaje);
       return { pollUntilDone: async () => ({ status: 'Succeeded' }) };
     } })
     .overrideProvider(PROVEEDOR_DOLAR).useValue({ consultar: async () => ({ venta: 1200, compra: 1180, actualizadaEn: new Date(), proveedor: 'prueba' }) })
+    .overrideProvider(AlmacenamientoService).useValue(almacenamientoDePrueba().almacenamiento)
     .compile();
   const app = modulo.createNestApplication({ logger: false });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
   try {
     const estados = source.getRepository(Estado);
-    const codigoAmbito = 'DISPUTA';
-    await estados.delete({ codigoAmbito, codigo: 'GANADA' });
-    await estados.update({ codigoAmbito, codigo: 'ABIERTA' }, { nombre: 'Abierta en el panel' });
+    const codigoAmbito = 'RECLAMO';
+    await estados.delete({ codigoAmbito, codigo: 'CERRADO' });
+    await estados.update({ codigoAmbito, codigo: 'ABIERTO' }, { nombre: 'Abierto en el panel' });
     await base.cargarSeed();
     await app.init();
-    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'GANADA' })).nombre, 'Ganada');
-    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'ABIERTA' })).nombre, 'Abierta en el panel');
+    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'CERRADO' })).nombre, 'Cerrado');
+    assert.equal((await estados.findOneByOrFail({ codigoAmbito, codigo: 'ABIERTO' })).nombre, 'Abierto en el panel');
     assert.equal(await estados.countBy({ codigoAmbito }), 5);
     const http = app.getHttpServer();
     const token = id => app.get(JwtService).sign({ sub: id });
@@ -1522,12 +2092,20 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       await request(http).post(`/pagos/${ruta}`).send({}).expect(401);
       await request(http).post(`/pagos/${ruta}`).set('Authorization', tenant).send({}).expect(400);
     }
+    // El usuario 4 es administrador en este escenario: para una persona ajena se usa una cuenta de inquilino.
+    await source.query(`INSERT INTO usuario (id_usuario,nombre,apellido,email,telefono,contrasenia,email_verificado,id_rol)
+      VALUES (5,'Persona','Ajena','usuario5@example.invalid','123','hash',true,1) ON CONFLICT DO NOTHING`);
+    const ajena = `Bearer ${token(5)}`;
     for (const ruta of ['estado', 'resumen']) {
       const url = `/pagos/reservas/${reserva.id}/${ruta}`;
       await request(http).get(url).expect(401);
-      await request(http).get(url).set('Authorization', ajeno).expect(403);
+      await request(http).get(url).set('Authorization', ajena).expect(403);
       await request(http).get(url).set('Authorization', tenant).expect(200);
     }
+    // T53: el admin ve el resumen de cualquier reserva en solo lectura; el estado sigue siendo solo de las partes.
+    await request(http).get(`/pagos/reservas/${reserva.id}/estado`).set('Authorization', admin).expect(403);
+    const { body: resumenAdmin } = await request(http).get(`/pagos/reservas/${reserva.id}/resumen`).set('Authorization', admin).expect(200);
+    assert.deepEqual([resumenAdmin.reserva.id, resumenAdmin.puede_reintentar], [reserva.id, false]);
     await request(http).post('/pagos/webhook?data.id=123').send({ type: 'payment' }).expect(503);
     ajustes.MP_WEBHOOK_SECRET = firmaPruebas;
     await request(http).post('/pagos/webhook?data.id=123').send({ type: 'payment' }).expect(401);
@@ -1553,10 +2131,16 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.deepEqual((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).codigo_generado_en, primeraConfirmacion.codigo_generado_en);
     const reconciliar = (autorizacion) => request(http).post('/pagos/reconciliar')
       .set('Authorization', autorizacion).send({ payment_id: '123' });
+    cobro.status = 'charged_back';
+    const liquidacionAntes = await reservas.obtenerReserva(reserva.id);
+    await webhook('123', `ts=${ts},v1=${hash}`).expect(201, { received: true });
     await reconciliar(ajeno).expect(403);
     await reconciliar(tenant).expect(201, {
       reserva_id: reserva.id, estado_pago: 'APROBADO', mercado_pago_status: 'approved', mercado_pago_status_detail: 'accredited',
     });
+    assert.deepEqual(await reservas.obtenerReserva(reserva.id), liquidacionAntes);
+    assert.equal(await source.getRepository(Reembolso).count(), 0);
+    cobro.status = 'approved';
     assert.equal(await source.getRepository(Pago).count(), 1);
     const anunciante = `Bearer ${token(2)}`;
     const hoy = require('../dist/common/utils/fechas').fechaArgentina();
@@ -1587,22 +2171,72 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.equal(avisosIngreso.length, 1);
     assert.match(avisosIngreso[0].content.html, /src="cid:logo-depa"/);
     assert.equal(avisosIngreso[0].content.html.includes(acceso.codigo), false);
-    const lista = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
-    assert.equal(lista.body.find(fila => fila.id === ingreso.id).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
     const detalle = await request(http).get(`/reservas/${ingreso.id}`).set('Authorization', tenant).expect(200);
     assert.equal(detalle.body.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
     const historialAnunciante = '/reservas/liquidaciones/publicacion/1';
     await request(http).get(historialAnunciante).set('Authorization', anunciante).expect(200, []);
     const consultaCbu = `/reservas/${ingreso.id}/liquidacion/cbu`;
     await request(http).get(consultaCbu).set('Authorization', anunciante).expect(403);
-    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu: null });
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO' }).expect(409);
     const cbu = '0010000700000000000017';
-    await source.query('UPDATE anunciante SET cbu_validado = $1 WHERE id_usuario = 2', [cbu]);
-    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu });
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({
-      estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
-    }).expect(200);
+    await source.query('UPDATE anunciante SET cbu_validado = $1, cuit_cuil = $2 WHERE id_usuario = 2', [cbu, '20-12345678-3']);
+    // T56: el pago se registra por multipart con el comprobante.
+    const rutaPago = `${rutaLiquidacion}/pago`;
+    const pagar = (datos = {}, archivo = 'banco.pdf', actor = admin) => {
+      const pedido = request(http).patch(rutaPago).set('Authorization', actor);
+      for (const [campo, valor] of Object.entries(datos)) pedido.field(campo, valor);
+      return archivo ? pedido.attach('comprobante', Buffer.from('%PDF-1.7 pago'), { filename: archivo, contentType: 'application/pdf' }) : pedido;
+    };
+    const operacionesLiquidacion = app.get(OperacionesLiquidacionService);
+    const correosDeLiquidacion = () => correos.filter(({ content }) => content.subject === 'Liquidación disponible para pago manual');
+    const configurarFin = async (dias) => {
+      const fin = new Date(`${hoy}T00:00:00Z`);
+      fin.setUTCDate(fin.getUTCDate() - dias);
+      const fecha = fin.toISOString().slice(0, 10);
+      await source.getRepository(Reserva).update(ingreso.id, {
+        fecha_inicio: fecha, fecha_fin: fecha, codigo_validado_en: fin, finalizada: true,
+      });
+    };
+    await configurarFin(4);
+    const listaAntes = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
+    const liquidacionEnEspera = listaAntes.body.find(fila => fila.id === ingreso.id);
+    assert.equal(liquidacionEnEspera.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+    const fechaHabilitacion = new Date(`${hoy}T00:00:00Z`);
+    fechaHabilitacion.setUTCDate(fechaHabilitacion.getUTCDate() + 1);
+    assert.equal(liquidacionEnEspera.fecha_disponible_pago, fechaHabilitacion.toISOString().slice(0, 10));
+    await request(http).get(consultaCbu).set('Authorization', admin).expect(409);
+    await pagar({ referencia: 'pago-anticipado' }).expect(409);
+    await operacionesLiquidacion.avisarLiquidacionesDisponibles();
+    assert.equal(correosDeLiquidacion().length, 0);
+
+    await configurarFin(5);
+    const lista = await request(http).get('/reservas/liquidaciones/administracion').set('Authorization', admin).expect(200);
+    assert.equal(lista.body.find(fila => fila.id === ingreso.id).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+    fallaAvisoAnunciante = true;
+    await operacionesLiquidacion.avisarLiquidacionesDisponibles();
+    assert.deepEqual(correosDeLiquidacion().map(aviso => aviso.recipients.to[0].address).sort(), ['usuario3@example.invalid', 'usuario4@example.invalid']);
+    const repositorioLiquidaciones = source.getRepository(Liquidacion);
+    const primerAviso = await repositorioLiquidaciones.findOneByOrFail({ reserva: { id: ingreso.id } });
+    assert.ok(primerAviso.aviso_pago_admin_en);
+    assert.equal(primerAviso.aviso_pago_anunciante_en, null);
+    fallaAvisoAnunciante = false;
+    await Promise.all([
+      operacionesLiquidacion.avisarLiquidacionesDisponibles(), operacionesLiquidacion.avisarLiquidacionesDisponibles(),
+    ]);
+    await operacionesLiquidacion.avisarLiquidacionesDisponibles();
+    assert.deepEqual(correosDeLiquidacion().map(aviso => aviso.recipients.to[0].address).sort(), ['usuario2@example.invalid', 'usuario3@example.invalid', 'usuario4@example.invalid']);
+    await db.exec(migracion('20261121-avisos-liquidacion-disponible.sql'));
+    const avisosEnviados = await repositorioLiquidaciones.findOneByOrFail({ reserva: { id: ingreso.id } });
+    assert.deepEqual(avisosEnviados.aviso_pago_admin_en, primerAviso.aviso_pago_admin_en);
+    assert.ok(avisosEnviados.aviso_pago_anunciante_en);
+    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu, cuit_cuil: '20-12345678-3' });
+    // T47: el plazo de reclamos termina el día anterior a que se habilite el pago (T35).
+    const { sumarDiasCalendario } = require('../dist/common/utils/fechas');
+    const filaPagable = lista.body.find(fila => fila.id === ingreso.id);
+    assert.equal(filaPagable.fin_plazo_reclamo, sumarDiasCalendario(filaPagable.fecha_disponible_pago, -1));
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }).expect(400);
+    await pagar({ referencia: 'pago-prueba' }, null).expect(400);
+    await pagar({}, 'banco.pdf', tenant).expect(403);
+    await pagar({ referencia: 'pago-prueba', observacion: 'Transferencia acreditada' }).expect(200);
     await request(http).get(historialAnunciante).expect(401);
     await request(http).get(historialAnunciante).set('Authorization', tenant).expect(200, []);
     await request(http).get(historialAnunciante).set('Authorization', ajeno).expect(200, []);
@@ -1611,26 +2245,36 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const [{ id: idPago, fecha: fechaPago }] = historialPropio;
     assert.ok(idPago);
     assert.ok(Number.isFinite(Date.parse(fechaPago)));
+    const historialAdministracion = await request(http).get('/reservas/liquidaciones/administracion/historial')
+      .set('Authorization', admin).expect(200);
+    assert.ok(historialAdministracion.body.some(item => item.reservaId === ingreso.id));
     assert.deepEqual(historialPropio, [{
-      id: idPago, reservaId: ingreso.id, fecha: fechaPago, importe: 100, moneda: 'ARS',
-      referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
+      id: idPago, reservaId: ingreso.id, publicacion: 'Publicación de prueba', fecha: fechaPago, importe: 100, moneda: 'ARS',
+      referencia: 'pago-prueba', observacion: 'Transferencia acreditada', indice: 0, comprobante: 'banco.pdf',
     }]);
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-repetido' }).expect(409);
+    // T56: el enlace firmado del comprobante, solo para el admin y el anunciante; la URL privada no viaja.
+    const rutaComprobante = `/reservas/${ingreso.id}/liquidacion/pagos/0/comprobante`;
+    await request(http).get(rutaComprobante).expect(401);
+    for (const actor of [admin, anunciante]) {
+      const { body } = await request(http).get(rutaComprobante).set('Authorization', actor).expect(200);
+      assert.match(body.url, /comprobantes\/liquidaciones\/\d+\/.+\.pdf\?firmado$/);
+    }
+    // El usuario 4 (`ajeno`) es administrador en este escenario; el inquilino no ve el pago al anunciante.
+    await request(http).get(rutaComprobante).set('Authorization', tenant).expect(404);
+    assert.equal(JSON.stringify(historialAdministracion.body).includes('privado.example'), false);
+    // T55: el panel del anunciante muestra el mismo pago, una sola vez, y nadie más lo ve.
+    const misPagos = '/reservas/liquidaciones/mias';
+    await request(http).get(misPagos).expect(401);
+    await request(http).get(misPagos).set('Authorization', tenant).expect(200, []);
+    await request(http).get(misPagos).set('Authorization', ajeno).expect(200, []);
+    await request(http).get(misPagos).set('Authorization', anunciante).expect(200, historialPropio);
+    await pagar({ referencia: 'pago-repetido' }).expect(409);
     assert.equal(correos.filter(({ content }) => content.subject === 'Pago al anunciante registrado').length, 1);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);
-    const disputa = await app.get(DisputasService).registrarContracargo({
-      idReserva: reserva.id, idPago: pago.id, chargebackId: 'contracargo-api', importe: 100,
-    });
-    await request(http).get('/disputas/administracion').expect(401);
-    await request(http).get('/disputas/administracion').set('Authorization', tenant).expect(403);
-    const expedientes = await request(http).get('/disputas/administracion')
-      .set('Authorization', admin).expect(200);
-    assert.equal(expedientes.body[0].estado, 'ABIERTA');
-    assert.equal(Object.hasOwn(expedientes.body[0], 'ambitoEstado'), false);
-    const resolucion = await request(http).patch(`/disputas/${disputa.id}/resolver`)
-      .set('Authorization', admin).send({ resultado: 'GANADA' }).expect(200);
-    assert.equal(resolucion.body.estado, 'GANADA');
+    await request(http).get('/disputas/administracion').set('Authorization', admin).expect(404);
+    await request(http).patch('/disputas/1/resolver')
+      .set('Authorization', admin).send({ resultado: 'GANADA' }).expect(404);
     await request(http).patch(`/reservas/${reserva.id}/liquidacion`)
       .set('Authorization', admin).send({ estado: 'GANADA' }).expect(400);
     await request(http).get('/reservas/cancelaciones/administracion').expect(401);
@@ -1728,6 +2372,14 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     });
     const { body: abierto } = await request(http).post('/reclamos').set('Authorization', tenant)
       .send({ id_reserva: conReclamo.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }).expect(201);
+    // T49: el chat acepta imágenes sin texto (multipart) y sigue aceptando solo texto (JSON).
+    const rutaMensajes = `/reclamos/${abierto.id}/mensajes`;
+    const { body: conImagen } = await request(http).post(rutaMensajes).set('Authorization', tenant)
+      .attach('evidencias', (await imagenPng()).buffer, 'pileta.png').expect(201);
+    assert.deepEqual([conImagen.texto, conImagen.evidencias.length, Object.hasOwn(conImagen, 'reclamo')], ['', 1, false]);
+    await request(http).post(rutaMensajes).set('Authorization', tenant).send({ texto: '   ' }).expect(400);
+    const { body: soloTexto } = await request(http).post(rutaMensajes).set('Authorization', admin).send({ texto: 'Recibido' }).expect(201);
+    assert.deepEqual(soloTexto.evidencias, []);
     const rutaResolver = `/reclamos/${abierto.id}/resolver`;
     await request(http).patch(rutaResolver).set('Authorization', tenant)
       .send({ resolucion: 'DEVOLUCION_TOTAL', observacion: 'Pedido del inquilino' }).expect(403);
@@ -1797,6 +2449,14 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       await request(http).post(rutaAnunciante).set('Authorization', anunciante)
         .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, actor: 'ANUNCIANTE' }).expect(400);
       const condicionesAnunciante = await request(http).get(`${rutaAnunciante}/condiciones`).set('Authorization', anunciante).expect(200);
+      if (dias <= 0) {
+        assert.match(condicionesAnunciante.body.motivoBloqueo, /Desde la fecha de ingreso/);
+        assert.equal(condicionesAnunciante.body.devolucion, null);
+        await request(http).post(rutaAnunciante).set('Authorization', anunciante)
+          .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(400);
+        assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
+        continue;
+      }
       assert.equal(condicionesAnunciante.body.motivoBloqueo, null);
       assert.equal(condicionesAnunciante.body.devolucion.porcentaje, 100);
       assert.equal(condicionesAnunciante.body.devolucion.importe, 100);

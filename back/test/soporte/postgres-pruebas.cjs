@@ -46,6 +46,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
       '20261104-cuit-email-historicos.sql', '20261104-orden-imagenes.sql',
       '20261105-eliminacion-documentos.sql',
       '20261111-apelaciones-bloqueo.sql',
+      '20261122-historial-bloqueos.sql',
       '20261111-publicaciones-eliminadas.sql',
       '20261120-reactivacion-cuenta.sql',
     ]) {
@@ -68,16 +69,23 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     if (estadosPorAmbito && aplicacionReembolsos)
       await db.exec(leerMigracion('20261113-aplicacion-reembolsos.sql'));
     await db.exec('SET search_path TO public');
-    if (estadosPorAmbito) await db.exec(leerMigracion('20261113-catalogos-de-expedientes.sql'));
+    if (estadosPorAmbito) {
+      await db.exec(leerMigracion('20261113-catalogos-de-expedientes.sql'));
+      await db.exec(leerMigracion('20261122-reinicio-codigo-alojamiento.sql'));
+    }
     if (estadosPorAmbito) {
       await db.exec('BEGIN;\n' + leerMigracion('20261113-retirar-liquidacion-de-reserva.sql') + '\nCOMMIT;');
       await db.exec(leerMigracion('20261116-historial-pagos-anunciantes.sql'));
+      await db.exec(leerMigracion('20261121-avisos-liquidacion-disponible.sql'));
       await db.exec(leerMigracion('20261116-chat-reembolsos.sql'));
       if (reclamoFaltante) await db.exec(leerMigracion('20261121-reclamo-faltante-cancelacion.sql'));
       await db.exec(leerMigracion('20261123-reclamo-demora-administrativa.sql'));
     }
     await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await db.exec(leerMigracion('20261116-cbu-anunciantes.sql'));
+    await db.exec(leerMigracion('20261122-comision-depa.sql'));
+    await db.exec(leerMigracion('20261123-comprobante-reembolso.sql'));
+    await db.exec(leerMigracion('20261123-imagenes-mensajes-reclamo.sql'));
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };
   } catch (error) {

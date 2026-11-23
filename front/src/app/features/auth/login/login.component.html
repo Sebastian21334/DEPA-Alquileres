@@ -10,13 +10,20 @@
     <p class="auth__subtitle">Ingresá con tu email y contraseña.</p>
 
     <form class="auth__form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
-      @if (error()) {
+      @if (puedeReenviarVerificacion()) {
+        <div class="auth__verification" role="alert">
+          <span class="auth__verification-icon" aria-hidden="true"><svg lucideMail [size]="24"></svg></span>
+          <div class="auth__verification-content">
+            <strong>Verificá tu email</strong>
+            <p>Para iniciar sesión, primero verificá tu correo.</p>
+            <button type="button" class="auth__resend" (click)="reenviarVerificacion()" [disabled]="reenviandoVerificacion()">
+              {{ reenviandoVerificacion() ? 'Enviando…' : 'Reenviar email de verificación' }}
+            </button>
+          </div>
+        </div>
+      }
+      @if (error() && (!puedeReenviarVerificacion() || error() !== mensajeEmailNoVerificado)) {
         <div class="auth__error" role="alert">{{ error() }}</div>
-        @if (puedeReenviarVerificacion()) {
-          <button type="button" class="auth__resend" (click)="reenviarVerificacion()" [disabled]="reenviandoVerificacion()">
-            {{ reenviandoVerificacion() ? 'Enviando…' : 'Reenviar email de verificación' }}
-          </button>
-        }
       }
 
       @if (verificacionReenviada()) {

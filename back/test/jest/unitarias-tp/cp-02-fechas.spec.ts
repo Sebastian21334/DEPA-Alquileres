@@ -83,6 +83,7 @@ describe('CP-02 · Fechas de reserva · PDF Pruebas Unitarias - TP', () => {
       } },
       { provide: CatalogosService, useValue: {
         codigoEstado: jest.fn((_ambito: string, codigo: string) => codigo),
+        obtenerComision: jest.fn(async () => 10),
       } },
     ] }).compile();
     service = modulo.get(ReservasService);

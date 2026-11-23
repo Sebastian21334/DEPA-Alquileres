@@ -3,6 +3,47 @@ require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { LiquidacionesService } = require('../dist/liquidaciones/service/liquidaciones.service');
+const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
+const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
+
+test('una estadía cerrada sin código mantiene el ingreso no verificado', () => {
+  const service = new ReservaEstadoService({}, catalogosDePrueba());
+  const reserva = crearReserva({ estado_pago: 'APROBADO', finalizada: true, fecha_inicio: '2026-11-10', fecha_fin: '2026-11-16' });
+  assert.equal(service.calcularEstadoEstadia(reserva, new Date('2026-11-21T12:00:00Z')), 'INGRESO_NO_VERIFICADO');
+  reserva.codigo_validado_en = new Date('2026-11-10T12:00:00Z');
+  assert.equal(service.calcularEstadoEstadia(reserva, new Date('2026-11-21T12:00:00Z')), 'FINALIZADA');
+});
+
+test('el vencimiento libera solo ingresos sin código y sin revisión ni devolución, a partir del quinto día', async () => {
+  const catalogos = catalogosDePrueba();
+  const repositorio = crearRepositorio();
+  const liquidaciones = new LiquidacionesService(repositorio, catalogos);
+  const reservas = [
+    crearReserva({ id: 1, fecha_inicio: '2026-11-10', fecha_fin: '2026-11-16', estado_pago: 'APROBADO' }),
+    crearReserva({ id: 2, fecha_inicio: '2026-11-10', fecha_fin: '2026-11-17', estado_pago: 'APROBADO' }),
+    crearReserva({ id: 3, fecha_inicio: '2026-11-10', fecha_fin: '2026-11-16', estado_pago: 'APROBADO', estado_liquidacion: 'EN_REVISION' }),
+    crearReserva({ id: 4, fecha_inicio: '2026-11-10', fecha_fin: '2026-11-16', estado_pago: 'APROBADO' }),
+  ];
+  for (const reserva of reservas) await liquidaciones.asegurarParaReserva(reserva);
+  repositorio.listarIngresosNoVerificadosVencidos = async () => reservas.map(r => r.id);
+  const reservaService = {
+    conReservaBloqueada: async (id, operar) => operar(reservas.find(r => r.id === id), {}),
+    pagoAprobado: r => r.estado_pago === 'APROBADO',
+    codigoValidado: r => !!r.codigo_validado_en,
+    codigoBloqueado: r => (r.intentos_codigo ?? 0) >= 5,
+  };
+  const reembolsos = { listarPorReserva: async id => id === 4 ? [{ estado: 'PENDIENTE' }] : [] };
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservaService, liquidaciones, catalogos, {}, { tieneReclamoAbierto: async () => false });
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal(reservas[0].estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal(reservas[0].codigo_validado_en, undefined);
+  assert.equal(reservas[1].estado_liquidacion, 'RETENIDO');
+  assert.equal(reservas[2].estado_liquidacion, 'EN_REVISION');
+  assert.equal(reservas[3].estado_liquidacion, 'RETENIDO');
+  assert.match(reservas[0].observacion_liquidacion, /Ingreso no verificado/);
+  await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
+  assert.equal(repositorio.filas.size, 4);
+});
 
 function crearReserva(extra = {}) {
   return {
@@ -29,11 +70,27 @@ function crearRepositorio() {
     },
     buscarPorReserva: async (idReserva) => filas.get(idReserva) ?? null,
     buscarPorReservaConBloqueo: async (idReserva) => filas.get(idReserva) ?? null,
+    listarPorEstados: async (estados) => [...filas.values()].filter(fila => estados.includes(fila.estado)),
     listarPagosRegistrados: async (estado) =>
       [...filas.values()].filter(fila => fila.estado === estado || fila.pagos_anunciante),
   };
   return repositorio;
 }
+
+test('el panel incluye liquidaciones en espera y en revisión y calcula la fecha de pago', async () => {
+  const repositorio = crearRepositorio();
+  const service = new LiquidacionesService(repositorio, catalogosDePrueba());
+  const reserva = crearReserva({ fecha_inicio: '2026-11-12', fecha_fin: '2026-11-16',
+    estado_liquidacion: 'PENDIENTE_PAGO_PROPIETARIO' });
+  const revision = crearReserva({ id: 2, fecha_inicio: '2026-11-20', fecha_fin: null,
+    estado_liquidacion: 'EN_REVISION' });
+  await service.asegurarParaReserva(reserva);
+  await service.asegurarParaReserva(revision);
+
+  assert.equal(service.fechaDisponiblePagoManual(reserva), '2026-11-21');
+  assert.equal(service.fechaDisponiblePagoManual(revision), null);
+  assert.deepEqual((await service.listarParaAdministracion()).map(r => r.id), [1, 2]);
+});
 
 test('el historial conserva los datos del pago al anunciante después de una devolución', async () => {
   const reserva = crearReserva();

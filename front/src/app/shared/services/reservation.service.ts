@@ -7,6 +7,7 @@ import { Usuario } from '../models/usuario.model';
 import { CotizacionDolar } from './cotizaciones.service';
 import type { FechaDisponible } from './availability.service';
 import type { EstadoEstadia } from '../utils/reservation-state';
+import { cuerpoMensajeReclamo } from '../utils/reclamo-imagenes';
 
 export interface CrearReservaPayload {
   id_publicacion: number;
@@ -65,6 +66,10 @@ export interface Reserva {
   codigo_generado_en: string | null;
   codigo_validado_en: string | null;
   intentos_codigo: number;
+  /** Último día (AAAA-MM-DD) para reclamar; hasta entonces se retiene el pago al anunciante. */
+  fin_plazo_reclamo?: string | null;
+  /** Intentos que le quedan al anunciante antes de que se bloquee el código (T34). */
+  intentos_codigo_restantes?: number;
   fecha_resolucion_liquidacion: string | null;
   referencia_liquidacion: string | null;
   observacion_liquidacion: string | null;
@@ -214,14 +219,19 @@ export interface Reclamo {
     id: number;
     monto_pago?: number | string;
     moneda_contratada?: string | null;
+    estado_estadia?: EstadoEstadia;
+    estado_liquidacion?: Reserva['estado_liquidacion'];
+    fecha_fin?: string | null;
+    intentos_codigo_restantes?: number;
     publicacion?: { id?: number; titulo?: string; imagenes?: { url: string }[] } | null;
   } | null;
   anunciante?: ParticipanteReclamo | null;
   inquilino?: ParticipanteReclamo | null;
-  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'DEMORA_ADMINISTRATIVA';
+  /** CODIGO_BLOQUEADO: pedido de reinicio del código que abre el anunciante (T34). */
+  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'DEMORA_ADMINISTRATIVA' | 'CODIGO_BLOQUEADO';
   descripcion: string;
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
-  resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | null;
+  resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | 'REINICIAR_CODIGO' | 'CONFIRMAR_INGRESO' | null;
   importe_reembolso: number | null;
   creado_en: string;
   resuelto_en: string | null;
@@ -229,11 +239,17 @@ export interface Reclamo {
   mensajes?: ReclamoMensaje[];
 }
 
+export type AutorReclamo = ParticipanteReclamo & { rol?: { nombre: string } | null };
+
+/** T49: imagen de un reclamo con su autor; `url` es un enlace firmado que vence a los 15 minutos. */
 export interface ReclamoEvidencia {
   id: number;
-  url: string;
+  /** null: es de la descripción del reclamo. */
+  id_mensaje: number | null;
   nombre_archivo: string;
-  tipo: string;
+  creado_en: string;
+  autor: AutorReclamo | null;
+  url: string;
 }
 
 export interface ReclamoMensaje {
@@ -241,7 +257,9 @@ export interface ReclamoMensaje {
   texto: string;
   visible_para: 'TODOS' | 'ADMIN';
   creado_en: string;
-  autor?: ParticipanteReclamo & { rol?: { nombre: string } | null };
+  autor?: AutorReclamo | null;
+  /** T49: imágenes enviadas con este mensaje. */
+  evidencias?: ReclamoEvidencia[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -280,6 +298,11 @@ export class ReservationService {
 
   byPublication(idPublicacion: number): Observable<Reserva[]> {
     return this.http.get<Reserva[]>(`${this.baseUrl}/publicacion/${idPublicacion}`);
+  }
+
+  /** GET /reservas/:id: una sola reserva, para el inquilino o el anunciante. */
+  byId(id: number): Observable<Reserva> {
+    return this.http.get<Reserva>(`${this.baseUrl}/${id}`);
   }
 
   cancel(id: number): Observable<Reserva> {
@@ -345,10 +368,6 @@ export class ReservationService {
     return this.http.get<Reclamo[]>(`${environment.apiUrl}/reclamos/mios`);
   }
 
-  claimEvidenceUrl(id: number, evidencia: number): Observable<{ url: string }> {
-    return this.http.get<{ url: string }>(`${environment.apiUrl}/reclamos/${id}/evidencias/${evidencia}/url`);
-  }
-
   uploadClaimEvidence(id: number, archivos: File[]): Observable<ReclamoEvidencia[]> {
     const datos = new FormData();
     archivos.forEach((archivo) => datos.append('evidencias', archivo));
@@ -359,10 +378,7 @@ export class ReservationService {
     return this.http.get<ReclamoMensaje[]>(`${environment.apiUrl}/reclamos/${id}/mensajes`);
   }
 
-  sendClaimMessage(id: number, texto: string): Observable<ReclamoMensaje> {
-    return this.http.post<ReclamoMensaje>(`${environment.apiUrl}/reclamos/${id}/mensajes`, {
-      texto,
-      visible_para: 'TODOS',
-    });
+  sendClaimMessage(id: number, texto: string, imagenes: readonly File[] = []): Observable<ReclamoMensaje> {
+    return this.http.post<ReclamoMensaje>(`${environment.apiUrl}/reclamos/${id}/mensajes`, cuerpoMensajeReclamo(texto, imagenes));
   }
 }

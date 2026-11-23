@@ -100,14 +100,6 @@ export class MensajesService {
       if (!remitente?.activa) {
         throw new ConflictException('El contacto está suspendido porque la cuenta está inactiva.');
       }
-      if (destinatario.bloqueado || remitente.bloqueado) {
-        const hayConversacion = await mensajes.existeConversacion(publicacion.id, remitente.id, destinatario.id);
-        if (!hayConversacion ||
-            (remitente.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(remitente, transaccion)) ||
-            (destinatario.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(destinatario, transaccion))) {
-          throw new ConflictException('La cuenta bloqueada solo puede responder en conversaciones existentes mientras tenga operaciones pendientes.');
-        }
-      }
 
       const mensaje = mensajes.crear({
         texto: dto.texto,
@@ -170,9 +162,7 @@ export class MensajesService {
 
     const { origenUsuario, destinoUsuario, publicacion } = mensajes[0];
     const contactoSuspendido = publicacion.eliminada ||
-      (!origenUsuario.activa || !destinoUsuario.activa) ||
-      (origenUsuario.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(origenUsuario)) ||
-      (destinoUsuario.bloqueado && !await this.usuariosService.puedeContinuarConversaciones(destinoUsuario));
+      (!origenUsuario.activa || !destinoUsuario.activa);
     return mensajes.map((mensaje) => ({ ...this.prepararRespuesta(mensaje), contactoSuspendido }));
   }
 

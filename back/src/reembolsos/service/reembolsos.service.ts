@@ -6,7 +6,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AlmacenamientoService, type ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
 import { createHash, randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
 import type { Pago } from '../../pagos/entity/pago.entity';
@@ -53,7 +55,7 @@ export class ReembolsosService {
 
   private readonly logger = new Logger(ReembolsosService.name);
 
-  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, private readonly pasarela: MercadoPagoService, private readonly pagos: PagosService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService) {}
+  constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, private readonly pasarela: MercadoPagoService, private readonly pagos: PagosService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService, @Optional() private readonly almacenamiento?: AlmacenamientoService) {}
 
   /**
    * Con `transaccion`, el registro participa de la operación del servicio que
@@ -65,6 +67,7 @@ export class ReembolsosService {
   }
 
   async crearSolicitudConResultado(datos: CrearReembolsoDatos, transaccion?: EntityManager): Promise<{ reembolso: Reembolso; creado: boolean }> {
+    this.verificarOrigenOperable(datos.origen);
     const importe = Number(datos.importe);
     if (!Number.isFinite(importe) || importe <= 0)
       throw new BadRequestException('El importe del reembolso debe ser positivo');
@@ -128,8 +131,7 @@ export class ReembolsosService {
       importe,
       moneda: pago.currency,
       estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
-      transferencia_manual: datos.origen !== OrigenReembolso.CONTRACARGO &&
-        this.requiereTransferencia(pago),
+      transferencia_manual: this.requiereTransferencia(pago),
       motivo: datos.motivo.trim().slice(0, 500),
       referencia_interna: datos.referenciaInterna ?? null,
       referencia_externa: null,
@@ -156,10 +158,46 @@ export class ReembolsosService {
     });
   }
 
-  async registrarTransferencia(id: number, referencia: string, idActor: number): Promise<Reembolso> {
-    if (!referencia.trim() || referencia.trim().length > 150)
-      throw new BadRequestException('Ingresá una referencia de transferencia de hasta 150 caracteres');
-    return this.confirmar(id, { referencia: referencia.trim(), idActor, idExterno: null, transferencia: true });
+  /**
+   * T44: el admin registra la transferencia con el comprobante obligatorio; la referencia y la observación son opcionales.
+   * El archivo se sube antes de confirmar y se borra si el registro no lo termina guardando.
+   */
+  async registrarTransferencia(id: number, datos: { referencia?: string; observacion?: string }, archivo: Express.Multer.File | undefined, idActor: number): Promise<Reembolso> {
+    const texto = datos.referencia?.trim() ?? '';
+    const observacion = datos.observacion?.trim() || null;
+    if (texto.length > 150)
+      throw new BadRequestException('La referencia de la transferencia admite hasta 150 caracteres');
+    if ((observacion?.length ?? 0) > 500)
+      throw new BadRequestException('La observación de la transferencia admite hasta 500 caracteres');
+    const actual = await this.reembolsos.buscarRegistro(id);
+    if (!actual) throw new NotFoundException('Reembolso no encontrado');
+    if (!actual.transferencia_manual)
+      throw new ConflictException('El reembolso no está habilitado para transferencia');
+    if (actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
+      throw new ConflictException('Otro administrador ya registró esta devolución');
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    const comprobante = await this.almacenamiento.subirComprobante(`reembolsos/${id}`, archivo);
+    let guardado = false;
+    try {
+      return await this.confirmar(id, {
+        referencia: texto, idActor, idExterno: null, transferencia: true,
+        comprobante, observacion, alGuardarComprobante: () => { guardado = true; },
+      });
+    } finally {
+      if (!guardado)
+        await this.almacenamiento.eliminarComprobante(comprobante.url).catch(() =>
+          this.logger.warn(`No se pudo borrar el comprobante sin usar del reembolso ${id}`));
+    }
+  }
+
+  /** T44: enlace firmado del comprobante, solo para el admin y el inquilino de la reserva. */
+  async urlComprobante(id: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
+    const comprobante = await this.reembolsos.buscarComprobante(id);
+    const autorizado = actor.rol === 'Administrador' || comprobante?.idInquilino === actor.id;
+    if (!comprobante || !autorizado || !comprobante.url)
+      throw new NotFoundException('Comprobante no encontrado');
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    return { url: await this.almacenamiento.firmarComprobante(comprobante.url) };
   }
 
   async conversar(id: number, actor: { id: number; rol?: string }, despuesDe: number, texto?: string) {
@@ -211,6 +249,7 @@ export class ReembolsosService {
 
   async recuperarConfirmacion(id: number, referencia: string, idActor: number): Promise<Reembolso> {
     const reembolso = await this.buscar(id);
+    this.verificarOrigenOperable(reembolso.origen);
     if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return reembolso;
     if (reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO') &&
         reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'))
@@ -241,6 +280,7 @@ export class ReembolsosService {
 
   async ejecutar(id: number, idActor: number): Promise<Reembolso> {
     const reembolso = await this.buscar(id);
+    this.verificarOrigenOperable(reembolso.origen);
     if (!reembolso.pago.payment_id)
       throw new ConflictException('El pago no tiene identificador de Mercado Pago');
     if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return reembolso;
@@ -341,14 +381,16 @@ export class ReembolsosService {
     }
   }
 
-  private async confirmar(id: number, datos: { referencia: string; idActor: number | null; idExterno: string | null; transferencia?: boolean }): Promise<Reembolso> {
+  private async confirmar(id: number, datos: { referencia: string; idActor: number | null; idExterno: string | null; transferencia?: boolean; comprobante?: ComprobanteSubido; observacion?: string | null; alGuardarComprobante?: () => void }): Promise<Reembolso> {
     const guardado = await this.reembolsos.conTransaccion(async (repo, transaccion) => {
       const reembolso = await repo.buscarRegistro(id, { bloquear: true, idsRelaciones: true });
       if (!reembolso) throw new NotFoundException('Reembolso no encontrado');
+      this.verificarOrigenOperable(reembolso.origen);
       if (datos.transferencia && !reembolso.transferencia_manual)
         throw new ConflictException('El reembolso no está habilitado para transferencia');
       if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) {
-        if (datos.transferencia && reembolso.referencia_externa !== datos.referencia)
+        // Con comprobante, cada registro es único: si ya se aprobó, este archivo no se usa.
+        if (datos.transferencia && (datos.comprobante || (reembolso.referencia_externa ?? '') !== datos.referencia))
           throw new ConflictException('Otro administrador ya registró esta devolución');
         return reembolso;
       }
@@ -370,12 +412,7 @@ export class ReembolsosService {
       reembolso.resuelto_en = new Date();
       if (datos.idActor != null) reembolso.resuelto_por = referenciaUsuario(datos.idActor);
       reembolso.error_detalle = null;
-      await this.pagos.aplicarReembolso(
-        pago,
-        Number(reembolso.importe),
-        reembolso.origen === OrigenReembolso.CONTRACARGO,
-        transaccion,
-      );
+      await this.pagos.aplicarReembolso(pago, Number(reembolso.importe), transaccion);
       reembolso.conciliar_en = null;
       await repo.actualizar(reembolso.id, {
         estado: reembolso.estado,
@@ -385,9 +422,12 @@ export class ReembolsosService {
         resuelto_por: reembolso.resuelto_por,
         error_detalle: null,
         conciliar_en: null,
+        ...(datos.comprobante ? { comprobante_url: datos.comprobante.url, comprobante_nombre: datos.comprobante.nombre, observacion_transferencia: datos.observacion ?? null } : {}),
       });
       return reembolso;
     });
+    // Recién con la transacción confirmada el comprobante queda en uso; si algo falló, quien lo subió lo borra.
+    if (datos.comprobante) datos.alGuardarComprobante?.();
     return this.buscar(guardado.id);
   }
 
@@ -395,6 +435,7 @@ export class ReembolsosService {
     return this.reembolsos.conTransaccion(async (repo, transaccion) => {
       const registro = await repo.buscarRegistro(id, { bloquear: true });
       if (!registro) throw new NotFoundException('Reembolso no encontrado');
+      this.verificarOrigenOperable(registro.origen);
       if (registro.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'))
         throw new ConflictException('Solo se puede aplicar un reembolso aprobado');
       if (registro.aplicado_en) return null;
@@ -519,6 +560,7 @@ export class ReembolsosService {
         if (!registrados.some(registro => registro.id === vinculado.id) ||
             Math.abs(Number(vinculado.importe) - importe) > TOLERANCIA_MONETARIA)
           throw new ConflictException('El reembolso externo no coincide con su registro local');
+        if (vinculado.origen === OrigenReembolso.CONTRACARGO) continue;
         const confirmado = await this.confirmar(vinculado.id, { referencia: idExterno, idActor: null, idExterno });
         if (!confirmado.aplicado_en && !confirmado.revision_aplicacion) ids.push(confirmado.id);
         continue;
@@ -526,7 +568,7 @@ export class ReembolsosService {
       const previo = registrados.find(registro => registro.referencia_externa === idExterno &&
         registro.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'));
       if (previo) {
-        if (!previo.aplicado_en && !previo.revision_aplicacion) ids.push(previo.id);
+        if (previo.origen !== OrigenReembolso.CONTRACARGO && !previo.aplicado_en && !previo.revision_aplicacion) ids.push(previo.id);
         continue;
       }
       const previoWebhook = await this.reembolsos.buscarPorReferenciaExterna(`mp-refund:${pago.payment_id}`);
@@ -732,6 +774,11 @@ export class ReembolsosService {
 
   async listarPendientesAplicacion(desdeId = 0): Promise<Reembolso[]> {
     return this.reembolsos.buscarPendientesAplicacion(this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'), desdeId);
+  }
+
+  private verificarOrigenOperable(origen: OrigenReembolso): void {
+    if (origen === OrigenReembolso.CONTRACARGO)
+      throw new ConflictException('DEPA gestiona los contracargos fuera de la aplicación');
   }
 
   buscarPorOrigen(origen: OrigenReembolso, referencia: string, transaccion?: EntityManager): Promise<Reembolso | null> {

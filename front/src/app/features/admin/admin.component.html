@@ -1,6 +1,7 @@
 <section class="admin" aria-label="Panel administrativo">
   <aside class="admin-sidebar">
-    <div class="admin-brand"><img src="/images/Logo.png" alt="DEPA" /><span>Alquileres</span></div>
+    <!-- T58: el logo lleva al inicio del sitio. -->
+    <a class="admin-brand" routerLink="/" title="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" /><span>Alquileres</span></a>
     <nav class="admin-nav" aria-label="Secciones del panel">
       <button type="button" [attr.aria-current]="activeSection() === 'resumen' ? 'page' : null" (click)="openSection('resumen')">
         <svg lucideHouse [size]="19" aria-hidden="true"></svg> Resumen
@@ -48,9 +49,21 @@
 
   <dialog #bloqueoDialog class="block-dialog" aria-labelledby="block-dialog-title" (cancel)="cerrarBloqueo($event)">
       <form class="block-form" (ngSubmit)="confirmarBloqueo()">
-        <h2 id="block-dialog-title">Bloquear a {{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</h2>
-        <p>El usuario verá este motivo al intentar iniciar sesión y podrá apelar el bloqueo.</p>
-        <p>Si tiene operaciones pendientes, solo podrá entrar para resolverlas y apelar. Al terminarlas, se aplicará el bloqueo total.</p>
+        <header class="block-form__header">
+          <span class="block-form__icon" aria-hidden="true"><svg lucideLockKeyhole [size]="24"></svg></span>
+          <div class="block-form__title">
+            <h2 id="block-dialog-title">Bloquear usuario</h2>
+            <p>{{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</p>
+          </div>
+        </header>
+        <div class="block-form__notice block-form__notice--info">
+          <span class="block-form__notice-icon" aria-hidden="true"><svg lucideInfo [size]="20"></svg></span>
+          <p>El usuario verá este motivo al intentar iniciar sesión y podrá apelar el bloqueo.</p>
+        </div>
+        <div class="block-form__notice block-form__notice--warning">
+          <span class="block-form__notice-icon" aria-hidden="true"><svg lucideLayers3 [size]="20"></svg></span>
+          <p>Si tiene operaciones pendientes, solo podrá entrar para resolverlas y apelar. Al terminarlas, se aplicará el bloqueo total.</p>
+        </div>
         <label for="block-reason">Motivo del bloqueo</label>
         <textarea id="block-reason" name="motivoBloqueo" [(ngModel)]="motivoBloqueo"
           placeholder="Explicá por qué se bloquea esta cuenta" rows="5" maxlength="500" required autofocus></textarea>
@@ -190,7 +203,7 @@
     <div class="panel__title">
       <div>
         <h2>Reservas por liquidar</h2>
-        <p>Registrá pagos a anunciantes con el código validado. Derivá a Reembolsos los casos que deben devolverse al inquilino.</p>
+        <p>Registrá pagos a anunciantes cuando la liquidación esté habilitada. Derivá a Reembolsos los casos que deben devolverse al inquilino.</p>
       </div>
       <span class="counter">{{ settlements().length }}</span>
     </div>
@@ -200,16 +213,26 @@
       <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
     } @else {
       <div class="settlement-list">
-        @for (settlement of settlements(); track settlement.id) {
+        @for (settlement of liquidacionesOrdenadas(); track settlement.id) {
           <article class="settlement-card">
             <div>
               <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
-                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : 'Código validado' }}
+                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : settlement.codigo_validado_en ? 'Código validado' : 'Ingreso no verificado: plazo vencido' }}
               </span>
+              @if (settlement.estado_liquidacion !== 'EN_REVISION') {
+                @let dias = diasEsperaLiquidacion(settlement);
+                @if (dias === null) {
+                  <p class="settlement-note">Fecha de habilitación pendiente de revisión.</p>
+                } @else if (dias > 0) {
+                  <p class="settlement-note">Lapso de espera · {{ dias === 1 ? 'Falta 1 día' : 'Faltan ' + dias + ' días' }} para habilitar el pago.</p>
+                }
+              }
               <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
               <p><strong>Importe:</strong> {{ montoLiquidacion(settlement) }}</p>
+              <p><strong>Comisión DEPA:</strong> @if (settlement.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ settlement.porcentaje_comision_depa }} % · {{ settlement.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
+              <p><strong>Neto al anunciante:</strong> {{ settlement.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</p>
               @if (settlement.cotizacion_dolar; as dolar) {
                 <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
                 <p>Cotización #{{ dolar.id }} · {{ dolar.proveedor }} · Publicada: {{ dolar.actualizada_fuente_en }} · Aceptada: {{ settlement.cotizacion_aceptada_en }}.</p>
@@ -219,12 +242,27 @@
               }
             </div>
             <div class="actions">
+              <a class="button button--ghost" [routerLink]="['/admin/reservas', settlement.id]" [queryParams]="{ desde: 'liquidaciones' }">Ver reserva</a>
               @if (settlement.estado_liquidacion === 'EN_REVISION' && !settlement.cancelada) {
                 <button type="button" class="button button--ghost" (click)="abrirResolucionLiquidacion(settlement, false)">Cerrar revisión del pago</button>
               }
               <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
-              @if (settlement.codigo_validado_en) {
-                <button type="button" class="button button--success" [disabled]="settlement.estado_liquidacion === 'EN_REVISION'" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+              @if (settlement.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO') {
+                @let diasPago = diasEsperaLiquidacion(settlement);
+                @if (diasPago === 0) {
+                  <button type="button" class="button button--success" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+                } @else {
+                  <span class="settlement-payment-unavailable" tabindex="0" [attr.aria-describedby]="'payment-wait-' + settlement.id">
+                    <button type="button" class="button button--success" disabled>Registrar pago al anunciante</button>
+                    <span class="settlement-payment-unavailable__tooltip" role="tooltip" [id]="'payment-wait-' + settlement.id">
+                      @if (diasPago === null) {
+                        No se puede registrar el pago: la fecha de habilitación está pendiente de revisión.
+                      } @else {
+                        No se puede registrar el pago todavía. {{ diasPago === 1 ? 'Falta 1 día' : 'Faltan ' + diasPago + ' días' }} para habilitarlo.
+                      }
+                    </span>
+                  </span>
+                }
               }
             </div>
           </article>
@@ -263,6 +301,9 @@
               <p class="settlement-note">{{ solicitud.motivo }}</p>
             </div>
             <div class="actions">
+              @if (solicitud.reserva?.id; as idReserva) {
+                <a class="button button--ghost" [routerLink]="['/admin/reservas', idReserva]" [queryParams]="{ desde: 'cancelaciones' }">Ver reserva</a>
+              }
               <button type="button" class="button button--success" [disabled]="!solicitud.devolucion || busy() === 'cancellation-' + solicitud.id" (click)="abrirAprobacionCancelacion(solicitud)">Aprobar</button>
               <button type="button" class="button button--danger-outline" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="rechazarCancelacion(solicitud)">Rechazar</button>
             </div>
@@ -275,7 +316,7 @@
   <section class="panel admin-module" [hidden]="activeSection() !== 'reembolsos'">
     <div class="panel__title">
       <div>
-        <h2>Reembolsos pendientes</h2>
+        <h2>Reembolsos</h2>
         <p>Devoluciones creadas por cancelaciones, reclamos o contracargos.</p>
       </div>
       <span class="counter">{{ refunds().length }}</span>
@@ -284,18 +325,24 @@
       <p class="empty">No hay reembolsos registrados.</p>
     } @else {
       <div class="settlement-list">
-        @for (reembolso of refunds(); track reembolso.id) {
+        @for (reembolso of refundsPageItems(); track reembolso.id) {
           <article class="settlement-card" [id]="'admin-reembolsos-' + reembolso.id" tabindex="-1">
             <div>
               <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ estadosReembolso[reembolso.estado] }}</span>
               <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
               <p><strong>{{ reembolso.tipo }}</strong> · {{ reembolso.importe | currency: reembolso.moneda }}</p>
               <p class="muted">{{ origenesReembolso[reembolso.origen] || reembolso.origen }} · {{ reembolso.motivo }}</p>
+              @if (reembolso.creado_en) {
+                <p class="muted">Creado el <time [attr.datetime]="reembolso.creado_en">{{ reembolso.creado_en | date:'dd/MM/yyyy HH:mm':'-0300' }}</time></p>
+              }
               @if (puedeRegistrarTransferencia(reembolso)) {
                 <p>Transferencia bancaria pendiente · Chat disponible</p>
               }
             </div>
             <div class="actions">
+              @if (reembolso.reserva?.id; as idReserva) {
+                <a class="button button--ghost" [routerLink]="['/admin/reservas', idReserva]" [queryParams]="{ desde: 'reembolsos' }">Ver reserva</a>
+              }
               <button type="button" class="button button--ghost" (click)="abrirReembolso(reembolso)">
                 {{ puedeRegistrarTransferencia(reembolso) ? 'Ver detalle y chat' : 'Ver detalle' }}
               </button>
@@ -303,6 +350,17 @@
           </article>
         }
       </div>
+      @if (refundsPages() > 1) {
+        <nav class="pagination" aria-label="Paginación de reembolsos">
+          <span role="status">Página {{ refundsPage() }} de {{ refundsPages() }}</span>
+          <div class="pagination__actions">
+            <button type="button" class="button button--ghost" (click)="refundsPage.set(refundsPage() - 1)"
+              [disabled]="refundsPage() <= 1">Anterior</button>
+            <button type="button" class="button button--ghost" (click)="refundsPage.set(refundsPage() + 1)"
+              [disabled]="refundsPage() >= refundsPages()">Siguiente</button>
+          </div>
+        </nav>
+      }
     }
   </section>
 
@@ -316,7 +374,7 @@
       <p class="empty">Todavía no hay pagos a anunciantes registrados.</p>
     } @else {
       <div class="table-wrap settlement-history">
-        <table>
+        <table class="settlement-history__table">
           <caption class="settlement-history-caption">Pagos registrados a anunciantes</caption>
           <thead>
             <tr><th scope="col">Fecha de registro</th><th scope="col">Reserva</th><th scope="col">Anunciante</th><th scope="col">Importe</th><th scope="col">Comprobante y observación</th><th scope="col">Registrado por</th></tr>
@@ -324,12 +382,23 @@
           <tbody>
             @for (pago of historialLiquidaciones(); track pago.id) {
               <tr>
-                <td>{{ pago.fecha ? (pago.fecha | date:'dd/MM/yyyy HH:mm':'-0300') : 'Sin fecha' }}</td>
-                <td><strong>#{{ pago.reservaId }}</strong><br />{{ pago.publicacion || 'Publicación no disponible' }}</td>
-                <td>{{ pago.anunciante || 'Sin datos' }}</td>
-                <td>{{ pago.importe !== null && pago.moneda ? (pago.importe | currency:pago.moneda:'code') : (pago.importe ?? 'Sin importe') }}</td>
-                <td>{{ pago.referencia || 'Sin referencia' }}@if (pago.observacion) { <p class="settlement-note">{{ pago.observacion }}</p> }</td>
-                <td>{{ pago.administrador || 'Sin datos' }}</td>
+                <td data-label="Fecha de registro">
+                  @if (pago.fecha) {
+                    <span class="settlement-history__date"><svg lucideCalendarDays [size]="16" aria-hidden="true"></svg>{{ pago.fecha | date:'dd/MM/yyyy':'-0300' }}</span>
+                    <span class="settlement-history__date settlement-history__time"><svg lucideClock3 [size]="16" aria-hidden="true"></svg>{{ pago.fecha | date:'HH:mm':'-0300' }}</span>
+                  } @else { Sin fecha }
+                </td>
+                <td data-label="Reserva"><a class="settlement-history__reservation" [routerLink]="['/admin/reservas', pago.reservaId]" [queryParams]="{ desde: 'historial-liquidaciones' }" [attr.aria-label]="'Ver reserva #' + pago.reservaId">#{{ pago.reservaId }}</a><span class="settlement-history__publication">{{ pago.publicacion || 'Publicación no disponible' }}</span></td>
+                <td data-label="Anunciante">{{ pago.anunciante || 'Sin datos' }}</td>
+                <td data-label="Importe" class="settlement-history__amount">{{ pago.importe !== null && pago.moneda ? (pago.importe | currency:pago.moneda:'code') : (pago.importe ?? 'Sin importe') }}</td>
+                <td data-label="Comprobante y observación">
+                  @if (pago.comprobante) {
+                    <app-ver-comprobante [obtenerUrl]="urlComprobantePago(pago)" [etiqueta]="'Ver ' + pago.comprobante" />
+                  }
+                  <p class="settlement-history__reference">{{ pago.referencia ? 'N.º de operación: ' + pago.referencia : 'Sin número de operación' }}</p>
+                  @if (pago.observacion) { <p class="settlement-note">{{ pago.observacion }}</p> }
+                </td>
+                <td data-label="Registrado por">{{ pago.administrador || 'Sin datos' }}</td>
               </tr>
             }
           </tbody>
@@ -368,36 +437,54 @@
     </form>
   </dialog>
 
-  <dialog #dialogoPagoAnunciante class="block-dialog refund-dialog cancellation-approval-dialog" aria-labelledby="advertiser-payment-title"
+  <dialog #dialogoPagoAnunciante class="block-dialog refund-dialog cancellation-approval-dialog advertiser-payment-dialog" aria-labelledby="advertiser-payment-title"
     (cancel)="cerrarPagoAnunciante($event)">
     <form class="block-form" (ngSubmit)="confirmarPagoAnunciante()" [attr.aria-busy]="registrandoPagoAnunciante()">
-      <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideWallet [size]="26"></svg></div>
-      <h2 id="advertiser-payment-title">Registrar pago al anunciante</h2>
+      <div class="advertiser-payment__header">
+        <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideWallet [size]="26"></svg></div>
+        <div>
+          <h2 id="advertiser-payment-title">Registrar pago al anunciante</h2>
+          @if (pagoAnuncianteSeleccionado(); as item) {
+            <p class="refund-meta">Reserva #{{ item.id }} · {{ item.publicacion?.titulo ?? 'Publicación eliminada' }}</p>
+          }
+        </div>
+      </div>
       @if (pagoAnuncianteSeleccionado(); as item) {
-        <p class="refund-meta">Reserva #{{ item.id }} · {{ item.publicacion?.titulo ?? 'Publicación eliminada' }}</p>
-        <p><strong>Anunciante</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
-        <p><strong>Importe</strong> {{ montoLiquidacion(item) }}</p>
+        <div class="advertiser-payment__summary">
+          <p class="advertiser-payment__row"><strong>Importe total</strong><span>{{ montoLiquidacion(item) }}</span></p>
+          <p class="advertiser-payment__commission"><strong>Comisión DEPA:</strong> @if (item.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ item.porcentaje_comision_depa }} % · {{ item.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
+          <div class="advertiser-payment__row advertiser-payment__net">
+            <strong>Importe a transferir</strong>
+            <app-dato-copiable [valor]="(item.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2') ?? ''"
+              [copia]="importeParaCopiar(item.importe_neto_anunciante)" descripcion="importe a transferir" />
+          </div>
+        </div>
+        <section class="transfer-data" aria-labelledby="advertiser-transfer-title">
+          <h3 id="advertiser-transfer-title">Datos para transferir</h3>
+          @if (consultandoCbuParaPago()) {
+            <p role="status">Consultando el CBU validado…</p>
+          } @else if (cbuParaPago(); as cbu) {
+            <p class="transfer-data__label">{{ tipoCuentaBancaria(cbu) }} validado</p>
+            <app-dato-copiable [valor]="formatearCbu(cbu)" [copia]="cbu" [descripcion]="tipoCuentaBancaria(cbu)" [monoespaciado]="true" />
+            <p class="transfer-data__owner"><strong>Titular:</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}@if (cuitParaPago(); as cuit) { · CUIT/CUIL {{ formatearCuit(cuit) }} }</p>
+          } @else if (!errorPagoAnunciante()) {
+            <p class="refund-error advertiser-payment__alert" role="alert">El anunciante necesita un CBU validado para recibir el pago.</p>
+          }
+        </section>
       }
-      <p class="refund-help" id="advertiser-payment-help">Registrá una transferencia que ya realizaste. El anunciante podrá ver la referencia y la observación en Mis publicaciones.</p>
-      @if (consultandoCbuParaPago()) {
-        <p role="status">Consultando el CBU validado…</p>
-      } @else if (cbuParaPago(); as cbu) {
-        <p><strong>CBU validado para transferir</strong> <code>{{ cbu }}</code></p>
-      } @else if (!errorPagoAnunciante()) {
-        <p class="refund-error" role="alert">El anunciante necesita un CBU validado para recibir el pago.</p>
-      }
-      <label for="advertiser-payment-reference">Referencia o número de comprobante <span class="muted">(opcional)</span></label>
+      <p class="refund-help" id="advertiser-payment-help">Transferí el importe y adjuntá el comprobante. El anunciante va a poder ver el comprobante, el número de operación y la observación en su historial de pagos.</p>
+      <app-carga-comprobante [(archivo)]="comprobantePago" [deshabilitado]="registrandoPagoAnunciante()" />
+      <label for="advertiser-payment-reference">Número de operación <span class="muted">(opcional)</span></label>
       <input id="advertiser-payment-reference" name="referenciaPagoAnunciante" [(ngModel)]="referenciaPagoAnunciante"
-        maxlength="150" placeholder="Número de operación o referencia" aria-describedby="advertiser-payment-help"
-        [disabled]="registrandoPagoAnunciante()" autofocus />
+        maxlength="150" aria-describedby="advertiser-payment-help" [disabled]="registrandoPagoAnunciante()" />
       <label for="advertiser-payment-note">Observación <span class="muted">(opcional)</span></label>
       <textarea id="advertiser-payment-note" name="observacionPagoAnunciante" [(ngModel)]="observacionPagoAnunciante"
         rows="3" maxlength="500" [disabled]="registrandoPagoAnunciante()"></textarea>
-      @if (errorPagoAnunciante()) { <p class="refund-error" role="alert">{{ errorPagoAnunciante() }}</p> }
+      @if (errorPagoAnunciante()) { <p class="refund-error advertiser-payment__alert" role="alert">{{ errorPagoAnunciante() }}</p> }
       <div class="block-actions">
         <button type="button" class="button button--ghost" [disabled]="registrandoPagoAnunciante()" (click)="cerrarPagoAnunciante()">Volver</button>
-        <button type="submit" class="button button--success" [disabled]="registrandoPagoAnunciante() || !cbuParaPago()">
-          {{ registrandoPagoAnunciante() ? 'Registrando…' : 'Confirmar registro' }}
+        <button type="submit" class="button button--success" [disabled]="registrandoPagoAnunciante() || !cbuParaPago() || !comprobantePago()">
+          {{ registrandoPagoAnunciante() ? 'Registrando…' : 'Registrar pago' }}
         </button>
       </div>
     </form>
@@ -443,16 +530,24 @@
     @if (reembolsoSeleccionado(); as item) {
       <form class="block-form" (ngSubmit)="procesarReembolso(item)" [attr.aria-busy]="guardandoReembolso()">
         <header class="refund-heading">
-          <div>
-            <p class="refund-meta">Reembolso #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
-            <h2 id="refund-title">Detalle del reembolso</h2>
+          <div class="advertiser-payment__header">
+            <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideReceiptText [size]="26"></svg></div>
+            <div>
+              <h2 id="refund-title">{{ puedeRegistrarTransferencia(item) ? 'Registrar transferencia del reembolso' : 'Detalle del reembolso' }}</h2>
+              <p class="refund-meta">Reembolso #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
+            </div>
           </div>
           <button type="button" class="button button--ghost" aria-label="Cerrar"
             [disabled]="guardandoReembolso()" (click)="cerrarReembolso()"><svg lucideX [size]="20" aria-hidden="true"></svg></button>
         </header>
         <div class="refund-amount">
           <span>{{ item.tipo === 'TOTAL' ? 'Devolución total' : item.tipo === 'PARCIAL' ? 'Devolución parcial' : 'Contracargo' }}</span>
-          <strong>{{ item.importe | currency: item.moneda }} {{ item.moneda }}</strong>
+          @if (puedeRegistrarTransferencia(item)) {
+            <app-dato-copiable class="refund-amount__value" [valor]="(item.importe | currency: item.moneda) ?? ''"
+              [copia]="importeParaCopiar(item.importe)" descripcion="importe a devolver" />
+          } @else {
+            <strong class="refund-amount__value">{{ item.importe | currency: item.moneda }}</strong>
+          }
           <span class="status" [class.status--blocked]="item.estado === 'PENDIENTE' || puedeConciliarReembolso(item)">{{ estadosReembolso[item.estado] }}</span>
         </div>
         <dl class="refund-data">
@@ -467,7 +562,10 @@
             <div><dt>Pago original</dt><dd>{{ pago.payment_id ? 'Mercado Pago #' + pago.payment_id : 'Pago #' + pago.id }}</dd></div>
           }
           @if (item.referencia_externa) {
-            <div><dt>Referencia de devolución</dt><dd>{{ item.referencia_externa }}</dd></div>
+            <div><dt>{{ item.transferencia_manual ? 'Número de operación' : 'Referencia de devolución' }}</dt><dd>{{ item.referencia_externa }}</dd></div>
+          }
+          @if (item.comprobante_nombre) {
+            <div><dt>Comprobante</dt><dd><app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(item.id)" [etiqueta]="'Ver ' + item.comprobante_nombre" /></dd></div>
           }
           @if (item.resuelto_en) {
             <div><dt>Resuelto</dt><dd>{{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
@@ -479,20 +577,32 @@
             <div><dt>Aplicado a la reserva</dt><dd>{{ item.aplicado_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
           }
           <div class="refund-reason"><dt>Motivo</dt><dd>{{ item.motivo }}</dd></div>
+          @if (item.observacion_transferencia) {
+            <div class="refund-reason"><dt>Observación de la transferencia</dt><dd>{{ item.observacion_transferencia }}</dd></div>
+          }
         </dl>
         @if (item.revision_aplicacion) {
           <p class="refund-help">Reembolso histórico pendiente de revisión administrativa.</p>
         } @else if (item.estado === 'APROBADO' && !item.aplicado_en) {
           <p class="refund-help">El reembolso está aprobado y pendiente de aplicar a la reserva.</p>
         }
+        @if (puedeRegistrarTransferencia(item)) {
+          <p class="refund-help refund-help--accent" id="refund-transfer-help">Pedile al inquilino su CBU o alias por el chat, transferí el importe y adjuntá el comprobante. El inquilino va a poder ver el comprobante, el número de operación y la observación.</p>
+        }
         @if (item.transferencia_manual) {
-          <app-reembolso-chat [reembolsoId]="item.id" />
+          <details class="refund-chat" [open]="puedeRegistrarTransferencia(item)">
+            <summary>Conversación con el inquilino</summary>
+            <app-reembolso-chat [reembolsoId]="item.id" />
+          </details>
         }
         @if (puedeRegistrarTransferencia(item)) {
-          <label for="refund-bank-reference">Referencia del comprobante de transferencia</label>
+          <app-carga-comprobante [(archivo)]="comprobanteReembolso" [deshabilitado]="guardandoReembolso()" />
+          <label for="refund-bank-reference">Número de operación <span class="muted">(opcional)</span></label>
           <input id="refund-bank-reference" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
-            required maxlength="150" [disabled]="guardandoReembolso()" />
-          <p class="refund-help">Registrá el comprobante después de transferir el importe al inquilino.</p>
+            maxlength="150" aria-describedby="refund-transfer-help" [disabled]="guardandoReembolso()" />
+          <label for="refund-transfer-note">Observación <span class="muted">(opcional)</span></label>
+          <textarea id="refund-transfer-note" name="observacionReembolso" [(ngModel)]="observacionReembolso"
+            rows="3" maxlength="500" [disabled]="guardandoReembolso()"></textarea>
         } @else if (puedeConciliarReembolso(item)) {
           <label for="refund-external-id">ID del reembolso en Mercado Pago</label>
           <input id="refund-external-id" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
@@ -535,10 +645,11 @@
       @for (claim of claims(); track claim.id) {
         <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
           <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
-            (verArchivo)="verEvidencia(claim, $event)" (verReembolso)="verReembolsoReclamo(claim)">
+            [actualizar]="activeSection() === 'reclamos'"
+            (verReembolso)="verReembolsoReclamo(claim)">
             @if (gestionReclamo()?.id === claim.id && gestionReclamo()?.accion === 'mensaje') {
-              <app-conversation-composer [(texto)]="textoReclamo" etiqueta="Mensaje para el inquilino y el anunciante"
-                [deshabilitado]="!!busy()" (enviar)="responderReclamo(claim)" />
+              <app-conversation-composer [(texto)]="textoReclamo" [(imagenes)]="imagenesReclamo" [adjuntos]="imagenesDisponibles(claim)"
+                etiqueta="Mensaje para el inquilino y el anunciante" [deshabilitado]="!!busy()" (enviar)="responderReclamo(claim)" />
               <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
             }
           </app-claim-history>
@@ -555,11 +666,21 @@
               <form class="claim-form" (ngSubmit)="resolverReclamoReserva(claim)">
                 <label>Resultado de la revisión
                   <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
-                    <option value="SIN_DEVOLUCION">Sin devolución</option>
-                    <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
-                    <option value="DEVOLUCION_TOTAL">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}</option>
+                    @if (claim.categoria === 'CODIGO_BLOQUEADO') {
+                      <!-- T34: el pedido de reinicio del código tiene sus propias salidas. -->
+                      <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
+                      <option value="CONFIRMAR_INGRESO">Confirmar el ingreso sin código (a favor del anunciante)</option>
+                      <option value="DEVOLUCION_TOTAL">Devolver el 100 % al inquilino</option>
+                    } @else {
+                      <option value="SIN_DEVOLUCION">Sin devolución</option>
+                      <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
+                      <option value="DEVOLUCION_TOTAL">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}</option>
+                    }
                   </select>
                 </label>
+                @if (claim.categoria === 'CODIGO_BLOQUEADO' && resolucionReclamo === 'CONFIRMAR_INGRESO') {
+                  <p class="refund-help">El pago al anunciante se habilita en la fecha habitual, a los 5 días del fin de la estadía.</p>
+                }
                 @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
                   <label>Importe a devolver ({{ claim.devolucion_cancelacion?.moneda || claim.reserva?.moneda_contratada || 'ARS' }})
                     <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required
@@ -840,14 +961,18 @@
       </div>
     </nav>
   </section>
-  <section class="panel admin-module" aria-labelledby="blocked-users-title" [hidden]="activeSection() !== 'bloqueos'">
-    <div class="panel__title">
+  <section class="panel admin-module appeals-panel" aria-labelledby="blocked-users-title" [hidden]="activeSection() !== 'bloqueos'">
+    <div class="panel__title appeals-panel__title">
       <div>
         <h2 id="blocked-users-title">Usuarios bloqueados</h2>
         <p>Consultá los bloqueos vigentes y respondé las apelaciones.</p>
       </div>
-      <button type="button" class="button button--ghost" (click)="cargarBloqueados()" [disabled]="bloqueadosCargando()">Actualizar</button>
     </div>
+    <nav class="appeals-tabs" aria-label="Vistas de bloqueos">
+      <button type="button" [class.active]="vistaBloqueos() === 'actuales'" [attr.aria-pressed]="vistaBloqueos() === 'actuales'" (click)="cambiarVistaBloqueos('actuales')">Bloqueos actuales</button>
+      <button type="button" [class.active]="vistaBloqueos() === 'historial'" [attr.aria-pressed]="vistaBloqueos() === 'historial'" (click)="cambiarVistaBloqueos('historial')">Historial</button>
+    </nav>
+    @if (vistaBloqueos() === 'actuales') {
     @if (bloqueadosError()) {
       <p class="alert alert--error" role="alert">{{ bloqueadosError() }}</p>
     }
@@ -855,35 +980,51 @@
       <p class="empty" role="status">Cargando usuarios bloqueados…</p>
     } @else {
       <div class="blocked-users">
-        @for (bloqueo of bloqueados(); track bloqueo.detalle.id) {
+        @for (bloqueo of bloqueosOrdenados(); track bloqueo.detalle.id) {
           <article class="blocked-user">
-            <header>
-              <h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3>
-              <p>{{ bloqueo.usuario.email }}</p>
+            <header class="blocked-user__header">
+              <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
+              <div class="blocked-user__identity">
+                <h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3>
+                <p>{{ bloqueo.usuario.email }}</p>
+              </div>
+              <span class="blocked-user__status">
+                @if (bloqueo.detalle.apelacion) {
+                  <svg lucideMessageCircle [size]="15" aria-hidden="true"></svg> {{ bloqueo.detalle.respuesta ? 'Respondida' : 'Apelación en curso' }}
+                } @else {
+                  <svg lucideClock3 [size]="15" aria-hidden="true"></svg> Sin apelación
+                }
+              </span>
+              <button type="button" class="blocked-user__unblock" [disabled]="!!busy()" (click)="desbloquearDesdeApelaciones(bloqueo)">
+                {{ busy() === 'user-' + bloqueo.usuario.id ? 'Desbloqueando...' : 'Desbloquear usuario' }}
+              </button>
             </header>
-            <p><strong>Bloqueado por</strong> {{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p>
-            @if (bloqueo.detalle.fecha) {
-              <p><strong>Fecha del bloqueo</strong> {{ bloqueo.detalle.fecha | date: 'dd/MM/yyyy' }}</p>
-            }
-            <p><strong>Motivo</strong> {{ bloqueo.detalle.motivo || 'Sin registro' }}</p>
+            <div class="blocked-user__details">
+              <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
+              <div><svg lucideCalendarDays [size]="20" aria-hidden="true"></svg><p><strong>Fecha del bloqueo</strong>{{ bloqueo.detalle.fecha ? (bloqueo.detalle.fecha | date: 'dd/MM/yyyy') : 'Sin registro' }}</p></div>
+              <div><svg lucideMessageCircle [size]="20" aria-hidden="true"></svg><p><strong>Motivo</strong>{{ bloqueo.detalle.motivo || 'Sin registro' }}</p></div>
+            </div>
             @if (bloqueo.detalle.accesoLimitado) {
-              <p>Acceso limitado a operaciones pendientes y apelación.</p>
+              <p class="blocked-user__notice">Acceso limitado a operaciones pendientes y apelación.</p>
             }
             @if (bloqueo.detalle.apelacion) {
-              <app-conversation-panel titulo="Apelación del bloqueo"
+              <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true"
                 [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">
-                @if (!bloqueo.detalle.respuesta) {
-                  @if (apelacionSeleccionada() === bloqueo.detalle.id) {
-                    <app-conversation-composer [(texto)]="respuestaApelacion" [limite]="2000"
-                      etiqueta="Respuesta de Administración" [deshabilitado]="!!busy()" (enviar)="responderApelacion(bloqueo)" />
-                    <button type="button" class="button button--ghost" (click)="apelacionSeleccionada.set(null)" [disabled]="!!busy()">Cancelar</button>
-                  } @else {
-                    <button type="button" class="button button--ghost" (click)="abrirRespuesta(bloqueo)" [disabled]="!!busy()">Responder apelación</button>
+                  <div class="blocked-user__composer">
+                    <textarea [(ngModel)]="respuestasApelacion[bloqueo.detalle.id]" [ngModelOptions]="{ standalone: true }" rows="1" maxlength="2000" [disabled]="!!busy()" aria-label="Respuesta de Administración" placeholder="Escribí un mensaje..." (keydown.enter)="enviarApelacionConEnter($event, bloqueo)"></textarea>
+                    <label class="blocked-user__attach" title="Adjuntar imagen">
+                      <svg lucidePaperclip [size]="19" aria-hidden="true"></svg><span class="blocked-user__sr-only">Adjuntar imagen JPEG o PNG de hasta 5 MB</span>
+                      <input type="file" accept="image/jpeg,image/png" [disabled]="!!busy()" (change)="seleccionarImagenApelacion($event, bloqueo)" />
+                    </label>
+                    <button type="button" class="blocked-user__send" [disabled]="!!busy() || !(respuestasApelacion[bloqueo.detalle.id] || '').trim()" (click)="responderApelacion(bloqueo)"><svg lucideSend [size]="17" aria-hidden="true"></svg> Enviar</button>
+                    <button type="button" class="blocked-user__cancel" [disabled]="!!busy()" (click)="cancelarRespuesta(bloqueo)">Cancelar</button>
+                  </div>
+                  @if (imagenesApelacion[bloqueo.detalle.id]; as imagen) {
+                    @if (vistasPreviasApelacion[bloqueo.detalle.id]; as vista) {
+                      <app-attachment-preview class="blocked-user__attachment" [url]="vista" [nombre]="imagen.name" [deshabilitado]="!!busy()" (quitar)="quitarImagenApelacion(bloqueo)" />
+                    }
                   }
-                }
               </app-conversation-panel>
-            } @else {
-              <p>Sin apelación.</p>
             }
           </article>
         } @empty {
@@ -891,8 +1032,60 @@
         }
       </div>
     }
+    } @else {
+      @if (historialBloqueosError()) { <p class="alert alert--error" role="alert">{{ historialBloqueosError() }}</p> }
+      @if (historialBloqueosCargando()) {
+        <p class="empty" role="status">Cargando historial de bloqueos...</p>
+      } @else {
+        <div class="blocked-users">
+          @for (bloqueo of historialBloqueos(); track bloqueo.usuario.id + '-' + bloqueo.detalle.id) {
+            <article class="blocked-user">
+              <header class="blocked-user__header">
+                <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
+                <div class="blocked-user__identity"><h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3><p>{{ bloqueo.usuario.email }}</p></div>
+                <span class="blocked-user__status blocked-user__status--closed">Desbloqueado</span>
+              </header>
+              <div class="blocked-user__details">
+                <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
+                <div><svg lucideCalendarDays [size]="20" aria-hidden="true"></svg><p><strong>Fecha del bloqueo</strong>{{ bloqueo.detalle.fecha ? (bloqueo.detalle.fecha | date: 'dd/MM/yyyy') : 'Sin registro' }}</p></div>
+                <div><svg lucideMessageCircle [size]="20" aria-hidden="true"></svg><p><strong>Motivo</strong>{{ bloqueo.detalle.motivo || 'Sin registro' }}</p></div>
+              </div>
+              <p class="blocked-user__history-date">Desbloqueado: {{ bloqueo.detalle.fechaDesbloqueo ? (bloqueo.detalle.fechaDesbloqueo | date: 'dd/MM/yyyy HH:mm') : 'fecha no registrada' }}</p>
+              @if (bloqueo.detalle.apelacion) {
+                <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true" [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)" />
+              }
+            </article>
+          } @empty {
+            @if (!historialBloqueosError()) { <p class="empty">No hay bloqueos anteriores registrados.</p> }
+          }
+        </div>
+      }
+    }
   </section>
 
+  <section class="commission-section admin-module" [hidden]="activeSection() !== 'comision'" aria-label="Configuración de comisión">
+    @if (comisionCargando()) {
+      <p role="status">Cargando comisión…</p>
+    } @else if (comisionError()) {
+      <p class="alert alert--error" role="alert">No se pudo cargar la comisión: {{ comisionError() }}</p>
+      <button type="button" class="button button--ghost" (click)="cargarComision()">Reintentar</button>
+    } @else if (comisionActual !== null) {
+      <div class="commission-grid">
+        <div class="commission-current">
+          <div class="commission-current__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7l10-5Z"/><path d="m2 12 10 5 10-5M2 17l10 5 10-5"/></svg></div>
+          <span>Porcentaje actual</span>
+          <strong>{{ comisionActual }}<span> %</span></strong>
+        </div>
+        <form class="commission-form" (ngSubmit)="guardarComision()">
+          <h2><span class="commission-form__icon" aria-hidden="true">%</span> Cambiar comisión</h2>
+          <p class="commission-info"><span aria-hidden="true">ⓘ</span> El porcentaje se aplica a nuevas reservas y no modifica las anteriores.</p>
+          <label for="comision-depa">Nuevo porcentaje</label>
+          <div class="commission-input"><input id="comision-depa" type="number" name="comision" min="0" max="100" step="0.01" [(ngModel)]="comisionNueva" required /><span aria-hidden="true">%</span></div>
+          <button class="commission-save" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h14l3 3v15H3V3h1Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>Guardar comisión</button>
+        </form>
+      </div>
+    }
+  </section>
   <section class="panel management admin-module" [hidden]="activeSection() !== 'catalogos'">
     <div class="panel__title">
       <div>
