@@ -116,6 +116,8 @@ export interface AdminReembolso {
   /** Origen interno del reembolso; en los reclamos es `rec:<id del reclamo>`. */
   referencia_interna?: string | null;
   referencia_externa?: string | null;
+  /** T44: nombre del comprobante de la transferencia; null en los registros anteriores. */
+  comprobante_nombre?: string | null;
   resuelto_en?: string | null;
   resuelto_por?: { nombre?: string; apellido?: string } | null;
   pago?: { id: number; payment_id?: string | null } | null;
@@ -214,8 +216,16 @@ export class AdminService {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
   }
 
-  registrarTransferenciaReembolso(id: number, referencia: string) {
-    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, { referencia });
+  /** T44: multipart con el comprobante obligatorio y la referencia opcional. */
+  registrarTransferenciaReembolso(id: number, comprobante: File, referencia?: string) {
+    const datos = new FormData();
+    datos.append('comprobante', comprobante);
+    if (referencia) datos.append('referencia', referencia);
+    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, datos);
+  }
+
+  urlComprobanteReembolso(id: number) {
+    return this.http.get<{ url: string }>(`${this.api}/reembolsos/${id}/comprobante`);
   }
 
   listarReclamos() {

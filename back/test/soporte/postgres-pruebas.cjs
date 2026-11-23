@@ -82,6 +82,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await db.exec(leerMigracion('20261116-cbu-anunciantes.sql'));
     await db.exec(leerMigracion('20261122-comision-depa.sql'));
+    await db.exec(leerMigracion('20261123-comprobante-reembolso.sql'));
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };
   } catch (error) {

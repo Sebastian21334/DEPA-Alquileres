@@ -29,6 +29,12 @@
                 {{ conversacionAbierta() === reembolso.id ? 'Ocultar conversación' : 'Ver conversación' }}
               </button>
             </header>
+            @if (reembolso.comprobante_nombre) {
+              <!-- T44: el inquilino ve el comprobante de la transferencia que recibió. -->
+              <p class="refund-threads__receipt">Comprobante de la transferencia:
+                <app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(reembolso.id)" [etiqueta]="'Ver ' + reembolso.comprobante_nombre" />
+              </p>
+            }
             @if (conversacionAbierta() === reembolso.id) {
               <app-reembolso-chat [reembolsoId]="reembolso.id" [vistaInquilino]="true" />
             }

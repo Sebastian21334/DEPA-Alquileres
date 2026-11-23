@@ -1,4 +1,5 @@
-import { Body, Controller, Param, ParseIntPipe, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, ParseIntPipe, Patch, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { ComprobanteInterceptor } from '../../almacenamiento/comprobante.interceptor';
 import { RegistrarReembolsoManualDto } from '../../reembolsos/dto/registrar-reembolso-manual.dto';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { JwtAuthGuard, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
@@ -21,8 +22,10 @@ export class ReembolsosReservaController {
     return this.operaciones.recuperarConfirmacion(id, dto.referencia ?? '', req.user.id);
   }
 
+  /** T44: multipart con el comprobante obligatorio (`comprobante`) y la referencia opcional. */
   @Patch(':id/transferencia')
-  registrarTransferencia(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarReembolsoManualDto, @Req() req: AuthenticatedRequest) {
-    return this.operaciones.registrarTransferencia(id, dto.referencia ?? '', req.user.id);
+  @UseInterceptors(ComprobanteInterceptor())
+  registrarTransferencia(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarReembolsoManualDto, @UploadedFile() comprobante: Express.Multer.File | undefined, @Req() req: AuthenticatedRequest) {
+    return this.operaciones.registrarTransferencia(id, dto.referencia ?? '', comprobante, req.user.id);
   }
 }
