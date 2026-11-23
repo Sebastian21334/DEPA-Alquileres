@@ -12,5 +12,8 @@ export interface ICancelacionesRepository {
   buscarParaResolver(id: number, idReserva: number): Promise<SolicitudCancelacion | null>;
   buscarActiva(idReserva: number, estado: string): Promise<SolicitudCancelacion | null>;
   buscarPolitica(fechaPago: string | null): Promise<PoliticaCancelacion | null>;
+  listarVencibles(hoy: string, despuesDe: number): Promise<SolicitudCancelacion[]>;
+  buscarDemorada(idReserva: number, idUsuario: number): Promise<SolicitudCancelacion | null>;
+  listarDemoradasDelSolicitante(idUsuario: number, hoy: string): Promise<SolicitudCancelacion[]>;
   listarPorEstado(estado: string): Promise<SolicitudCancelacion[]>;
 }

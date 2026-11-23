@@ -155,6 +155,15 @@ export interface CondicionesCancelacion {
   };
 }
 
+export interface DemoraAdministrativa {
+  solicitudId: number;
+  reservaId: number;
+  titulo: string;
+  fechaInicio: string | null;
+  fechaSolicitud: string;
+  reclamoAbierto: boolean;
+}
+
 export interface SolicitudCancelacion {
   id: number;
   motivo: string;
@@ -209,7 +218,7 @@ export interface Reclamo {
   } | null;
   anunciante?: ParticipanteReclamo | null;
   inquilino?: ParticipanteReclamo | null;
-  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO';
+  categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'DEMORA_ADMINISTRATIVA';
   descripcion: string;
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
   resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | null;
@@ -314,6 +323,10 @@ export class ReservationService {
 
   refunds(id: number): Observable<Reembolso[]> {
     return this.http.get<Reembolso[]>(`${this.baseUrl}/${id}/reembolsos`);
+  }
+
+  myAdministrativeDelays(): Observable<DemoraAdministrativa[]> {
+    return this.http.get<DemoraAdministrativa[]>(`${environment.apiUrl}/reclamos/demoras/mias`);
   }
 
   createClaim(payload: { id_reserva: number; categoria: Reclamo['categoria']; descripcion: string; }): Observable<Reclamo> {

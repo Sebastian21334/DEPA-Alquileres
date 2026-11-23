@@ -557,7 +557,7 @@
                   <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
                     <option value="SIN_DEVOLUCION">Sin devolución</option>
                     <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
-                    <option value="DEVOLUCION_TOTAL">{{ claim.solicitud_cancelacion_id ? 'Completar faltante' : 'Devolución total' }}</option>
+                    <option value="DEVOLUCION_TOTAL">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}</option>
                   </select>
                 </label>
                 @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
@@ -566,10 +566,10 @@
                       [attr.max]="totalPagadoReclamo(claim)" [attr.aria-invalid]="parcialCubreElTotal(claim)" [disabled]="!!busy()" />
                   </label>
                   @if (totalPagadoReclamo(claim); as total) {
-                    <p class="refund-help">{{ claim.solicitud_cancelacion_id ? 'Faltante disponible:' : 'Pagó el inquilino' }} {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
+                    <p class="refund-help">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Faltante disponible:' : 'Pagó el inquilino' }} {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
                   }
                   @if (parcialCubreElTotal(claim)) {
-                    <p class="refund-error" role="alert">Para devolver todo elegí «{{ claim.solicitud_cancelacion_id ? 'Completar faltante' : 'Devolución total' }}».</p>
+                    <p class="refund-error" role="alert">Para devolver todo elegí «{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}».</p>
                   }
                 }
                 <label>Conclusión de la revisión

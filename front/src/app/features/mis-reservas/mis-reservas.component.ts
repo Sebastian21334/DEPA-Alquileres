@@ -8,6 +8,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
   CondicionesCancelacion,
+  DemoraAdministrativa,
   FaltanteCancelacion,
   Reserva,
   ReprogramacionReserva,
@@ -54,6 +55,45 @@ export class MisReservasComponent {
   protected readonly esAnunciante = computed(() => this.accesoLimitado()
     ? this.auth.currentUser()?.anuncianteVerificado === true
     : this.perfil.esAnuncianteVerificado());
+
+  protected readonly demorasAdministrativas = signal<DemoraAdministrativa[]>([]);
+  protected readonly errorDemorasAdministrativas = signal('');
+  private readonly dialogoDemora = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoDemora');
+  protected readonly demoraSeleccionada = signal<DemoraAdministrativa | null>(null);
+  protected readonly enviandoDemora = signal(false);
+  protected readonly errorDemora = signal('');
+  protected descripcionDemora = '';
+
+  protected abrirDemora(item: DemoraAdministrativa): void {
+    if (item.reclamoAbierto || this.enviandoDemora()) return;
+    this.demoraSeleccionada.set(item);
+    this.descripcionDemora = '';
+    this.errorDemora.set('');
+    this.dialogoDemora().nativeElement.showModal();
+  }
+
+  protected cerrarDemora(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.enviandoDemora()) return;
+    this.dialogoDemora().nativeElement.close();
+    this.demoraSeleccionada.set(null);
+  }
+
+  protected enviarDemora(): void {
+    const item = this.demoraSeleccionada();
+    const descripcion = this.descripcionDemora.trim();
+    if (!item || this.enviandoDemora() || descripcion.length < 20 || descripcion.length > 1000) return;
+    this.enviandoDemora.set(true);
+    this.errorDemora.set('');
+    this.reservasApi.createClaim({ id_reserva: item.reservaId, categoria: 'DEMORA_ADMINISTRATIVA', descripcion }).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.enviandoDemora.set(false))).subscribe({
+      next: () => {
+        this.enviandoDemora.set(false);
+        this.cerrarDemora();
+        this.finalizarReclamo('Reclamo por demora administrativa enviado. La reserva sigue en curso; administración revisará los inconvenientes informados.');
+      },
+      error: (error: ApiError) => this.errorDemora.set(error.message),
+    });
+  }
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
@@ -165,6 +205,10 @@ export class MisReservasComponent {
     this.consultaReservas?.unsubscribe();
     const anunciante = this.accesoLimitado() ? of(this.esAnunciante()) : this.perfil.esAnunciante();
     this.consultaReservas = forkJoin({
+      demoras: this.reservasApi.myAdministrativeDelays().pipe(catchError((error: ApiError) => {
+        this.errorDemorasAdministrativas.set(error.message);
+        return of(null);
+      })),
       propias: this.reservasApi.mine(),
       recibidas: anunciante.pipe(
         switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received() : of<Reserva[]>([])),
@@ -174,7 +218,8 @@ export class MisReservasComponent {
         return of(null);
       })),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ propias, recibidas, reclamos }) => {
+      next: ({ propias, recibidas, reclamos, demoras }) => {
+        if (demoras) { this.demorasAdministrativas.set(demoras); this.errorDemorasAdministrativas.set(''); }
         this.propias.set(propias);
         this.recibidas.set(recibidas);
         if (reclamos) {
@@ -251,7 +296,7 @@ export class MisReservasComponent {
       reserva.estado_pago === 'APROBADO' &&
       !reserva.cancelada &&
       !reserva.finalizada &&
-      !!reserva.fecha_inicio && (recibida || reserva.fecha_inicio > this.hoy()) &&
+      !!reserva.fecha_inicio && reserva.fecha_inicio > this.hoy() &&
       (recibida || ['CONFIRMADA', 'PENDIENTE_INGRESO'].includes(reserva.estado_estadia)) &&
       !reserva.codigo_validado_en &&
       (recibida || reserva.estado_liquidacion !== 'EN_REVISION') &&

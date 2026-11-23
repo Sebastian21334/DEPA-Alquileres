@@ -56,6 +56,7 @@ async function main() {
         '20261116-historial-pagos-anunciantes.sql',
         '20261116-chat-reembolsos.sql',
         '20261121-reclamo-faltante-cancelacion.sql',
+        '20261123-reclamo-demora-administrativa.sql',
         '20261113-vencimiento-pago-zona-horaria.sql',
       ]) {
         const sql = fs.readFileSync(path.join(__dirname, '..', 'migrations', archivo), 'utf8');

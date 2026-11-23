@@ -55,6 +55,7 @@ export class PublicationFormComponent {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly imagesBusy = signal(false);
+  protected readonly imageOrderSaving = signal(false);
   protected readonly images = signal<Imagen[]>([]);
   protected readonly imageError = signal('');
   protected readonly error = signal('');
@@ -93,7 +94,7 @@ export class PublicationFormComponent {
   }
 
   protected submit(): void {
-    if (this.saving() || this.imagesBusy() || this.form.disabled) return;
+    if (this.saving() || this.imagesBusy() || this.imageOrderSaving() || this.form.disabled) return;
     this.error.set('');
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -145,14 +146,33 @@ export class PublicationFormComponent {
 
   protected reorderImages({ desde, hasta }: { desde: number; hasta: number }): void {
     if (this.saving() || this.imagesBusy() || this.form.disabled) return;
-    const imagenes = moverImagen(this.images(), desde, hasta);
-    this.imagesBusy.set(true);
+    const anteriores = this.images();
+    const imagenes = moverImagen(anteriores, desde, hasta);
+    if (imagenes.every((imagen, index) => imagen.id === anteriores[index]?.id)) return;
+    this.images.set(imagenes);
     this.imageError.set('');
-    this.gestion.ordenarImagenes(this.publicationId, imagenes.map((imagen) => imagen.id)).pipe(
-      finalize(() => this.imagesBusy.set(false)),
-    ).subscribe({
-      next: (ordenadas) => this.images.set(ordenadas),
-      error: (err: ApiError) => this.imageError.set(err.message),
+    if (this.imageOrderSaving()) return;
+    this.imageOrderSaving.set(true);
+    this.saveImageOrder(anteriores);
+  }
+
+  private saveImageOrder(confirmadas: Imagen[]): void {
+    const ids = this.images().map(imagen => imagen.id);
+    // Una sola escritura a la vez; si hubo más movimientos, después se envía el último orden.
+    this.gestion.ordenarImagenes(this.publicationId, ids).subscribe({
+      next: (ordenadas) => {
+        if (this.images().some((imagen, index) => imagen.id !== ids[index])) {
+          this.saveImageOrder(ordenadas);
+          return;
+        }
+        this.images.set(ordenadas);
+        this.imageOrderSaving.set(false);
+      },
+      error: (err: ApiError) => {
+        this.images.set(confirmadas);
+        this.imageOrderSaving.set(false);
+        this.imageError.set(`No se pudo guardar el orden. Restauramos el último orden confirmado. ${err.message}`);
+      },
     });
   }
 
@@ -160,7 +180,7 @@ export class PublicationFormComponent {
     const input = event.target as HTMLInputElement;
     const archivos = Array.from(input.files ?? []);
     input.value = '';
-    if (this.saving() || this.imagesBusy() || this.form.disabled) return;
+    if (this.saving() || this.imagesBusy() || this.imageOrderSaving() || this.form.disabled) return;
     const validos = archivos.filter((archivo) =>
       ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(archivo.type) &&
       archivo.size <= 10 * 1024 * 1024,
@@ -179,7 +199,7 @@ export class PublicationFormComponent {
   }
 
   protected removeImage(index: number): void {
-    if (this.saving() || this.imagesBusy() || this.form.disabled || this.images().length <= 1) return;
+    if (this.saving() || this.imagesBusy() || this.imageOrderSaving() || this.form.disabled || this.images().length <= 1) return;
     const imagen = this.images()[index];
     if (!imagen) return;
     this.imagesBusy.set(true);

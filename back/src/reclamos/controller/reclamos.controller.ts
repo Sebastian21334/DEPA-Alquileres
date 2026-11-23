@@ -32,6 +32,12 @@ export class ReclamosController {
   constructor(private readonly reclamosService: ReclamosService) {}
 
   @PermitirAccesoLimitado()
+  @Get('demoras/mias')
+  listarDemoras(@Req() req: AuthenticatedRequest) {
+    return this.reclamosService.listarDemorasMias(req.user.id);
+  }
+
+  @PermitirAccesoLimitado()
   @Get('cancelacion/:idReserva')
   consultarFaltante(@Param('idReserva', ParseIntPipe) idReserva: number, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.consultarFaltanteCancelacion(idReserva, req.user.id);

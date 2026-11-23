@@ -3,6 +3,9 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
@@ -40,8 +43,76 @@ type ResultadoResolucion =
  * efectos sobre la estadía y el dinero.
  */
 @Injectable()
-export class CancelacionesService {
+export class CancelacionesService implements OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(CancelacionesService.name);
+  private temporizador?: ReturnType<typeof setInterval>;
+  private venciendo = false;
+  private readonly motivoDemora = 'Solicitud rechazada por falta de resolución administrativa antes de la fecha de ingreso';
   constructor(@Inject(CANCELACIONES_REPOSITORY) private readonly cancelaciones: ICancelacionesRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    await this.rechazarSolicitudesVencidas();
+    this.temporizador = setInterval(() => void this.rechazarSolicitudesVencidas(), 60_000);
+    this.temporizador.unref?.();
+  }
+
+  onModuleDestroy(): void {
+    if (this.temporizador) clearInterval(this.temporizador);
+  }
+
+  async rechazarSolicitudesVencidas(): Promise<void> {
+    if (this.venciendo) return;
+    this.venciendo = true;
+    try {
+      let despuesDe = 0;
+      for (;;) {
+        const filas = await this.cancelaciones.listarVencibles(fechaArgentina(), despuesDe);
+        if (!filas.length) break;
+        for (const fila of filas) {
+          despuesDe = fila.id;
+          await this.cancelaciones.conTransaccion(async (repo, tx) => {
+            const reserva = await this.reservas.obtenerReserva(fila.reserva.id, tx);
+            const solicitud = await repo.buscarParaResolver(fila.id, reserva.id);
+            if (solicitud?.estado === 'PENDIENTE' && reserva.fecha_inicio && reserva.fecha_inicio <= fechaArgentina())
+              await this.rechazarPorDemora(solicitud, repo);
+          });
+        }
+      }
+    } catch (error) {
+      this.logger.error('No se pudieron rechazar las cancelaciones fuera de plazo; se reintentará', error);
+    } finally { this.venciendo = false; }
+  }
+
+  private async rechazarPorDemora(solicitud: SolicitudCancelacion, repo: ICancelacionesRepository): Promise<SolicitudCancelacion> {
+    solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'RECHAZADA');
+    solicitud.decidida_por = null;
+    solicitud.decidida_en = new Date();
+    solicitud.observacion = this.motivoDemora;
+    return repo.guardar(solicitud);
+  }
+
+  private esDemoraAdministrativa(solicitud: SolicitudCancelacion, reserva: Reserva): boolean {
+    if (!reserva.fecha_inicio || reserva.fecha_inicio > fechaArgentina() || fechaArgentina(solicitud.creada_en) >= reserva.fecha_inicio) return false;
+    return solicitud.estado === 'PENDIENTE' || (solicitud.estado === 'VENCIDA' && (!solicitud.decidida_en || fechaArgentina(solicitud.decidida_en) >= reserva.fecha_inicio)) ||
+      (solicitud.estado === 'RECHAZADA' && !solicitud.decidida_por && solicitud.observacion === this.motivoDemora);
+  }
+
+  async buscarSolicitudParaReclamoDemora(reserva: Reserva, idUsuario: number, transaccion: EntityManager): Promise<SolicitudCancelacion> {
+    await this.reservas.buscarPorId(reserva.id, idUsuario, transaccion);
+    const repo = this.cancelaciones.enTransaccion(transaccion);
+    const candidata = await repo.buscarDemorada(reserva.id, idUsuario);
+    const solicitud = candidata ? await repo.buscarParaResolver(candidata.id, reserva.id) : null;
+    if (!solicitud || !this.esDemoraAdministrativa(solicitud, reserva))
+      throw new ConflictException('No tenés una solicitud de cancelación sin resolver antes del ingreso para reclamar por demora administrativa');
+    if (solicitud.estado === 'PENDIENTE') await this.rechazarPorDemora(solicitud, repo);
+    return solicitud;
+  }
+
+  async listarDemorasParaReclamo(idUsuario: number): Promise<SolicitudCancelacion[]> {
+    await this.rechazarSolicitudesVencidas();
+    const solicitudes = await this.cancelaciones.listarDemoradasDelSolicitante(idUsuario, fechaArgentina());
+    return solicitudes.filter(solicitud => this.esDemoraAdministrativa(solicitud, solicitud.reserva)).filter((solicitud, indice, filas) => filas.findIndex(fila => fila.reserva.id === solicitud.reserva.id) === indice);
+  }
 
   /**
    * Crea el pedido de cancelación de una reserva pagada. La reserva no se
@@ -57,7 +128,7 @@ export class CancelacionesService {
       const creadaEn = new Date();
       const hoy = fechaArgentina(creadaEn);
       const actor = this.actorDeCancelacion(reserva, idUsuario);
-      const impedimento = this.impedimentoReserva(reserva, hoy, actor);
+      const impedimento = this.impedimentoReserva(reserva, hoy);
       if (impedimento) throw impedimento;
       const politica = await this.politicaAplicable(cancelaciones, reserva);
       const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor);
@@ -80,7 +151,7 @@ export class CancelacionesService {
     return this.prepararRespuesta(resultado.solicitud);
   }
 
-  private impedimentoReserva(reserva: Reserva, hoy: string, actor: ActorCancelacion): BadRequestException | ConflictException | null {
+  private impedimentoReserva(reserva: Reserva, hoy: string): BadRequestException | ConflictException | null {
     if (!this.reservas.pagoAprobado(reserva))
       return new BadRequestException(
         'La reserva no está pagada. Usá la cancelación inmediata de la reserva pendiente.',
@@ -91,7 +162,7 @@ export class CancelacionesService {
       return new BadRequestException(
         'La reserva ya finalizó. Solo podés abrir un reclamo.',
       );
-    if (!reserva.fecha_inicio || (actor !== 'ANUNCIANTE' && reserva.fecha_inicio <= hoy))
+    if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
       return new BadRequestException(
         'La estadía ya comenzó. Para una devolución después del inicio, abrí un reclamo.',
       );
@@ -117,7 +188,7 @@ export class CancelacionesService {
     const hoy = fechaArgentina();
     const fechaSolicitud = solicitud ? fechaArgentina(solicitud.creada_en) : hoy;
     const actor = this.actorDeCancelacion(reserva, solicitud ? solicitud.solicitante?.id : idUsuario);
-    const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor) ?? this.impedimentoReserva(reserva, hoy, actor)?.message ?? null;
+    const motivoBloqueo = this.bloqueoPorPlazo(reserva, hoy, politica, actor) ?? this.impedimentoReserva(reserva, hoy)?.message ?? null;
     const devolucion = pago && (!motivoBloqueo || solicitud)
       ? { ...this.calcularDevolucion(reserva, actor, fechaSolicitud, politica, pago.amount), moneda: pago.currency }
       : null;
@@ -135,10 +206,9 @@ export class CancelacionesService {
   }
 
   private bloqueoPorPlazo(reserva: Reserva, hoy: string, politica: PoliticaCancelacion, actor: ActorCancelacion): string | null {
-    if (actor === 'ANUNCIANTE') return null;
     if (!reserva.fecha_inicio || reserva.fecha_inicio <= hoy)
       return 'Desde la fecha de ingreso no se puede solicitar la cancelación. Para una devolución, abrí un reclamo.';
-    if (actor === 'INQUILINO') return null;
+    if (actor === 'INQUILINO' || actor === 'ANUNCIANTE') return null;
     const diasMinimos = politica.diasDevolucionParcial;
     return this.diasHastaIngreso(reserva, hoy) < diasMinimos
       ? `El plazo venció. Tenés que solicitar la cancelación al menos ${diasMinimos} días antes del ingreso.`
@@ -226,7 +296,7 @@ export class CancelacionesService {
 
     await this.notificarResolucion(resultado);
     if (resultado.vencida)
-      throw new ConflictException(`${resultado.motivo}; la solicitud quedó vencida`);
+      throw new ConflictException(resultado.motivo === this.motivoDemora ? `${resultado.motivo}; la reserva sigue en curso y podés reclamar por demora administrativa` : `${resultado.motivo}; la solicitud quedó vencida`);
 
     return {
       solicitud: this.prepararRespuesta(resultado.solicitud),
@@ -247,10 +317,14 @@ export class CancelacionesService {
     solicitud.decidida_por = referenciaUsuario(idAdmin);
     solicitud.decidida_en = new Date();
 
-    const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
+    if (reserva.fecha_inicio && reserva.fecha_inicio <= hoy) {
+      await this.rechazarPorDemora(solicitud, cancelaciones);
+      return { vencida: true, reserva, motivo: this.motivoDemora, idSolicitante: solicitud.solicitante?.id };
+    }
+
     const motivoVencimiento = this.reservas.codigoValidado(reserva)
       ? 'El código de ingreso fue validado antes de resolver la solicitud'
-      : !reserva.fecha_inicio || (actor !== 'ANUNCIANTE' && reserva.fecha_inicio <= hoy)
+      : !reserva.fecha_inicio || reserva.fecha_inicio <= hoy
         ? 'La estadía comenzó antes de resolver la solicitud' : null;
     if (motivoVencimiento) {
       solicitud.estado = this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'VENCIDA');
@@ -272,7 +346,7 @@ export class CancelacionesService {
 
   private async aprobarSolicitud(reserva: Reserva, solicitud: SolicitudCancelacion, hoy: string, idAdmin: number, cancelaciones: ICancelacionesRepository, transaccion: EntityManager): Promise<ResultadoResolucion> {
     const actor = this.actorDeCancelacion(reserva, solicitud.solicitante?.id);
-    const impedimento = this.impedimentoReserva(reserva, hoy, actor);
+    const impedimento = this.impedimentoReserva(reserva, hoy);
     if (impedimento) throw impedimento;
     await this.asegurarSinDevolucionActiva(reserva.id, transaccion);
     const politica = await this.politicaAplicable(cancelaciones, reserva);
@@ -315,7 +389,7 @@ export class CancelacionesService {
     const solicitante = destinatario === 'ANUNCIANTE' ? ['anunciante'] as const
       : destinatario === 'INQUILINO' ? ['inquilino'] as const : [] as const;
     if (resultado.vencida) {
-      await this.notificaciones?.avisarCambio(resultado.reserva, solicitante, 'Solicitud de cancelación vencida', `${resultado.motivo}. Consultá el detalle en DEPA.`);
+      await this.notificaciones?.avisarCambio(resultado.reserva, solicitante, resultado.motivo === this.motivoDemora ? 'Solicitud de cancelación rechazada por demora' : 'Solicitud de cancelación vencida', `${resultado.motivo}. La reserva sigue en curso. Consultá en Mis reservas la opción de reclamo por demora administrativa.`);
       return;
     }
     if (resultado.solicitud.estado === this.catalogos.codigoEstado('SOLICITUD_CANCELACION', 'RECHAZADA'))

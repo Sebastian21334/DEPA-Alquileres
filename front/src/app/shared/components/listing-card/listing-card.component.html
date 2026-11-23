@@ -44,8 +44,11 @@
     </ul>
 
     <div class="card__footer">
-      <p class="card__price"><strong>${{ precioFormateado }}</strong><span>/ {{ esTemporaria ? 'día' : 'mes' }}</span></p>
-      <a class="card__cta" [routerLink]="['/publicaciones', publicacion().id]">Ver propiedad <svg lucideArrowRight [size]="17"></svg></a>
+      <p class="card__price">
+        <span class="card__currency">{{ publicacion().tipoMoneda?.nombre || 'Moneda no informada' }}</span>
+        <strong>${{ precioFormateado }}</strong><span class="card__period">/ {{ esTemporaria ? 'día' : 'mes' }}</span>
+      </p>
+      <a class="card__cta" [routerLink]="['/publicaciones', publicacion().id]" [attr.aria-label]="'Ver propiedad: ' + publicacion().titulo">Ver propiedad <svg lucideArrowRight [size]="17" aria-hidden="true"></svg></a>
     </div>
   </div>
 </article>

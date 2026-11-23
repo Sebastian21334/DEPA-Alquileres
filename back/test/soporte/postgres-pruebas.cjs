@@ -74,6 +74,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
       await db.exec(leerMigracion('20261116-historial-pagos-anunciantes.sql'));
       await db.exec(leerMigracion('20261116-chat-reembolsos.sql'));
       if (reclamoFaltante) await db.exec(leerMigracion('20261121-reclamo-faltante-cancelacion.sql'));
+      await db.exec(leerMigracion('20261123-reclamo-demora-administrativa.sql'));
     }
     await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await db.exec(leerMigracion('20261116-cbu-anunciantes.sql'));
