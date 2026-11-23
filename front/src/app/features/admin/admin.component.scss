@@ -51,8 +51,6 @@
 .advertiser-payment__header > div:last-child { min-width: 0; padding-left: 16px; border-left: 1px solid #dce3e8; }
 .advertiser-payment__header .cancellation-approval-icon { flex: none; }
 .advertiser-payment__header .refund-meta { margin-top: 4px; font-size: .9rem; overflow-wrap: anywhere; }
-.advertiser-payment__advertiser { overflow-wrap: anywhere; }
-.advertiser-payment__advertiser strong { margin-right: 6px; }
 .advertiser-payment__summary { padding: 4px; border: 1px solid #dfe5e8; border-radius: 9px; background: #f4f6f8; }
 .advertiser-payment__row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 8px 10px; }
 .advertiser-payment__row span, .advertiser-payment__row strong:last-child { text-align: right; }
@@ -61,8 +59,13 @@
 .advertiser-payment__net { border-radius: 7px; background: #e1f3e7; color: #146c43; font-size: 1.05rem; }
 .advertiser-payment-dialog .refund-help { padding-left: 12px; border-left: 3px solid var(--color-primary, #f47818); font-size: .88rem; line-height: 1.45; }
 .advertiser-payment__alert { padding: 10px 12px; border-radius: 8px; background: #ffeded; font-size: .9rem; font-weight: 650; }
-.advertiser-payment__cbu { padding: 10px 12px; border-radius: 8px; background: #eaf7ef; color: #146c43; overflow-wrap: anywhere; }
-.advertiser-payment__cbu strong { display: block; margin-bottom: 4px; }
+.advertiser-payment__net app-dato-copiable { justify-content: flex-end; font-weight: 700; }
+/* T56: datos para transferir al anunciante, con el CBU en bloques y botón de copiar. */
+.transfer-data { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid #b7dcc5; border-radius: 8px; background: #f3faf6; }
+.transfer-data h3 { margin: 0; color: #146c43; font-size: .95rem; }
+.transfer-data p { margin: 0; }
+.transfer-data__label { color: #52636c; font-size: .82rem; }
+.transfer-data__owner { color: #172b45; font-size: .88rem; overflow-wrap: anywhere; }
 .advertiser-payment-dialog label { margin-bottom: -7px; font-size: .9rem; }
 .advertiser-payment-dialog input, .advertiser-payment-dialog textarea { box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid #cbd5dc; border-radius: 8px; background: #fff; color: #172b45; font: inherit; }
 .advertiser-payment-dialog input:focus-visible, .advertiser-payment-dialog textarea:focus-visible { outline: 2px solid #146c43; outline-offset: 2px; }
@@ -662,13 +665,22 @@ select {
 .refund-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
 .refund-meta, .refund-data dt, .refund-help { color: #52636c; }
 .refund-amount { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .85rem; border-radius: 10px; background: #edf5f1; }
-.refund-amount strong { font-size: 1.25rem; }
+.refund-amount__value { font-size: 1.25rem; font-weight: 700; }
 .refund-amount .status { margin-left: auto; }
+/* T56: el detalle del reembolso sigue la estructura del pago al anunciante. */
+.refund-dialog .block-form { gap: 12px; }
+.refund-heading .advertiser-payment__header { margin-bottom: 0; }
+.refund-help--accent { margin: 0; padding-left: 12px; border-left: 3px solid var(--color-primary, #f47818); font-size: .88rem; line-height: 1.45; }
+.refund-chat { border: 1px solid #dfe5e8; border-radius: 8px; padding: 0 12px; }
+.refund-chat[open] { padding-bottom: 12px; }
+.refund-chat summary { padding: 10px 0; color: #172b45; font-weight: 650; cursor: pointer; }
+.refund-dialog label .muted { font-weight: 400; }
+.settlement-history__reference { margin: 4px 0 0; }
 .refund-data { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem 1rem; margin: 0; }
 .refund-data dt { font-size: .85rem; }
 .refund-data dd { margin: .2rem 0 0; font-weight: 650; }
 .refund-reason { grid-column: 1 / -1; padding: .75rem; border-radius: 8px; background: #f4f6f8; }
 .refund-reason dd { white-space: pre-wrap; }
-.refund-dialog input { box-sizing: border-box; width: 100%; padding: .65rem .75rem; border: 1px solid #9baab4; border-radius: 8px; font: inherit; }
+.refund-dialog input, .refund-dialog textarea { box-sizing: border-box; width: 100%; padding: .65rem .75rem; border: 1px solid #9baab4; border-radius: 8px; font: inherit; }
 .refund-error { color: #a12525; }
 

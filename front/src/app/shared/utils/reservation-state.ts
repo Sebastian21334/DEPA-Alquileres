@@ -66,15 +66,33 @@ export function puedeReprogramar(reserva: Reserva): boolean {
     ['ARS', 'USD'].includes(reserva.moneda_contratada ?? '');
 }
 
+/**
+ * Liquidación ya decidida: Administración confirmó el ingreso (pendiente de pago al anunciante),
+ * se pagó o se devolvió al inquilino. Desde ahí el código de alojamiento ya no cuenta.
+ */
+const LIQUIDACION_DECIDIDA = ['PENDIENTE_PAGO_PROPIETARIO', 'PAGADO_PROPIETARIO', 'DEVUELTO_INQUILINO', 'DEVUELTO_PARCIAL_INQUILINO'];
+
+function liquidacionDecidida(reserva: { estado_liquidacion?: string | null }): boolean {
+  return LIQUIDACION_DECIDIDA.includes(reserva.estado_liquidacion ?? '');
+}
+
 export function puedeConsultarCodigo(reserva: Reserva): boolean {
-  return (estadiaActiva(reserva) || ingresoEnPlazo(reserva)) && !reserva.codigo_validado_en;
+  return (estadiaActiva(reserva) || ingresoEnPlazo(reserva)) && !reserva.codigo_validado_en && !liquidacionDecidida(reserva);
 }
 
 /** Solo los datos que decide la carga del código, para usarla también desde un reclamo. */
-type EstadoCodigo = Partial<Pick<Reserva, 'estado_estadia' | 'estado_liquidacion' | 'fecha_fin'>>;
+type EstadoCodigo = Partial<Pick<Reserva, 'estado_estadia' | 'estado_liquidacion' | 'fecha_fin' | 'intentos_codigo_restantes'>>;
 
+/** El anunciante carga el código mientras siga pendiente, sin bloqueo ni revisión ni una decisión sobre el pago. */
 export function puedeValidarCodigo(reserva: EstadoCodigo): boolean {
-  return (reserva.estado_estadia === 'PENDIENTE_INGRESO' || ingresoEnPlazo(reserva)) && reserva.estado_liquidacion !== 'EN_REVISION';
+  return (reserva.estado_estadia === 'PENDIENTE_INGRESO' || ingresoEnPlazo(reserva)) &&
+    reserva.estado_liquidacion !== 'EN_REVISION' && !liquidacionDecidida(reserva) && reserva.intentos_codigo_restantes !== 0;
+}
+
+/** T34: con el código bloqueado, el anunciante pide el reinicio solo si el pago todavía no se decidió. */
+export function puedePedirReinicioCodigo(reserva: Reserva): boolean {
+  return !reserva.cancelada && !reserva.codigo_validado_en && reserva.intentos_codigo_restantes === 0 &&
+    !liquidacionDecidida(reserva) && !devolucionRegistrada(reserva);
 }
 
 function ingresoEnPlazo(reserva: EstadoCodigo): boolean {

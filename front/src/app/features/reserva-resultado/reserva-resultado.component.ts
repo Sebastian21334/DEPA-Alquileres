@@ -38,7 +38,7 @@ export class ReservaResultadoComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
   private readonly actividadReembolsos = inject(ActividadReembolsosService);
-  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string; comprobante_nombre?: string | null }[]>([]);
+  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string; comprobante_nombre?: string | null; referencia_externa?: string | null; observacion_transferencia?: string | null }[]>([]);
   /** T44: enlace firmado del comprobante de la transferencia del reembolso. */
   protected readonly urlComprobanteReembolso = (id: number) => () =>
     this.http.get<{ url: string }>(`${environment.apiUrl}/reembolsos/${id}/comprobante`);

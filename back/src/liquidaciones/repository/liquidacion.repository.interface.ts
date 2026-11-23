@@ -1,5 +1,5 @@
 import type { EntityManager } from 'typeorm';
-import type { Liquidacion } from '../entity/liquidacion.entity';
+import type { Liquidacion, PagoAnuncianteRegistrado } from '../entity/liquidacion.entity';
 
 export const LIQUIDACION_REPOSITORY = 'LIQUIDACION_REPOSITORY';
 
@@ -13,4 +13,5 @@ export interface ILiquidacionRepository {
   guardar(liquidacion: Liquidacion, transaccion?: EntityManager): Promise<Liquidacion>;
   buscarPorReserva(idReserva: number, transaccion?: EntityManager): Promise<Liquidacion | null>;
   buscarPorReservaConBloqueo(idReserva: number, transaccion?: EntityManager): Promise<Liquidacion | null>;
+  buscarPagosConAnunciante(idReserva: number): Promise<{ pagos: PagoAnuncianteRegistrado[]; idAnunciante: number | null } | null>;
 }

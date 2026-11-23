@@ -352,7 +352,8 @@
       @if (recibida) {
         <p><strong>{{ inquilino(reserva) }}</strong> · {{ reserva.usuario_email ?? reserva.usuario?.email ?? 'Sin email' }} · {{ reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'Sin teléfono' }}</p>
       }
-      @if (reserva.estado_estadia === 'PENDIENTE_INGRESO') {
+      <!-- Al anunciante solo se le pide el código mientras lo pueda cargar (sin bloqueo ni decisión sobre el pago). -->
+      @if (reserva.estado_estadia === 'PENDIENTE_INGRESO' && (!recibida || puedeValidarCodigo(reserva))) {
         <p class="muted">{{ recibida ? 'Validá el código que te entregue el huésped al ingresar.' : 'El propietario todavía no validó el código de alojamiento.' }}</p>
       }
       @if (reserva.estado_estadia === 'INGRESO_NO_VERIFICADO') { <p class="muted">El período terminó sin un código de ingreso validado.</p> }
@@ -397,7 +398,7 @@
         <!-- Después de validar o de bloquear, el campo desaparece y el aviso queda en la tarjeta. -->
         <p class="code-entry__aviso" [class.code-entry__aviso--error]="aviso.tipo === 'error'" [attr.role]="aviso.tipo === 'error' ? 'alert' : 'status'">{{ aviso.texto }}</p>
       }
-      @if (recibida && codigoBloqueado(reserva)) {
+      @if (recibida && puedePedirReinicioCodigo(reserva)) {
         <!-- T34: con el código bloqueado, el anunciante le pide el reinicio a Administración. -->
         @if (motivoPedidoReinicioNoDisponible(reserva); as motivo) {
           <p class="code-entry__hint">{{ motivo }}</p>

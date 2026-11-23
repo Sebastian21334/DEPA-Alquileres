@@ -3,6 +3,7 @@ import {
   Injectable,
   ConflictException,
   BadRequestException,
+  NotFoundException,
   Logger,
   OnApplicationBootstrap,
   OnModuleDestroy,
@@ -23,6 +24,8 @@ import { ReservaNotificacionesService } from '../../reservas/service/reserva-not
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 import { ReclamosService } from '../../reclamos/service/reclamos.service';
+import { AlmacenamientoService, type ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
+import { RegistrarTransferenciaDto } from '../dto/registrar-transferencia.dto';
 
 import type { EntityManager } from 'typeorm';
 
@@ -32,7 +35,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
   private temporizador?: ReturnType<typeof setInterval>;
   private avisosEnCurso?: Promise<void>;
 
-  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService, private readonly anunciantes: AnunciantesService, private readonly reclamos: ReclamosService, private readonly notificaciones?: ReservaNotificacionesService) {}
+  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService, private readonly anunciantes: AnunciantesService, private readonly reclamos: ReclamosService, private readonly notificaciones?: ReservaNotificacionesService, private readonly almacenamiento?: AlmacenamientoService) {}
 
   onApplicationBootstrap(): void {
     void this.avisarLiquidacionesDisponibles();
@@ -142,14 +145,52 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     return this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion);
   }
 
-  async consultarCbuParaPago(idReserva: number): Promise<{ cbu: string | null }> {
+  /** Datos para transferir: el CBU validado y el CUIT/CUIL para confirmar el destinatario (T56). */
+  async consultarCbuParaPago(idReserva: number): Promise<{ cbu: string | null; cuit_cuil: string | null }> {
     const reserva = await this.reservasService.obtenerReserva(idReserva);
     this.validarFechaPagoManual(reserva);
     const idAnunciante = reserva.publicacion?.anunciante?.idUsuario;
-    return { cbu: idAnunciante ? await this.anunciantes.buscarCbuValidado(idAnunciante) : null };
+    if (!idAnunciante) return { cbu: null, cuit_cuil: null };
+    const [cbu, anunciante] = await Promise.all([this.anunciantes.buscarCbuValidado(idAnunciante), this.anunciantes.buscarPorUsuario(idAnunciante)]);
+    return { cbu, cuit_cuil: anunciante?.cuit_cuil ?? null };
   }
 
+  /**
+   * T56: el admin registra la transferencia al anunciante con el comprobante obligatorio.
+   * El archivo se sube después de las validaciones previas y se borra si el pago no queda registrado.
+   */
+  async registrarPagoAnunciante(id: number, dto: RegistrarTransferenciaDto, archivo: Express.Multer.File | undefined, idAdmin: number): Promise<Reserva> {
+    const estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
+    this.validarResolucion(await this.reservasService.obtenerReserva(id), { estado });
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    const comprobante = await this.almacenamiento.subirComprobante(`liquidaciones/${id}`, archivo);
+    let guardado = false;
+    try {
+      return await this.resolver(id, { ...dto, estado }, idAdmin, { comprobante, alGuardar: () => { guardado = true; } });
+    } finally {
+      if (!guardado)
+        await this.almacenamiento.eliminarComprobante(comprobante.url).catch(() =>
+          this.logger.warn(`No se pudo borrar el comprobante sin usar del pago de la reserva ${id}`));
+    }
+  }
+
+  /** T56: enlace firmado del comprobante del pago, solo para el admin y el anunciante de la reserva. */
+  async urlComprobantePago(idReserva: number, indice: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
+    const comprobante = await this.liquidaciones.buscarComprobantePago(idReserva, indice);
+    const autorizado = actor.rol === 'Administrador' || (comprobante?.idAnunciante != null && comprobante.idAnunciante === actor.id);
+    if (!comprobante || !autorizado) throw new NotFoundException('Comprobante no encontrado');
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    return { url: await this.almacenamiento.firmarComprobante(comprobante.url) };
+  }
+
+  /** El pago al anunciante se registra con su comprobante en `registrarPagoAnunciante` (T56). */
   async resolverLiquidacion(id: number, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reserva> {
+    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
+      throw new BadRequestException('Registrá el pago al anunciante con el comprobante de la transferencia');
+    return this.resolver(id, dto, idAdmin);
+  }
+
+  private async resolver(id: number, dto: ResolverLiquidacionDto, idAdmin: number, pago?: { comprobante: ComprobanteSubido; alGuardar: () => void }): Promise<Reserva> {
     const permitidos: string[] = [
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
@@ -184,17 +225,20 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
       if (actual.cancelada && !registraPago)
         throw new ConflictException('Una reserva cancelada no puede volver al circuito de ingreso');
       await this.asegurarSinDevoluciones(id, transaccion);
-      const pago = registraPago ? await this.reembolsosService.buscarPagoPorReserva(id, transaccion) : null;
-      const bruto = pago ? this.reembolsosService.saldoReembolsable(pago) : Number(actual.monto_pago);
+      const cobro = registraPago ? await this.reembolsosService.buscarPagoPorReserva(id, transaccion) : null;
+      const bruto = cobro ? this.reembolsosService.saldoReembolsable(cobro) : Number(actual.monto_pago);
       await this.liquidaciones.registrarResolucion(actual, dto.estado, {
-        importe: registraPago ? this.calcularComision(actual, bruto, Number(pago?.amount_refunded ?? 0) > 0).importe_neto_anunciante : null,
-        moneda: pago?.currency ?? actual.moneda_contratada ?? 'ARS',
+        importe: registraPago ? this.calcularComision(actual, bruto, Number(cobro?.amount_refunded ?? 0) > 0).importe_neto_anunciante : null,
+        moneda: cobro?.currency ?? actual.moneda_contratada ?? 'ARS',
         referencia: dto.referencia ?? null,
         observacion: dto.observacion ?? null,
+        comprobante: registraPago ? pago?.comprobante ?? null : null,
       }, idAdmin, transaccion);
       if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'))
         actual.intentos_codigo = 0;
     });
+    // Recién con la transacción confirmada el comprobante queda en uso; si algo falló, quien lo subió lo borra.
+    pago?.alGuardar();
     if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
       await this.notificaciones?.avisarCambio(reserva, ['anunciante'], 'Pago al anunciante registrado', 'La administración registró el pago de tu liquidación. Podés consultar el detalle en DEPA.');
     return reserva;

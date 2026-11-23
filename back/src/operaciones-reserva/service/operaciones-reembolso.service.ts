@@ -25,8 +25,8 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
     return this.aplicarReembolsoConfirmado(id);
   }
 
-  async registrarTransferencia(id: number, referencia: string, comprobante: Express.Multer.File | undefined, idAdmin: number) {
-    await this.reembolsos.registrarTransferencia(id, referencia, comprobante, idAdmin);
+  async registrarTransferencia(id: number, datos: { referencia?: string; observacion?: string }, comprobante: Express.Multer.File | undefined, idAdmin: number) {
+    await this.reembolsos.registrarTransferencia(id, datos, comprobante, idAdmin);
     return this.aplicarReembolsoConfirmado(id);
   }
 

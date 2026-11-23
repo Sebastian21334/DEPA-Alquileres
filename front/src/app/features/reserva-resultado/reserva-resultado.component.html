@@ -34,6 +34,13 @@
               <p class="refund-threads__receipt">Comprobante de la transferencia:
                 <app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(reembolso.id)" [etiqueta]="'Ver ' + reembolso.comprobante_nombre" />
               </p>
+              <!-- T56: el número de operación y la observación que cargó el admin con el comprobante. -->
+              @if (reembolso.referencia_externa) {
+                <p class="refund-threads__detail">Número de operación: {{ reembolso.referencia_externa }}</p>
+              }
+              @if (reembolso.observacion_transferencia) {
+                <p class="refund-threads__detail refund-threads__note">Observación: {{ reembolso.observacion_transferencia }}</p>
+              }
             }
             @if (conversacionAbierta() === reembolso.id) {
               <app-reembolso-chat [reembolsoId]="reembolso.id" [vistaInquilino]="true" />

@@ -15,6 +15,9 @@ export interface PagoPublicacion {
   moneda: string | null;
   referencia: string | null;
   observacion: string | null;
+  /** Posición del pago en la liquidación, para pedir su comprobante (T56). */
+  indice: number;
+  comprobante: string | null;
 }
 
 // Operaciones del anunciante verificado sobre sus propias publicaciones e imágenes.
@@ -49,6 +52,11 @@ export class GestionPublicacionesService {
   /** Pagos registrados de todas las publicaciones del anunciante autenticado (T55). */
   listarMisLiquidaciones(): Observable<PagoPublicacion[]> {
     return this.http.get<PagoPublicacion[]>(`${this.api}/reservas/liquidaciones/mias`);
+  }
+
+  /** T56: enlace firmado del comprobante de un pago al anunciante. */
+  urlComprobantePago(pago: Pick<PagoPublicacion, 'reservaId' | 'indice'>): Observable<{ url: string }> {
+    return this.http.get<{ url: string }>(`${this.api}/reservas/${pago.reservaId}/liquidacion/pagos/${pago.indice}/comprobante`);
   }
 
   /** POST /publicaciones (alineado con back/src/publicaciones/dto/crear-publicacion.dto.ts). */

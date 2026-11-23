@@ -1,5 +1,6 @@
-import { Component, computed, input, signal } from '@angular/core';
-import type { PagoPublicacion } from '../../services/gestion-publicaciones.service';
+import { Component, computed, inject, input, signal } from '@angular/core';
+import { GestionPublicacionesService, type PagoPublicacion } from '../../services/gestion-publicaciones.service';
+import { VerComprobanteComponent } from '../ver-comprobante/ver-comprobante.component';
 
 /**
  * Lista de pagos registrados al anunciante (T55). La usan Mis publicaciones,
@@ -7,6 +8,7 @@ import type { PagoPublicacion } from '../../services/gestion-publicaciones.servi
  */
 @Component({
   selector: 'app-historial-liquidaciones',
+  imports: [VerComprobanteComponent],
   template: `
     @if (pagos().length) {
       <ul class="liquidaciones-lista">
@@ -20,8 +22,11 @@ import type { PagoPublicacion } from '../../services/gestion-publicaciones.servi
               <p class="liquidacion-publicacion">{{ pago.publicacion }}</p>
             }
             <p>Reserva #{{ pago.reservaId }} @if (pago.fecha) { · {{ fecha(pago.fecha) }} }</p>
+            @if (pago.comprobante) {
+              <p class="liquidacion-comprobante"><strong>Comprobante:</strong> <app-ver-comprobante [obtenerUrl]="urlComprobante(pago)" [etiqueta]="'Ver ' + pago.comprobante" /></p>
+            }
             @if (pago.referencia) {
-              <p><strong>Referencia o número de comprobante:</strong> {{ pago.referencia }}</p>
+              <p><strong>Número de operación:</strong> {{ pago.referencia }}</p>
             }
             @if (pago.observacion) {
               <p class="liquidacion-observacion"><strong>Observación del pago:</strong> {{ pago.observacion }}</p>
@@ -52,6 +57,7 @@ import type { PagoPublicacion } from '../../services/gestion-publicaciones.servi
     .liquidaciones-lista p, :host > p { margin: .35rem 0 0; font-size: .9rem; }
     .liquidacion-publicacion { font-weight: 700; }
     .liquidacion-observacion { white-space: pre-wrap; }
+    .liquidacion-comprobante { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
   `,
 })
 export class HistorialLiquidacionesComponent {
@@ -68,6 +74,8 @@ export class HistorialLiquidacionesComponent {
     return limite === null || this.verTodos() ? this.pagos() : this.pagos().slice(0, limite);
   });
   protected readonly ocultos = computed(() => this.pagos().length - this.visibles().length);
+  private readonly publicaciones = inject(GestionPublicacionesService);
+  protected readonly urlComprobante = (pago: PagoPublicacion) => () => this.publicaciones.urlComprobantePago(pago);
 
   protected importe(pago: PagoPublicacion): string {
     if (pago.importe === null) return 'Importe sin registrar';

@@ -159,13 +159,16 @@ export class ReembolsosService {
   }
 
   /**
-   * T44: el admin registra la transferencia con el comprobante obligatorio; la referencia es opcional.
+   * T44: el admin registra la transferencia con el comprobante obligatorio; la referencia y la observación son opcionales.
    * El archivo se sube antes de confirmar y se borra si el registro no lo termina guardando.
    */
-  async registrarTransferencia(id: number, referencia: string, archivo: Express.Multer.File | undefined, idActor: number): Promise<Reembolso> {
-    const texto = referencia.trim();
+  async registrarTransferencia(id: number, datos: { referencia?: string; observacion?: string }, archivo: Express.Multer.File | undefined, idActor: number): Promise<Reembolso> {
+    const texto = datos.referencia?.trim() ?? '';
+    const observacion = datos.observacion?.trim() || null;
     if (texto.length > 150)
       throw new BadRequestException('La referencia de la transferencia admite hasta 150 caracteres');
+    if ((observacion?.length ?? 0) > 500)
+      throw new BadRequestException('La observación de la transferencia admite hasta 500 caracteres');
     const actual = await this.reembolsos.buscarRegistro(id);
     if (!actual) throw new NotFoundException('Reembolso no encontrado');
     if (!actual.transferencia_manual)
@@ -178,7 +181,7 @@ export class ReembolsosService {
     try {
       return await this.confirmar(id, {
         referencia: texto, idActor, idExterno: null, transferencia: true,
-        comprobante, alGuardarComprobante: () => { guardado = true; },
+        comprobante, observacion, alGuardarComprobante: () => { guardado = true; },
       });
     } finally {
       if (!guardado)
@@ -378,7 +381,7 @@ export class ReembolsosService {
     }
   }
 
-  private async confirmar(id: number, datos: { referencia: string; idActor: number | null; idExterno: string | null; transferencia?: boolean; comprobante?: ComprobanteSubido; alGuardarComprobante?: () => void }): Promise<Reembolso> {
+  private async confirmar(id: number, datos: { referencia: string; idActor: number | null; idExterno: string | null; transferencia?: boolean; comprobante?: ComprobanteSubido; observacion?: string | null; alGuardarComprobante?: () => void }): Promise<Reembolso> {
     const guardado = await this.reembolsos.conTransaccion(async (repo, transaccion) => {
       const reembolso = await repo.buscarRegistro(id, { bloquear: true, idsRelaciones: true });
       if (!reembolso) throw new NotFoundException('Reembolso no encontrado');
@@ -419,7 +422,7 @@ export class ReembolsosService {
         resuelto_por: reembolso.resuelto_por,
         error_detalle: null,
         conciliar_en: null,
-        ...(datos.comprobante ? { comprobante_url: datos.comprobante.url, comprobante_nombre: datos.comprobante.nombre } : {}),
+        ...(datos.comprobante ? { comprobante_url: datos.comprobante.url, comprobante_nombre: datos.comprobante.nombre, observacion_transferencia: datos.observacion ?? null } : {}),
       });
       return reembolso;
     });

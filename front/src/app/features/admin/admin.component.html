@@ -365,7 +365,13 @@
                 <td data-label="Reserva"><strong class="settlement-history__reservation">#{{ pago.reservaId }}</strong><span class="settlement-history__publication">{{ pago.publicacion || 'Publicación no disponible' }}</span></td>
                 <td data-label="Anunciante">{{ pago.anunciante || 'Sin datos' }}</td>
                 <td data-label="Importe" class="settlement-history__amount">{{ pago.importe !== null && pago.moneda ? (pago.importe | currency:pago.moneda:'code') : (pago.importe ?? 'Sin importe') }}</td>
-                <td data-label="Comprobante y observación">{{ pago.referencia || 'Sin referencia' }}@if (pago.observacion) { <p class="settlement-note">{{ pago.observacion }}</p> }</td>
+                <td data-label="Comprobante y observación">
+                  @if (pago.comprobante) {
+                    <app-ver-comprobante [obtenerUrl]="urlComprobantePago(pago)" [etiqueta]="'Ver ' + pago.comprobante" />
+                  }
+                  <p class="settlement-history__reference">{{ pago.referencia ? 'N.º de operación: ' + pago.referencia : 'Sin número de operación' }}</p>
+                  @if (pago.observacion) { <p class="settlement-note">{{ pago.observacion }}</p> }
+                </td>
                 <td data-label="Registrado por">{{ pago.administrador || 'Sin datos' }}</td>
               </tr>
             }
@@ -418,33 +424,41 @@
         </div>
       </div>
       @if (pagoAnuncianteSeleccionado(); as item) {
-        <p class="advertiser-payment__advertiser"><strong>Anunciante</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}</p>
         <div class="advertiser-payment__summary">
           <p class="advertiser-payment__row"><strong>Importe total</strong><span>{{ montoLiquidacion(item) }}</span></p>
           <p class="advertiser-payment__commission"><strong>Comisión DEPA:</strong> @if (item.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ item.porcentaje_comision_depa }} % · {{ item.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
-          <p class="advertiser-payment__row advertiser-payment__net"><strong>Importe a transferir</strong><strong>{{ item.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</strong></p>
+          <div class="advertiser-payment__row advertiser-payment__net">
+            <strong>Importe a transferir</strong>
+            <app-dato-copiable [valor]="(item.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2') ?? ''"
+              [copia]="importeParaCopiar(item.importe_neto_anunciante)" descripcion="importe a transferir" />
+          </div>
         </div>
+        <section class="transfer-data" aria-labelledby="advertiser-transfer-title">
+          <h3 id="advertiser-transfer-title">Datos para transferir</h3>
+          @if (consultandoCbuParaPago()) {
+            <p role="status">Consultando el CBU validado…</p>
+          } @else if (cbuParaPago(); as cbu) {
+            <p class="transfer-data__label">{{ tipoCuentaBancaria(cbu) }} validado</p>
+            <app-dato-copiable [valor]="formatearCbu(cbu)" [copia]="cbu" [descripcion]="tipoCuentaBancaria(cbu)" [monoespaciado]="true" />
+            <p class="transfer-data__owner"><strong>Titular:</strong> {{ item.publicacion?.anunciante?.usuario?.nombre }} {{ item.publicacion?.anunciante?.usuario?.apellido }}@if (cuitParaPago(); as cuit) { · CUIT/CUIL {{ formatearCuit(cuit) }} }</p>
+          } @else if (!errorPagoAnunciante()) {
+            <p class="refund-error advertiser-payment__alert" role="alert">El anunciante necesita un CBU validado para recibir el pago.</p>
+          }
+        </section>
       }
-      <p class="refund-help" id="advertiser-payment-help">Registrá una transferencia que ya realizaste. El anunciante podrá ver la referencia y la observación en Mis publicaciones.</p>
-      @if (consultandoCbuParaPago()) {
-        <p role="status">Consultando el CBU validado…</p>
-      } @else if (cbuParaPago(); as cbu) {
-        <p class="advertiser-payment__cbu"><strong>CBU validado para transferir</strong> <code>{{ cbu }}</code></p>
-      } @else if (!errorPagoAnunciante()) {
-        <p class="refund-error advertiser-payment__alert" role="alert">El anunciante necesita un CBU validado para recibir el pago.</p>
-      }
-      <label for="advertiser-payment-reference">Referencia o número de comprobante <span class="muted">(opcional)</span></label>
+      <p class="refund-help" id="advertiser-payment-help">Transferí el importe y adjuntá el comprobante. El anunciante va a poder ver el comprobante, el número de operación y la observación en su historial de pagos.</p>
+      <app-carga-comprobante [(archivo)]="comprobantePago" [deshabilitado]="registrandoPagoAnunciante()" />
+      <label for="advertiser-payment-reference">Número de operación <span class="muted">(opcional)</span></label>
       <input id="advertiser-payment-reference" name="referenciaPagoAnunciante" [(ngModel)]="referenciaPagoAnunciante"
-        maxlength="150" placeholder="Número de operación o referencia" aria-describedby="advertiser-payment-help"
-        [disabled]="registrandoPagoAnunciante()" autofocus />
+        maxlength="150" aria-describedby="advertiser-payment-help" [disabled]="registrandoPagoAnunciante()" />
       <label for="advertiser-payment-note">Observación <span class="muted">(opcional)</span></label>
       <textarea id="advertiser-payment-note" name="observacionPagoAnunciante" [(ngModel)]="observacionPagoAnunciante"
         rows="3" maxlength="500" [disabled]="registrandoPagoAnunciante()"></textarea>
       @if (errorPagoAnunciante()) { <p class="refund-error advertiser-payment__alert" role="alert">{{ errorPagoAnunciante() }}</p> }
       <div class="block-actions">
         <button type="button" class="button button--ghost" [disabled]="registrandoPagoAnunciante()" (click)="cerrarPagoAnunciante()">Volver</button>
-        <button type="submit" class="button button--success" [disabled]="registrandoPagoAnunciante() || !cbuParaPago()">
-          {{ registrandoPagoAnunciante() ? 'Registrando…' : 'Confirmar registro' }}
+        <button type="submit" class="button button--success" [disabled]="registrandoPagoAnunciante() || !cbuParaPago() || !comprobantePago()">
+          {{ registrandoPagoAnunciante() ? 'Registrando…' : 'Registrar pago' }}
         </button>
       </div>
     </form>
@@ -478,16 +492,24 @@
     @if (reembolsoSeleccionado(); as item) {
       <form class="block-form" (ngSubmit)="procesarReembolso(item)" [attr.aria-busy]="guardandoReembolso()">
         <header class="refund-heading">
-          <div>
-            <p class="refund-meta">Reembolso #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
-            <h2 id="refund-title">Detalle del reembolso</h2>
+          <div class="advertiser-payment__header">
+            <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideReceiptText [size]="26"></svg></div>
+            <div>
+              <h2 id="refund-title">{{ puedeRegistrarTransferencia(item) ? 'Registrar transferencia del reembolso' : 'Detalle del reembolso' }}</h2>
+              <p class="refund-meta">Reembolso #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
+            </div>
           </div>
           <button type="button" class="button button--ghost" aria-label="Cerrar"
             [disabled]="guardandoReembolso()" (click)="cerrarReembolso()"><svg lucideX [size]="20" aria-hidden="true"></svg></button>
         </header>
         <div class="refund-amount">
           <span>{{ item.tipo === 'TOTAL' ? 'Devolución total' : item.tipo === 'PARCIAL' ? 'Devolución parcial' : 'Contracargo' }}</span>
-          <strong>{{ item.importe | currency: item.moneda }} {{ item.moneda }}</strong>
+          @if (puedeRegistrarTransferencia(item)) {
+            <app-dato-copiable class="refund-amount__value" [valor]="(item.importe | currency: item.moneda) ?? ''"
+              [copia]="importeParaCopiar(item.importe)" descripcion="importe a devolver" />
+          } @else {
+            <strong class="refund-amount__value">{{ item.importe | currency: item.moneda }}</strong>
+          }
           <span class="status" [class.status--blocked]="item.estado === 'PENDIENTE' || puedeConciliarReembolso(item)">{{ estadosReembolso[item.estado] }}</span>
         </div>
         <dl class="refund-data">
@@ -502,7 +524,7 @@
             <div><dt>Pago original</dt><dd>{{ pago.payment_id ? 'Mercado Pago #' + pago.payment_id : 'Pago #' + pago.id }}</dd></div>
           }
           @if (item.referencia_externa) {
-            <div><dt>Referencia de devolución</dt><dd>{{ item.referencia_externa }}</dd></div>
+            <div><dt>{{ item.transferencia_manual ? 'Número de operación' : 'Referencia de devolución' }}</dt><dd>{{ item.referencia_externa }}</dd></div>
           }
           @if (item.comprobante_nombre) {
             <div><dt>Comprobante</dt><dd><app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(item.id)" [etiqueta]="'Ver ' + item.comprobante_nombre" /></dd></div>
@@ -517,21 +539,32 @@
             <div><dt>Aplicado a la reserva</dt><dd>{{ item.aplicado_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
           }
           <div class="refund-reason"><dt>Motivo</dt><dd>{{ item.motivo }}</dd></div>
+          @if (item.observacion_transferencia) {
+            <div class="refund-reason"><dt>Observación de la transferencia</dt><dd>{{ item.observacion_transferencia }}</dd></div>
+          }
         </dl>
         @if (item.revision_aplicacion) {
           <p class="refund-help">Reembolso histórico pendiente de revisión administrativa.</p>
         } @else if (item.estado === 'APROBADO' && !item.aplicado_en) {
           <p class="refund-help">El reembolso está aprobado y pendiente de aplicar a la reserva.</p>
         }
+        @if (puedeRegistrarTransferencia(item)) {
+          <p class="refund-help refund-help--accent" id="refund-transfer-help">Pedile al inquilino su CBU o alias por el chat, transferí el importe y adjuntá el comprobante. El inquilino va a poder ver el comprobante, el número de operación y la observación.</p>
+        }
         @if (item.transferencia_manual) {
-          <app-reembolso-chat [reembolsoId]="item.id" />
+          <details class="refund-chat" [open]="puedeRegistrarTransferencia(item)">
+            <summary>Conversación con el inquilino</summary>
+            <app-reembolso-chat [reembolsoId]="item.id" />
+          </details>
         }
         @if (puedeRegistrarTransferencia(item)) {
           <app-carga-comprobante [(archivo)]="comprobanteReembolso" [deshabilitado]="guardandoReembolso()" />
-          <label for="refund-bank-reference">Número de operación (opcional)</label>
+          <label for="refund-bank-reference">Número de operación <span class="muted">(opcional)</span></label>
           <input id="refund-bank-reference" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
-            maxlength="150" [disabled]="guardandoReembolso()" />
-          <p class="refund-help">Registrá la transferencia después de transferir el importe al inquilino. El inquilino va a poder ver el comprobante.</p>
+            maxlength="150" aria-describedby="refund-transfer-help" [disabled]="guardandoReembolso()" />
+          <label for="refund-transfer-note">Observación <span class="muted">(opcional)</span></label>
+          <textarea id="refund-transfer-note" name="observacionReembolso" [(ngModel)]="observacionReembolso"
+            rows="3" maxlength="500" [disabled]="guardandoReembolso()"></textarea>
         } @else if (puedeConciliarReembolso(item)) {
           <label for="refund-external-id">ID del reembolso en Mercado Pago</label>
           <input id="refund-external-id" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"

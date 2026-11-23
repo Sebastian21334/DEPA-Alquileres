@@ -640,10 +640,13 @@ export class ReservasService
   /**
    * T34: Administración da por bueno el ingreso sin el código. La liquidación queda
    * pendiente de pago y el pago se habilita en la fecha habitual (T35).
+   * El ingreso queda validado desde ahora, como con el código, para que la estadía se vea
+   * «En curso» y después «Finalizada»; quién lo decidió y por qué queda en el reclamo.
    */
   async confirmarIngresoSinCodigo(reserva: Reserva, observacion: string | undefined, transaccion: EntityManager): Promise<Reserva> {
     if (this.liquidacionResuelta(reserva))
       throw new ConflictException('La liquidación de la reserva ya fue resuelta');
+    reserva.codigo_validado_en = new Date();
     reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
     reserva.observacion_liquidacion =
       observacion?.trim() || 'Ingreso confirmado por Administración sin el código de alojamiento';
