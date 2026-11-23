@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { afterRenderEffect, Component, computed, ElementRef, input, viewChild } from '@angular/core';
+import { afterRenderEffect, Component, computed, ElementRef, input, signal, viewChild } from '@angular/core';
 import { LucideMessageCircle } from '@lucide/angular';
 import { AvatarComponent } from '../avatar/avatar.component';
 
@@ -40,9 +40,12 @@ export function mensajesApelacion(detalle: {
     @if (titulo()) {
       <header><svg lucideMessageCircle [size]="26" aria-hidden="true"></svg>
         <div><h4>{{ titulo() }}</h4>@if (subtitulo()) { <p>{{ subtitulo() }}</p> }</div>
+        @if (permitirAmpliar()) {
+          <button class="ampliar" type="button" [attr.aria-expanded]="ampliado()" (click)="ampliado.set(!ampliado())">{{ ampliado() ? 'Reducir chat' : 'Ampliar chat' }}</button>
+        }
       </header>
     }
-    <div class="hilo" #hilo role="log" aria-label="Mensajes" tabindex="0">
+    <div class="hilo" [class.hilo--ampliado]="ampliado()" #hilo role="log" aria-label="Mensajes" tabindex="0">
       @for (grupo of grupos(); track grupo.dia) {
         <div class="fecha"><span>{{ grupo.etiqueta }}</span></div>
         @for (mensaje of grupo.mensajes; track mensaje.id) {
@@ -86,10 +89,13 @@ export function mensajesApelacion(detalle: {
     :host { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid #d5deee; border-radius: 12px; background: #fff; color: #121b36; }
     header { display: flex; align-items: flex-start; gap: 12px; padding: 15px 20px; border-bottom: 1px solid #d5deee; }
     header svg { color: #1648f5; flex: none; }
+    .ampliar { margin-left: auto; padding: 6px 10px; border: 1px solid #d5deee; border-radius: 7px; background: #f6f8ff; color: #1648c5; font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; }
+    .ampliar:focus-visible { outline: 2px solid #1648f5; outline-offset: 2px; }
     h4, header p, .burbuja { margin: 0; }
     h4 { font-size: 1rem; }
     header p { margin-top: 3px; font-size: .88rem; color: #52607a; }
     .hilo { flex: 1 1 auto; min-height: 110px; max-height: var(--conversation-height, 330px); overflow-y: auto; padding: 14px clamp(10px, 3vw, 24px); background: #f3f6fc; }
+    .hilo--ampliado { min-height: min(60vh, 600px); max-height: min(60vh, 600px); }
     .fecha { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; color: #52607a; font-size: .8rem; }
     .fecha::before, .fecha::after { content: ''; height: 1px; background: #d2dbea; flex: 1; }
     article { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
@@ -120,6 +126,8 @@ export class ConversationPanelComponent {
   readonly subtitulo = input('');
   readonly mensajes = input.required<MensajeConversacion[]>();
   readonly vacio = input('Todavía no hay mensajes.');
+  readonly permitirAmpliar = input(false);
+  protected readonly ampliado = signal(false);
   private readonly hilo = viewChild.required<ElementRef<HTMLElement>>('hilo');
   private readonly fecha = new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long' });
   protected readonly grupos = computed(() => {

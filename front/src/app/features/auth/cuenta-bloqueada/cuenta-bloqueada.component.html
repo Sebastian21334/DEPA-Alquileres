@@ -54,13 +54,7 @@
               <input id="appeal-image" class="appeal-attachment__input" type="file" accept="image/jpeg,image/png" [disabled]="ocupado()" (change)="seleccionarImagen($event)" />
             </div>
             @if (imagen && vistaPreviaImagen) {
-              <div class="appeal-attachment__preview">
-                <img [src]="vistaPreviaImagen" alt="Vista previa de la imagen adjunta" />
-                <div class="appeal-attachment__details"><strong>{{ imagen.name }}</strong><span>Lista para enviar</span></div>
-                <button type="button" class="appeal-attachment__remove" [disabled]="ocupado()" (click)="quitarImagen()" aria-label="Quitar imagen adjunta" title="Quitar imagen">
-                  <svg lucideX [size]="18" aria-hidden="true"></svg>
-                </button>
-              </div>
+              <app-attachment-preview class="appeal-attachment__preview" [url]="vistaPreviaImagen" [nombre]="imagen.name" [deshabilitado]="ocupado()" (quitar)="quitarImagen()" />
             }
           </div>
         </form>

@@ -8,6 +8,9 @@
 }
 
 .block-dialog {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
   width: min(520px, calc(100% - 32px));
   max-height: calc(100dvh - 32px);
   margin: auto;
@@ -16,13 +19,31 @@
   border-radius: 14px;
   background: #fff;
   color: inherit;
+  box-shadow: 0 18px 45px rgb(15 23 42 / 25%);
 }
 .block-dialog::backdrop { background: rgb(16 42 58 / 55%); }
-.block-form { display: grid; gap: 12px; }
+.block-form { display: grid; gap: 12px; color: #172b4b; }
 .block-form h2, .block-form p, .blocked-user h3, .blocked-user p { margin: 0; }
-.block-form label { font-weight: 700; }
-.block-form textarea { width: 100%; padding: 10px 12px; border: 1px solid #dfe6ea; border-radius: 8px; font: inherit; resize: vertical; }
+.block-form__header { display: flex; align-items: center; gap: 14px; margin-bottom: 4px; }
+.block-form__icon { display: grid; flex: none; place-items: center; width: 46px; height: 46px; border-radius: 10px; background: #fff0e6; color: #f47720; }
+.block-form__title { min-width: 0; padding-left: 13px; border-left: 2px solid #f47720; }
+.block-form__title h2 { color: #142743; font-size: 1.25rem; font-weight: 800; line-height: 1.2; }
+.block-form__title p { margin-top: 4px; color: #49617d; font-size: .85rem; overflow-wrap: anywhere; }
+.block-form__notice { display: flex; align-items: center; gap: 11px; padding: 10px 11px; border-radius: 9px; font-size: .85rem; line-height: 1.35; }
+.block-form__notice--info { background: #f0f4fa; }
+.block-form__notice--warning { background: #fff5ed; }
+.block-form__notice-icon { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border-radius: 7px; }
+.block-form__notice--info .block-form__notice-icon { background: #e0eaf8; color: #24538a; }
+.block-form__notice--warning .block-form__notice-icon { background: #ffeadb; color: #f47720; }
+.block-form__notice p { padding-left: 11px; border-left: 2px solid #a9c8ef; }
+.block-form__notice--warning p { border-left-color: #ff9a55; }
+.block-form label { margin-top: 3px; font-weight: 700; font-size: .9rem; }
+.block-form textarea { box-sizing: border-box; width: 100%; min-height: 110px; padding: 10px 12px; border: 1px solid #d7e0e9; border-radius: 8px; color: #172b4b; font: inherit; font-size: .9rem; resize: vertical; }
+.block-form textarea::placeholder { color: #8a9aab; }
+.block-form textarea:focus-visible { outline: 2px solid #5686e4; outline-offset: 2px; }
 .block-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.block-actions .button--ghost { background: #e9edf2; color: #253d5a; border: 1px solid transparent; }
+.block-actions .button--danger-outline { background: #fff5f4; color: #b83232; border: 1px solid #ed9b96; }
 .cancellation-approval-dialog {
   position: fixed;
   inset: 0;
@@ -46,7 +67,6 @@
   border-top: 4px solid var(--color-primary, #f47818);
   color: #172b45;
 }
-.advertiser-payment-dialog .block-form { gap: 12px; }
 .advertiser-payment__header { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
 .advertiser-payment__header > div:last-child { min-width: 0; padding-left: 16px; border-left: 1px solid #dce3e8; }
 .advertiser-payment__header .cancellation-approval-icon { flex: none; }
@@ -113,8 +133,11 @@
 .blocked-user__attach input, .blocked-user__sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .blocked-user__attach:focus-within, .blocked-user__composer :focus-visible { outline: 2px solid #5276ff; outline-offset: 2px; }
 .blocked-user__composer button:disabled { opacity: .55; cursor: default; }
-.blocked-user__attachment { padding: 0 12px 10px; color: #52607a; font-size: .8rem; }
-.blocked-user__attachment button { border: 0; background: none; color: #1648f5; cursor: pointer; }
+.blocked-user__attachment { margin: 0 10px 10px; }
+.blocked-user__unblock { flex: none; padding: 9px 12px; border: 1px solid #b9d8c7; border-radius: 8px; background: #edf9f1; color: #17683c; font: inherit; font-size: .82rem; font-weight: 700; cursor: pointer; }
+.blocked-user__unblock:hover:not(:disabled) { background: #dbf3e3; }
+.blocked-user__unblock:disabled { opacity: .55; cursor: default; }
+.blocked-user__unblock:focus-visible { outline: 2px solid #17683c; outline-offset: 2px; }
 @media (max-width: 620px) {
   .blocked-user__header { flex-wrap: wrap; gap: 10px; }
   .blocked-user__identity { padding-left: 10px; }
@@ -439,9 +462,7 @@ dd {
   overflow-x: auto;
 }
 .settlement-history-caption {
-  padding: 16px 24px;
   text-align: left;
-  font-weight: 700;
 }
 .settlement-history td {
   vertical-align: top;
