@@ -24,6 +24,7 @@ import { ClaimHistoryComponent } from '../../shared/components/claim-history/cla
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
 import { CargaImagenesComponent } from '../../shared/components/carga-imagenes/carga-imagenes.component';
 import { imagenesDisponibles, MAX_IMAGENES_POR_ENVIO } from '../../shared/utils/reclamo-imagenes';
+import { rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -99,6 +100,16 @@ export class MisReservasComponent {
   protected readonly ocupada = signal<number | null>(null);
   protected readonly vista = signal<'realizadas' | 'recibidas' | 'reclamos'>('realizadas');
   protected readonly reclamos = signal<Reclamo[]>([]);
+  /** T53: subpestaña de Reclamos según el rol en cada uno. */
+  protected readonly vistaReclamos = signal<RolEnReclamo>('inquilino');
+  protected readonly reclamosComoInquilino = computed(() => this.reclamosConRol('inquilino'));
+  protected readonly reclamosComoAnunciante = computed(() => this.reclamosConRol('anunciante'));
+  /** Sin subpestañas si no es anunciante, salvo que tenga reclamos de cuando lo era. */
+  protected readonly separarReclamos = computed(() => this.esAnunciante() || this.reclamosComoAnunciante().length > 0);
+  protected readonly reclamosVisibles = computed(() => {
+    if (!this.separarReclamos()) return this.reclamos();
+    return this.vistaReclamos() === 'anunciante' ? this.reclamosComoAnunciante() : this.reclamosComoInquilino();
+  });
   protected readonly errorHistorial = signal('');
   protected readonly errorAccionReclamo = signal('');
   protected readonly errorReclamo = signal('');
@@ -553,6 +564,8 @@ export class MisReservasComponent {
         : 'Reclamo enviado. Podés seguirlo y responder desde esta sección.'),
     );
     this.vista.set('reclamos');
+    // El pedido de reinicio del código lo hace el anunciante; el reclamo, el inquilino.
+    this.vistaReclamos.set(pedido ? 'anunciante' : 'inquilino');
     this.cargarReservas(true);
   }
 
@@ -620,7 +633,16 @@ export class MisReservasComponent {
 
   /** La devolución la sigue el inquilino; el anunciante no gestiona reembolsos. */
   protected esInquilinoDelReclamo(reclamo: Reclamo): boolean {
-    return reclamo.inquilino?.id === Number(this.auth.currentUser()?.sub);
+    return rolEnReclamo(reclamo, this.idUsuario()) === 'inquilino';
+  }
+
+  private reclamosConRol(rol: RolEnReclamo): Reclamo[] {
+    const idUsuario = this.idUsuario();
+    return this.reclamos().filter((reclamo) => rolEnReclamo(reclamo, idUsuario) === rol);
+  }
+
+  private idUsuario(): number {
+    return Number(this.auth.currentUser()?.sub);
   }
 
   /** El estado y el chat de la devolución están en el detalle de la reserva. */

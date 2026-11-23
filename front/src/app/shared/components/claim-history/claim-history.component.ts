@@ -7,6 +7,7 @@ import { EMPTY, catchError, exhaustMap, timer } from 'rxjs';
 import { ReservationService } from '../../services/reservation.service';
 import type { AutorReclamo, ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
 import { puedeValidarCodigo } from '../../utils/reservation-state';
+import { rolEnReclamo } from '../../utils/reclamo-rol';
 
 /** Mismo ritmo que los chats de mensajes y de reembolsos. */
 const INTERVALO_CHAT_MS = 5000;
@@ -21,12 +22,21 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
     @let item = reclamo();
     <header>
       <div>
-        <p class="meta">Reclamo #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
+        <p class="meta">Reclamo #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}
+          @if (rolPropio(); as rol) { <span class="rol">Sos el {{ rol }}</span> }
+        </p>
         <h3>{{ item.reserva?.publicacion?.titulo || categorias[item.categoria] }}</h3>
       </div>
-      <span class="status" [class.status--resolved]="item.resuelto_en || item.estado === 'CERRADO'">
-        {{ estados[item.estado] }}
-      </span>
+      <div class="header-actions">
+        <span class="status" [class.status--resolved]="item.resuelto_en || item.estado === 'CERRADO'">
+          {{ estados[item.estado] }}
+        </span>
+        <!-- T53: el admin va al detalle de su panel; las partes, al resumen de la reserva. -->
+        @if (item.reserva?.id; as idReserva) {
+          <a class="ver-reserva" [routerLink]="administracion() ? ['/admin/reservas', idReserva] : ['/reserva/resultado']"
+            [queryParams]="administracion() ? { desde: 'reclamos' } : { reserva_id: idReserva }">Ver reserva</a>
+        }
+      </div>
     </header>
     <p class="meta">{{ categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
     @if (item.reserva?.monto_pago; as monto) {
@@ -122,6 +132,10 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
     .meta { color: #526475; font-size: .84rem; }
     .amount { color: #101d36; }
     .status { background: #fff1d8; color: #74470a; padding: .25rem .65rem; border-radius: 1rem; font-size: .8rem; font-weight: 700; }
+    .header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .rol { display: inline-block; margin-inline-start: .35rem; padding: .1rem .5rem; border-radius: 1rem; background: #e8eeff; color: #1d3b8f; font-size: .78rem; font-weight: 700; }
+    .ver-reserva { padding: .3rem .7rem; border: 1px solid #10233f; border-radius: .45rem; color: #10233f; font-size: .82rem; font-weight: 700; text-decoration: none; }
+    .ver-reserva:hover, .ver-reserva:focus-visible { background: #10233f; color: #fff; }
     .status--resolved, .resolution { background: #edf6f2; color: #205c46; }
     .body { white-space: pre-wrap; overflow-wrap: anywhere; }
     .imagenes-reclamo { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0; padding: 0; list-style: none; }
@@ -187,6 +201,11 @@ export class ClaimHistoryComponent {
   /** El admin la apaga mientras la sección Reclamos está oculta, para no consultar en segundo plano. */
   readonly actualizar = input(true);
   protected readonly puedeValidarCodigo = puedeValidarCodigo;
+  /** T53: en Mis reservas, el rol de quien mira el reclamo; el admin no lo necesita. */
+  protected readonly rolPropio = computed(() => {
+    if (this.administracion()) return '';
+    return rolEnReclamo(this.reclamo(), Number(this.auth.currentUser()?.sub)) ?? '';
+  });
   protected readonly participantes = computed(() => [
     { rol: 'Anunciante', usuario: this.reclamo().anunciante },
     { rol: 'Inquilino', usuario: this.reclamo().inquilino },

@@ -7,6 +7,7 @@
 .reservation-tabs button.is-active { background: var(--color-secondary); color: #fff; box-shadow: 0 3px 9px color-mix(in srgb, var(--color-secondary), transparent 70%); }
 .reservation-tabs button span { display: grid; min-width: 1.45rem; height: 1.45rem; place-items: center; padding: 0 .35rem; border-radius: 999px; background: rgba(255,255,255,.2); font-size: .74rem; }
 .reservation-tabs button:focus-visible { outline: 3px solid color-mix(in srgb, var(--color-secondary), transparent 70%); outline-offset: 2px; }
+.reservation-tabs--sub { margin-bottom: 1rem; }
 
 .reservation-section { margin-top: .25rem; }
 .reservation-filters { display: flex; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; }

@@ -13,9 +13,23 @@
             <span class="verified"><svg lucideBadgeCheck [size]="13"></svg> Dueño Verificado</span>
           }
           <ul class="owner-card__meta">
-            @if (locations()) { <li><svg lucideMapPin [size]="16"></svg> {{ locations() }}</li> }
             <li><svg lucideBuilding2 [size]="16"></svg> {{ owner.tipoAnunciante?.nombre ?? 'Anunciante' }}</li>
           </ul>
+          <!-- T28: ciudades como chips, con límite y «Ver más». -->
+          @if (ciudades().length) {
+            <div class="owner-cities">
+              <h2 id="owner-cities-title"><svg lucideMapPin [size]="16" aria-hidden="true"></svg> Ciudades donde publica</h2>
+              <ul id="owner-cities-list" class="owner-cities__list" aria-labelledby="owner-cities-title">
+                @for (ciudad of ciudadesVisibles(); track ciudad) { <li>{{ ciudad }}</li> }
+              </ul>
+              @if (ciudadesOcultas()) {
+                <button type="button" class="owner-cities__more" aria-controls="owner-cities-list"
+                  [attr.aria-expanded]="verTodasLasCiudades()" (click)="verTodasLasCiudades.set(!verTodasLasCiudades())">
+                  {{ verTodasLasCiudades() ? 'Ver menos' : 'Ver ' + ciudadesOcultas() + ' más' }}
+                </button>
+              }
+            </div>
+          }
         </section>
 
         <section class="public-data" appReveal="left" [revealDelay]="120">
