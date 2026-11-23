@@ -1,0 +1,159 @@
+.asistente,
+.asistente__lanzador {
+  position: fixed;
+  z-index: 29;
+  inset-inline-start: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+.asistente__lanzador {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  min-height: 3.2rem;
+  padding: .55rem 1rem;
+  border: 1px solid #f1a62d;
+  border-radius: var(--radius-pill);
+  background: #ffbf55;
+  color: #30210c;
+  box-shadow: 0 5px 20px #10182824;
+  font-weight: 750;
+}
+
+.asistente__lanzador:hover { background: #ffd081; }
+
+.asistente {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(25rem, calc(100vw - 2rem));
+  height: min(35rem, calc(100dvh - 5rem));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 15px 48px #10182829;
+  overflow: hidden;
+}
+
+.asistente__encabezado,
+.asistente__marca,
+.asistente__formulario {
+  display: flex;
+  align-items: center;
+}
+
+.asistente__encabezado {
+  justify-content: space-between;
+  padding: .65rem .8rem .65rem 1rem;
+  color: white;
+  background: var(--color-secondary-dark);
+}
+
+.asistente__marca { gap: .65rem; }
+.asistente__marca h2 { margin: 0; font-size: 1.25rem; font-weight: 800; line-height: 1.1; }
+.asistente__marca p { margin: .12rem 0 0; font-size: .78rem; color: #e8eefb; }
+
+.asistente__icono,
+.asistente__cerrar,
+.asistente__formulario button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+}
+
+.asistente__icono { background: #ffbf55; color: #30210c; }
+.asistente__cerrar:hover { background: #ffffff26; }
+.asistente__cerrar:focus-visible { outline-color: #ffbf55; }
+
+.asistente__historial {
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+}
+
+.mensaje,
+.asistente__respuesta { overflow-wrap: anywhere; }
+.mensaje {
+  width: fit-content;
+  max-width: 94%;
+  margin: 0 0 .65rem;
+  padding: .65rem .8rem;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  white-space: pre-wrap;
+  font-size: .92rem;
+}
+
+.mensaje--propio { margin-inline-start: auto; background: var(--color-secondary-light); }
+.asistente__respuesta { margin-bottom: .8rem; }
+.asistente__sugerencias { display: flex; flex-wrap: wrap; gap: .4rem; }
+.asistente__sugerencias button {
+  padding: .45rem .7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-secondary-dark);
+  font-size: .8rem;
+  font-weight: 650;
+}
+
+.resultado {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: .55rem;
+  margin: .35rem 0;
+  padding: .55rem .7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-secondary-dark);
+  font-size: .875rem;
+}
+
+.resultado:hover,
+.asistente__sugerencias button:hover { background: var(--color-secondary-light); }
+.resultado svg { flex: none; }
+.resultado__detalle { display: grid; gap: .1rem; }
+.resultado__detalle > span { color: var(--color-text-muted); font-size: .8rem; }
+.resultado__detalle .resultado__precio { color: var(--color-text); font-weight: 750; }
+.asistente__estado,
+.asistente__error { margin: .5rem 0; font-size: .85rem; }
+.asistente__estado { color: var(--color-text-muted); }
+.asistente__error { color: var(--color-primary-dark); }
+
+.asistente__formulario {
+  gap: .55rem;
+  padding: .7rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.asistente__formulario textarea {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  padding: .48rem .65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+}
+
+.asistente__formulario button { background: var(--color-secondary); color: white; }
+.asistente__formulario button:disabled { opacity: .45; cursor: default; }
+
+@media (max-width: 520px) {
+  .asistente { z-index: 35; }
+}

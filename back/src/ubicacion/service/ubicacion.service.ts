@@ -67,4 +67,8 @@ export class UbicacionService {
     await this.getProvinciaPorId(idProvincia); // valida que exista la provincia
     return this.ubicacionRepo.buscarCiudadesPorProvincia(idProvincia);
   }
+
+  buscarIdsCiudadesPorNombre(nombre: string): Promise<number[]> {
+    return this.ubicacionRepo.buscarIdsCiudadesPorNombre(nombre.trim().toLowerCase().normalize('NFD').replace(/\p{M}/gu, ''));
+  }
 }

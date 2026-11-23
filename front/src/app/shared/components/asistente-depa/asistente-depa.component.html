@@ -1,0 +1,64 @@
+@if (abierto()) {
+  <section class="asistente" aria-labelledby="asistente-depa-titulo" (keydown.escape)="cerrar(); $event.stopPropagation()">
+    <header class="asistente__encabezado">
+      <div class="asistente__marca">
+        <span class="asistente__icono"><svg lucideSparkles [size]="19" aria-hidden="true"></svg></span>
+        <div>
+          <h2 id="asistente-depa-titulo">depa</h2>
+          <p>Asistente de DEPA</p>
+        </div>
+      </div>
+      <button type="button" class="asistente__cerrar" aria-label="Cerrar asistente" (click)="cerrar()">
+        <svg lucideX [size]="22" aria-hidden="true"></svg>
+      </button>
+    </header>
+
+    <div #historial class="asistente__historial" role="log" aria-label="Conversación con depa">
+      @if (!intercambios().length && !consultaEnCurso() && !error()) {
+        <p class="mensaje">¡Hola! Podés pedirme que busque un alquiler o preguntarme cómo funciona DEPA.</p>
+        <div class="asistente__sugerencias">
+          <button type="button" (click)="enviar('Busco un alquiler temporario en Villa María')">Buscar un temporario</button>
+          <button type="button" (click)="enviar('¿Cómo hago para reservar?')">¿Cómo hago para reservar?</button>
+        </div>
+      }
+
+      @for (intercambio of intercambios(); track $index) {
+        <p class="mensaje mensaje--propio">{{ intercambio.pregunta }}</p>
+        <div class="asistente__respuesta">
+          <p class="mensaje">{{ intercambio.respuesta }}</p>
+          @for (publicacion of intercambio.publicaciones; track publicacion.id) {
+            <a class="resultado" [routerLink]="['/publicaciones', publicacion.id]" (click)="cerrar(false)">
+              <span class="resultado__detalle">
+                <strong>{{ publicacion.titulo }}</strong>
+                <span>{{ publicacion.ciudad }} · {{ publicacion.modalidad }} · {{ publicacion.ambientes }} amb.</span>
+                <span class="resultado__precio">{{ importe.format(publicacion.precio) }} {{ publicacion.moneda }}</span>
+              </span>
+              <svg lucideArrowUpRight [size]="17" aria-hidden="true"></svg>
+            </a>
+          }
+        </div>
+      }
+      @if (consultaEnCurso()) {
+        <p class="mensaje mensaje--propio">{{ consultaEnCurso() }}</p>
+        <p class="asistente__estado" role="status">depa está respondiendo…</p>
+      }
+      @if (error()) {
+        <p class="asistente__error" role="alert">{{ error() }}</p>
+      }
+    </div>
+
+    <form class="asistente__formulario" (ngSubmit)="enviar()">
+      <textarea #entrada name="consulta" rows="2" aria-label="Tu consulta para depa"
+        placeholder="Escribí tu consulta…" [maxlength]="limiteMensaje" [readOnly]="!!consultaEnCurso()"
+        [(ngModel)]="borrador" (keydown.enter)="manejarEnter($event)"></textarea>
+      <button type="submit" aria-label="Enviar consulta" [disabled]="!borrador.trim() || !!consultaEnCurso()">
+        <svg lucideSend [size]="19" aria-hidden="true"></svg>
+      </button>
+    </form>
+  </section>
+} @else {
+  <button #lanzador type="button" class="asistente__lanzador" aria-label="Abrir el asistente depa" (click)="abrir()">
+    <svg lucideSparkles [size]="21" aria-hidden="true"></svg>
+    <span>Preguntale a depa</span>
+  </button>
+}

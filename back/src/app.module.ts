@@ -21,6 +21,7 @@ import { MailModule } from './mail/mail.module';
 import { FavoritosModule } from './favoritos/favoritos.module';
 import { OperacionesReservaModule } from './operaciones-reserva/operaciones-reserva.module';
 import { ReclamosModule } from './reclamos/reclamos.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -65,6 +66,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     FavoritosModule,
     OperacionesReservaModule,
     ReclamosModule,
+    ChatbotModule,
   ],
   controllers: [AppController],
   providers: [AppService],

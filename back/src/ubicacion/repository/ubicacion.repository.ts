@@ -30,4 +30,12 @@ export class UbicacionRepository implements IUbicacionRepository {
       where: { provincia: { id: idProvincia } },
     });
   }
+
+  async buscarIdsCiudadesPorNombre(nombre: string): Promise<number[]> {
+    const ciudades = await this.ciudadRepo.createQueryBuilder('ciudad')
+      .select('ciudad.id')
+      .where("TRANSLATE(LOWER(ciudad.nombre), 'áéíóúüñ', 'aeiouun') = :nombre", { nombre })
+      .getMany();
+    return ciudades.map(({ id }) => id);
+  }
 }
