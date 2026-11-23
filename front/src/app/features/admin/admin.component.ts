@@ -735,7 +735,7 @@ export class AdminComponent {
       return;
     }
     if (resolucion === 'DEVOLUCION_PARCIAL' && this.parcialCubreElTotal(reclamo)) {
-      this.toast.mostrar(reclamo.solicitud_cancelacion_id
+      this.toast.mostrar((reclamo.solicitud_cancelacion_id && reclamo.categoria !== 'DEMORA_ADMINISTRATIVA')
         ? 'La devolución parcial debe ser menor al faltante. Para completarlo elegí «Completar faltante».'
         : 'La devolución parcial tiene que ser menor que lo que pagó el inquilino. Para devolver todo elegí «Devolución total».', 'error');
       return;
@@ -755,7 +755,7 @@ export class AdminComponent {
   }
 
   private avisoResolucion(reclamo: Reclamo, resuelto: Reclamo): string {
-    if (reclamo.solicitud_cancelacion_id) return resuelto.resolucion === 'SIN_DEVOLUCION'
+    if ((reclamo.solicitud_cancelacion_id && reclamo.categoria !== 'DEMORA_ADMINISTRATIVA')) return resuelto.resolucion === 'SIN_DEVOLUCION'
       ? 'Reclamo cerrado sin devolución adicional.'
       : `Reclamo resuelto con devolución del faltante de ${this.montoReclamo(reclamo, resuelto.importe_reembolso ?? 0)}. La devolución sigue en Reembolsos.`;
     if (resuelto.resolucion === 'SIN_DEVOLUCION') return 'Reclamo resuelto a favor del anunciante, sin devolución.';

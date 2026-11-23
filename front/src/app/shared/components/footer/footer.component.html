@@ -11,15 +11,17 @@
     <nav class="footer__cols" aria-label="Enlaces del sitio">
       <div>
         <h3>Buscar</h3>
-        <a routerLink="/" [queryParams]="{ modalidad: 'largo' }" fragment="resultados">Alquiler Largo Plazo</a>
-        <a routerLink="/" [queryParams]="{ modalidad: 'temporario' }" fragment="resultados">Alquiler Temporario</a>
+        <a routerLink="/publicaciones" [queryParams]="{ categoria: 'largo-plazo' }">Alquiler Largo Plazo</a>
+        <a routerLink="/publicaciones" [queryParams]="{ categoria: 'temporales' }">Alquiler Temporario</a>
         <a routerLink="/publicaciones/nueva">Publicar propiedad</a>
       </div>
       <div>
         <h3>Tu cuenta</h3>
         @if (auth.isAuthenticated) {
           <a routerLink="/mi-perfil">Mi perfil</a>
-          <a routerLink="/mi-perfil/anunciante">Quiero ser anunciante</a>
+          @if (perfil.solicitudConsultada() && !perfil.esAnuncianteVerificado()) {
+            <a routerLink="/mi-perfil/anunciante">Quiero ser anunciante</a>
+          }
         } @else {
           <a routerLink="/login">Iniciar sesión</a>
           <a routerLink="/registro">Crear cuenta</a>

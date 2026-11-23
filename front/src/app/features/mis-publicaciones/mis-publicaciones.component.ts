@@ -1,23 +1,19 @@
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { concatMap, from, type Subscription } from 'rxjs';
-import { LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
+import type { Subscription } from 'rxjs';
+import { LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
 import { GestionPublicacionesService, type PagoPublicacion } from '../../shared/services/gestion-publicaciones.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
-import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
-import { moverImagen } from '../../shared/utils/orden-imagenes';
-
-const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-const MAX_IMAGEN = 10 * 1024 * 1024;
 
 // Panel del anunciante verificado para administrar sus publicaciones: ver,
-// activar, desactivar, mover a la papelera, restaurar y gestionar sus imágenes.
+// activar, desactivar, mover a la papelera y restaurar. Las imágenes se gestionan en Editar.
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, GaleriaImagenesComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, SpinnerComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
@@ -29,11 +25,11 @@ export class MisPublicacionesComponent {
   private readonly todas = signal<Publicacion[]>([]);
   protected readonly publicaciones = computed(() => this.todas().filter((p) => !p.eliminada));
   protected readonly papelera = computed(() => this.todas().filter((p) => p.eliminada));
+  protected readonly esTemporaria = admiteReservasPorFecha;
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
   protected readonly aviso = signal(inject(ActivatedRoute).snapshot.queryParamMap.get('aviso') ?? '');
   protected readonly resultado = signal('');
-  protected readonly expandida = signal<number | null>(null);
   protected readonly liquidacionesAbiertas = signal<number | null>(null);
   protected readonly liquidaciones = signal<PagoPublicacion[] | null>(null);
   protected readonly errorLiquidaciones = signal(false);
@@ -58,11 +54,6 @@ export class MisPublicacionesComponent {
         this.cargando.set(false);
       },
     });
-  }
-
-  protected alternarImagenes(id: number): void {
-    this.expandida.update((actual) => (actual === id ? null : id));
-    this.errorFila.set(null);
   }
 
   protected alternarLiquidaciones(id: number): void {
@@ -106,7 +97,6 @@ export class MisPublicacionesComponent {
       next: (eliminada) => {
         this.actualizar(pub.id, () => eliminada);
         this.confirmandoBorrado.set(null);
-        if (this.expandida() === pub.id) this.expandida.set(null);
         this.resultado.set('La publicación se movió a la Papelera. Podés restaurarla desde allí.');
         this.ocupada.set(null);
       },
@@ -138,57 +128,6 @@ export class MisPublicacionesComponent {
       next: (actualizada) => {
         this.actualizar(pub.id, () => actualizada);
         this.resultado.set(actualizada.activa ? 'Publicación activada.' : 'Publicación desactivada. Ya no aparece en el feed.');
-        this.ocupada.set(null);
-      },
-      error: (err: Error) => this.fallo(pub.id, err),
-    });
-  }
-
-  protected subirImagenes(pub: Publicacion, event: Event): void {
-    if (this.ocupada() !== null) return;
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    input.value = '';
-    const validos = archivos.filter((a) => TIPOS_IMAGEN.includes(a.type) && a.size <= MAX_IMAGEN);
-    this.errorFila.set(
-      validos.length < archivos.length
-        ? { id: pub.id, mensaje: 'Algunos archivos se descartaron: solo imágenes de hasta 10 MB.' }
-        : null,
-    );
-    if (!validos.length) return;
-
-    this.ocupada.set(pub.id);
-    from(validos)
-      .pipe(concatMap((archivo) => this.gestion.subirImagen(pub.id, archivo)))
-      .subscribe({
-        next: (imagen) =>
-          // El backend activa la publicación al recibir su primera imagen.
-          this.actualizar(pub.id, (p) => ({ ...p, activa: p.activa || (!p.motivo_baja_admin && !p.imagenes?.length), imagenes: [...(p.imagenes ?? []), { id: imagen.id, url: imagen.url }] })),
-        error: (err: Error) => this.fallo(pub.id, err),
-        complete: () => this.ocupada.set(null),
-      });
-  }
-
-  protected eliminarImagen(pub: Publicacion, idImagen: number): void {
-    if (this.ocupada() !== null) return;
-    this.ocupada.set(pub.id);
-    this.gestion.eliminarImagen(idImagen).subscribe({
-      next: () => {
-        this.actualizar(pub.id, (p) => ({ ...p, imagenes: (p.imagenes ?? []).filter((i) => i.id !== idImagen) }));
-        this.ocupada.set(null);
-      },
-      error: (err: Error) => this.fallo(pub.id, err),
-    });
-  }
-
-  protected ordenarImagenes(pub: Publicacion, cambio: { desde: number; hasta: number }): void {
-    if (this.ocupada() !== null) return;
-    const imagenes = moverImagen(pub.imagenes ?? [], cambio.desde, cambio.hasta);
-    this.ocupada.set(pub.id);
-    this.errorFila.set(null);
-    this.gestion.ordenarImagenes(pub.id, imagenes.map((imagen) => imagen.id)).subscribe({
-      next: (ordenadas) => {
-        this.actualizar(pub.id, (p) => ({ ...p, imagenes: ordenadas }));
         this.ocupada.set(null);
       },
       error: (err: Error) => this.fallo(pub.id, err),

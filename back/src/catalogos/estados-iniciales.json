@@ -173,6 +173,9 @@
       },
       "OTRO": {
         "nombre": "OTRO"
+      },
+      "DEMORA_ADMINISTRATIVA": {
+        "nombre": "Demora administrativa"
       }
     }
   },

@@ -37,6 +37,7 @@ import { PresupuestoReserva, ReservationService, type Reserva } from '../../shar
 import { FavoritesService } from '../../shared/services/favorites.service';
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
+import { PaymentSummaryComponent } from './payment-summary/payment-summary.component';
 
 @Component({
   selector: 'app-publication-detail',
@@ -47,6 +48,7 @@ import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
     RevealDirective,
     AvatarComponent,
     AvailabilityCalendarComponent,
+    PaymentSummaryComponent,
     RelativeTimePipe,
     LucideBadgeCheck,
     LucideBookmark,
@@ -375,20 +377,6 @@ export class PublicationDetailComponent {
   protected presupuestoVencido(): boolean {
     return !this.presupuesto() || Date.now() >= new Date(this.presupuesto()!.vence_en).getTime();
   }
-  protected aceptarConversion(evento: Event): void {
-    this.aceptaConversion.set(evento.target instanceof HTMLInputElement && evento.target.checked);
-  }
-  protected formatCurrency(valor: string | number, moneda: string, decimales = 2): string {
-    return Number(valor).toLocaleString('es-AR', {
-      style: 'currency',
-      currency: moneda,
-      maximumFractionDigits: decimales,
-    });
-  }
-  protected fechaCotizacion(valor: string): string {
-    return new Date(valor).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
-  }
-
   protected confirmPayment(event: Event): void {
     event.preventDefault();
     const item = this.publication();

@@ -13,17 +13,17 @@ de 2 días calendario, se muestra una advertencia de devolución del 0 % y debe
 aceptar los términos, que aclaran que no recibirá una devolución. Desde la
 fecha de ingreso el inquilino no puede solicitar la cancelación, aunque no se haya
 validado el código de alojamiento. Se puede solicitar con cualquier medio
-de pago admitido para reservar. Si el pago se hizo con tarjeta u otro medio
-distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por
-transferencia con administración.
+de pago admitido para reservar. Las tarjetas y el dinero en cuenta usan el mismo
+circuito de devolución por Mercado Pago. Si falta el medio del pago o la pasarela
+rechaza definitivamente la devolución, se coordina una transferencia con administración.
 
-El anunciante puede solicitarla en cualquier momento mientras el código de
-ingreso no esté validado, incluso el día del ingreso o después, con devolución
-del 100 % al inquilino. Que el código ya esté generado no impide solicitarla.
+El anunciante puede solicitarla antes de la fecha de ingreso, hasta el día
+anterior inclusive, con devolución del 100 % al inquilino si se aprueba dentro
+de ese plazo. Que el código ya esté generado no impide solicitarla.
 Se conservan los controles de reserva pagada y vigente y de liquidación sin resolver.
 
 Los siguientes porcentajes se calculan con la fecha de envío de la solicitud,
-en días calendario de Argentina. Una aprobación posterior no reduce el porcentaje.
+en días calendario de Argentina. Una aprobación posterior no reduce el porcentaje, pero debe ocurrir antes de la fecha de ingreso.
 El modal muestra antes de enviar el porcentaje, el importe y la moneda de la devolución
 si se aprueba. El servidor registra `creada_en` y usa esa fecha al resolver;
 el cliente no puede elegir la fecha ni el importe. La política sigue siendo la
@@ -50,22 +50,23 @@ deshabilita la aprobación en el panel. Consultar la lista no genera reembolsos.
 | Inquilino cancela entre 2 y 6 días antes | 50 % |
 | Inquilino cancela el día anterior al ingreso | 0 %, con advertencia antes de enviar |
 | Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | Conserva el porcentaje del día de solicitud |
-| Anunciante cancela antes de validar el código, independientemente de la fecha de ingreso | 100 % |
-| Administrador cancela antes del inicio | Según la política contratada para otros actores |
-| El inquilino solicita desde la fecha de ingreso | No se cancela; solo reclamo |
+| Anunciante solicita hasta el día anterior al ingreso y se aprueba antes del ingreso | 100 % |
+| Inquilino o anunciante solicita desde la fecha de ingreso | No admite nuevas solicitudes de cancelación |
 | Código de ingreso ya validado | No admite nuevas solicitudes de cancelación |
 
 Con devolución del 0 %, la aprobación cancela la reserva, conserva el pago y
 libera las fechas, sin generar un registro de reembolso. La solicitud,
 la cancelación y la liquidación se actualizan en la misma transacción.
 
-Una solicitud del anunciante no vence por llegar la fecha de ingreso. Si el
-código se valida antes de resolverla, la solicitud queda `VENCIDA`, sin crear
-una devolución, y se informa el motivo. La aprobación y la validación del código
-bloquean la misma reserva: si se aprueba primero, no se permite validar el código
-mientras la devolución esté activa. Al confirmar el reembolso se cancela la
-reserva y se libera el calendario, incluso si la fecha de ingreso ya pasó.
-Para el inquilino se conserva el vencimiento al llegar la fecha de ingreso.
+Toda solicitud pendiente, del Inquilino o del Anunciante, se considera rechazada
+si llega la fecha de ingreso sin resolución. Se registra como `RECHAZADA`, se
+conserva la reserva en curso y se habilita el reclamo por demora administrativa
+al solicitante. No se genera una devolución por la solicitud rechazada.
+
+Una solicitud aprobada antes del ingreso conserva su devolución pendiente. Si la
+confirmación llega después, se completa la cancelación y se libera el calendario
+como parte de esa decisión previa; no se vuelve a aprobar ni se modifica el porcentaje.
+Mientras la devolución esté activa no se permite validar el código de ingreso.
 
 ### Módulo de cancelaciones
 
@@ -237,3 +238,35 @@ vigentes hasta este cambio. Cancelaciones elige la versión por la fecha del pag
 en Argentina. Las reservas sin fecha de pago usan la política inicial.
 Para modificar la política, agregar una versión con una fecha de vigencia nueva
 y conservar las versiones anteriores para las reservas ya pagadas.
+
+
+## Solicitudes sin respuesta y reclamo por demora administrativa
+
+Al llegar la fecha de ingreso, una solicitud todavía PENDIENTE se considera
+rechazada por falta de respuesta y se registra como RECHAZADA, con el motivo y
+la fecha del rechazo automático. La tarea se ejecuta al iniciar el backend y
+cada minuto. También se controla el plazo al intentar resolver o reclamar.
+La reserva sigue en curso: no se cancela, no se liberan fechas ni se devuelve
+dinero por el rechazo. Las solicitudes históricas VENCIDAS por demora conservan
+su estado y también pueden dar lugar a un reclamo dentro del plazo.
+
+El solicitante, ya sea inquilino o anunciante, puede usar «Reclamar por demora
+administrativa» desde Mis reservas. El reclamo usa el catálogo existente, con
+categoría DEMORA_ADMINISTRATIVA, y se vincula a la solicitud original. Se admite
+desde la fecha de ingreso hasta siete días corridos después de finalizar la
+estadía, con descripción de 20 a 1000 caracteres y un único reclamo abierto por
+reserva. El servidor comprueba que exista una solicitud del usuario que no se
+resolvió a tiempo; una solicitud rechazada por administración antes del ingreso
+no habilita esta opción.
+
+Presentar este reclamo conserva el estado de la reserva y de su liquidación,
+por lo que no bloquea la validación normal del código. Administración lo tramita
+mediante el circuito existente de Reclamos y decide cómo resolverlo. No hay
+confirmaciones de ausencia, reembolso garantizado ni compensación a cargo de
+DEPA por el mero hecho de la demora.
+
+La migración 20261123-reclamo-demora-administrativa.sql incorpora la categoría
+y retira la estructura de la excepción descartada únicamente si no tiene
+revisiones ni compensaciones registradas. Se detiene antes de eliminarla si
+encuentra datos que deban conservarse. Las solicitudes, pagos, reembolsos y
+reclamos anteriores se preservan.

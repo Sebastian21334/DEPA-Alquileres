@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, Repository, type EntityManager } from 'typeorm';
+import { In, LessThanOrEqual, MoreThan, Repository, type EntityManager } from 'typeorm';
 import { PoliticaCancelacion } from '../entity/politica-cancelacion.entity';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 import type { ICancelacionesRepository } from './cancelaciones.repository.interface';
@@ -69,6 +69,19 @@ export class CancelacionesRepository implements ICancelacionesRepository {
       where: fechaPago ? { vigenteDesde: LessThanOrEqual(fechaPago) } : {},
       order: { vigenteDesde: fechaPago ? 'DESC' : 'ASC' },
     });
+  }
+
+  listarVencibles(hoy: string, despuesDe: number): Promise<SolicitudCancelacion[]> {
+    return this.repository.find({ where: { id: MoreThan(despuesDe), estado: 'PENDIENTE', reserva: { fecha_inicio: LessThanOrEqual(hoy) } }, relations: { reserva: true }, order: { id: 'ASC' }, take: 100 });
+  }
+
+  buscarDemorada(idReserva: number, idUsuario: number): Promise<SolicitudCancelacion | null> {
+    return this.repository.findOne({ where: { reserva: { id: idReserva }, solicitante: { id: idUsuario }, estado: In(['PENDIENTE','VENCIDA','RECHAZADA']) }, relations: { solicitante: true, decidida_por: true }, order: { id: 'DESC' } });
+  }
+
+  listarDemoradasDelSolicitante(idUsuario: number, hoy: string): Promise<SolicitudCancelacion[]> {
+    return this.repository.find({ where: { solicitante: { id: idUsuario }, estado: In(['PENDIENTE','VENCIDA','RECHAZADA']), reserva: { fecha_inicio: LessThanOrEqual(hoy) } },
+      relations: { solicitante: true, decidida_por: true, reserva: { usuario: true, publicacion: { anunciante: { usuario: true } } } }, order: { id: 'DESC' } });
   }
 
   listarPorEstado(estado: string): Promise<SolicitudCancelacion[]> {

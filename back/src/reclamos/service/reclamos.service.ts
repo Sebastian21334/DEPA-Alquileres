@@ -1,3 +1,4 @@
+import type { DemoraAdministrativaDto } from '../dto/reclamo-demora-administrativa.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   BadRequestException,
@@ -51,6 +52,14 @@ export class ReclamosService {
 
   constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly cancelaciones: CancelacionesService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
+  async listarDemorasMias(idUsuario: number): Promise<DemoraAdministrativaDto[]> {
+    const solicitudes = await this.cancelaciones.listarDemorasParaReclamo(idUsuario);
+    const elegibles = solicitudes.filter(({ reserva }) => !reserva.cancelada && this.reservas.pagoAprobado(reserva) && reserva.fecha_fin && !this.fueraDePlazo(reserva.fecha_fin, fechaArgentina()));
+    return Promise.all(elegibles.map(async solicitud => ({ solicitudId: solicitud.id, reservaId: solicitud.reserva.id,
+      titulo: solicitud.reserva.publicacion?.titulo ?? 'Alojamiento', fechaInicio: solicitud.reserva.fecha_inicio, fechaSolicitud: solicitud.creada_en,
+      reclamoAbierto: await this.reclamos.existeAbierto(solicitud.reserva.id, ['ABIERTO','EN_REVISION']) })));
+  }
+
   async consultarFaltanteCancelacion(idReserva: number, idUsuario: number): Promise<FaltanteCancelacionDto> {
     const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
     this.verificarInquilino(reserva, idUsuario);
@@ -89,9 +98,12 @@ export class ReclamosService {
   }
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<Reclamo> {
-    const reclamo = await this.reservas.conReservaParaReclamo(dto.id_reserva, async (reserva, transaccion) => {
+    if (dto.descripcion.trim().length < 20) throw new BadRequestException('La descripción debe tener al menos 20 caracteres de contenido');
+    const porDemora = dto.categoria === 'DEMORA_ADMINISTRATIVA';
+    let reclamo!: Reclamo;
+    const crear = async (reserva: Reserva, transaccion: EntityManager): Promise<Reclamo> => {
       const reclamos = this.reclamos.enTransaccion(transaccion);
-      if (!this.reservas.esDelInquilino(reserva, idUsuario))
+      if (!porDemora && !this.reservas.esDelInquilino(reserva, idUsuario))
         throw new ForbiddenException(
           'Solo el Inquilino de la reserva puede iniciar un reclamo',
         );
@@ -122,11 +134,13 @@ export class ReclamosService {
       if (await reclamos.existeAbierto(reserva.id, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]))
         throw new ConflictException('La reserva ya tiene un reclamo abierto');
 
-      return reclamos.guardar({
+      const solicitudDemorada = porDemora ? await this.cancelaciones.buscarSolicitudParaReclamoDemora(reserva, idUsuario, transaccion) : null;
+      reclamo = await reclamos.guardar({
         reserva,
         inquilino: reserva.usuario,
         anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
         categoria: dto.categoria,
+        solicitud_cancelacion_id: solicitudDemorada?.id ?? null,
         descripcion: dto.descripcion.trim(),
         estado: this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
         resolucion: null,
@@ -134,8 +148,11 @@ export class ReclamosService {
         administrador_resolucion: null,
         resuelto_en: null,
       });
-    });
-    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
+      return reclamo;
+    };
+    if (porDemora) await this.reservas.conReservaBloqueada(dto.id_reserva, async (reserva, tx) => { await crear(reserva, tx); });
+    else await this.reservas.conReservaParaReclamo(dto.id_reserva, crear);
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], porDemora ? 'Reclamo por demora administrativa' : 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
     return this.prepararRespuesta(reclamo);
   }
 
@@ -263,14 +280,14 @@ export class ReclamosService {
       if (!expediente || estadosCerrados.includes(expediente.estado))
         throw new ConflictException('El reclamo ya fue resuelto');
       const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
-      if (expediente.solicitud_cancelacion_id != null) {
+      if (expediente.solicitud_cancelacion_id != null && expediente.categoria !== 'DEMORA_ADMINISTRATIVA') {
         resultado.reembolso = await this.resolverFaltanteCancelacion(expediente, actual, dto, idAdmin, previo, transaccion);
         resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, resultado.reembolso ? Number(resultado.reembolso.importe) : null, idAdmin));
         return;
       }
       if (dto.resolucion === ResolucionReclamo.SIN_DEVOLUCION) {
         if (previo) throw new ConflictException('El reclamo tiene una devolución registrada');
-        expediente.reserva = await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion, transaccion);
+        expediente.reserva = expediente.categoria === 'DEMORA_ADMINISTRATIVA' ? actual : await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion, transaccion);
         resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, ResolucionReclamo.SIN_DEVOLUCION, null, idAdmin));
         return;
       }
@@ -362,7 +379,7 @@ export class ReclamosService {
 
   private async prepararFaltante(reclamo: Reclamo): Promise<ReclamoRespuestaDto> {
     const respuesta = this.prepararRespuesta(reclamo);
-    if (reclamo.solicitud_cancelacion_id == null) return respuesta;
+    if (reclamo.solicitud_cancelacion_id == null || reclamo.categoria === 'DEMORA_ADMINISTRATIVA') return respuesta;
     return { ...respuesta, devolucion_cancelacion: await this.cancelaciones.saldoDevolucion(reclamo.reserva) };
   }
 

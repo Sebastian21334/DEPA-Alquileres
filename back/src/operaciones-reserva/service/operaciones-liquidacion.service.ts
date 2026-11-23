@@ -9,7 +9,6 @@ import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import {
   OrigenReembolso,
-  Reembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';

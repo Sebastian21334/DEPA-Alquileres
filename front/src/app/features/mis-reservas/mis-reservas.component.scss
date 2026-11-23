@@ -191,3 +191,6 @@
 .cancellation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; margin-top: 1.3rem; }
 .cancellation-back { background: white; color: #a52e17; border: 1px solid #b83d22; }
 .cancellation-submit { background: #ae3619; color: white; border: 1px solid #ae3619; }
+
+.administrative-delays { margin-bottom: 1.5rem; h2 { font-size: 1.1rem; margin-bottom: 1rem; } }
+.administrative-delay { padding: 1.2rem; margin-bottom: 1rem; border: 1px solid #e5c4a7; border-left: 4px solid #b96222; border-radius: 10px; background: #fffaf5; h3 { font-size: 1rem; margin: 0 0 .6rem; } p { line-height: 1.6; margin-bottom: 1rem; } }

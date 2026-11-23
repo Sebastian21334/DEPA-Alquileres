@@ -106,21 +106,6 @@ h2 { margin: 0 0 14px; font-size: 1.05rem; font-weight: 800; }
 .booking-actions { display: grid; gap: 10px; margin-top: 14px; }
 .button--outline { border: 1px solid #25d366; color: #168a42; background: #fff; box-shadow: none; }
 
-.modal-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(11 24 40 / 70%); }
-.payment-modal { position: relative; width: min(100%, 470px); max-height: calc(100dvh - 40px); overflow-y: auto; padding: 28px; border-radius: 16px; background: #fff; box-shadow: 0 24px 70px rgb(0 0 0 / 30%); }
-.payment-modal__close { position: absolute; top: 12px; right: 14px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: #f1f3f6; font-size: 1.5rem; cursor: pointer; }
-.payment-modal__eyebrow { color: var(--color-primary); font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
-.payment-modal h2 { margin: 7px 30px 7px 0; font-size: 1.35rem; }
-.payment-modal > p { margin: 0 0 18px; color: var(--color-text-muted); font-size: .85rem; line-height: 1.5; }
-.payment-modal form, .payment-modal label { display: grid; gap: 7px; }
-.payment-modal form { gap: 14px; }
-.payment-modal label { color: #344054; font-size: .8rem; font-weight: 700; }
-.payment-modal input, .payment-modal select { width: 100%; min-height: 43px; padding: 9px 11px; border: 1px solid #d0d5dd; border-radius: 7px; background: #fff; color: var(--color-text); font: inherit; }
-.payment-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.payment-total { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-top: 1px solid var(--color-border); }
-.payment-total span { color: var(--color-text-muted); font-size: .85rem; }
-.payment-placeholder { padding: 12px; border-radius: 8px; color: var(--color-text-muted); background: #f5f7fa; font-size: .82rem; }
-
 .image-modal-backdrop { position: fixed; z-index: 1100; inset: 0; display: grid; place-items: center; padding: 28px; background: rgb(11 24 40 / 88%); }
 .image-modal { position: relative; display: grid; place-items: center; width: min(100%, 1280px); height: min(100%, 820px); }
 .image-modal img { display: block; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 10px; box-shadow: 0 24px 70px rgb(0 0 0 / 40%); }
@@ -154,10 +139,7 @@ h2 { margin: 0 0 14px; font-size: 1.05rem; font-weight: 800; }
   .image-modal-backdrop { padding: 18px; }
   .image-modal__close { top: -8px; right: -4px; }
   .features__grid, .advertiser-card__stats { grid-template-columns: 1fr; }
-  .payment-grid { grid-template-columns: 1fr; }
 }
-.conversion-accept { display: flex; align-items: flex-start; gap: .6rem; margin: .85rem 0; padding: .8rem; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; font-size: .9rem; }
-.conversion-accept input { margin-top: .2rem; flex-shrink: 0; }
 .ingresos-card { position: static; }
 .ingresos-card form {
   display: grid;

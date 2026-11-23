@@ -20,7 +20,7 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
         {{ estados[item.estado] }}
       </span>
     </header>
-    <p class="meta">{{ item.solicitud_cancelacion_id ? 'Reembolso faltante de cancelación' : categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    <p class="meta">{{ (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Reembolso faltante de cancelación' : categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
     @if (item.devolucion_cancelacion; as saldo) {
       <div class="resolution">
         <p>Correspondía devolver: <strong>{{ saldo.esperado | currency:saldo.moneda:'code' }}</strong> ({{ saldo.porcentaje }} %)</p>
@@ -35,10 +35,10 @@ import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } f
       <div class="resolution" role="status">
         <p class="resolution__title">Reclamo resuelto</p>
         @if (item.resolucion === 'SIN_DEVOLUCION') {
-          <p>{{ item.solicitud_cancelacion_id ? 'No se aprobó una devolución adicional.' : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
+          <p>{{ (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'No se aprobó una devolución adicional.' : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
         } @else {
           <p>
-            A favor del inquilino: {{ item.solicitud_cancelacion_id ? 'devolución del faltante' : resoluciones[item.resolucion].toLowerCase() }}
+            A favor del inquilino: {{ (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'devolución del faltante' : resoluciones[item.resolucion].toLowerCase() }}
             @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.devolucion_cancelacion?.moneda || item.reserva?.moneda_contratada || 'ARS') }}</span>}.
             {{ administracion() ? 'La devolución se gestiona en Reembolsos.' : 'La devolución se sigue desde el detalle de la reserva.' }}
           </p>
@@ -203,7 +203,7 @@ export class ClaimHistoryComponent {
     })));
   protected readonly categorias = {
     LIMPIEZA: 'Limpieza', MANTENIMIENTO: 'Mantenimiento', INGRESO: 'Problemas de ingreso',
-    DESCRIPCION: 'La propiedad no coincide', OTRO: 'Otro motivo',
+    DESCRIPCION: 'La propiedad no coincide', OTRO: 'Otro motivo', DEMORA_ADMINISTRATIVA: 'Demora administrativa',
   };
   protected readonly estados = {
     ABIERTO: 'Recibido', EN_REVISION: 'En revisión', RESUELTO_INQUILINO: 'Resuelto',

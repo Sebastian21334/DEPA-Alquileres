@@ -7,14 +7,14 @@
           <p>{{ publicaciones().length }} en total · {{ activas() }} activas</p>
         }
       </div>
-      <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">
+      <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--general">
         <svg lucideSquarePlus [size]="18"></svg> Nueva publicación
       </a>
     </div>
 
     @if (aviso()) {
       <div class="acct-alert acct-alert--info notice" role="status">
-        {{ aviso() }} Podés volver a cargarlas desde "Imágenes".
+        {{ aviso() }} Podés volver a cargarlas desde Editar, en «Fotos de la propiedad».
         <button type="button" aria-label="Cerrar aviso" (click)="aviso.set('')"><svg lucideX [size]="16"></svg></button>
       </div>
     }
@@ -29,7 +29,7 @@
       <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
     } @else {
       @for (pub of publicaciones(); track pub.id) {
-        <article class="acct-card item" [class.is-busy]="ocupada() === pub.id">
+        <article class="acct-card item" [class.item--temp]="esTemporaria(pub.modalidad)" [class.is-busy]="ocupada() === pub.id">
           <div class="item__main">
             <div class="item__thumb">
               @if (pub.imagenes?.length) {
@@ -50,14 +50,14 @@
                 } @else {
                   <span class="acct-badge">Inactiva</span>
                 }
-                @if (pub.modalidad?.nombre) { <span class="acct-badge acct-badge--info">{{ pub.modalidad?.nombre }}</span> }
                 <small>Publicada el {{ fecha(pub.fecha_publicacion) }}</small>
+                @if (pub.modalidad?.nombre) { <span class="acct-badge item__modality">{{ pub.modalidad?.nombre }}</span> }
               </div>
               <h2>{{ pub.titulo }}</h2>
               @if (pub.motivo_baja_admin) {
                 <p class="acct-alert acct-alert--error"><strong>Motivo de la baja:</strong> {{ pub.motivo_baja_admin }}</p>
               }
-              <p class="item__location"><svg lucideMapPin [size]="14"></svg> {{ ubicacion(pub) }}</p>
+              <p class="item__location"><svg lucideMapPin [size]="14" aria-hidden="true"></svg><span>{{ ubicacion(pub) }}</span></p>
               <p class="item__specs">
                 <strong>{{ precio(pub) }}</strong> · {{ pub.cantidad_ambientes }} amb. · {{ pub.superficie }} m²
                 @if (pub.tipoPropiedad?.nombre) { · {{ pub.tipoPropiedad?.nombre }} }
@@ -65,6 +65,9 @@
             </div>
 
             <div class="item__actions">
+              <a class="acct-btn acct-btn--general acct-btn--sm" [routerLink]="['/publicaciones', pub.id, 'editar']">
+                <svg lucidePencil [size]="16" aria-hidden="true"></svg> Editar
+              </a>
               <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm"
                 [disabled]="ocupada() !== null || (!pub.activa && (!!pub.motivo_baja_admin || !pub.imagenes?.length))"
                 [title]="pub.motivo_baja_admin ? 'La baja administrativa impide activar esta publicación' : (!pub.imagenes?.length ? 'Agregá al menos una imagen para activar' : '')"
@@ -74,14 +77,6 @@
               <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', pub.id]">
                 <svg lucideEye [size]="16"></svg> Ver
               </a>
-              <a class="acct-btn acct-btn--ghost acct-btn--sm" [routerLink]="['/publicaciones', pub.id, 'editar']">
-                Editar
-              </a>
-              <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="alternarImagenes(pub.id)"
-                [disabled]="ocupada() !== null"
-                [attr.aria-expanded]="expandida() === pub.id">
-                <svg lucideImagePlus [size]="16"></svg> Imágenes ({{ pub.imagenes?.length ?? 0 }})
-              </button>
               <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="alternarLiquidaciones(pub.id)"
                 [attr.aria-expanded]="liquidacionesAbiertas() === pub.id">
                 Liquidaciones
@@ -136,26 +131,12 @@
               }
             </section>
           }
-
-          @if (expandida() === pub.id) {
-            <app-galeria-imagenes [fotos]="pub.imagenes ?? []" [minimo]="1"
-              [disabled]="ocupada() !== null" (reordenar)="ordenarImagenes(pub, $event)"
-              (quitar)="eliminarImagen(pub, pub.imagenes![$event].id)" />
-            <div class="gallery">
-              <label class="gallery__add">
-                <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                  [disabled]="ocupada() !== null" (change)="subirImagenes(pub, $event)" />
-                <svg lucideImagePlus [size]="24"></svg>
-                <span>{{ ocupada() === pub.id ? 'Procesando…' : 'Agregar' }}</span>
-              </label>
-            </div>
-          }
         </article>
       } @empty {
         <div class="acct-card acct-state">
           <h2>No tenés publicaciones en esta sección</h2>
           <p>Las publicaciones que crees o restaures aparecerán acá.</p>
-          <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">Nueva publicación</a>
+          <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--general">Nueva publicación</a>
         </div>
       }
 
@@ -165,7 +146,7 @@
           <p>Las publicaciones eliminadas se conservan acá. Al restaurarlas, vuelven a Mis publicaciones como inactivas.</p>
         </div>
         @for (pub of papelera(); track pub.id) {
-          <article class="acct-card item" [class.is-busy]="ocupada() === pub.id">
+          <article class="acct-card item" [class.item--temp]="esTemporaria(pub.modalidad)" [class.is-busy]="ocupada() === pub.id">
             <div class="item__main">
               <div class="item__thumb">
                 @if (pub.imagenes?.length) {
@@ -175,9 +156,12 @@
                 }
               </div>
               <div class="item__info">
-                <span class="acct-badge">En la Papelera</span>
+                <div class="item__badges">
+                  <span class="acct-badge">En la Papelera</span>
+                  @if (pub.modalidad?.nombre) { <span class="acct-badge item__modality">{{ pub.modalidad?.nombre }}</span> }
+                </div>
                 <h3>{{ pub.titulo }}</h3>
-                <p class="item__location"><svg lucideMapPin [size]="14" aria-hidden="true"></svg> {{ ubicacion(pub) }}</p>
+                <p class="item__location"><svg lucideMapPin [size]="14" aria-hidden="true"></svg><span>{{ ubicacion(pub) }}</span></p>
                 <p class="item__specs"><strong>{{ precio(pub) }}</strong> · {{ pub.cantidad_ambientes }} amb. · {{ pub.superficie }} m²</p>
                 @if (pub.motivo_baja_admin) {
                   <p class="acct-alert acct-alert--error"><strong>Motivo de la baja:</strong> {{ pub.motivo_baja_admin }}</p>

@@ -257,6 +257,14 @@
   font-weight: 700;
   overflow-wrap: anywhere;
 }
+.payment-card dl .payment-card__tax-id {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+.payment-card__tax-id dd {
+  max-width: none;
+  white-space: nowrap;
+}
 .payment-card .total {
   color: var(--color-primary);
   font-size: 1.2rem;
