@@ -14,6 +14,8 @@ export interface MensajeConversacion {
   interno?: boolean;
   leido?: boolean;
   imagen?: string;
+  /** T49: imágenes adjuntas al mensaje (reclamos). */
+  imagenes?: { url: string; nombre: string }[];
 }
 
 export function mensajesApelacion(detalle: {
@@ -51,11 +53,20 @@ export function mensajesApelacion(detalle: {
                 @if (mensaje.rol) { <span>· {{ mensaje.rol }}</span> }
                 @if (mensaje.interno) { <span class="nota">Nota interna</span> }
               </div>
-              <p class="burbuja" [class.interna]="mensaje.interno">{{ mensaje.texto }}</p>
+              @if (mensaje.texto) { <p class="burbuja" [class.interna]="mensaje.interno">{{ mensaje.texto }}</p> }
               @if (mensaje.imagen) {
                 <a class="imagen" [href]="mensaje.imagen" target="_blank" rel="noopener noreferrer" aria-label="Abrir imagen adjunta">
                   <img [src]="mensaje.imagen" alt="Imagen adjunta" loading="lazy" />
                 </a>
+              }
+              @if (mensaje.imagenes?.length) {
+                <div class="imagenes" role="group" [attr.aria-label]="'Imágenes de ' + mensaje.autor">
+                  @for (imagen of mensaje.imagenes; track $index) {
+                    <a [href]="imagen.url" target="_blank" rel="noopener noreferrer" [attr.aria-label]="'Abrir ' + imagen.nombre" [title]="imagen.nombre">
+                      <img [src]="imagen.url" [alt]="imagen.nombre" loading="lazy" />
+                    </a>
+                  }
+                </div>
               }
               <div class="hora"><time [attr.datetime]="mensaje.fecha">{{ mensaje.fecha | date:'HH:mm' }}</time>
                 @if (mensaje.leido !== undefined) {
@@ -94,6 +105,11 @@ export function mensajesApelacion(detalle: {
     .burbuja.interna { background: #fff0cb; }
     .imagen { display: block; margin-top: 6px; }
     .imagen img { display: block; max-width: min(100%, 240px); max-height: 220px; border-radius: 8px; object-fit: contain; }
+    .imagenes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .propio .imagenes { justify-content: flex-end; }
+    .imagenes a { display: block; border-radius: 8px; }
+    .imagenes a:focus-visible { outline: 2px solid #1640f5; outline-offset: 2px; }
+    .imagenes img { display: block; width: 96px; height: 96px; border-radius: 8px; object-fit: cover; background: #e3eaff; }
     .hora { margin-top: 4px; font-size: .72rem; }
     .hora span { margin-inline-start: 4px; }
     .vacio { margin: 16px 0; color: #52607a; font-size: .88rem; text-align: center; }

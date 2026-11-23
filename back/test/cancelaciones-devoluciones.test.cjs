@@ -17,7 +17,7 @@ const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolso
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { AlmacenamientoService } = require('../dist/almacenamiento/service/almacenamiento.service');
 // T44/T56: almacenamiento privado de prueba para los comprobantes de transferencia.
-const { comprobantePdf, almacenamientoDePrueba } = require('./soporte/comprobantes-pruebas.cjs');
+const { comprobantePdf, almacenamientoDePrueba, imagenPng } = require('./soporte/comprobantes-pruebas.cjs');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
@@ -1125,6 +1125,98 @@ test('las notas internas de reclamos solo se entregan al administrador', async (
   assert.doesNotMatch(avisos[0][3], /Respuesta pública/);
 });
 
+/** T49: servicio de reclamos con almacenamiento de prueba, para subir imágenes. */
+function reclamosConImagenes() {
+  const { almacenamiento, archivos } = almacenamientoDePrueba();
+  const servicio = new ReclamosService(
+    new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia), source.getRepository(ReclamoMensaje)),
+    reservas, reembolsos, almacenamiento, catalogosDePrueba(), { avisarCambio: async () => {} },
+  );
+  return { servicio, archivos };
+}
+
+async function reclamoDePrueba() {
+  const { reserva } = await escenario();
+  return source.getRepository(Reclamo).save({
+    reserva, inquilino: { id: 1 }, anunciante: { id: 2 }, categoria: 'OTRO', descripcion: 'Reclamo de prueba',
+  });
+}
+
+test('T49: las imágenes de un mensaje quedan en ese mensaje, con su autor y sin datos de más', async () => {
+  const { servicio, archivos } = reclamosConImagenes();
+  const reclamo = await reclamoDePrueba();
+  const enviado = await servicio.enviarMensaje(reclamo.id, {}, 1, false, [await imagenPng('living.png'), await imagenPng('baño.png')]);
+  assert.equal(enviado.texto, '');
+  assert.equal(Object.hasOwn(enviado, 'reclamo'), false);
+  assert.deepEqual(enviado.evidencias.map(({ nombre_archivo, id_mensaje }) => [nombre_archivo, id_mensaje]),
+    [['living.png', enviado.id], ['baño.png', enviado.id]]);
+  assert.equal(archivos.subidos.length, 2);
+  for (const imagen of enviado.evidencias) {
+    assert.match(imagen.url, /\?firmado$/);
+    assert.equal(imagen.autor.id, 1);
+    assert.ok(imagen.autor.nombre);
+  }
+
+  // Las imágenes que se suben al crear el reclamo quedan con la descripción.
+  await servicio.subirEvidencias(reclamo.id, 1, false, [await imagenPng('frente.png')]);
+  const visto = JSON.parse(JSON.stringify(await servicio.obtener(reclamo.id, 2, false)));
+  assert.deepEqual(visto.evidencias.map((imagen) => [imagen.nombre_archivo, imagen.id_mensaje, imagen.autor.id]), [['frente.png', null, 1]]);
+  assert.deepEqual(Object.keys(visto.evidencias[0]).sort(), ['autor', 'creado_en', 'id', 'id_mensaje', 'nombre_archivo', 'url']);
+  assert.deepEqual(Object.keys(visto.evidencias[0].autor).sort(), ['apellido', 'id', 'nombre', 'rol']);
+  assert.deepEqual(Object.keys(visto.mensajes[0].autor).sort(), ['apellido', 'id', 'nombre', 'rol']);
+  assert.equal(visto.mensajes[0].evidencias.length, 2);
+  assert.deepEqual((await servicio.listarMensajes(reclamo.id, 1, false))[0].evidencias.map((imagen) => imagen.nombre_archivo), ['living.png', 'baño.png']);
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: '   ' }, 1, false), /Escribí un mensaje o adjuntá/);
+});
+
+test('T49: hasta 10 imágenes por envío y 30 por reclamo; una nota interna no lleva imágenes', async () => {
+  const { servicio, archivos } = reclamosConImagenes();
+  const reclamo = await reclamoDePrueba();
+  const imagen = await imagenPng();
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, {}, 1, false, Array(11).fill(imagen)), /hasta 10 imágenes por envío/);
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: 'Nota', visible_para: 'ADMIN' }, 3, true, [imagen]), /notas internas no admiten imágenes/);
+  await source.getRepository(ReclamoEvidencia).save(Array.from({ length: 26 }, (_, i) => ({
+    reclamo, url: `https://privado.example/anterior-${i}.jpg`, nombre_archivo: `anterior-${i}.jpg`,
+  })));
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, {}, 2, false, Array(5).fill(imagen)), /podés adjuntar 4 más/);
+  assert.equal(archivos.subidos.length, 0);
+  // El admin también puede adjuntar imágenes en un mensaje visible para las partes.
+  const delAdmin = await servicio.enviarMensaje(reclamo.id, { texto: 'Adjunto el inventario' }, 3, true, Array(4).fill(imagen));
+  assert.equal(delAdmin.evidencias.length, 4);
+  await assert.rejects(servicio.subirEvidencias(reclamo.id, 1, false, [imagen]), /ya tiene las 30 imágenes permitidas/);
+});
+
+test('T49: si el mensaje no se guarda, no queda a medias y se borran las imágenes subidas', async (t) => {
+  const { servicio, archivos } = reclamosConImagenes();
+  const reclamo = await reclamoDePrueba();
+  t.mock.method(ReclamosRepository.prototype, 'guardarEvidencias', async () => { throw new Error('Fallo simulado al guardar'); });
+  await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: 'Con fotos' }, 1, false, [await imagenPng(), await imagenPng()]), /Fallo simulado/);
+  assert.equal(archivos.subidos.length, 2);
+  assert.deepEqual([...archivos.borrados].sort(), archivos.subidos.map((nombre) => `https://privado.example/${nombre}`).sort());
+  assert.equal(await source.getRepository(ReclamoMensaje).countBy({ reclamo: { id: reclamo.id } }), 0);
+});
+
+test('T49: la migración une imágenes y mensajes, conserva las imágenes existentes y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261123-imagenes-mensajes-reclamo.sql'), 'utf8');
+  const base = new PGlite();
+  try {
+    await base.exec(`CREATE TABLE reclamo_mensaje (id_mensaje_reclamo integer PRIMARY KEY);
+      CREATE TABLE reclamo_evidencia (id_evidencia integer PRIMARY KEY, nombre_archivo varchar(255) NOT NULL);
+      INSERT INTO reclamo_mensaje VALUES (1);
+      INSERT INTO reclamo_evidencia VALUES (1, 'anterior.jpg');`);
+    await base.exec(migracion);
+    await base.exec(migracion);
+    assert.deepEqual((await base.query('SELECT nombre_archivo, id_mensaje FROM reclamo_evidencia')).rows, [{ nombre_archivo: 'anterior.jpg', id_mensaje: null }]);
+    await base.exec("INSERT INTO reclamo_evidencia VALUES (2, 'del-chat.jpg', 1)");
+    await assert.rejects(base.exec("INSERT INTO reclamo_evidencia VALUES (3, 'sin-mensaje.jpg', 99)"), /foreign key/);
+    await base.exec('DELETE FROM reclamo_mensaje WHERE id_mensaje_reclamo = 1');
+    assert.deepEqual((await base.query('SELECT id_mensaje FROM reclamo_evidencia WHERE id_evidencia = 2')).rows, [{ id_mensaje: null }]);
+  } finally {
+    await base.close();
+  }
+});
+
 for (const [dias, porcentaje] of [[7, 100], [2, 50], [1, 0]]) {
   test(`cancelar con ${dias} días de anticipación aplica ${porcentaje}% de devolución`, async () => {
     const { reserva } = await escenario(fechaEnDias(dias));
@@ -1769,6 +1861,14 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     });
     const { body: abierto } = await request(http).post('/reclamos').set('Authorization', tenant)
       .send({ id_reserva: conReclamo.id, categoria: 'OTRO', descripcion: 'Problema durante la estadía' }).expect(201);
+    // T49: el chat acepta imágenes sin texto (multipart) y sigue aceptando solo texto (JSON).
+    const rutaMensajes = `/reclamos/${abierto.id}/mensajes`;
+    const { body: conImagen } = await request(http).post(rutaMensajes).set('Authorization', tenant)
+      .attach('evidencias', (await imagenPng()).buffer, 'pileta.png').expect(201);
+    assert.deepEqual([conImagen.texto, conImagen.evidencias.length, Object.hasOwn(conImagen, 'reclamo')], ['', 1, false]);
+    await request(http).post(rutaMensajes).set('Authorization', tenant).send({ texto: '   ' }).expect(400);
+    const { body: soloTexto } = await request(http).post(rutaMensajes).set('Authorization', admin).send({ texto: 'Recibido' }).expect(201);
+    assert.deepEqual(soloTexto.evidencias, []);
     const rutaResolver = `/reclamos/${abierto.id}/resolver`;
     await request(http).patch(rutaResolver).set('Authorization', tenant)
       .send({ resolucion: 'DEVOLUCION_TOTAL', observacion: 'Pedido del inquilino' }).expect(403);
