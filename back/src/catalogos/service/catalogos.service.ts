@@ -1,9 +1,4 @@
-import { RolDto } from '../dto/rol.dto';
-import { CatalogoDto } from '../dto/catalogo.dto';
-import { ModalidadDto } from '../dto/modalidad.dto';
-import { RegistroEnUsoError } from '../../common/persistence/registro-en-uso.error';
 import {
-  ConflictException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -86,46 +81,10 @@ export class CatalogosService implements OnModuleInit {
   getRoles() {
     return this.catalogosRepo.buscarTodosRoles();
   }
+
   /** Busca un rol por nombre; se usa al asignar roles automaticamente. */
   getRolPorNombre(nombre: string) {
     return this.catalogosRepo.buscarRolPorNombre(nombre);
-  }
-  /** Crea un rol y evita duplicados por nombre. */
-  async crearRol(datos: RolDto) {
-    // Se consulta antes de insertar porque el catálogo no depende solo del error de DB.
-    const existente = await this.catalogosRepo.buscarRolPorNombre(datos.nombre);
-    if (existente) {
-      throw new ConflictException(`Ya existe el rol '${datos.nombre}'`);
-    }
-    return this.catalogosRepo.crearRol(datos);
-  }
-  /** Actualiza un rol existente despues de validar su existencia. */
-  async actualizarRol(id: number, datos: RolDto) {
-    const rol = await this.catalogosRepo.buscarRolPorId(id);
-    if (!rol) throw new NotFoundException(`El rol con ID ${id} no existe`);
-    if (datos.nombre !== rol.nombre && this.esRolInicial(rol.nombre)) {
-      throw new ConflictException(`El rol ${rol.nombre} debe conservar su nombre`);
-    }
-    const duplicado = await this.catalogosRepo.buscarRolPorNombre(datos.nombre);
-    if (duplicado && duplicado.id !== id)
-      throw new ConflictException('Ya existe un rol con ese nombre');
-    const actualizado = await this.catalogosRepo.actualizarRol(id, datos);
-    if (!actualizado) throw new NotFoundException('El rol ya no existe');
-    return actualizado;
-  }
-  /** Elimina un rol existente y devuelve un mensaje de confirmacion. */
-  async eliminarRol(id: number) {
-    const rol = await this.catalogosRepo.buscarRolPorId(id);
-    if (!rol) throw new NotFoundException(`El rol con ID ${id} no existe`);
-    if (this.esRolInicial(rol.nombre)) {
-      throw new ConflictException(`El rol ${rol.nombre} es necesario para el sistema`);
-    }
-    await this.eliminarSeguro(() => this.catalogosRepo.eliminarRol(id), 'rol');
-    return { mensaje: `Rol con ID ${id} eliminado correctamente` };
-  }
-
-  private esRolInicial(nombre: string): boolean {
-    return catalogosIniciales.rol.some((rol) => rol.nombre === nombre);
   }
 
   // --- TIPOS ANUNCIANTE ---
@@ -133,55 +92,7 @@ export class CatalogosService implements OnModuleInit {
   getTiposAnunciante() {
     return this.catalogosRepo.buscarTodosTiposAnunciante();
   }
-  /** Crea una categoria de anunciante sin permitir nombres repetidos. */
-  async crearTipoAnunciante(datos: CatalogoDto) {
-    const existente = await this.catalogosRepo.buscarTipoAnunciantePorNombre(
-      datos.nombre,
-    );
-    if (existente) {
-      throw new ConflictException(
-        `Ya existe el tipo de anunciante '${datos.nombre}'`,
-      );
-    }
-    return this.catalogosRepo.crearTipoAnunciante(datos);
-  }
-  /** Actualiza una categoria de anunciante existente. */
-  async actualizarTipoAnunciante(id: number, datos: CatalogoDto) {
-    const item = await this.catalogosRepo.buscarTipoAnunciantePorId(id);
-    if (!item)
-      throw new NotFoundException(
-        `El tipo de anunciante con ID ${id} no existe`,
-      );
-    const duplicado = await this.catalogosRepo.buscarTipoAnunciantePorNombre(
-      datos.nombre,
-    );
-    if (duplicado && duplicado.id !== id)
-      throw new ConflictException(
-        'Ya existe un tipo de anunciante con ese nombre',
-      );
-    const actualizado = await this.catalogosRepo.actualizarTipoAnunciante(
-      id,
-      datos,
-    );
-    if (!actualizado)
-      throw new NotFoundException('El tipo de anunciante ya no existe');
-    return actualizado;
-  }
-  /** Elimina una categoria de anunciante validando primero el ID. */
-  async eliminarTipoAnunciante(id: number) {
-    const item = await this.catalogosRepo.buscarTipoAnunciantePorId(id);
-    if (!item)
-      throw new NotFoundException(
-        `El tipo de anunciante con ID ${id} no existe`,
-      );
-    await this.eliminarSeguro(
-      () => this.catalogosRepo.eliminarTipoAnunciante(id),
-      'tipo de anunciante',
-    );
-    return {
-      mensaje: `Tipo de anunciante con ID ${id} eliminado correctamente`,
-    };
-  }
+
   /** Busca una categoria de anunciante o informa que la relacion no existe. */
   async getTipoAnunciantePorId(id: number) {
     const item = await this.catalogosRepo.buscarTipoAnunciantePorId(id);
@@ -197,55 +108,7 @@ export class CatalogosService implements OnModuleInit {
   getTiposPropiedad() {
     return this.catalogosRepo.buscarTodosTiposPropiedad();
   }
-  /** Crea un tipo de propiedad y controla la unicidad del nombre. */
-  async crearTipoPropiedad(datos: CatalogoDto) {
-    const existente = await this.catalogosRepo.buscarTipoPropiedadPorNombre(
-      datos.nombre,
-    );
-    if (existente) {
-      throw new ConflictException(
-        `Ya existe el tipo de propiedad '${datos.nombre}'`,
-      );
-    }
-    return this.catalogosRepo.crearTipoPropiedad(datos);
-  }
-  /** Actualiza un tipo de propiedad previamente existente. */
-  async actualizarTipoPropiedad(id: number, datos: CatalogoDto) {
-    const item = await this.catalogosRepo.buscarTipoPropiedadPorId(id);
-    if (!item)
-      throw new NotFoundException(
-        `El tipo de propiedad con ID ${id} no existe`,
-      );
-    const duplicado = await this.catalogosRepo.buscarTipoPropiedadPorNombre(
-      datos.nombre,
-    );
-    if (duplicado && duplicado.id !== id)
-      throw new ConflictException(
-        'Ya existe un tipo de propiedad con ese nombre',
-      );
-    const actualizado = await this.catalogosRepo.actualizarTipoPropiedad(
-      id,
-      datos,
-    );
-    if (!actualizado)
-      throw new NotFoundException('El tipo de propiedad ya no existe');
-    return actualizado;
-  }
-  /** Elimina un tipo de propiedad despues de verificarlo. */
-  async eliminarTipoPropiedad(id: number) {
-    const item = await this.catalogosRepo.buscarTipoPropiedadPorId(id);
-    if (!item)
-      throw new NotFoundException(
-        `El tipo de propiedad con ID ${id} no existe`,
-      );
-    await this.eliminarSeguro(
-      () => this.catalogosRepo.eliminarTipoPropiedad(id),
-      'tipo de propiedad',
-    );
-    return {
-      mensaje: `Tipo de propiedad con ID ${id} eliminado correctamente`,
-    };
-  }
+
   /** Resuelve el tipo de propiedad requerido al crear una publicacion. */
   async getTipoPropiedadPorId(id: number) {
     const item = await this.catalogosRepo.buscarTipoPropiedadPorId(id);
@@ -262,41 +125,7 @@ export class CatalogosService implements OnModuleInit {
     const modalidades = await this.catalogosRepo.buscarTodasModalidades();
     return modalidades.map((modalidad) => this.prepararModalidad(modalidad));
   }
-  /** Crea una modalidad sin duplicar nombres existentes. */
-  async crearModalidad(datos: ModalidadDto) {
-    const existente = await this.catalogosRepo.buscarModalidadPorNombre(
-      datos.nombre,
-    );
-    if (existente) {
-      throw new ConflictException(`Ya existe la modalidad '${datos.nombre}'`);
-    }
-    return this.prepararModalidad(await this.catalogosRepo.crearModalidad(datos));
-  }
-  /** Actualiza una modalidad existente. */
-  async actualizarModalidad(id: number, datos: ModalidadDto) {
-    const item = await this.catalogosRepo.buscarModalidadPorId(id);
-    if (!item)
-      throw new NotFoundException(`La modalidad con ID ${id} no existe`);
-    const duplicado = await this.catalogosRepo.buscarModalidadPorNombre(
-      datos.nombre,
-    );
-    if (duplicado && duplicado.id !== id)
-      throw new ConflictException('Ya existe un modalidad con ese nombre');
-    const actualizado = await this.catalogosRepo.actualizarModalidad(id, datos);
-    if (!actualizado) throw new NotFoundException('El modalidad ya no existe');
-    return this.prepararModalidad(actualizado);
-  }
-  /** Elimina una modalidad despues de validar que exista. */
-  async eliminarModalidad(id: number) {
-    const item = await this.catalogosRepo.buscarModalidadPorId(id);
-    if (!item)
-      throw new NotFoundException(`La modalidad con ID ${id} no existe`);
-    await this.eliminarSeguro(
-      () => this.catalogosRepo.eliminarModalidad(id),
-      'modalidad',
-    );
-    return { mensaje: `Modalidad con ID ${id} eliminada correctamente` };
-  }
+
   /** Resuelve una modalidad para asociarla a una publicacion. */
   async getModalidadPorId(id: number) {
     const item = await this.catalogosRepo.buscarModalidadPorId(id);
@@ -310,65 +139,12 @@ export class CatalogosService implements OnModuleInit {
   getTiposMoneda() {
     return this.catalogosRepo.buscarTodosTiposMoneda();
   }
-  /** Crea un tipo de moneda y controla nombres repetidos. */
-  async crearTipoMoneda(datos: CatalogoDto) {
-    const existente = await this.catalogosRepo.buscarTipoMonedaPorNombre(
-      datos.nombre,
-    );
-    if (existente) {
-      throw new ConflictException(
-        `Ya existe el tipo de moneda '${datos.nombre}'`,
-      );
-    }
-    return this.catalogosRepo.crearTipoMoneda(datos);
-  }
-  /** Actualiza un tipo de moneda existente. */
-  async actualizarTipoMoneda(id: number, datos: CatalogoDto) {
-    const item = await this.catalogosRepo.buscarTipoMonedaPorId(id);
-    if (!item)
-      throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
-    const duplicado = await this.catalogosRepo.buscarTipoMonedaPorNombre(
-      datos.nombre,
-    );
-    if (duplicado && duplicado.id !== id)
-      throw new ConflictException('Ya existe un tipo de moneda con ese nombre');
-    const actualizado = await this.catalogosRepo.actualizarTipoMoneda(
-      id,
-      datos,
-    );
-    if (!actualizado)
-      throw new NotFoundException('El tipo de moneda ya no existe');
-    return actualizado;
-  }
-  /** Elimina un tipo de moneda despues de validar su existencia. */
-  async eliminarTipoMoneda(id: number) {
-    const item = await this.catalogosRepo.buscarTipoMonedaPorId(id);
-    if (!item)
-      throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
-    await this.eliminarSeguro(
-      () => this.catalogosRepo.eliminarTipoMoneda(id),
-      'moneda',
-    );
-    return { mensaje: `Tipo de moneda con ID ${id} eliminado correctamente` };
-  }
+
   /** Resuelve la moneda asociada al precio de una publicacion. */
   async getTipoMonedaPorId(id: number) {
     const item = await this.catalogosRepo.buscarTipoMonedaPorId(id);
     if (!item)
       throw new NotFoundException(`El tipo de moneda con ID ${id} no existe`);
     return item;
-  }
-
-  private async eliminarSeguro(accion: () => Promise<void>, nombre: string): Promise<void> {
-    try {
-      await accion();
-    } catch (error: unknown) {
-      if (error instanceof RegistroEnUsoError) {
-        throw new ConflictException(
-          `No se puede eliminar el ${nombre} porque está siendo utilizado`,
-        );
-      }
-      throw error;
-    }
   }
 }

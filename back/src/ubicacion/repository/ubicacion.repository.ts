@@ -1,4 +1,3 @@
-import { eliminarConIntegridad } from '../../common/persistence/registro-en-uso.error';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,20 +17,6 @@ export class UbicacionRepository implements IUbicacionRepository {
     return this.provinciaRepo.findOneBy({ id });
   }
 
-  crearProvincia(datos: Partial<Provincia>): Promise<Provincia> {
-    const provincia = this.provinciaRepo.create(datos);
-    return this.provinciaRepo.save(provincia);
-  }
-
-  async actualizarProvincia(id: number, datos: Partial<Provincia>): Promise<Provincia | null> {
-    await this.provinciaRepo.update(id, datos);
-    return this.buscarProvinciaPorId(id);
-  }
-
-  async eliminarProvincia(id: number): Promise<void> {
-    await eliminarConIntegridad(() => this.provinciaRepo.delete(id));
-  }
-
   buscarCiudadPorId(id: number): Promise<Ciudad | null> {
     // La provincia se carga para validar y reutilizar la relación al crear publicaciones.
     return this.ciudadRepo.findOne({
@@ -44,19 +29,5 @@ export class UbicacionRepository implements IUbicacionRepository {
     return this.ciudadRepo.find({
       where: { provincia: { id: idProvincia } },
     });
-  }
-
-  crearCiudad(datos: Partial<Ciudad>): Promise<Ciudad> {
-    const ciudad = this.ciudadRepo.create(datos);
-    return this.ciudadRepo.save(ciudad);
-  }
-
-  async actualizarCiudad(id: number, datos: Partial<Ciudad>): Promise<Ciudad | null> {
-    await this.ciudadRepo.update(id, datos);
-    return this.buscarCiudadPorId(id);
-  }
-
-  async eliminarCiudad(id: number): Promise<void> {
-    await eliminarConIntegridad(() => this.ciudadRepo.delete(id));
   }
 }
