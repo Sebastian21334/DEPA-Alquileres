@@ -17,4 +17,12 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .actions { display: flex; gap: 6px; }
 .actions button { flex: 1; }
 .actions .remove { flex: 2; color: #b42318; }
-@media (max-width: 420px) { .photos { grid-template-columns: 1fr; } img { height: 190px; } }
+.remove { color: #b42318; }
+.name { overflow: hidden; color: #344054; font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
+.photos--compacta { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.photos--compacta img { height: 105px; }
+@media (max-width: 420px) {
+  .photos { grid-template-columns: 1fr; }
+  img { height: 190px; }
+  .photos--compacta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

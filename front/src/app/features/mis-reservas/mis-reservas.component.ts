@@ -22,12 +22,13 @@ import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
+import { CargaImagenesComponent } from '../../shared/components/carga-imagenes/carga-imagenes.component';
 
 @Component({
   selector: 'app-mis-reservas',
   standalone: true,
   imports: [
-    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, NgTemplateOutlet, DatePipe,
+    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, NgTemplateOutlet, DatePipe,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
   ],
@@ -461,15 +462,6 @@ export class MisReservasComponent {
   protected cerrarReclamo(): void {
     if (this.reclamoEnviando()) return;
     this.reclamoAbierto.set(null);
-  }
-
-  protected seleccionarArchivos(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    const error = this.validarEvidencias(archivos, 5);
-    if (error) input.value = '';
-    this.errorReclamo.set(error);
-    this.reclamoArchivos.set(error ? [] : archivos);
   }
 
   private validarEvidencias(archivos: File[], disponibles: number): string {
