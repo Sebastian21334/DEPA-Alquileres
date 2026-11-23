@@ -1,6 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import {
   LucideBadgeCheck,
@@ -15,8 +15,6 @@ import {
   LucideTrash2,
 } from '@lucide/angular';
 import { PerfilService } from '../../core/services/perfil.service';
-import { AuthService } from '../../core/services/auth.service';
-import { ChatService } from '../../core/services/chat.service';
 import { PerfilUsuario, etiquetaRol } from '../../shared/models/perfil.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
@@ -54,9 +52,6 @@ const MAX_FOTO = 5 * 1024 * 1024;
 })
 export class MiPerfilComponent {
   private readonly perfilService = inject(PerfilService);
-  private readonly auth = inject(AuthService);
-  private readonly chat = inject(ChatService);
-  private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
   protected readonly perfil = signal<PerfilUsuario | null>(null);
@@ -71,7 +66,8 @@ export class MiPerfilComponent {
   protected readonly errorEdicion = signal('');
   protected readonly guardado = signal(false);
   protected readonly mostrarConfirmacionBaja = signal(false);
-  protected readonly eliminandoCuenta = signal(false);
+  protected readonly solicitandoBaja = signal(false);
+  protected readonly mensajeBaja = signal('');
   protected readonly errorBaja = signal('');
   protected readonly confirmarPausa = signal(false);
   protected readonly cambiandoPausa = signal(false);
@@ -209,21 +205,21 @@ export class MiPerfilComponent {
     });
   }
 
-  protected confirmarBajaCuenta(): void {
-    if (this.eliminandoCuenta()) return;
-    this.eliminandoCuenta.set(true);
+  protected solicitarBajaCuenta(): void {
+    if (this.solicitandoBaja()) return;
+    this.solicitandoBaja.set(true);
     this.errorBaja.set('');
+    this.mensajeBaja.set('');
 
-    this.perfilService.eliminarCuenta().subscribe({
-      next: () => {
-        this.auth.logout();
-        this.perfilService.limpiar();
-        this.chat.cerrarTodos();
-        void this.router.navigateByUrl('/');
+    this.perfilService.solicitarBajaCuenta().subscribe({
+      next: ({ mensaje }) => {
+        this.mensajeBaja.set(mensaje);
+        this.mostrarConfirmacionBaja.set(false);
+        this.solicitandoBaja.set(false);
       },
       error: (err: Error) => {
         this.errorBaja.set(err.message);
-        this.eliminandoCuenta.set(false);
+        this.solicitandoBaja.set(false);
       },
     });
   }

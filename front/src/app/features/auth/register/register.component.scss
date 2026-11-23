@@ -224,6 +224,22 @@
   background: color-mix(in srgb, var(--color-accent) 88%, black);
 }
 
+.btn--secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.auth__edit {
+  align-self: center;
+  border: 0;
+  padding: 0.25rem;
+  color: var(--color-text);
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -258,3 +274,7 @@
   color: var(--color-text);
   background: var(--color-bg);
 }
+.terminos-consentimiento { margin: 1rem 0; font-size: .92rem; line-height: 1.5; }
+.terminos-consentimiento label { display: flex; align-items: flex-start; gap: .6rem; }
+.terminos-consentimiento input { flex: 0 0 auto; margin-top: .3rem; }
+.terminos-consentimiento a { color: #a64f31; text-decoration: underline; }

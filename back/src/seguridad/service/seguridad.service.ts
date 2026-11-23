@@ -1,11 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { UsuariosConsultaService } from '../../usuarios-consulta/service/usuarios-consulta.service';
+import { UsuariosService } from '../../usuarios/service/usuarios.service';
 
 @Injectable()
 export class SeguridadService {
-  constructor(private readonly usuariosConsulta: UsuariosConsultaService) {}
+  constructor(private readonly usuariosService: UsuariosService) {}
 
-  async validarSesion(idUsuario: unknown) {
+  async validarSesion(idUsuario: unknown, versionSesion?: unknown) {
     if (
       typeof idUsuario !== 'number' ||
       !Number.isInteger(idUsuario) ||
@@ -15,11 +15,28 @@ export class SeguridadService {
       throw new UnauthorizedException('Identificador de sesión inválido');
     }
 
-    const usuario = await this.usuariosConsulta.buscarPorId(idUsuario);
-    if (!usuario || !usuario.activa || usuario.bloqueado) {
+    const usuario = await this.usuariosService.buscarParaSesion(idUsuario);
+    if (!usuario || !usuario.activa) {
       throw new UnauthorizedException('La cuenta no está habilitada');
     }
+    if (usuario.version_sesion && usuario.version_sesion !== versionSesion) {
+      throw new UnauthorizedException('La sesión ya no está habilitada');
+    }
 
-    return { id: usuario.id, email: usuario.email, rol: usuario.rol?.nombre };
+    const accesoLimitado = usuario.bloqueado && usuario.bloqueoDetalle
+      ? await this.usuariosService.verificarAccesoLimitado(usuario)
+      : null;
+    if (usuario.bloqueado && !accesoLimitado) {
+      throw new UnauthorizedException({
+        codigo: 'USUARIO_BLOQUEADO',
+        message: 'Tu cuenta está bloqueada. Ingresá nuevamente para consultar o apelar el bloqueo.',
+      });
+    }
+    return {
+      id: usuario.id,
+      email: usuario.email,
+      rol: accesoLimitado ? undefined : usuario.rol?.nombre,
+      ...(accesoLimitado && { accesoLimitado: true, ...accesoLimitado }),
+    };
   }
 }

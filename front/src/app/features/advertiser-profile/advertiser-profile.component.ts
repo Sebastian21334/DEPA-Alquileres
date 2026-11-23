@@ -13,6 +13,9 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 
+/** T28: ciudades que se ven antes de «Ver más». */
+const CIUDADES_VISIBLES = 5;
+
 function normalizeSearchText(value: string): string {
   return value.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es-AR');
 }
@@ -60,15 +63,21 @@ export class AdvertiserProfileComponent {
   protected readonly verifiedLabel = computed(() =>
     esInmobiliaria(this.perfil()?.tipoAnunciante) ? 'Inmobiliaria verificada' : 'Dueño Verificado',
   );
-  protected readonly locations = computed(() =>
-    Array.from(
-      new Set(
-        this.publications()
-          .map((item) => [item.ciudad?.nombre, item.provincia?.nombre].filter(Boolean).join(', '))
-          .filter(Boolean),
-      ),
-    ).join(' · '),
-  );
+  /** T28: ciudades donde publica, sin repetir; primero las que tienen más publicaciones y, si empatan, alfabético. */
+  protected readonly ciudades = computed(() => {
+    const cantidades = new Map<string, number>();
+    for (const item of this.publications()) {
+      const ciudad = [item.ciudad?.nombre, item.provincia?.nombre].filter(Boolean).join(', ');
+      if (ciudad) cantidades.set(ciudad, (cantidades.get(ciudad) ?? 0) + 1);
+    }
+    return [...cantidades]
+      .sort(([ciudadA, cantidadA], [ciudadB, cantidadB]) => cantidadB - cantidadA || ciudadA.localeCompare(ciudadB, 'es'))
+      .map(([ciudad]) => ciudad);
+  });
+  protected readonly verTodasLasCiudades = signal(false);
+  protected readonly ciudadesVisibles = computed(() =>
+    this.verTodasLasCiudades() ? this.ciudades() : this.ciudades().slice(0, CIUDADES_VISIBLES));
+  protected readonly ciudadesOcultas = computed(() => Math.max(0, this.ciudades().length - CIUDADES_VISIBLES));
 
   constructor() {
     const id = Number(this.route.snapshot.paramMap.get('id'));

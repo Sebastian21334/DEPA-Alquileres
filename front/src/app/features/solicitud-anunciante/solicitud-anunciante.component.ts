@@ -11,6 +11,7 @@ import { CatalogoService } from '../../shared/services/catalogo.service';
 import { TipoAnunciante } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { CbuAnuncianteComponent } from '../../shared/components/cbu-anunciante/cbu-anunciante.component';
+import { CargaComprobanteComponent } from '../../shared/components/carga-comprobante/carga-comprobante.component';
 import {
   CapturaIdentidadComponent,
   IdentidadCapturada,
@@ -23,7 +24,7 @@ import {
 @Component({
   selector: 'app-solicitud-anunciante',
   standalone: true,
-  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, CbuAnuncianteComponent, LucideBadgeCheck, LucideClock],
+  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, CbuAnuncianteComponent, CargaComprobanteComponent, LucideBadgeCheck, LucideClock],
   templateUrl: './solicitud-anunciante.component.html',
   styleUrl: './solicitud-anunciante.component.scss',
 })
@@ -65,6 +66,7 @@ export class SolicitudAnuncianteComponent {
     cuit: ['', [Validators.required, Validators.pattern(/^\d{2}-?\d{8}-?\d$/), Validators.maxLength(15)]],
     cbu: ['', [Validators.required, Validators.pattern(/^\d{22}$/)]],
     titularidad_declarada: [false, Validators.requiredTrue],
+    aceptaTerminos: [false, Validators.requiredTrue],
     numero_contacto: ['', [Validators.required, Validators.maxLength(20)]],
   });
 
@@ -82,20 +84,9 @@ export class SolicitudAnuncianteComponent {
     const tipo = this.tipos().find((item) => item.id === this.tipoSeleccionado());
     return /inmobiliaria|institucional/i.test(tipo?.nombre ?? '');
   });
+  /** T05: las elige `app-carga-comprobante`, que valida PDF, JPG o PNG de hasta 5 MB y muestra el error junto al campo. */
   protected readonly matricula = signal<File | null>(null);
   protected readonly constanciaCuit = signal<File | null>(null);
-
-  protected seleccionarConstancia(evento: Event, tipo: 'matricula' | 'cuit') {
-    const archivo = (evento.target as HTMLInputElement).files?.[0] ?? null;
-    const destino = tipo === 'matricula' ? this.matricula : this.constanciaCuit;
-    if (archivo && (archivo.size > 5 * 1024 * 1024 || !['application/pdf', 'image/jpeg', 'image/png'].includes(archivo.type))) {
-      destino.set(null);
-      this.error.set('Adjuntá una constancia PDF, JPG o PNG de hasta 5 MB.');
-      return;
-    }
-    destino.set(archivo);
-    this.error.set('');
-  }
 
   constructor() {
     effect(() => {
@@ -164,6 +155,7 @@ export class SolicitudAnuncianteComponent {
           ...datos,
           cbu: valor.cbu,
           titularidad_declarada: valor.titularidad_declarada,
+          aceptaTerminos: valor.aceptaTerminos,
         });
     peticion.subscribe({
       next: () => {

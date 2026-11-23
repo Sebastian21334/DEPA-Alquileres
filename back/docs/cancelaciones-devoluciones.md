@@ -5,30 +5,50 @@
 La cancelación de una reserva **pendiente de pago** es inmediata y no genera
 devolución. Las fechas se liberan al cancelar.
 
-La cancelación de una reserva **pagada** antes del inicio requiere una solicitud
+La cancelación de una reserva **pagada** requiere una solicitud
 y una decisión administrativa. La reserva no se cancela hasta que el reembolso
-quede registrado cuando corresponde una devolución. El solicitante puede
-enviar el pedido hasta 2 días calendario antes del ingreso, inclusive, y debe
-aceptar los términos de cancelación. Se puede solicitar con cualquier medio
+quede registrado cuando corresponde una devolución. El inquilino puede
+enviar el pedido hasta el día anterior al ingreso, inclusive. Si faltan menos
+de 2 días calendario, se muestra una advertencia de devolución del 0 % y debe
+aceptar los términos, que aclaran que no recibirá una devolución. Desde la
+fecha de ingreso el inquilino no puede solicitar la cancelación, aunque no se haya
+validado el código de alojamiento. Se puede solicitar con cualquier medio
 de pago admitido para reservar. Si el pago se hizo con tarjeta u otro medio
-distinto de dinero en cuenta de Mercado Pago, la aprobación cancela la
-reserva y libera las fechas sin generar un reembolso.
+distinto de dinero en cuenta de Mercado Pago, la devolución se coordina por
+transferencia con administración.
 
-Los siguientes porcentajes se calculan al aprobar la solicitud y se aplican
-solo a pagos con dinero en cuenta de Mercado Pago.
+El anunciante puede solicitarla hasta el día anterior al ingreso, con devolución
+del 100 % al inquilino si se aprueba antes del inicio. Que el código ya esté generado no impide solicitarla.
+Se conservan los controles de reserva pagada y vigente y de liquidación sin resolver.
 
-| Situación al aprobar la solicitud | Devolución |
+Los siguientes porcentajes se calculan con la fecha de envío de la solicitud,
+en días calendario de Argentina. Una aprobación posterior no reduce el porcentaje.
+El modal muestra antes de enviar el porcentaje, el importe y la moneda de la devolución
+si se aprueba. El servidor registra `creada_en` y usa esa fecha al resolver;
+el cliente no puede elegir la fecha ni el importe. La política sigue siendo la
+versión aplicable a la fecha del pago. No cambia el esquema de la base.
+
+| Situación al enviar la solicitud | Devolución |
 |---|---|
 | Inquilino cancela con 7 días o más de anticipación | 100 % |
 | Inquilino cancela entre 2 y 6 días antes | 50 % |
-| Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | 0 % |
-| Anunciante o Administrador cancela antes del inicio | 100 % |
-| La estadía ya comenzó o terminó | No se cancela; solo reclamo |
+| Inquilino cancela el día anterior al ingreso | 0 %, con advertencia antes de enviar |
+| Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | Conserva el porcentaje del día de solicitud |
+| Anunciante cancela antes de la fecha de ingreso | 100 % |
+| Administrador cancela antes del inicio | Según la política contratada para otros actores |
+| El inquilino solicita desde la fecha de ingreso | No se cancela; solo reclamo |
+| Código de ingreso ya validado | No admite nuevas solicitudes de cancelación |
 
-Si el Administrador intenta resolverla en la fecha de ingreso o después,
-el sistema marca la solicitud como `VENCIDA`.
-Después del inicio no se admite cancelación con devolución automática: el
-Inquilino debe abrir un reclamo.
+Con devolución del 0 %, la aprobación cancela la reserva, conserva el pago y
+libera las fechas, sin generar un registro de reembolso. La solicitud,
+la cancelación y la liquidación se actualizan en la misma transacción.
+
+Una solicitud pendiente vence al llegar la fecha de ingreso. Si el
+código se valida antes de resolverla, la solicitud queda `VENCIDA`, sin crear
+una devolución, y se informa el motivo. La aprobación y la validación del código
+bloquean la misma reserva: si se aprueba primero, no se permite validar el código
+mientras la devolución esté activa. Al confirmar el reembolso se cancela la
+reserva y se libera el calendario, incluso si la fecha de ingreso ya pasó.
 
 ### Módulo de cancelaciones
 

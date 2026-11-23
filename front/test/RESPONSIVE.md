@@ -19,6 +19,17 @@ Mis reservas debe mostrar únicamente las reservas realizadas.
 `?publicacionesPerfil=14` muestra 14 propiedades en el perfil del anunciante para
 probar su paginación (6 por página). Acepta entre 0 y 60; `pagina=2` abre la segunda página.
 
+En `/mis-reservas?rol=Usuario&anunciante=no&cancelacion=sin-devolucion`, la reserva
+#3 ingresa mañana: permite enviar la solicitud y muestra el 0 % con advertencia.
+Con `cancelacion=iniciada`, ingresa hoy y no ofrece solicitar la cancelación.
+Los envíos de esta vista se guardan únicamente en memoria, sin llamar a la API.
+
+Para T39, usar `/mis-reservas?rol=Anunciante&cancelacion=anunciante-ingreso`
+y abrir **Reservas recibidas**. La reserva #3 permite solicitar la cancelación
+el día del ingreso, con devolución del 100 % al inquilino. Con
+`cancelacion=anunciante-posterior`, el ingreso fue ayer; con
+`cancelacion=anunciante-validada`, el código ya está validado y no se ofrece cancelar.
+
 Revisión realizada el 5 de noviembre de 2026:
 
 - Las 21 rutas se comprobaron a 320 y 768 px sin desbordamiento horizontal de página:

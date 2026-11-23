@@ -1,10 +1,12 @@
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Inject, Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
+import { esFechaCalendarioValida, fechaArgentina, sumarDiasCalendario } from '../../common/utils/fechas';
 import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.error';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { Liquidacion } from '../entity/liquidacion.entity';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
+import type { ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
 import {
   type ILiquidacionRepository,
   LIQUIDACION_REPOSITORY,
@@ -15,12 +17,17 @@ export type ResolucionLiquidacionDatos = {
   moneda?: string | null;
   referencia?: string | null;
   observacion?: string | null;
+  /** T56: comprobante de la transferencia al anunciante. */
+  comprobante?: ComprobanteSubido | null;
 };
 
 export type DevolucionLiquidacionDatos = ResolucionLiquidacionDatos & {
   importe: number;
   parcial?: boolean;
 };
+
+/** Días después del fin de la estadía hasta que se habilita el pago al anunciante (T35). */
+export const DIAS_ESPERA_PAGO_MANUAL = 5;
 
 /**
  * Mantiene el registro auditable de la liquidación y sincroniza la caché de
@@ -31,14 +38,65 @@ export class LiquidacionesService {
   constructor(@Inject(LIQUIDACION_REPOSITORY) private readonly liquidaciones: ILiquidacionRepository, private readonly catalogos: CatalogosService) {}
 
   async listarParaAdministracion(): Promise<Reserva[]> {
+    const pendiente = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
+    const revision = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
     const filas = await this.liquidaciones.listarPorEstados([
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
+      pendiente, revision,
     ]);
     return filas.map(liquidacion => {
       this.sincronizarReserva(liquidacion.reserva, liquidacion);
       return liquidacion.reserva;
     });
+  }
+
+  fechaDisponiblePagoManual(reserva: Pick<Reserva, 'fecha_inicio' | 'fecha_fin'>): string | null {
+    if (!esFechaCalendarioValida(reserva.fecha_inicio) || !esFechaCalendarioValida(reserva.fecha_fin) ||
+        reserva.fecha_inicio > reserva.fecha_fin) return null;
+    return this.desplazarFecha(reserva.fecha_fin, DIAS_ESPERA_PAGO_MANUAL);
+  }
+
+  listarReservasPendientesDeAviso(ahora: Date): Promise<number[]> {
+    return this.liquidaciones.listarReservasPendientesDeAviso(
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
+      this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+      this.desplazarFecha(fechaArgentina(ahora), -DIAS_ESPERA_PAGO_MANUAL),
+    );
+  }
+
+  /**
+   * Ingresos sin código cuyo plazo venció: retenidos y, desde T34, en revisión solo
+   * porque el código se bloqueó (`maxIntentosCodigo` intentos incorrectos).
+   */
+  listarIngresosNoVerificadosVencidos(ahora: Date, maxIntentosCodigo: number): Promise<number[]> {
+    return this.liquidaciones.listarIngresosNoVerificadosVencidos(
+      {
+        retenido: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'),
+        revision: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
+        maxIntentosCodigo,
+      },
+      this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+      this.desplazarFecha(fechaArgentina(ahora), -DIAS_ESPERA_PAGO_MANUAL),
+    );
+  }
+
+  async registrarVencimientoIngreso(reserva: Reserva, transaccion: EntityManager): Promise<void> {
+    const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
+    liquidacion.estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
+    liquidacion.observacion = 'Ingreso no verificado: venció el plazo de cinco días';
+    liquidacion.fecha_resolucion = null;
+    this.sincronizarReserva(reserva, liquidacion, false);
+    await this.liquidaciones.guardar(liquidacion, transaccion);
+  }
+
+  async registrarAvisosPagoManual(liquidacion: Liquidacion, avisados: { admin: boolean; anunciante: boolean }, fecha: Date, transaccion: EntityManager): Promise<void> {
+    if (!avisados.admin && !avisados.anunciante) return;
+    if (avisados.admin) liquidacion.aviso_pago_admin_en = fecha;
+    if (avisados.anunciante) liquidacion.aviso_pago_anunciante_en = fecha;
+    await this.liquidaciones.guardar(liquidacion, transaccion);
+  }
+
+  private desplazarFecha(fecha: string, dias: number): string {
+    return sumarDiasCalendario(fecha, dias);
   }
 
   async listarPagosRegistrados() {
@@ -48,14 +106,23 @@ export class LiquidacionesService {
     return this.formatearPagosRegistrados(pagos);
   }
 
-  async listarPagosDelAnunciante(idUsuario: number, idPublicacion: number) {
+  /** Sin `idPublicacion` devuelve los pagos de todas las publicaciones del anunciante (T55). */
+  async listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
     const pagos = await this.liquidaciones.listarPagosRegistrados(
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
       { idUsuario, idPublicacion },
     );
-    return this.formatearPagosRegistrados(pagos).map(({ id, reservaId, fecha, importe, moneda, referencia, observacion }) => ({
-      id, reservaId, fecha, importe, moneda, referencia, observacion,
+    // El anunciante no recibe datos del administrador que registró el pago.
+    return this.formatearPagosRegistrados(pagos).map(({ id, reservaId, indice, publicacion, fecha, importe, moneda, referencia, observacion, comprobante }) => ({
+      id, reservaId, indice, publicacion, fecha, importe, moneda, referencia, observacion, comprobante,
     }));
+  }
+
+  /** T56: comprobante de un pago registrado, con el anunciante para que el llamador verifique el acceso. */
+  async buscarComprobantePago(idReserva: number, indice: number): Promise<{ url: string; idAnunciante: number | null } | null> {
+    const registro = await this.liquidaciones.buscarPagosConAnunciante(idReserva);
+    const url = registro?.pagos[indice]?.comprobanteUrl;
+    return registro && url ? { url, idAnunciante: registro.idAnunciante } : null;
   }
 
   private formatearPagosRegistrados(pagos: Liquidacion[]) {
@@ -74,6 +141,7 @@ export class LiquidacionesService {
       return registros.map((registro, indice) => ({
         id: `${pago.id}-${indice}`,
         reservaId: pago.reserva.id,
+        indice,
         publicacion: publicacion?.titulo ?? null,
         anunciante: anunciante ? [anunciante.nombre, anunciante.apellido].filter(Boolean).join(' ') : null,
         administrador: administrador && administrador.id === registro.administradorId
@@ -84,6 +152,8 @@ export class LiquidacionesService {
         moneda: registro.moneda,
         referencia: registro.referencia,
         observacion: registro.observacion,
+        // Solo el nombre: el enlace se pide aparte y vence (T56).
+        comprobante: registro.comprobanteNombre ?? null,
       }));
     }).sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? ''));
   }
@@ -219,6 +289,8 @@ export class LiquidacionesService {
         referencia: liquidacion.referencia,
         observacion: datos.observacion?.trim() || null,
         administradorId: idAdmin,
+        comprobanteUrl: datos.comprobante?.url ?? null,
+        comprobanteNombre: datos.comprobante?.nombre ?? null,
       }];
     }
     this.sincronizarReserva(reserva, liquidacion);
@@ -236,7 +308,7 @@ export class LiquidacionesService {
     return this.liquidaciones.guardar(liquidacion, transaccion);
   }
 
-  /** El código válido habilita el pago al propietario. */
+  /** El código válido deja el pago agendado conforme a la fecha de disponibilidad. */
   async registrarValidacionCodigo(reserva: Reserva, transaccion?: EntityManager): Promise<Liquidacion> {
     const liquidacion = await this.asegurarParaReserva(reserva, transaccion);
     liquidacion.estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');

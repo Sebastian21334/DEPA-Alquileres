@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideEye, LucideEyeOff } from '@lucide/angular';
+import { LucideArrowLeft, LucideEye, LucideEyeOff, LucideMail } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { ApiError } from '../../../core/interceptors/api-error';
 
@@ -10,11 +10,12 @@ const MENSAJE_EMAIL_NO_VERIFICADO = 'Tenés que verificar tu email antes de inic
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, LucideArrowLeft, LucideEye, LucideEyeOff],
+  imports: [ReactiveFormsModule, RouterLink, LucideArrowLeft, LucideEye, LucideEyeOff, LucideMail],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
 })
 export class LoginComponent {
+  protected readonly mensajeEmailNoVerificado = MENSAJE_EMAIL_NO_VERIFICADO;
   private readonly fb = inject(FormBuilder);
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
@@ -36,6 +37,9 @@ export class LoginComponent {
     if (this.route.snapshot.queryParamMap.get('sesionExpirada') === '1') {
       this.error.set('Tu sesión venció. Ingresá nuevamente para continuar.');
     }
+    if (this.route.snapshot.queryParamMap.get('bloqueoTotal') === '1') {
+      this.error.set('Finalizó el acceso a tus operaciones pendientes. Ingresá para consultar o apelar el bloqueo.');
+    }
   }
 
   protected onSubmit(): void {
@@ -55,6 +59,12 @@ export class LoginComponent {
       next: () => {
         this.enviando.set(false);
         const destino = this.route.snapshot.queryParamMap.get('returnUrl');
+        if (this.authService.currentUser()?.accesoLimitado) {
+          const ruta = destino?.split(/[?#]/)[0];
+          const seguirReserva = ruta === '/mis-reservas' || ruta === '/reserva/resultado';
+          void this.router.navigateByUrl(seguirReserva && destino ? destino : '/mis-reservas');
+          return;
+        }
         this.router.navigateByUrl(destino?.startsWith('/') ? destino : '/');
       },
       error: (err: ApiError) => {

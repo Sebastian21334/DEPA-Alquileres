@@ -28,12 +28,12 @@ test('la seed completa una base parcial y se puede repetir sin duplicar datos', 
       INSERT INTO provincia (nombre) VALUES ('CABA');
       INSERT INTO rol (nombre, descripcion) VALUES ('Administrador', 'Descripción propia');
       INSERT INTO tipo_moneda (nombre) VALUES ('Dólar estadounidense');
-      DELETE FROM estado WHERE codigo_ambito = 'DISPUTA' AND codigo = 'GANADA';
+      DELETE FROM estado WHERE codigo_ambito = 'RECLAMO' AND codigo = 'CERRADO';
       DELETE FROM estado WHERE codigo_ambito = 'VERIFICACION_ANUNCIANTE';
       DELETE FROM ambito WHERE codigo = 'VERIFICACION_ANUNCIANTE';
-      UPDATE estado SET nombre = 'Etiqueta del panel' WHERE codigo_ambito = 'DISPUTA' AND codigo = 'ABIERTA';
+      UPDATE estado SET nombre = 'Etiqueta del panel' WHERE codigo_ambito = 'RECLAMO' AND codigo = 'ABIERTO';
     `);
-    await assert.rejects(servicio.onModuleInit(), /rol Inquilino.*DISPUTA\/GANADA.*db:seed/);
+    await assert.rejects(servicio.onModuleInit(), /rol Inquilino.*RECLAMO\/CERRADO.*db:seed/);
 
     const primera = await cargarSeed();
     assert.equal(primera.politica_cancelacion, 1);
@@ -56,7 +56,7 @@ test('la seed completa una base parcial y se puede repetir sin duplicar datos', 
     assert.ok(reenviada.ambito instanceof Ambito);
     assert.equal(reenviada.ambito.codigo, 'VERIFICACION_ANUNCIANTE');
     assert.equal(reenviada.codigo, 'reenviada');
-    assert.equal(servicio.obtenerEstado('DISPUTA', 'ABIERTA').nombre, 'Etiqueta del panel');
+    assert.equal(servicio.obtenerEstado('RECLAMO', 'ABIERTO').nombre, 'Etiqueta del panel');
     await servicio.onModuleInit();
     const { rows: ciudades } = await db.query(
       "SELECT nombre FROM ciudad WHERE id_provincia = $1 AND nombre IN ('Villa Maria', 'Villa María')",

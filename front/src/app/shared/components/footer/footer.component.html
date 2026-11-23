@@ -17,6 +17,8 @@
       </div>
       <div>
         <h3>Tu cuenta</h3>
+        <a routerLink="/terminos/usuarios">Términos de uso</a>
+        <a routerLink="/terminos/anunciantes">Términos para anunciantes</a>
         @if (auth.isAuthenticated) {
           <a routerLink="/mi-perfil">Mi perfil</a>
           <a routerLink="/mi-perfil/anunciante">Quiero ser anunciante</a>
@@ -30,6 +32,6 @@
 
   <div class="footer__bottom">
     <p>© {{ anio }} DEPA. Todos los derechos reservados.</p>
-    <p>Hecho con <span class="footer__heart" aria-label="amor">♥</span> en Córdoba, Argentina</p>
+    <p>Hecho con <span class="footer__heart" aria-label="amor">♥</span> en la UTN FRVM</p>
   </div>
 </footer>

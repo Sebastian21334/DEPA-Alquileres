@@ -1,5 +1,5 @@
 import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { UsuariosService } from './service/usuarios.service';
 import { UsuariosCredencialesService } from './service/usuarios-credenciales.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -27,7 +27,7 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
     AlmacenamientoModule,
     TypeOrmModule.forFeature([Usuario]),
     CatalogosModule,
-    SeguridadModule,
+    forwardRef(() => SeguridadModule),
     MailModule,
     AnunciantesModule,
     PublicacionesModule,

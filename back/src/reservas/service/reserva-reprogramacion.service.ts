@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { nombreInquilinoReserva } from './reservas.utils';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
-import { diasDeAntelacion, fechaArgentina } from '../../common/utils/fechas';
+import { MS_POR_DIA, diasDeAntelacion, esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { Reserva } from '../entity/reserva.entity';
 import {
@@ -121,12 +121,8 @@ export class ReservaReprogramacionService {
         const fin = new Date(dto.fecha_fin);
         const hoyTexto = fechaArgentina();
         if (
-          !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_inicio) ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_fin) ||
-          !Number.isFinite(inicio.getTime()) ||
-          !Number.isFinite(fin.getTime()) ||
-          inicio.toISOString().slice(0, 10) !== dto.fecha_inicio ||
-          fin.toISOString().slice(0, 10) !== dto.fecha_fin ||
+          !esFechaCalendarioValida(dto.fecha_inicio) ||
+          !esFechaCalendarioValida(dto.fecha_fin) ||
           inicio > fin ||
           dto.fecha_inicio < hoyTexto
         ) {
@@ -143,10 +139,10 @@ export class ReservaReprogramacionService {
           Math.floor(
             (new Date(reserva.fecha_fin).getTime() -
               new Date(reserva.fecha_inicio).getTime()) /
-              86400000,
+              MS_POR_DIA,
           ) + 1;
         const diasNuevos =
-          Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
+          Math.floor((fin.getTime() - inicio.getTime()) / MS_POR_DIA) + 1;
         if (
           !Number.isSafeInteger(diasOriginales) ||
           diasOriginales < 1 ||

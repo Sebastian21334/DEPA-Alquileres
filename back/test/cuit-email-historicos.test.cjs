@@ -39,7 +39,8 @@ function base() {
     CREATE TABLE usuario (id INTEGER PRIMARY KEY, activa BOOLEAN, bloqueado BOOLEAN, fecha_baja TEXT,
       email TEXT, email_historico TEXT);
     CREATE TABLE anunciante (id_usuario INTEGER PRIMARY KEY, verificado BOOLEAN, cuit_cuil TEXT,
-      cuit_cuil_historico TEXT, numero_contacto TEXT, id_tipo_anunciante INTEGER);
+      cuit_cuil_historico TEXT, numero_contacto TEXT, id_tipo_anunciante INTEGER,
+      actividades_pausadas BOOLEAN DEFAULT FALSE, cbu_validado TEXT);
     CREATE TABLE publicacion (id INTEGER PRIMARY KEY, id_anunciante INTEGER, activa BOOLEAN);
     CREATE TABLE reserva (id INTEGER PRIMARY KEY, id_usuario INTEGER, id_publicacion INTEGER,
       estado_pago TEXT, cancelada BOOLEAN, finalizada BOOLEAN, fecha_inicio TEXT, fecha_fin TEXT,
@@ -47,7 +48,8 @@ function base() {
     CREATE TABLE liquidacion (id_reserva INTEGER PRIMARY KEY, estado TEXT);
     CREATE TABLE pago (id INTEGER PRIMARY KEY, id_reserva INTEGER, payment_id TEXT, status TEXT, created_at TEXT);
     INSERT INTO usuario VALUES (1, 1, 0, NULL, 'ana@mail.com', NULL), (2, 1, 0, NULL, 'beto@mail.com', NULL);
-    INSERT INTO anunciante VALUES (1, 1, '20-12345678-9', NULL, '3510000000', 1);
+    INSERT INTO anunciante (id_usuario, verificado, cuit_cuil, cuit_cuil_historico, numero_contacto, id_tipo_anunciante)
+      VALUES (1, 1, '20-12345678-9', NULL, '3510000000', 1);
     INSERT INTO publicacion VALUES (10, 1, 1);
   `);
   return db;
@@ -132,7 +134,7 @@ test('la baja de la cuenta mueve el email al histórico y lo libera', async () =
   const servicio = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => false, desactivarPorBajaDeCuenta: async () => {} },
     { archivarCuitPorBajaDeCuenta: async () => {} });
-  await servicio.darDeBajaPropia(usuario.id);
+  await servicio.eliminar(usuario.id, 0);
   assert.equal(usuario.activa, false);
   assert.equal(usuario.email, null);
   assert.equal(usuario.email_historico, 'ana@mail.com');
@@ -140,7 +142,7 @@ test('la baja de la cuenta mueve el email al histórico y lo libera', async () =
 
 test('la baja de un Anunciante mueve su CUIT/CUIL y su email al histórico', async () => {
   const db = base();
-  await servicioUsuarios(db).darDeBajaPropia(1);
+  await servicioUsuarios(db).eliminar(1, 0);
   assert.deepEqual({ ...fila(db, 'SELECT cuit_cuil, cuit_cuil_historico FROM anunciante WHERE id_usuario = ?', 1) },
     { cuit_cuil: null, cuit_cuil_historico: '20-12345678-9' });
   assert.deepEqual({ ...fila(db, 'SELECT activa, email, email_historico FROM usuario WHERE id = ?', 1) },
@@ -150,7 +152,7 @@ test('la baja de un Anunciante mueve su CUIT/CUIL y su email al histórico', asy
 
 test('la baja de un usuario sin perfil de Anunciante no toca otros CUIT/CUIL', async () => {
   const db = base();
-  await servicioUsuarios(db).darDeBajaPropia(2);
+  await servicioUsuarios(db).eliminar(2, 0);
   assert.equal(fila(db, 'SELECT cuit_cuil FROM anunciante WHERE id_usuario = ?', 1).cuit_cuil, '20-12345678-9');
   assert.equal(fila(db, 'SELECT email_historico FROM usuario WHERE id = ?', 2).email_historico, 'beto@mail.com');
 });
@@ -179,7 +181,7 @@ test('el CUIT/CUIL se compara por dígitos, con o sin guiones', async () => {
 
 test('el CUIT/CUIL de una cuenta dada de baja queda libre para una cuenta nueva', async () => {
   const db = base();
-  await servicioUsuarios(db).darDeBajaPropia(1);
+  await servicioUsuarios(db).eliminar(1, 0);
   assert.equal(await repositorioAnunciantes(db).existeCuitVigente('20-12345678-9'), false);
 });
 

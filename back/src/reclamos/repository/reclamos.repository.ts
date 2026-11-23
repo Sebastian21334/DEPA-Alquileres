@@ -11,7 +11,8 @@ const RELACIONES_RECLAMO: FindOptionsRelations<Reclamo> = {
   reserva: { liquidacion: true, publicacion: { anunciante: { usuario: true } }, usuario: true },
   inquilino: true,
   anunciante: true,
-  evidencias: true,
+  // T49: autor y mensaje de cada imagen; la respuesta los reduce a lo mínimo.
+  evidencias: { usuario: { rol: true }, mensaje: true },
   mensajes: { autor: { rol: true } },
 };
 
@@ -25,6 +26,14 @@ export class ReclamosRepository implements IReclamosRepository {
       transaccion.getRepository(ReclamoEvidencia),
       transaccion.getRepository(ReclamoMensaje),
     );
+  }
+
+  transaccion<T>(trabajo: (reclamos: IReclamosRepository) => Promise<T>): Promise<T> {
+    return this.reclamos.manager.transaction((transaccion) => trabajo(this.enTransaccion(transaccion)));
+  }
+
+  async bloquear(idReclamo: number): Promise<void> {
+    await this.reclamos.findOne({ where: { id: idReclamo }, lock: { mode: 'pessimistic_write' } });
   }
 
   existeAbierto(idReserva: number, estados: string[]): Promise<boolean> {
@@ -64,7 +73,7 @@ export class ReclamosRepository implements IReclamosRepository {
   buscarPorId(id: number): Promise<Reclamo | null> {
     return this.reclamos.findOne({
       where: { id },
-      relations: { ...RELACIONES_RECLAMO, evidencias: { usuario: true } },
+      relations: RELACIONES_RECLAMO,
     });
   }
 
@@ -72,12 +81,8 @@ export class ReclamosRepository implements IReclamosRepository {
     return this.evidencias.countBy({ reclamo: { id: idReclamo } });
   }
 
-  guardarEvidencia(evidencia: Partial<ReclamoEvidencia>): Promise<ReclamoEvidencia> {
-    return this.evidencias.save(this.evidencias.create(evidencia));
-  }
-
-  buscarEvidencia(idReclamo: number, idEvidencia: number): Promise<ReclamoEvidencia | null> {
-    return this.evidencias.findOneBy({ id: idEvidencia, reclamo: { id: idReclamo } });
+  guardarEvidencias(evidencias: Partial<ReclamoEvidencia>[]): Promise<ReclamoEvidencia[]> {
+    return this.evidencias.save(this.evidencias.create(evidencias));
   }
 
   async guardarMensaje(mensaje: Omit<Partial<ReclamoMensaje>, 'autor'> & { autor: Pick<Usuario, 'id'> }): Promise<ReclamoMensaje> {

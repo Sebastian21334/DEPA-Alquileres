@@ -97,10 +97,8 @@ export class MensajesService {
           'No podés enviarle mensajes a esta cuenta porque fue dada de baja',
         );
       }
-      if (destinatario.bloqueado || !remitente?.activa || remitente.bloqueado) {
-        throw new ConflictException(
-          'El contacto está suspendido porque una cuenta está bloqueada o inactiva. Para reservas anteriores, contactá a soporte.',
-        );
+      if (!remitente?.activa) {
+        throw new ConflictException('El contacto está suspendido porque la cuenta está inactiva.');
       }
 
       const mensaje = mensajes.crear({
@@ -162,7 +160,10 @@ export class MensajesService {
       throw new ForbiddenException('No formás parte de esta conversación');
     }
 
-    return mensajes.map((mensaje) => this.prepararRespuesta(mensaje));
+    const { origenUsuario, destinoUsuario, publicacion } = mensajes[0];
+    const contactoSuspendido = publicacion.eliminada ||
+      (!origenUsuario.activa || !destinoUsuario.activa);
+    return mensajes.map((mensaje) => ({ ...this.prepararRespuesta(mensaje), contactoSuspendido }));
   }
 
   /**

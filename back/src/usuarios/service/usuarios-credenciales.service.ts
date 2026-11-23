@@ -27,9 +27,13 @@ export class UsuariosCredencialesService {
     return bcrypt.hash(contrasenia, rounds);
   }
 
+  coincideContrasenia(contrasenia: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(contrasenia, hash);
+  }
+
   async validarCredenciales(email: string, contrasenia: string, permitirBloqueado = false) {
     const user = await this.usuariosRepo.buscarParaLogin(email);
-    if (!user || !(await bcrypt.compare(contrasenia, user.contrasenia))) {
+    if (!user || !(await this.coincideContrasenia(contrasenia, user.contrasenia))) {
       throw new UnauthorizedException('Credenciales inválidas');
     }
     if (!user.activa)
@@ -40,24 +44,16 @@ export class UsuariosCredencialesService {
   }
 
   /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */
-  async generarTokenVerificacion(usuario: Usuario): Promise<string> {
+  async generarTokenVerificacion(id: number, email: string): Promise<string | null> {
     const token = crypto.randomBytes(32).toString('hex');
-    usuario.token_verificacion = token;
-    usuario.email_verificado = false;
-    await this.usuariosRepo.guardar(usuario);
-    return token;
+    return await this.usuariosRepo.guardarTokenVerificacion(id, email, token) ? token : null;
   }
 
   /** Marca la cuenta como verificada y consume el token (uso único). */
   async verificarCuenta(token: string): Promise<void> {
-    const usuario = await this.usuariosRepo.buscarPorTokenVerificacion(token);
-    if (!usuario) {
+    if (!(await this.usuariosRepo.verificarCuenta(token))) {
       throw new BadRequestException('Token de verificación inválido');
     }
-
-    usuario.email_verificado = true;
-    usuario.token_verificacion = null;
-    await this.usuariosRepo.guardar(usuario);
   }
 
   /**
@@ -70,11 +66,9 @@ export class UsuariosCredencialesService {
     if (!usuario || !usuario.activa || usuario.bloqueado) return null;
 
     const token = crypto.randomBytes(32).toString('hex');
-    usuario.token_recuperacion = token;
-    usuario.token_recuperacion_expira = new Date(Date.now() + 2 * 60 * 60 * 1000); // RN-30: 2 horas
-    await this.usuariosRepo.guardar(usuario);
-
-    return { token, usuario };
+    const expira = new Date(Date.now() + 2 * 60 * 60 * 1000); // RN-30: 2 horas
+    const guardado = await this.usuariosRepo.guardarTokenRecuperacion(usuario.id, email, token, expira);
+    return guardado ? { token, usuario } : null;
   }
 
   /** Valida el token de recuperación (existencia y vigencia) y setea la nueva contraseña hasheada. */

@@ -22,6 +22,9 @@ export interface PagoAnuncianteRegistrado {
   referencia: string | null;
   observacion: string | null;
   administradorId: number | null;
+  /** T56: URL privada del comprobante; nunca viaja en las respuestas, se pide un enlace firmado. */
+  comprobanteUrl?: string | null;
+  comprobanteNombre?: string | null;
 }
 
 /**
@@ -104,8 +107,15 @@ export class Liquidacion {
   @Column({ name: 'fecha_pago_propietario', type: 'timestamp', nullable: true })
   fecha_pago_propietario: Date | null;
 
-  @Column({ name: 'pagos_anunciante', type: 'jsonb', nullable: true })
+  /** Solo lo leen las consultas de liquidaciones: las relaciones de reclamos o reembolsos no lo exponen. */
+  @Column({ name: 'pagos_anunciante', type: 'jsonb', nullable: true, select: false })
   pagos_anunciante: PagoAnuncianteRegistrado[] | null;
+
+  @Column({ name: 'aviso_pago_admin_en', type: 'timestamptz', nullable: true })
+  aviso_pago_admin_en: Date | null;
+
+  @Column({ name: 'aviso_pago_anunciante_en', type: 'timestamptz', nullable: true })
+  aviso_pago_anunciante_en: Date | null;
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;

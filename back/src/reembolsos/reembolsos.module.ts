@@ -10,9 +10,11 @@ import { REEMBOLSOS_REPOSITORY } from './repository/reembolsos.repository.interf
 import { ReembolsosController } from './controller/reembolsos.controller';
 import { ReembolsosService } from './service/reembolsos.service';
 import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.module';
+import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
 
 @Module({
   imports: [
+    AlmacenamientoModule,
     CatalogosModule,
     TypeOrmModule.forFeature([Reembolso]),
     PagosModule,

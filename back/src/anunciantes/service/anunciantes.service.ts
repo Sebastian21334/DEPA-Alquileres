@@ -59,6 +59,17 @@ export class AnunciantesService {
     return this.anunciantesRepo.archivarCuit(idUsuario, transaccion);
   }
 
+  async restaurarCuitPorReactivacion(idUsuario: number, transaccion: EntityManager): Promise<void> {
+    try {
+      await this.anunciantesRepo.restaurarCuit(idUsuario, transaccion);
+    } catch (error) {
+      if (error instanceof ValorDuplicadoError) {
+        throw new ConflictException('El CUIT/CUIL de esta cuenta ya está en uso en otra cuenta.');
+      }
+      throw error;
+    }
+  }
+
   /** Habilita al anunciante dentro de la misma transacción que aprueba su solicitud. */
   async verificar(anunciante: Anunciante, transaccion: EntityManager): Promise<void> {
     await this.anunciantesRepo.actualizarVerificacion(anunciante.idUsuario, true, transaccion);

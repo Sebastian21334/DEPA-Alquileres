@@ -5,7 +5,7 @@ import type { EntityManager } from 'typeorm';
 export const RESERVA_REPOSITORY = 'RESERVA_REPOSITORY';
 
 export interface IReservaRepository {
-  finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<void>;
+  finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<number[]>;
   conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T>;
   enTransaccion(transaccion: EntityManager): IReservaRepository;
   guardarReprogramacion(datos: Partial<ReprogramacionReserva>): Promise<ReprogramacionReserva>;
@@ -21,7 +21,7 @@ export interface IReservaRepository {
   buscarPorUsuario(idUsuario: number): Promise<Reserva[]>;
   buscarPorPublicacion(idPublicacion: number): Promise<Reserva[]>;
   buscarPorAnunciante(idUsuarioAnunciante: number): Promise<Reserva[]>;
-  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, aprobado: string): Promise<Reserva[]>;
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, estados: string[]): Promise<Reserva[]>;
   buscarPendientesVencidas(fecha: Date, pendiente: string): Promise<Reserva[]>;
   existeAprobada(idPublicacion: number, idUsuarioInquilino: number, aprobado: string): Promise<boolean>;
 }

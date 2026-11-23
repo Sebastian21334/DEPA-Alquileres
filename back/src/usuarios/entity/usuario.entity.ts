@@ -13,9 +13,14 @@ export interface DetalleBloqueo {
   motivo: string | null;
   administradorId: number | null;
   fecha: string | null;
+  // Los bloqueos anteriores pueden omitir el campo. false indica un cierre definitivo.
+  accesoLimitado?: boolean;
   apelacion?: { texto: string; fecha: string };
   respuesta?: { texto: string; fecha: string; administradorId: number };
+  mensajes?: { id: string; autor: 'usuario' | 'administracion'; texto: string; fecha: string; administradorId?: number; imagen?: string }[];
 }
+
+export type BloqueoHistorico = DetalleBloqueo & { fechaDesbloqueo: string | null; desbloqueadoPorId: number | null };
 
 @Entity('usuario')
 export class Usuario {
@@ -60,12 +65,21 @@ export class Usuario {
   @Column({ name: 'bloqueo_detalle', type: 'jsonb', nullable: true, select: false })
   bloqueoDetalle?: DetalleBloqueo | null;
 
+  @Column({ name: 'historial_bloqueos', type: 'jsonb', default: () => "'[]'::jsonb", select: false })
+  historialBloqueos?: BloqueoHistorico[];
+
   // Baja lógica: la cuenta se conserva, pero no puede iniciar sesión.
   @Column({ name: 'activa', type: 'boolean', default: true })
   activa: boolean;
 
   @Column({ name: 'fecha_baja', type: 'timestamptz', nullable: true })
   fecha_baja: Date | null;
+
+  @Column({ name: 'baja_recuperable', type: 'boolean', default: false, select: false })
+  baja_recuperable: boolean;
+
+  @Column({ name: 'version_sesion', type: 'uuid', nullable: true, select: false })
+  version_sesion: string | null;
 
   // Relación directa: Muchos usuarios pueden tener un mismo rol
   @ManyToOne(() => Rol, (rol) => rol.usuarios)

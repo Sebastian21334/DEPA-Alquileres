@@ -38,9 +38,12 @@ export interface ReprogramacionEmailDetalle {
 }
 
 export interface IMailService {
+  enviarConfirmacionBaja(destinatario: string, token: string, origen?: string): Promise<void>;
+  enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: 'inquilino' | 'anunciante' | 'admin'): Promise<void>;
   enviarReprogramacionReserva(destinatario: string, detalle: ReprogramacionEmailDetalle): Promise<void>;
   enviarBajaPublicacion(destinatario: string, titulo: string, motivo: string): Promise<void>;
-  enviarVerificacion(destinatario: string, token: string): Promise<void>;
+  enviarVerificacion(destinatario: string, token: string, origen?: string): Promise<void>;
+  enviarReactivacion(destinatario: string, token: string, origen?: string): Promise<void>;
   enviarRecuperacion(destinatario: string, token: string): Promise<void>;
   enviarCambioContrasenia(destinatario: string): Promise<void>;
   enviarResultadoVerificacion(destinatario: string, aprobada: boolean, motivo?: string): Promise<void>;
@@ -49,7 +52,7 @@ export interface IMailService {
   enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number): Promise<void>;
   enviarSolicitudAnunciante(destinatario: string): Promise<void>;
   enviarSolicitudParaRevision(destinatarios: string[], nombreSolicitante: string, emailSolicitante: string): Promise<void>;
-  enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string): Promise<void>;
+  enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string, accesoLimitado?: boolean): Promise<void>;
 }
 
 export const MAIL_SERVICE = 'MAIL_SERVICE';

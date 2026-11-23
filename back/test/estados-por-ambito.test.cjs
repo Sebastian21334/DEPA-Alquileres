@@ -42,6 +42,9 @@ test('migra estados históricos, conserva los nombres de Disputas y protege cada
     const expedientes = readFileSync(join(__dirname, '../migrations/20261113-catalogos-de-expedientes.sql'), 'utf8');
     await db.exec(expedientes);
     await db.exec(expedientes);
+    const reinicioCodigo = readFileSync(join(__dirname, '../migrations/20261122-reinicio-codigo-alojamiento.sql'), 'utf8');
+    await db.exec(reinicioCodigo);
+    await db.exec(reinicioCodigo);
     const { rows: [movimiento] } = await db.query('SELECT tipo, origen FROM reembolso');
     assert.deepEqual(movimiento, { tipo: 'PARCIAL', origen: 'RECLAMO' });
     await assert.rejects(db.exec("UPDATE reembolso SET origen = 'OTRO'"), /foreign key/);

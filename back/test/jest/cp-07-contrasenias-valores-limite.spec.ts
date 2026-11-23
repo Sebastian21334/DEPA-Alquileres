@@ -14,9 +14,9 @@ import request from 'supertest';
 import { AppDePrueba, crearAppDePrueba } from './soporte/app-de-prueba';
 
 const DATA = {
-  usuario1: { nombre: 'Tester_NuevoLD1', apellido: 'Prueba', email: 'leandro.prueba1@gmail.com', telefono: '6942067' },
-  usuario2: { nombre: 'Tester_NuevoLD2', apellido: 'Prueba', email: 'leandro.prueba2@gmail.com', telefono: '6942067' },
-  usuario3: { nombre: 'Tester_NuevoLD3', apellido: 'Prueba', email: 'leandro.prueba3@gmail.com', telefono: '6942067' },
+  usuario1: { nombre: 'Ana', apellido: 'Prueba', email: 'leandro.prueba1@gmail.com', telefono: '6942067' },
+  usuario2: { nombre: 'Bruno', apellido: 'Prueba', email: 'leandro.prueba2@gmail.com', telefono: '6942067' },
+  usuario3: { nombre: 'Cecilia', apellido: 'Prueba', email: 'leandro.prueba3@gmail.com', telefono: '6942067' },
   contrasenia1: 'Depa2026!xy',
   contrasenia2: 'Depa2026!xyz',
   contrasenia3: 'DepaAlquileres2026!SeminarioIntegradorUTNVillaMaria2026#ReservaSegura$Ok',
@@ -47,7 +47,7 @@ describe('CP-07 · Valores límite de las contraseñas de usuario', () => {
   const registrar = (datos: object, contrasenia: string) =>
     request(ctx.app.getHttpServer())
       .post('/auth/register')
-      .send({ ...datos, contrasenia });
+      .send({ ...datos, contrasenia, aceptaTerminos: true });
 
   /** El registro se rechaza con 400 y la cuenta no se crea. */
   const esperarRechazo = async (datos: { email: string }, contrasenia: string) => {

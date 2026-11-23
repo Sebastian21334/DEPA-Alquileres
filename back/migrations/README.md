@@ -242,3 +242,55 @@ versión del backend sobre una base existente. El comando aplica
 `20261116-pausa-actividades.sql` a la base de `DATABASE_URL` (entorno o
 `back/.env`). Es reejecutable. Las bases nuevas creadas con el esquema
 inicial ya incluyen la columna.
+
+# Recuperación de cuentas dadas de baja (T09)
+
+Desde `back`, ejecutá `npm run db:reactivacion-cuenta` antes de iniciar
+esta versión del backend. El comando aplica una migración reejecutable de
+`usuario` a la base configurada en `DATABASE_URL`.
+
+El registro ofrece recuperar la cuenta o crear una nueva con el mismo email
+cuando la baja se confirmó desde el perfil con esta versión. Las bajas
+anteriores conservan su historial y permiten reutilizar el email. El origen
+de esas bajas no quedó registrado en la base.
+
+# Avisos de liquidación disponible (T35)
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:liquidaciones` desde
+`back`. La migración `20261121-avisos-liquidacion-disponible.sql` registra por
+separado los avisos de disponibilidad enviados a Administración y al anunciante.
+Es reejecutable y conserva las liquidaciones existentes.
+
+# Comprobante del reembolso por transferencia (T44 y T56)
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:comprobante-reembolso`
+desde `back`. La migración `20261123-comprobante-reembolso.sql` agrega a `reembolso`
+las columnas `comprobante_url`, `comprobante_nombre` y `observacion_transferencia`. Los
+reembolsos existentes quedan sin comprobante ni observación. Es reejecutable: si ya se
+aplicó la versión de T44, volver a correrla agrega solo la observación.
+
+El comprobante del pago al anunciante (T56) se guarda dentro de `liquidacion.pagos_anunciante`
+(jsonb) y no requiere migración.
+
+# Imágenes adjuntas a los mensajes de un reclamo (T49)
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:imagenes-mensajes-reclamo`
+desde `back`. La migración `20261123-imagenes-mensajes-reclamo.sql` agrega a
+`reclamo_evidencia` la columna `id_mensaje`, que une cada imagen al mensaje del chat con
+el que se envió. Las imágenes existentes quedan sin mensaje y se muestran con la
+descripción del reclamo. Es reejecutable.
+
+# Pedido de reinicio del código de alojamiento (T34)
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:cancelaciones-devoluciones`
+desde `back`. La migración `20261122-reinicio-codigo-alojamiento.sql` agrega al catálogo
+la categoría de reclamo `CODIGO_BLOQUEADO` y las resoluciones `REINICIAR_CODIGO` y
+`CONFIRMAR_INGRESO`. Solo inserta valores nuevos y es reejecutable. Si se prefiere,
+`npm run db:seed` también completa estos valores.
+
+# Historial de bloqueos
+
+Antes de iniciar esta versión ejecutar `npm run db:apelaciones-bloqueo` desde
+`back`. La migración agrega el historial y recupera el último bloqueo de las
+cuentas actualmente desbloqueadas cuando todavía existe su detalle. Los bloqueos
+anteriores que ya fueron reemplazados no pueden reconstruirse. Es reejecutable.

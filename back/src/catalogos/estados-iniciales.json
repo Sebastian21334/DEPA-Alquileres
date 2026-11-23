@@ -128,34 +128,6 @@
       }
     }
   },
-  "DISPUTA": {
-    "nombre": "Disputa",
-    "estados": {
-      "ABIERTA": {
-        "nombre": "Abierta"
-      },
-      "EN_REVISION": {
-        "nombre": "En revisión"
-      },
-      "GANADA": {
-        "nombre": "Ganada"
-      },
-      "PERDIDA": {
-        "nombre": "Perdida"
-      },
-      "CERRADA": {
-        "nombre": "Cerrada"
-      }
-    }
-  },
-  "DISPUTA_ORIGEN": {
-    "nombre": "DISPUTA ORIGEN",
-    "estados": {
-      "CONTRACARGO": {
-        "nombre": "CONTRACARGO"
-      }
-    }
-  },
   "RECLAMO_CATEGORIA": {
     "nombre": "RECLAMO CATEGORIA",
     "estados": {
@@ -173,6 +145,9 @@
       },
       "OTRO": {
         "nombre": "OTRO"
+      },
+      "CODIGO_BLOQUEADO": {
+        "nombre": "CODIGO BLOQUEADO"
       }
     }
   },
@@ -187,6 +162,12 @@
       },
       "DEVOLUCION_PARCIAL": {
         "nombre": "DEVOLUCION PARCIAL"
+      },
+      "REINICIAR_CODIGO": {
+        "nombre": "REINICIAR CODIGO"
+      },
+      "CONFIRMAR_INGRESO": {
+        "nombre": "CONFIRMAR INGRESO"
       }
     }
   },

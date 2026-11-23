@@ -1,0 +1,6 @@
+@use '../carga-comprobante/zona-carga';
+
+:host { display: grid; gap: .45rem; min-width: 0; }
+.carga__cuenta { color: #52607a; font-weight: 600; }
+.carga__avisos { display: grid; gap: .2rem; padding-inline-start: 1.1rem; overflow-wrap: anywhere; }
+app-galeria-imagenes { margin-top: .2rem; }

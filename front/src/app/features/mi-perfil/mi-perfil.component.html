@@ -213,7 +213,7 @@
             }
           </section>
 
-          <section class="profile-section advertiser" aria-labelledby="cuenta-anunciante">
+          <section class="profile-section cuenta-anunciante" aria-labelledby="cuenta-anunciante">
             <div class="card-head">
               <h2 id="cuenta-anunciante">Cuenta de anunciante</h2>
               @if (solicitud()?.estado === 'aprobada' && solicitud()?.cbu_ultimos_digitos) {
@@ -247,7 +247,7 @@
                     <dd>{{ p.bloqueado ? 'Bloqueada' : !p.activa ? 'Inactiva' : 'Habilitada' }}</dd>
                   </div>
                 </dl>
-                <div class="advertiser-activity">
+                <div class="cuenta-anunciante__actividad">
                   @if (s.anunciante.actividades_pausadas) {
                     <p role="status">
                       Podés seguir gestionando tus reservas y solicitar la baja cuando resuelvas tus
@@ -368,16 +368,21 @@
                   class="acct-btn acct-btn--danger acct-btn--sm"
                   (click)="mostrarConfirmacionBaja.set(true)"
                 >
-                  Eliminar cuenta
+                  Solicitar baja
                 </button>
               }
             </div>
             @if (mostrarConfirmacionBaja()) {
               <div class="delete-account__warning" role="alert">
-                <strong>¿Seguro que querés dar de baja tu cuenta?</strong>
+                <strong>¿Querés solicitar la baja de tu cuenta?</strong>
+                <p>Te enviaremos un enlace a tu correo. La baja se aplica cuando la confirmes desde ese enlace.</p>
                 <p>
-                  Perderás el acceso a DEPA. Si sos anunciante, todas tus publicaciones dejarán de
-                  estar disponibles. Las reservas y pagos registrados se conservarán como historial.
+                  Perderás el acceso a DEPA.
+                  @if (solicitud()?.estado === 'aprobada') {
+                    Tus publicaciones dejarán de estar disponibles.
+                  }
+                  Las reservas y pagos registrados se conservarán como historial.
+                  Si volvés a registrarte con el mismo email, podrás recuperar esta cuenta o crear una nueva.
                   Si tenés reservas, estadías, pagos, liquidaciones o reclamos pendientes de
                   resolver, como inquilino o como anunciante, no vas a poder dar de baja la cuenta
                   hasta regularizarlos. Esta acción no cancela ni reembolsa operaciones.
@@ -389,7 +394,7 @@
                   <button
                     type="button"
                     class="acct-btn acct-btn--ghost"
-                    [disabled]="eliminandoCuenta()"
+                    [disabled]="solicitandoBaja()"
                     (click)="mostrarConfirmacionBaja.set(false); errorBaja.set('')"
                   >
                     Cancelar
@@ -397,13 +402,16 @@
                   <button
                     type="button"
                     class="acct-btn acct-btn--danger"
-                    [disabled]="eliminandoCuenta()"
-                    (click)="confirmarBajaCuenta()"
+                    [disabled]="solicitandoBaja()"
+                    (click)="solicitarBajaCuenta()"
                   >
-                    {{ eliminandoCuenta() ? 'Procesando…' : 'Sí, eliminar mi cuenta' }}
+                    {{ solicitandoBaja() ? 'Enviando…' : 'Enviar correo de confirmación' }}
                   </button>
                 </div>
               </div>
+            }
+            @if (mensajeBaja()) {
+              <p class="acct-alert acct-alert--success" role="status">{{ mensajeBaja() }}</p>
             }
           </section>
         </section>

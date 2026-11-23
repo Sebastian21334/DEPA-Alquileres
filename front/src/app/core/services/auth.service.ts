@@ -10,16 +10,26 @@ interface JwtPayload {
   sub: number;
   email: string;
   rol?: string;
+  accesoLimitado?: boolean;
+  anuncianteVerificado?: boolean;
   exp: number;
+}
+
+interface EstadoSesion {
+  accesoLimitado: boolean;
+  anuncianteVerificado: boolean;
+  rol?: string | null;
 }
 
 // DTOs alineados con back/src/auth/dto/register.dto.ts y login.dto.ts.
 export interface RegisterDto {
+  aceptaTerminos: boolean;
   nombre: string;
   apellido: string;
   email: string;
   telefono: string;
   contrasenia: string;
+  crearCuentaNueva?: boolean;
 }
 
 export interface LoginDto {
@@ -40,6 +50,7 @@ export interface VistaBloqueo {
   fecha: string | null;
   apelacion: { texto: string; fecha: string } | null;
   respuesta: { texto: string; fecha: string } | null;
+  mensajes?: { id: string; autor: 'usuario' | 'administracion'; texto: string; fecha: string; imagen?: string }[] | null;
 }
 
 const TOKEN_KEY = 'auth_token';
@@ -71,12 +82,36 @@ export class AuthService {
   }
 
   get isAdmin(): boolean {
-    return this.currentUser()?.rol === 'Administrador';
+    const usuario = this.currentUser();
+    return !!usuario && !usuario.accesoLimitado && usuario.rol === 'Administrador';
   }
 
-  /** POST /auth/register — crea la cuenta (siempre como Inquilino) y dispara el mail de verificación. */
+  actualizarEstadoSesion(estado: EstadoSesion): void {
+    this.currentUser.update((usuario) => {
+      if (!usuario) return usuario;
+      const rol = estado.rol === undefined ? usuario.rol : estado.rol ?? undefined;
+      if (Boolean(usuario.accesoLimitado) === estado.accesoLimitado &&
+          Boolean(usuario.anuncianteVerificado) === estado.anuncianteVerificado && usuario.rol === rol) return usuario;
+      return { ...usuario, ...estado, rol };
+    });
+  }
+
+  consultarSesion(): Observable<EstadoSesion> {
+    return this.http.get<EstadoSesion>(`${this.baseUrl}/sesion`)
+      .pipe(tap((estado) => this.actualizarEstadoSesion(estado)));
+  }
+
+  /** Registra la cuenta y envía el correo de verificación. */
   register(dto: RegisterDto): Observable<MensajeResponse> {
     return this.http.post<MensajeResponse>(`${this.baseUrl}/register`, dto);
+  }
+
+  solicitarReactivacion(email: string, constanciaReactivacion: string): Observable<MensajeResponse> {
+    return this.http.post<MensajeResponse>(`${this.baseUrl}/reactivar-cuenta/solicitar`, { email, constanciaReactivacion });
+  }
+
+  confirmarReactivacion(token: string, contrasenia: string): Observable<MensajeResponse> {
+    return this.http.post<MensajeResponse>(`${this.baseUrl}/reactivar-cuenta/confirmar`, { token, contrasenia });
   }
 
   /** POST /auth/verificar-cuenta — consume el token del link recibido por mail. */
@@ -120,12 +155,18 @@ export class AuthService {
       .pipe(tap((res) => this.guardarSesion(res.access_token)));
   }
 
-  consultarBloqueo(token: string): Observable<VistaBloqueo> {
-    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/consultar`, { token });
+  consultarBloqueo(token: string | null): Observable<VistaBloqueo> {
+    return token
+      ? this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/consultar`, { token })
+      : this.http.get<VistaBloqueo>(`${this.baseUrl}/bloqueo/actual`);
   }
 
-  apelarBloqueo(token: string, texto: string): Observable<VistaBloqueo> {
-    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/apelar`, { token, texto });
+  apelarBloqueo(token: string | null, texto: string, imagen?: File | null): Observable<VistaBloqueo> {
+    const datos = new FormData();
+    datos.append('texto', texto);
+    if (token) datos.append('token', token);
+    if (imagen) datos.append('imagen', imagen);
+    return this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/${token ? 'mensajes' : 'actual/mensajes'}`, datos);
   }
 
   /** POST /auth/reenviar-verificacion — solicita un nuevo mail para una cuenta pendiente. */

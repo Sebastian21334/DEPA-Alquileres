@@ -6,16 +6,37 @@
 
   <div class="auth__card">
     <a routerLink="/" class="auth__brand" aria-label="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" /></a>
-    <h1 class="auth__title">Creá tu cuenta</h1>
-    <p class="auth__subtitle">Buscá y reservá propiedades en alquiler.</p>
+    <h1 class="auth__title">{{ recuperacionEnviada() ? 'Mail enviado' : cuentaRecuperable() ? 'Elegí cómo continuar' : 'Creá tu cuenta' }}</h1>
 
     @if (mensajeExito()) {
       <div class="auth__success" role="status">
         <p>{{ mensajeExito() }}</p>
-        <p>Revisá tu correo y hacé clic en el link de verificación para poder iniciar sesión.</p>
         <a routerLink="/login" class="btn btn--primary">Ir a iniciar sesión</a>
       </div>
+    } @else if (cuentaRecuperable(); as cuenta) {
+      @if (recuperacionEnviada()) {
+        <p class="auth__subtitle" role="status">Te enviamos un enlace de recuperación a <strong>{{ cuenta.email }}</strong>. Revisá tu bandeja de entrada y la carpeta de spam.</p>
+      } @else {
+        <p class="auth__subtitle">Podés recuperar la cuenta dada de baja de <strong>{{ cuenta.email }}</strong> o crear una cuenta nueva con ese email.</p>
+      }
+      <div class="auth__form">
+        @if (error()) {
+          <div class="auth__error" role="alert">{{ error() }}</div>
+        }
+        @if (recuperacionEnviada()) {
+          <a routerLink="/login" class="btn btn--primary">Ir a iniciar sesión</a>
+        } @else {
+          <button type="button" class="btn btn--primary" [disabled]="enviando()" (click)="solicitarReactivacion()">
+            Recuperar mi cuenta por email
+          </button>
+          <button type="button" class="btn btn--secondary" [disabled]="enviando()" (click)="onSubmit(true)">
+            Crear una cuenta nueva
+          </button>
+        }
+        <button type="button" class="auth__edit" [disabled]="enviando()" (click)="volverAlFormulario()">Volver al formulario</button>
+      </div>
     } @else {
+      <p class="auth__subtitle">Buscá y reservá propiedades en alquiler.</p>
       <form class="auth__form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
         @if (error()) {
           <div class="auth__error" role="alert">{{ error() }}</div>
@@ -24,37 +45,48 @@
         <div class="auth__row">
           <div class="auth__field">
             <label for="nombre">Nombre</label>
-            <input id="nombre" type="text" formControlName="nombre" autocomplete="given-name" />
+            <input id="nombre" type="text" formControlName="nombre" autocomplete="given-name" maxlength="100"
+              (input)="filtrarCampo($event, 'nombre')" (compositionend)="filtrarCampo($event, 'nombre')"
+              [attr.aria-invalid]="form.controls.nombre.touched && form.controls.nombre.invalid || null"
+              [attr.aria-describedby]="form.controls.nombre.touched && form.controls.nombre.invalid ? 'nombre-ayuda' : null" />
             @if (form.controls.nombre.invalid && form.controls.nombre.touched) {
-              <span class="auth__hint auth__hint--error">Ingresá tu nombre (mínimo 2 caracteres).</span>
+              <span id="nombre-ayuda" class="auth__hint auth__hint--error">Ingresá tu nombre con letras y espacios (mínimo 2 caracteres).</span>
             }
           </div>
 
           <div class="auth__field">
             <label for="apellido">Apellido</label>
-            <input id="apellido" type="text" formControlName="apellido" autocomplete="family-name" />
+            <input id="apellido" type="text" formControlName="apellido" autocomplete="family-name" maxlength="100"
+              (input)="filtrarCampo($event, 'apellido')" (compositionend)="filtrarCampo($event, 'apellido')"
+              [attr.aria-invalid]="form.controls.apellido.touched && form.controls.apellido.invalid || null"
+              [attr.aria-describedby]="form.controls.apellido.touched && form.controls.apellido.invalid ? 'apellido-ayuda' : null" />
             @if (form.controls.apellido.invalid && form.controls.apellido.touched) {
-              <span class="auth__hint auth__hint--error">Ingresá tu apellido (mínimo 2 caracteres).</span>
+              <span id="apellido-ayuda" class="auth__hint auth__hint--error">Ingresá tu apellido con letras y espacios (mínimo 2 caracteres).</span>
             }
           </div>
         </div>
 
         <div class="auth__field">
           <label for="email">Email</label>
-          <input id="email" type="email" formControlName="email" autocomplete="email"
-            [attr.aria-invalid]="!!errorEmail() || null" (input)="errorEmail.set(null)" />
+          <input id="email" type="email" formControlName="email" autocomplete="email" maxlength="150"
+            [readOnly]="enviando()" [attr.aria-invalid]="(form.controls.email.touched && form.controls.email.invalid) || !!errorEmail() || null"
+            aria-describedby="email-ayuda" (input)="errorEmail.set(null)" />
           @if (form.controls.email.invalid && form.controls.email.touched) {
-            <span class="auth__hint auth__hint--error">Ingresá un email válido.</span>
+            <span id="email-ayuda" class="auth__hint auth__hint--error">Ingresá un email válido.</span>
           } @else if (errorEmail()) {
-            <span class="auth__hint auth__hint--error" role="alert">{{ errorEmail() }}</span>
+            <span id="email-ayuda" class="auth__hint auth__hint--error" role="alert">{{ errorEmail() }}</span>
           }
         </div>
 
         <div class="auth__field">
           <label for="telefono">Teléfono</label>
-          <input id="telefono" type="tel" formControlName="telefono" autocomplete="tel" />
+          <input id="telefono" type="tel" formControlName="telefono" autocomplete="tel" maxlength="20"
+            (input)="filtrarCampo($event, 'telefono')" aria-describedby="telefono-ayuda"
+            [attr.aria-invalid]="form.controls.telefono.touched && form.controls.telefono.invalid || null" />
           @if (form.controls.telefono.invalid && form.controls.telefono.touched) {
-            <span class="auth__hint auth__hint--error">Ingresá un teléfono de contacto.</span>
+            <span id="telefono-ayuda" class="auth__hint auth__hint--error">Ingresá hasta 15 dígitos. Podés usar + al inicio y guiones entre números.</span>
+          } @else {
+            <span id="telefono-ayuda" class="auth__hint">Por ejemplo, +54-9-351-555-0123.</span>
           }
         </div>
 
@@ -95,11 +127,16 @@
           }
         </div>
 
+        <div class="terminos-consentimiento">
+          <label><input type="checkbox" formControlName="aceptaTerminos" /> <span>Leí y acepto los <a routerLink="/terminos/usuarios" target="_blank" rel="noopener">términos y condiciones de uso</a>.</span></label>
+          @if (form.controls.aceptaTerminos.invalid && form.controls.aceptaTerminos.touched) {
+            <span class="auth__hint auth__hint--error" role="alert">Aceptá los términos para crear tu cuenta.</span>
+          }
+        </div>
         <button type="submit" class="btn btn--primary" [disabled]="enviando()">
           {{ enviando() ? 'Creando cuenta…' : 'Crear cuenta' }}
         </button>
       </form>
-
       <p class="auth__switch">¿Ya tenés cuenta? <a routerLink="/login">Iniciá sesión</a></p>
     }
   </div>

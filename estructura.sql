@@ -403,6 +403,8 @@ CREATE TABLE public.liquidacion (
     fecha_resolucion timestamp without time zone,
     fecha_pago_propietario timestamp without time zone,
     pagos_anunciante jsonb,
+    aviso_pago_admin_en timestamp with time zone,
+    aviso_pago_anunciante_en timestamp with time zone,
     creado_en timestamp without time zone DEFAULT now() NOT NULL,
     actualizado_en timestamp without time zone DEFAULT now() NOT NULL,
     CONSTRAINT ck_liquidacion_estado_ambito CHECK (((ambito_estado)::text = 'LIQUIDACION_RESERVA'::text))
@@ -1137,6 +1139,8 @@ CREATE TABLE public.usuario (
     email character varying(150),
     telefono character varying(20) NOT NULL,
     bloqueado boolean DEFAULT false NOT NULL,
+    bloqueo_detalle jsonb,
+    historial_bloqueos jsonb DEFAULT '[]'::jsonb NOT NULL,
     id_rol integer,
     contrasenia character varying NOT NULL,
     email_verificado boolean DEFAULT false NOT NULL,

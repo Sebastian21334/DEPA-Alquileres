@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, MoreThan, Repository, type EntityManager } from 'typeorm';
-import { Reembolso } from '../entity/reembolso.entity';
+import { In, IsNull, MoreThan, Not, Repository, type EntityManager } from 'typeorm';
+import { OrigenReembolso, Reembolso } from '../entity/reembolso.entity';
 import type { IReembolsosRepository, MensajeReembolso } from './reembolsos.repository.interface';
 
 @Injectable()
@@ -43,6 +43,18 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
+  /** T44: la URL privada del comprobante y el inquilino que puede verlo. */
+  async buscarComprobante(id: number): Promise<{ url: string | null; idInquilino: number | null } | null> {
+    const fila = await this.repository.createQueryBuilder('reembolso')
+      .leftJoin('reembolso.reserva', 'reserva')
+      .leftJoin('reserva.usuario', 'inquilino')
+      .select('reembolso.comprobante_url', 'url')
+      .addSelect('inquilino.id', 'idInquilino')
+      .where('reembolso.id = :id', { id })
+      .getRawOne<{ url: string | null; idInquilino: number | null }>();
+    return fila ? { url: fila.url, idInquilino: fila.idInquilino == null ? null : Number(fila.idInquilino) } : null;
+  }
+
   buscarPorIdempotencyKey(clave: string): Promise<Reembolso | null> {
     return this.repository.findOne({ where: { idempotency_key: clave } });
   }
@@ -54,7 +66,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
   buscarPorPago(idPago: number): Promise<Reembolso[]> {
     return this.repository.find({
       where: { pago: { id: idPago } },
-      select: { id: true, importe: true, estado: true, id_externo: true, referencia_externa: true,
+      select: { id: true, importe: true, estado: true, origen: true, id_externo: true, referencia_externa: true,
         conciliar_en: true, aplicado_en: true, revision_aplicacion: true },
       order: { id: 'DESC' },
     });
@@ -118,6 +130,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
       .addSelect('reembolso.conciliar_en')
       .where('reembolso.estado IN (:...estados)', { estados })
       .andWhere('reembolso.conciliar_en <= :hasta', { hasta })
+      .andWhere('reembolso.origen <> :origen', { origen: OrigenReembolso.CONTRACARGO })
       .orderBy('reembolso.conciliar_en', 'ASC')
       .addOrderBy('reembolso.id', 'ASC')
       .limit(50)
@@ -126,7 +139,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
 
   buscarPendientesAplicacion(estado: string, desdeId: number): Promise<Reembolso[]> {
     return this.repository.find({
-      where: { id: MoreThan(desdeId), estado, aplicado_en: IsNull(), revision_aplicacion: false },
+      where: { id: MoreThan(desdeId), estado, aplicado_en: IsNull(), revision_aplicacion: false, origen: Not(OrigenReembolso.CONTRACARGO) },
       select: { id: true },
       order: { id: 'ASC' },
       take: 50,
@@ -185,9 +198,9 @@ export class ReembolsosRepository implements IReembolsosRepository {
     );
   }
 
-  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado'>[]> {
+  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado' | 'comprobante_nombre' | 'referencia_externa' | 'observacion_transferencia'>[]> {
     return this.repository.find({
-      select: { id: true, importe: true, moneda: true, estado: true },
+      select: { id: true, importe: true, moneda: true, estado: true, comprobante_nombre: true, referencia_externa: true, observacion_transferencia: true },
       where: { transferencia_manual: true, reserva: { id: idReserva, usuario: { id: idInquilino } } },
       order: { id: 'DESC' },
     });

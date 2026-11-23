@@ -1,7 +1,7 @@
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThan, Repository, type EntityManager } from 'typeorm';
+import { In, LessThan, Repository, type EntityManager } from 'typeorm';
 import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
@@ -14,9 +14,9 @@ export class ReservaRepository implements IReservaRepository {
     return this.repository.create(datos);
   }
 
-  async finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<void> {
+  async finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<number[]> {
     // PostgreSQL vuelve a comprobar las condiciones tras adquirir el bloqueo.
-    await this.repository.createQueryBuilder()
+    const resultado = await this.repository.createQueryBuilder()
       .update(Reserva)
       .set({ finalizada: true })
       .where('finalizada = false')
@@ -26,7 +26,9 @@ export class ReservaRepository implements IReservaRepository {
       .andWhere('fecha_inicio IS NOT NULL AND fecha_fin IS NOT NULL')
       .andWhere('fecha_inicio <= fecha_fin')
       .andWhere('fecha_fin < :hoy', { hoy })
+      .returning(['id'])
       .execute();
+    return (resultado.raw as { id: number }[]).map(({ id }) => id);
   }
 
   conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
@@ -177,12 +179,11 @@ export class ReservaRepository implements IReservaRepository {
     });
   }
 
-  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, aprobado: string): Promise<Reserva[]> {
+  buscarRecibidasPorAnunciante(idUsuarioAnunciante: number, estados: string[]): Promise<Reserva[]> {
     return this.repository.find({
       where: {
         publicacion: { anunciante: { idUsuario: idUsuarioAnunciante } },
-        estado_pago: aprobado,
-        cancelada: false,
+        estado_pago: In(estados),
       },
       relations: {
         reprogramaciones: true,
