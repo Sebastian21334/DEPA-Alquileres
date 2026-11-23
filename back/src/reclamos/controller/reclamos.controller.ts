@@ -73,17 +73,6 @@ export class ReclamosController {
   }
 
   @PermitirAccesoLimitado()
-  @Get(':id/evidencias/:idEvidencia/url')
-  urlEvidencia(@Param('id', ParseIntPipe) id: number, @Param('idEvidencia', ParseIntPipe) idEvidencia: number, @Req() req: AuthenticatedRequest) {
-    return this.reclamosService.urlEvidencia(
-      id,
-      idEvidencia,
-      req.user.id,
-      req.user.rol === 'Administrador',
-    );
-  }
-
-  @PermitirAccesoLimitado()
   @Get(':id/mensajes')
   listarMensajes(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.listarMensajes(

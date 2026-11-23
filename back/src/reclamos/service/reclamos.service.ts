@@ -157,16 +157,6 @@ export class ReclamosService {
     return this.imagenesRespuesta(guardadas);
   }
 
-  async urlEvidencia(idReclamo: number, idEvidencia: number, idUsuario: number, esAdmin: boolean): Promise<{ url: string }> {
-    const reclamo = await this.buscarComoParticipante(idReclamo, idUsuario, esAdmin);
-    const evidencia = reclamo.evidencias?.find((actual) => actual.id === idEvidencia);
-    if (!evidencia || (!esAdmin && !this.visibleParaLasPartes(evidencia)))
-      throw new NotFoundException('Evidencia no encontrada');
-    return {
-      url: await this.almacenamientoService.firmarArchivo('reclamos', evidencia.url),
-    };
-  }
-
   /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[] = []): Promise<MensajeReclamoRespuesta> {
     const reclamo = await this.buscarComoParticipante(id, idUsuario, esAdmin);
