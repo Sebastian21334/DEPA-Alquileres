@@ -3,49 +3,194 @@ import {
   Injectable,
   ConflictException,
   BadRequestException,
+  NotFoundException,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 import { ResolverLiquidacionDto } from '../dto/resolver-liquidacion.dto';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import {
   OrigenReembolso,
-  Reembolso,
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { decimalEntero } from '../../common/utils/importes';
+import { fechaArgentina } from '../../common/utils/fechas';
+import { MAX_INTENTOS_CODIGO } from '../../reservas-consulta/service/reserva-estado.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
+import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { LiquidacionesService } from '../../liquidaciones/service/liquidaciones.service';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
+import { ReclamosService } from '../../reclamos/service/reclamos.service';
+import { AlmacenamientoService, type ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
+import { RegistrarTransferenciaDto } from '../dto/registrar-transferencia.dto';
 
 import type { EntityManager } from 'typeorm';
 
 @Injectable()
-export class OperacionesLiquidacionService {
-  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService, private readonly anunciantes: AnunciantesService) {}
+export class OperacionesLiquidacionService implements OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(OperacionesLiquidacionService.name);
+  private temporizador?: ReturnType<typeof setInterval>;
+  private avisosEnCurso?: Promise<void>;
 
-  async listarLiquidacionesAdministracion(): Promise<Reserva[]> {
+  constructor(private readonly reembolsosService: ReembolsosService, private readonly reservasService: ReservasService, private readonly liquidaciones: LiquidacionesService, private readonly catalogos: CatalogosService, private readonly anunciantes: AnunciantesService, private readonly reclamos: ReclamosService, private readonly notificaciones?: ReservaNotificacionesService, private readonly almacenamiento?: AlmacenamientoService) {}
+
+  onApplicationBootstrap(): void {
+    void this.avisarLiquidacionesDisponibles();
+    this.temporizador = setInterval(() => void this.avisarLiquidacionesDisponibles(), 60_000);
+    this.temporizador.unref();
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.temporizador) clearInterval(this.temporizador);
+    await this.avisosEnCurso;
+  }
+
+  avisarLiquidacionesDisponibles(ahora = new Date()): Promise<void> {
+    this.avisosEnCurso ??= this.procesarAvisos(ahora).finally(() => { this.avisosEnCurso = undefined; });
+    return this.avisosEnCurso;
+  }
+
+  private async procesarAvisos(ahora: Date): Promise<void> {
+    try {
+      const vencidas = await this.liquidaciones.listarIngresosNoVerificadosVencidos(ahora, MAX_INTENTOS_CODIGO);
+      for (const id of vencidas) {
+        try {
+          await this.reservasService.conReservaBloqueada(id, async (reserva, transaccion) => {
+            const fecha = this.liquidaciones.fechaDisponiblePagoManual(reserva);
+            if (!fecha || fecha > fechaArgentina(ahora) || reserva.cancelada ||
+                !this.reservasService.pagoAprobado(reserva) || this.reservasService.codigoValidado(reserva) ||
+                !this.vencePorIngresoNoVerificado(reserva) ||
+                await this.tieneDevolucionActiva(id, transaccion) ||
+                await this.reclamos.tieneReclamoAbierto(id, transaccion)) return;
+            await this.liquidaciones.registrarVencimientoIngreso(reserva, transaccion);
+          });
+        } catch {
+          this.logger.warn(`No se pudo procesar el ingreso no verificado de la reserva ${id}.`);
+        }
+      }
+      if (!this.notificaciones) return;
+      const pendientes = await this.liquidaciones.listarReservasPendientesDeAviso(ahora);
+      const hoy = fechaArgentina(ahora);
+      for (const id of pendientes) {
+        try {
+          await this.reservasService.conReservaBloqueada(id, async (reserva, transaccion) => {
+            await this.avisarSiDisponible(reserva, hoy, ahora, transaccion);
+          });
+        } catch {
+          this.logger.warn(`Quedaron pendientes los avisos de liquidación de la reserva ${id}.`);
+        }
+      }
+    } catch {
+      this.logger.warn('No se pudieron consultar los avisos pendientes de liquidación.');
+    }
+  }
+
+  /** T36, extendido por T34: vence la retenida y la que está en revisión solo por el código bloqueado. */
+  private vencePorIngresoNoVerificado(reserva: Reserva): boolean {
+    const estado = reserva.estado_liquidacion;
+    return estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO') ||
+      (estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION') && this.reservasService.codigoBloqueado(reserva));
+  }
+
+  private async avisarSiDisponible(reserva: Reserva, hoy: string, ahora: Date, transaccion: EntityManager): Promise<void> {
+    if (!this.notificaciones) return;
+    const fecha = this.liquidaciones.fechaDisponiblePagoManual(reserva);
+    if (!fecha || fecha > hoy || reserva.cancelada || !this.reservasService.pagoAprobado(reserva) ||
+        reserva.estado_liquidacion !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO')) return;
+
+    const liquidacion = await this.liquidaciones.asegurarParaReserva(reserva, transaccion);
+    if (liquidacion.aviso_pago_admin_en && liquidacion.aviso_pago_anunciante_en) return;
+    const idAnunciante = reserva.publicacion?.anunciante?.idUsuario;
+    if (!idAnunciante || !await this.anunciantes.buscarCbuValidado(idAnunciante, transaccion) ||
+        await this.tieneDevolucionActiva(reserva.id, transaccion)) return;
+
+    const asunto = 'Liquidación disponible para pago manual';
+    const [admin, anunciante] = await Promise.all([
+      !liquidacion.aviso_pago_admin_en && this.notificaciones.avisarCambio(reserva, ['admin'], asunto,
+        'Ya podés gestionar el pago manual de esta reserva y registrar la transferencia en el panel de Administración.'),
+      !liquidacion.aviso_pago_anunciante_en && this.notificaciones.avisarCambio(reserva, ['anunciante'], asunto,
+        'Tu liquidación está disponible para pago manual. Administración ya puede gestionar el pago y podés seguir su estado en DEPA.'),
+    ]);
+    await this.liquidaciones.registrarAvisosPagoManual(liquidacion, { admin, anunciante }, ahora, transaccion);
+  }
+
+  async listarLiquidacionesAdministracion(): Promise<(Reserva & { fecha_disponible_pago: string | null })[]> {
     const reservas = await this.liquidaciones.listarParaAdministracion();
     const reembolsos = await this.reembolsosService.listarActivosPorReservas(reservas.map(reserva => reserva.id));
     const transferidas = new Set(reembolsos.map(reembolso => reembolso.reserva.id));
     return reservas.filter(reserva => !transferidas.has(reserva.id))
-      .map(reserva => this.reservasService.prepararRespuesta(reserva));
+      .map(reserva => ({
+        ...this.reservasService.prepararRespuesta(reserva),
+        fecha_disponible_pago: this.liquidaciones.fechaDisponiblePagoManual(reserva),
+        ...this.calcularComision(reserva, Number(reserva.monto_pago), false),
+      }));
+  }
+
+  private calcularComision(reserva: Reserva, importe: number, huboDevolucion: boolean): { importe_comision_depa: number; importe_neto_anunciante: number } {
+    const porcentaje = huboDevolucion || reserva.porcentaje_comision_depa == null ? 0 : reserva.porcentaje_comision_depa;
+    const centavos = decimalEntero(importe, 2);
+    const centesimasPorcentaje = decimalEntero(porcentaje, 2);
+    const comision = (centavos * centesimasPorcentaje + 5000n) / 10000n;
+    return { importe_comision_depa: Number(comision) / 100, importe_neto_anunciante: Number(centavos - comision) / 100 };
   }
 
   listarPagosRegistrados() {
     return this.liquidaciones.listarPagosRegistrados();
   }
 
-  listarPagosDelAnunciante(idUsuario: number, idPublicacion: number) {
+  listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
     return this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion);
   }
 
-  async consultarCbuParaPago(idReserva: number): Promise<{ cbu: string | null }> {
+  /** Datos para transferir: el CBU validado y el CUIT/CUIL para confirmar el destinatario (T56). */
+  async consultarCbuParaPago(idReserva: number): Promise<{ cbu: string | null; cuit_cuil: string | null }> {
     const reserva = await this.reservasService.obtenerReserva(idReserva);
+    this.validarFechaPagoManual(reserva);
     const idAnunciante = reserva.publicacion?.anunciante?.idUsuario;
-    return { cbu: idAnunciante ? await this.anunciantes.buscarCbuValidado(idAnunciante) : null };
+    if (!idAnunciante) return { cbu: null, cuit_cuil: null };
+    const [cbu, anunciante] = await Promise.all([this.anunciantes.buscarCbuValidado(idAnunciante), this.anunciantes.buscarPorUsuario(idAnunciante)]);
+    return { cbu, cuit_cuil: anunciante?.cuit_cuil ?? null };
   }
 
+  /**
+   * T56: el admin registra la transferencia al anunciante con el comprobante obligatorio.
+   * El archivo se sube después de las validaciones previas y se borra si el pago no queda registrado.
+   */
+  async registrarPagoAnunciante(id: number, dto: RegistrarTransferenciaDto, archivo: Express.Multer.File | undefined, idAdmin: number): Promise<Reserva> {
+    const estado = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
+    this.validarResolucion(await this.reservasService.obtenerReserva(id), { estado });
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    const comprobante = await this.almacenamiento.subirComprobante(`liquidaciones/${id}`, archivo);
+    let guardado = false;
+    try {
+      return await this.resolver(id, { ...dto, estado }, idAdmin, { comprobante, alGuardar: () => { guardado = true; } });
+    } finally {
+      if (!guardado)
+        await this.almacenamiento.eliminarComprobante(comprobante.url).catch(() =>
+          this.logger.warn(`No se pudo borrar el comprobante sin usar del pago de la reserva ${id}`));
+    }
+  }
+
+  /** T56: enlace firmado del comprobante del pago, solo para el admin y el anunciante de la reserva. */
+  async urlComprobantePago(idReserva: number, indice: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
+    const comprobante = await this.liquidaciones.buscarComprobantePago(idReserva, indice);
+    const autorizado = actor.rol === 'Administrador' || (comprobante?.idAnunciante != null && comprobante.idAnunciante === actor.id);
+    if (!comprobante || !autorizado) throw new NotFoundException('Comprobante no encontrado');
+    if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
+    return { url: await this.almacenamiento.firmarComprobante(comprobante.url) };
+  }
+
+  /** El pago al anunciante se registra con su comprobante en `registrarPagoAnunciante` (T56). */
   async resolverLiquidacion(id: number, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reserva> {
+    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
+      throw new BadRequestException('Registrá el pago al anunciante con el comprobante de la transferencia');
+    return this.resolver(id, dto, idAdmin);
+  }
+
+  private async resolver(id: number, dto: ResolverLiquidacionDto, idAdmin: number, pago?: { comprobante: ComprobanteSubido; alGuardar: () => void }): Promise<Reserva> {
     const permitidos: string[] = [
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
@@ -60,8 +205,11 @@ export class OperacionesLiquidacionService {
       );
     }
 
-    return this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
+    const reserva = await this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
       this.validarResolucion(actual, dto);
+      if (dto.estado !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION') &&
+          await this.reclamos.tieneReclamoAbierto(id, transaccion))
+        throw new ConflictException('La reserva tiene un reclamo abierto; resolvelo antes de modificar la liquidación');
       const registraPago = dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
       const idAnunciante = actual.publicacion?.anunciante?.idUsuario;
       if (registraPago && (!idAnunciante || !await this.anunciantes.buscarCbuValidado(idAnunciante, transaccion))) {
@@ -77,16 +225,23 @@ export class OperacionesLiquidacionService {
       if (actual.cancelada && !registraPago)
         throw new ConflictException('Una reserva cancelada no puede volver al circuito de ingreso');
       await this.asegurarSinDevoluciones(id, transaccion);
-      const pago = registraPago ? await this.reembolsosService.buscarPagoPorReserva(id, transaccion) : null;
+      const cobro = registraPago ? await this.reembolsosService.buscarPagoPorReserva(id, transaccion) : null;
+      const bruto = cobro ? this.reembolsosService.saldoReembolsable(cobro) : Number(actual.monto_pago);
       await this.liquidaciones.registrarResolucion(actual, dto.estado, {
-        importe: registraPago ? (pago ? this.reembolsosService.saldoReembolsable(pago) : Number(actual.monto_pago)) : null,
-        moneda: pago?.currency ?? actual.moneda_contratada ?? 'ARS',
+        importe: registraPago ? this.calcularComision(actual, bruto, Number(cobro?.amount_refunded ?? 0) > 0).importe_neto_anunciante : null,
+        moneda: cobro?.currency ?? actual.moneda_contratada ?? 'ARS',
         referencia: dto.referencia ?? null,
         observacion: dto.observacion ?? null,
+        comprobante: registraPago ? pago?.comprobante ?? null : null,
       }, idAdmin, transaccion);
       if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'))
         actual.intentos_codigo = 0;
     });
+    // Recién con la transacción confirmada el comprobante queda en uso; si algo falló, quien lo subió lo borra.
+    pago?.alGuardar();
+    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
+      await this.notificaciones?.avisarCambio(reserva, ['anunciante'], 'Pago al anunciante registrado', 'La administración registró el pago de tu liquidación. Podés consultar el detalle en DEPA.');
+    return reserva;
   }
 
   private async derivarReembolso(reserva: Reserva, dto: ResolverLiquidacionDto, idAdmin: number, transaccion: EntityManager): Promise<void> {
@@ -122,18 +277,21 @@ export class OperacionesLiquidacionService {
   }
 
   private async asegurarSinDevoluciones(id: number, transaccion?: EntityManager): Promise<void> {
+    if (await this.tieneDevolucionActiva(id, transaccion))
+      throw new ConflictException(
+        'La reserva tiene una devolución registrada; no se puede pagar al propietario',
+      );
+  }
+
+  private async tieneDevolucionActiva(id: number, transaccion?: EntityManager): Promise<boolean> {
     const existentes = await this.reembolsosService.listarPorReserva(id, transaccion);
-    const activa = existentes.find(
+    return existentes.some(
       (reembolso) =>
         reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') ||
         reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') ||
         reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO') ||
         reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
     );
-    if (activa)
-      throw new ConflictException(
-        'La reserva tiene una devolución registrada; no se puede pagar al propietario',
-      );
   }
 
   private validarResolucion(reserva: Reserva, dto: ResolverLiquidacionDto): void {
@@ -170,10 +328,10 @@ export class OperacionesLiquidacionService {
     }
     if (
       dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') &&
-      !this.reservasService.codigoValidado(reserva)
+      reserva.estado_liquidacion !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO')
     ) {
       throw new ConflictException(
-        'No se puede registrar el pago al propietario sin validar el código',
+        'La liquidación todavía no está pendiente de pago al propietario',
       );
     }
     if (
@@ -184,6 +342,16 @@ export class OperacionesLiquidacionService {
         'No se puede pagar al propietario con una liquidación en revisión',
       );
     }
+    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO')) {
+      this.validarFechaPagoManual(reserva);
+    }
   }
 
+  private validarFechaPagoManual(reserva: Reserva): void {
+    const fecha = this.liquidaciones.fechaDisponiblePagoManual(reserva);
+    if (!fecha) throw new ConflictException('La reserva necesita fechas válidas para registrar el pago al propietario');
+    if (fecha > fechaArgentina()) {
+      throw new ConflictException(`El pago al propietario se habilita el ${fecha.split('-').reverse().join('/')}, cinco días después del fin de la estadía.`);
+    }
+  }
 }

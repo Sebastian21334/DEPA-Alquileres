@@ -1,0 +1,78 @@
+<main class="terminos">
+  <a class="terminos__back" routerLink="/">← Volver al inicio</a>
+  <article class="terminos__card">
+    <a routerLink="/" aria-label="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" class="terminos__logo" /></a>
+    <p class="terminos__eyebrow">DEPA ALQUILERES</p>
+    @if (anunciante()) {
+      <h1>Términos y condiciones para anunciantes</h1>
+      <p class="terminos__intro">Estas condiciones complementan los <a routerLink="/terminos/usuarios">términos de uso para usuarios</a> y explican cómo funciona DEPA para quienes ofrecen propiedades.</p>
+      <h2>1. Solicitud y verificación</h2>
+      <p>Para publicar, debés solicitar la habilitación como propietario particular o inmobiliaria y proporcionar datos verdaderos, tu CUIT o CUIL, un número de contacto y un CBU de una cuenta a tu nombre. El CBU se encuentra sujeto a revisión. También debés presentar frente y dorso del DNI y realizar una prueba de vida. La habilitación requiere una revisión y aprobación por parte de la administración; completar la prueba de vida no habilita automáticamente la cuenta.</p>
+      <p>Si actuás como inmobiliaria, el corredor responsable debe acreditar su identidad e informar los datos de la organización, la matrícula, el colegio profesional y el domicilio comercial, además de presentar la constancia de CUIT y la documentación de la matrícula.</p>
+      <h2>2. Publicaciones y disponibilidad</h2>
+      <p>Sos responsable de que las propiedades que ofrecés, sus imágenes, precios, condiciones, ubicación y disponibilidad sean correctos y estén actualizados. Debés estar habilitado para ofrecerlas y atender las consultas y reservas recibidas. Una publicación activa debe contar con al menos una imagen.</p>
+      <p>En alquileres de largo plazo DEPA facilita la consulta y el contacto; la celebración de contratos y otros trámites legales se realizan fuera de la plataforma. En alquileres temporarios administrás la disponibilidad y las reservas a través del calendario.</p>
+      <h2>3. Reservas e ingreso</h2>
+      <p>Las fechas de una reserva pendiente quedan bloqueadas hasta 15 minutos mientras se procesa el pago. La reserva se confirma cuando el pago se aprueba dentro del plazo. El inquilino puede solicitar una reprogramación antes del inicio si las nuevas fechas están disponibles; se mantienen la duración y las condiciones económicas originales.</p>
+      <p>Al ingresar, el inquilino te entrega su código de alojamiento y debés cargarlo en DEPA para validar el ingreso. Un código incorrecto reiterado o un reclamo puede dejar la liquidación en revisión. No solicites el código antes de que se produzca el ingreso.</p>
+      <h2>4. Comisión y liquidación</h2>
+      @if (comision() !== null) {
+        <p>La comisión vigente de DEPA es del <strong>{{ comision() }} %</strong>. Se calcula sobre el importe total pagado por el inquilino y se descuenta del importe a transferirte cuando la liquidación finaliza con el pago total al anunciante.</p>
+      } @else if (errorComision()) {
+        <p class="terminos__notice" role="status">No pudimos consultar la comisión vigente. Consultala antes de realizar una operación.</p>
+      } @else { <p role="status">Consultando la comisión vigente…</p> }
+      <p>El porcentaje puede modificarse para futuras reservas. Cada reserva conserva el porcentaje correspondiente al registrar sus condiciones económicas. Si se realiza una devolución total o parcial al inquilino, no se aplica comisión de DEPA a esa reserva. Los costos de Mercado Pago son independientes.</p>
+      <p>La liquidación queda retenida tras aprobarse el pago. La validación del código permite que pase a pendiente de pago. El registro del pago se habilita a partir del quinto día calendario posterior al fin de la estadía, siempre que el CBU esté validado y la liquidación habilitada. El pago al anunciante se realiza fuera de DEPA y la administración lo registra; no es una transferencia automática. Una revisión o un reclamo puede demorar su resolución.</p>
+      <h2>5. Cancelaciones y reclamos</h2>
+      <p>Una reserva pendiente de pago puede cancelarse y libera las fechas. Para cancelar una reserva pagada, debés solicitarlo antes del día de ingreso y la administración debe resolver la solicitud. Si se aprueba una cancelación solicitada por el anunciante, corresponde la devolución del 100 % al inquilino. Cuando hay devolución, la reserva se cancela y las fechas se liberan al confirmarse el reembolso.</p>
+      <p>Si la cancelación la solicita el inquilino, se aplica la política correspondiente a la fecha de pago. La política vigente para nuevas operaciones es:</p>
+      @if (politica(); as p) {
+        <ul>
+          <li>{{ p.diasDevolucionTotal }} días o más antes del ingreso: {{ p.porcentajeTotal }} %.</li>
+          <li>Desde {{ p.diasDevolucionParcial }} hasta menos de {{ p.diasDevolucionTotal }} días antes: {{ p.porcentajeParcial }} %.</li>
+          <li>Menos de {{ p.diasDevolucionParcial }} días antes: {{ p.porcentajeFueraDePlazo }} %.</li>
+        </ul>
+        <p>Las condiciones de cada reserva se muestran al solicitar la cancelación.</p>
+      } @else if (errorPolitica()) {
+        <p class="terminos__notice" role="status">No pudimos consultar la política vigente. Revisá las condiciones de la reserva antes de realizar una operación.</p>
+      } @else { <p role="status">Consultando la política de cancelación vigente…</p> }
+      <p>El inquilino puede iniciar un reclamo desde el inicio de la estadía hasta el final del cuarto día calendario posterior a su finalización. La administración lo revisa y puede resolver una devolución total o parcial. Un reclamo no cancela automáticamente la reserva ni libera las fechas.</p>
+      <h2>6. Pausa, bloqueo y baja</h2>
+      <p>Podés pausar tus actividades para dejar de recibir nuevas reservas mientras gestionás las existentes. La administración puede bloquear la cuenta o dar de baja publicaciones por incumplimientos. Las reservas y liquidaciones existentes se tratarán según su estado. Podés solicitar la baja de la cuenta cuando no existan operaciones pendientes en ninguno de tus roles; la baja no cancela ni reembolsa automáticamente las reservas.</p>
+    } @else {
+      <h1>Términos y condiciones de uso</h1>
+      <p class="terminos__intro">Estas condiciones explican cómo usar DEPA, buscar propiedades y gestionar reservas como usuario o inquilino.</p>
+      <h2>1. La plataforma</h2>
+      <p>DEPA reúne publicaciones de propiedades en alquiler y facilita el contacto entre inquilinos, propietarios e inmobiliarias. En alquileres temporarios permite gestionar disponibilidad, reservas y pagos. En alquileres de largo plazo facilita la búsqueda y el contacto; los contratos y trámites legales se realizan fuera de la plataforma.</p>
+      <h2>2. Cuenta y uso responsable</h2>
+      <p>Podés consultar publicaciones y contactar por WhatsApp sin iniciar sesión. Para usar favoritos, mensajería interna o reservas necesitás una cuenta y verificar tu correo. Debés brindar datos correctos, mantenerlos actualizados y proteger tu contraseña. La cuenta no debe utilizarse para suplantar a otra persona, publicar contenido engañoso o perjudicar a otros usuarios.</p>
+      <p>WhatsApp es un servicio externo y DEPA no almacena los mensajes intercambiados allí. La mensajería interna requiere autenticación y conserva el historial en la plataforma.</p>
+      <h2>3. Reservas y pagos</h2>
+      <p>En una propiedad que admita reservas, seleccionás fechas disponibles y revisás las condiciones económicas antes de pagar. Se cuentan días calendario, incluidos el inicio y el fin. El pago se procesa mediante Mercado Pago; DEPA no almacena los datos de tu tarjeta.</p>
+      <p>Al crear una reserva pendiente, las fechas se bloquean durante un máximo de 15 minutos. Si un pago se rechaza o cancela, podés reintentarlo dentro del plazo original. Si no se aprueba a tiempo, la reserva se cancela y se liberan las fechas. La confirmación depende de la aprobación del pago.</p>
+      <p>Una vez confirmada, recibirás un código de alojamiento. Entregalo al anunciante al ingresar a la propiedad para que valide tu llegada. Antes del inicio podés reprogramar la reserva si las nuevas fechas están disponibles, conservando la duración y el importe.</p>
+      <h2>4. Cancelaciones y devoluciones</h2>
+      <p>Una reserva pendiente de pago puede cancelarse sin devolución. Para una reserva pagada debés solicitar la cancelación antes del ingreso y aceptar las condiciones específicas que se muestran en ese momento. La administración debe resolverla. Si corresponde un reembolso, la reserva se cancela y las fechas se liberan al confirmarse la devolución; si no corresponde devolución, al aprobarse la solicitud.</p>
+      <p>Para solicitudes del inquilino se aplica la política vigente a la fecha de pago y el porcentaje depende de la anticipación. La política vigente para nuevas operaciones es:</p>
+      @if (politica(); as p) {
+        <ul>
+          <li>{{ p.diasDevolucionTotal }} días o más antes del ingreso: {{ p.porcentajeTotal }} %.</li>
+          <li>Desde {{ p.diasDevolucionParcial }} hasta menos de {{ p.diasDevolucionTotal }} días antes: {{ p.porcentajeParcial }} %.</li>
+          <li>Menos de {{ p.diasDevolucionParcial }} días antes: {{ p.porcentajeFueraDePlazo }} %.</li>
+        </ul>
+        <p>Si el anunciante solicita la cancelación, corresponde el 100 % de devolución. El medio de pago puede determinar cómo se realiza el reintegro.</p>
+      } @else if (errorPolitica()) {
+        <p class="terminos__notice" role="status">No pudimos consultar la política vigente. Revisá las condiciones de tu reserva antes de realizar una operación.</p>
+      } @else { <p role="status">Consultando la política de cancelación vigente…</p> }
+      <p>Las condiciones aplicables a una reserva concreta se muestran al solicitar su cancelación. Las comisiones de Mercado Pago se tratan como costo de la operación y no se reintegran al inquilino.</p>
+      <h2>5. Reclamos</h2>
+      <p>Podés abrir un reclamo desde el inicio de la estadía hasta el final del cuarto día calendario posterior a su finalización. Podés aportar imágenes y comunicarte con el anunciante y la administración. La administración revisa el caso y puede disponer una devolución total o parcial. El reclamo no cancela automáticamente la reserva ni libera las fechas.</p>
+      <h2>6. Datos personales, bloqueo y baja</h2>
+      <p>DEPA utiliza los datos proporcionados para gestionar la cuenta, las publicaciones, la comunicación, las reservas, los pagos, las verificaciones y las notificaciones. Los servicios externos intervienen cuando usás sus funciones, por ejemplo Mercado Pago para pagos y WhatsApp para contacto externo.</p>
+      <p>La administración puede bloquear una cuenta ante incumplimientos. Según las operaciones pendientes, puede habilitarse un acceso limitado para gestionarlas y comunicarse. Podés solicitar la baja cuando no existan operaciones pendientes en tus roles; se conserva el historial de operaciones y la baja no produce cancelaciones ni devoluciones automáticas.</p>
+      <h2>7. Convertirse en anunciante</h2>
+      <p>Para ofrecer propiedades tenés que solicitar la habilitación y aceptar las <a routerLink="/terminos/anunciantes">condiciones para anunciantes</a>, que complementan estas condiciones de uso.</p>
+    }
+    <p class="terminos__foot">Los importes, plazos y condiciones de cada operación se informan durante el proceso correspondiente.</p>
+  </article>
+</main>

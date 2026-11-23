@@ -54,7 +54,7 @@ export class PagosService {
       throw new BadRequestException('La moneda del pago no coincide con la reserva');
   }
 
-  async registrarEstadoExterno(pago: Pago, datos: DatosPagoExterno, transaccion?: EntityManager): Promise<void> {
+  async registrarEstadoExterno(pago: Pago, datos: DatosPagoExterno, transaccion?: EntityManager): Promise<boolean> {
     this.validarDatosExternos(pago, datos);
     const cambios = {
       payment_id: String(datos.id),
@@ -64,11 +64,12 @@ export class PagosService {
       approved_at: datos.date_approved ? new Date(datos.date_approved) : null,
     };
     if (cambios.status === 'rejected' || cambios.status === 'cancelled') {
-      if (!await this.pagosRepo.actualizarIntentoFallido(pago.id, cambios)) return;
+      if (!await this.pagosRepo.actualizarIntentoFallido(pago.id, cambios)) return false;
     } else {
       await this.pagosRepo.actualizar(pago.id, cambios, transaccion);
     }
     Object.assign(pago, cambios);
+    return true;
   }
 
   buscarPorReferencia(referencia: string): Promise<Pago | null> {
@@ -87,23 +88,13 @@ export class PagosService {
     return Math.max(0, Number(pago.amount) - Number(pago.amount_refunded ?? 0));
   }
 
-  aplicarReembolso(pago: Pago, importe: number, resuelveContracargo: boolean, transaccion: EntityManager): Promise<Pago> {
+  aplicarReembolso(pago: Pago, importe: number, transaccion: EntityManager): Promise<Pago> {
     pago.amount_refunded = Number(pago.amount_refunded ?? 0) + importe;
     if (pago.amount_refunded >= Number(pago.amount)) {
       pago.amount_refunded = Number(pago.amount);
       pago.status = 'refunded';
       pago.refunded_at = new Date();
-    } else if (resuelveContracargo && pago.status !== 'refunded') {
-      pago.status = 'approved';
     }
     return this.pagosRepo.guardar(pago, transaccion);
-  }
-
-  marcarContracargo(idPago: number, chargebackId: string, transaccion: EntityManager): Promise<void> {
-    return this.pagosRepo.actualizar(idPago, { status: 'charged_back', chargeback_id: chargebackId }, transaccion);
-  }
-
-  restaurarPagoAprobado(idPago: number, transaccion: EntityManager): Promise<void> {
-    return this.pagosRepo.actualizar(idPago, { status: 'approved', chargeback_id: null }, transaccion);
   }
 }

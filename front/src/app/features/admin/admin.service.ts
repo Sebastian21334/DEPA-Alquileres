@@ -7,6 +7,7 @@ import {
   Reserva,
 } from '../../shared/services/reservation.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import { cuerpoMensajeReclamo } from '../../shared/utils/reclamo-imagenes';
 
 export const ESTADOS_PUBLICACION_ADMINISTRACION = ['todas', 'activas', 'inactivas', 'bajas'] as const;
 export type AdminPublicacionEstado = (typeof ESTADOS_PUBLICACION_ADMINISTRACION)[number];
@@ -46,8 +47,12 @@ export interface AdminBloqueo {
     motivo: string | null;
     administradorId: number | null;
     fecha: string | null;
+    accesoLimitado?: boolean;
     apelacion?: { texto: string; fecha: string };
     respuesta?: { texto: string; fecha: string; administradorId: number };
+    mensajes?: { id: string; autor: 'usuario' | 'administracion'; texto: string; fecha: string; imagen?: string }[];
+    fechaDesbloqueo?: string | null;
+    desbloqueadoPorId?: number | null;
   };
 }
 
@@ -85,7 +90,7 @@ export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
-export type AdminSettlement = Reserva;
+export type AdminSettlement = Reserva & { fecha_disponible_pago: string | null; porcentaje_comision_depa: number | null; importe_comision_depa: number; importe_neto_anunciante: number };
 
 export interface AdminPagoLiquidacion {
   id: string;
@@ -98,6 +103,21 @@ export interface AdminPagoLiquidacion {
   moneda: string | null;
   referencia: string | null;
   observacion: string | null;
+  /** Posición del pago dentro de la liquidación, para pedir su comprobante (T56). */
+  indice: number;
+  comprobante: string | null;
+}
+
+/** T56: datos para transferir al anunciante. */
+export interface DatosTransferenciaAnunciante {
+  cbu: string | null;
+  cuit_cuil: string | null;
+}
+
+/** T44/T56: campos opcionales que acompañan al comprobante de una transferencia manual. */
+export interface DatosTransferencia {
+  referencia?: string;
+  observacion?: string;
 }
 
 export interface AdminReembolso {
@@ -112,7 +132,12 @@ export interface AdminReembolso {
   estado: 'PENDIENTE' | 'EN_PROCESO' | 'APROBADO' | 'RECHAZADO' | 'FALLIDO' | 'CANCELADO';
   motivo: string;
   creado_en: string;
+  /** Origen interno del reembolso; en los reclamos es `rec:<id del reclamo>`. */
+  referencia_interna?: string | null;
   referencia_externa?: string | null;
+  /** T44: nombre del comprobante de la transferencia; null en los registros anteriores. */
+  comprobante_nombre?: string | null;
+  observacion_transferencia?: string | null;
   resuelto_en?: string | null;
   resuelto_por?: { nombre?: string; apellido?: string } | null;
   pago?: { id: number; payment_id?: string | null } | null;
@@ -183,7 +208,7 @@ export class AdminService {
     return this.http.get<AdminSettlement[]>(`${this.api}/reservas/liquidaciones/administracion`);
   }
   consultarCbuParaPago(id: number) {
-    return this.http.get<{ cbu: string | null }>(`${this.api}/reservas/${id}/liquidacion/cbu`);
+    return this.http.get<DatosTransferenciaAnunciante>(`${this.api}/reservas/${id}/liquidacion/cbu`);
   }
   listarHistorialLiquidaciones() {
     return this.http.get<AdminPagoLiquidacion[]>(`${this.api}/reservas/liquidaciones/administracion/historial`);
@@ -222,25 +247,39 @@ export class AdminService {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
   }
 
-  registrarTransferenciaReembolso(id: number, referencia: string) {
-    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, { referencia });
+  /** T44: multipart con el comprobante obligatorio y la referencia opcional. */
+  registrarTransferenciaReembolso(id: number, comprobante: File, datos: DatosTransferencia = {}) {
+    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, this.formularioTransferencia(comprobante, datos));
+  }
+
+  /** T56: el pago al anunciante se registra con el comprobante de la transferencia. */
+  registrarPagoAnunciante(idReserva: number, comprobante: File, datos: DatosTransferencia = {}) {
+    return this.http.patch<AdminSettlement>(`${this.api}/reservas/${idReserva}/liquidacion/pago`, this.formularioTransferencia(comprobante, datos));
+  }
+
+  urlComprobantePago(idReserva: number, indice: number) {
+    return this.http.get<{ url: string }>(`${this.api}/reservas/${idReserva}/liquidacion/pagos/${indice}/comprobante`);
+  }
+
+  private formularioTransferencia(comprobante: File, { referencia, observacion }: DatosTransferencia): FormData {
+    const formulario = new FormData();
+    formulario.append('comprobante', comprobante);
+    if (referencia) formulario.append('referencia', referencia);
+    if (observacion) formulario.append('observacion', observacion);
+    return formulario;
+  }
+
+  urlComprobanteReembolso(id: number) {
+    return this.http.get<{ url: string }>(`${this.api}/reembolsos/${id}/comprobante`);
   }
 
   listarReclamos() {
     return this.http.get<Reclamo[]>(`${this.api}/reclamos/administracion`);
   }
-  urlEvidenciaReclamo(idReclamo: number, idEvidencia: number) {
-    return this.http.get<{ url: string }>(
-      `${this.api}/reclamos/${idReclamo}/evidencias/${idEvidencia}/url`,
-    );
+  responderReclamo(id: number, texto: string, imagenes: readonly File[] = []) {
+    return this.http.post<ReclamoMensaje>(`${this.api}/reclamos/${id}/mensajes`, cuerpoMensajeReclamo(texto, imagenes));
   }
-  responderReclamo(id: number, texto: string) {
-    return this.http.post<ReclamoMensaje>(`${this.api}/reclamos/${id}/mensajes`, {
-      texto,
-      visible_para: 'TODOS',
-    });
-  }
-  resolverReclamo(id: number, resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL', importe?: number, observacion?: string) {
+  resolverReclamo(id: number, resolucion: NonNullable<Reclamo['resolucion']>, importe?: number, observacion?: string) {
     return this.http.patch<Reclamo>(`${this.api}/reclamos/${id}/resolver`, {
       resolucion,
       importe,
@@ -248,15 +287,25 @@ export class AdminService {
     });
   }
   cambiarBloqueo(id: number, bloquear: boolean, motivo?: string) {
-    return this.http.patch(`${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo });
+    return this.http.patch<{ mensaje: string; accesoLimitado: boolean }>(
+      `${this.api}/usuarios/${id}/${bloquear ? 'bloquear' : 'habilitar'}`, { motivo },
+    );
   }
 
   listarBloqueados() {
     return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/bloqueados`);
   }
 
-  responderApelacion(id: number, bloqueoId: string, texto: string) {
-    return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/${id}/bloqueo/responder`, { bloqueoId, texto });
+  listarHistorialBloqueos() {
+    return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/historial-bloqueos`);
+  }
+
+  responderApelacion(id: number, bloqueoId: string, texto: string, imagen?: File | null) {
+    const datos = new FormData();
+    datos.append('bloqueoId', bloqueoId);
+    datos.append('texto', texto);
+    if (imagen) datos.append('imagen', imagen);
+    return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/${id}/bloqueo/mensajes`, datos);
   }
   aprobar(id: number, numero_revision: number, revisar_cbu: boolean, titular_cbu_confirmado: boolean) {
     return this.http.patch(`${this.api}/anunciantes/${id}/aprobar`, { numero_revision, revisar_cbu, titular_cbu_confirmado });
@@ -266,6 +315,12 @@ export class AdminService {
   }
   listarCatalogo(key: CatalogKey) {
     return this.http.get<AdminCatalogItem[]>(`${this.api}/catalogos/${key}`);
+  }
+  obtenerComisionDepa() {
+    return this.http.get<{ porcentaje: number }>(`${this.api}/catalogos/comision-depa`);
+  }
+  actualizarComisionDepa(porcentaje: number) {
+    return this.http.put<{ porcentaje: number }>(`${this.api}/catalogos/comision-depa`, { porcentaje });
   }
   listarProvincias() {
     return this.http.get<AdminProvince[]>(`${this.api}/ubicacion/provincias`);

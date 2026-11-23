@@ -1,6 +1,6 @@
 <section class="detail-shell" aria-live="polite">
   @if (administracion) {
-    <a routerLink="/admin" fragment="reclamos">← Volver a reclamos</a>
+    <a appVolver="/admin" fragmentoVolver="reclamos">← Volver</a>
   }
   @if (loading()) {
     <div class="state"><app-spinner /><p>Cargando publicación…</p></div>

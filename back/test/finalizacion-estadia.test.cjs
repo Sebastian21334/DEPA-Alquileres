@@ -27,27 +27,37 @@ function base() {
     [9,0,0,'REEMBOLSADO','2030-01-01','2030-01-01','2030-01-02','RETENIDO'],
   ];
   for (const fila of filas) insert.run(...fila);
-  const repo = { createQueryBuilder() {
+  const avisos = [];
+  const repo = { manager: {}, findOne: async ({ where }) => db.prepare('SELECT * FROM reserva WHERE id = ?').get(where.id), createQueryBuilder() {
     const conditions = [], params = {};
     const builder = {
       update() { return this; },
       set(values) { assert.deepEqual(values, { finalizada: true }); return this; },
       where(sql, values = {}) { conditions.push(sql); Object.assign(params, values); return this; },
       andWhere(sql, values = {}) { return this.where(sql, values); },
-      async execute() { return db.prepare(`UPDATE reserva SET finalizada = 1 WHERE ${conditions.join(' AND ')}`).run(params); },
+      returning(columns) { assert.deepEqual(columns, ['id']); return this; },
+      async execute() {
+        return { raw: db.prepare(`UPDATE reserva SET finalizada = 1 WHERE ${conditions.join(' AND ')} RETURNING id`).all(params) };
+      },
     };
     return builder;
   }};
-  return { db, service: new ReservaFinalizacionService(new ReservaRepository(repo), catalogosDePrueba()) };
+  const service = new ReservaFinalizacionService(new ReservaRepository(repo), catalogosDePrueba(), {
+    avisarCambio: async (reserva, destinos) => avisos.push({ id: reserva.id, destinos }),
+  });
+  return { db, service, avisos };
 }
 
 test('cierra solo estadías vencidas con pago e ingreso verificados, y conserva la liquidación', async () => {
-  const { db, service } = base();
+  const { db, service, avisos } = base();
   try {
     // Todavía es 2 de enero en Argentina.
     await service.ejecutar(new Date('2030-01-03T02:59:59Z'));
+    assert.deepEqual(avisos, []);
     assert.equal(db.prepare('SELECT finalizada FROM reserva WHERE id = 1').get().finalizada, 0);
     await service.ejecutar(new Date('2030-01-03T03:00:00Z'));
+    await service.ejecutar(new Date('2030-01-03T03:01:00Z'));
+    assert.deepEqual(avisos, [{ id: 1, destinos: ['inquilino', 'anunciante'] }]);
     const rows = db.prepare('SELECT id, finalizada, estado_liquidacion FROM reserva ORDER BY id').all();
     assert.deepEqual(rows.filter(r => r.finalizada).map(r => r.id), [1,8]);
     assert.equal(rows[0].estado_liquidacion, 'EN_REVISION');

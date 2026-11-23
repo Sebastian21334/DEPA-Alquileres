@@ -32,12 +32,12 @@ function escenario(moneda = 'ARS') {
   const publicacion = {
     id: 1,
     activa: true,
-    anunciante: { usuario: { activa: true, bloqueado: false } },
+    anunciante: { idUsuario: 2, usuario: { activa: true, bloqueado: false } },
     precio: moneda === 'USD' ? 50 : 100,
     tipoMoneda: { nombre: moneda },
     modalidad: { permite_reservas_por_fecha: true },
   };
-  const estado = { reservas: [], pagos: [], checkouts: [], alBloquear: () => {} };
+  const estado = { reservas: [], pagos: [], checkouts: [], alBloquear: () => {}, accesoLimitado: false, inquilinoBloqueado: false };
   const cotizacion = {
     id: 10, venta: '1200.000000', tipo: 'blue', proveedor: 'prueba',
     actualizada_fuente_en: new Date(), consultada_en: new Date(),
@@ -73,10 +73,16 @@ function escenario(moneda = 'ARS') {
     config,
     repositorio,
     disponibilidad,
-    { buscarPorId: async (id) => ({ id, nombre: 'Prueba', apellido: 'Reserva' }) },
+    {
+      buscarPorId: async (id) => ({ id, nombre: 'Prueba', apellido: 'Reserva' }),
+      validarCuentaParaNuevaReserva: async () => {
+        if (estado.inquilinoBloqueado) throw new Error('La cuenta no puede iniciar nuevas reservas');
+      },
+      consultarAccesoPendiente: async () => estado.accesoLimitado,
+    },
     publicaciones,
-    { enviarConfirmacion: async () => {} },
-    { crearSolicitud: async () => ({}) },
+    { enviarConfirmacion: async () => {}, avisarCambio: async () => {} },
+    { crearSolicitud: async () => ({}), registrarPagoTardio: async () => true },
     new ReservaEstadoService(publicaciones, catalogosDePrueba()),
     { proyectarEnReserva: async reserva => reserva, proyectarListado: async reservas => reservas, sincronizarDesdeReserva: async () => ({}), esLiquidacionResuelta: estado => reservasDePrueba().liquidacionResuelta({ estado_liquidacion: estado }) },
     catalogosDePrueba(),
@@ -107,7 +113,6 @@ function escenario(moneda = 'ARS') {
     }),
     reservas,
     { registrarDesdeWebhook: async () => ({}), registrarManual: async () => ({}) },
-    { registrarContracargo: async () => ({}) },
     config,
     {
       validarConfiguracionCheckout: () => {},
@@ -290,13 +295,15 @@ test('un intento rechazado permite reabrir el checkout hasta el vencimiento orig
   await assert.rejects(e.pagos.reintentarCheckout(reserva.id, USUARIO), { status: 409 });
 });
 
-test('un pago aprobado después de bloquear al anunciante no confirma la reserva', async (t) => {
+for (const accesoLimitado of [false, true]) {
+test(`un pago previo del anunciante bloqueado ${accesoLimitado ? 'se confirma durante el acceso limitado' : 'se deriva a revisión en bloqueo total'}`, async (t) => {
   const e = escenario('ARS');
   const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
   t.mock.timers.setTime(AHORA + 60000);
   await e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO);
   const reserva = e.estado.reservas[0];
   e.publicacion.anunciante.usuario.bloqueado = true;
+  e.estado.accesoLimitado = accesoLimitado;
   e.estado.pagoExterno = {
     id: 123,
     external_reference: `reserva:${reserva.id}`,
@@ -306,8 +313,19 @@ test('un pago aprobado después de bloquear al anunciante no confirma la reserva
     date_approved: new Date().toISOString(),
   };
   await e.pagos.procesarWebhook({ dataId: '123' });
-  assert.equal(reserva.cancelada, true);
-  assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  assert.equal(reserva.cancelada, !accesoLimitado);
+  if (accesoLimitado) assert.equal(reserva.estado_pago, 'APROBADO');
+  else assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+});
+}
+
+test('el bloqueo del inquilino se comprueba antes de guardar un checkout nuevo', async () => {
+  const e = escenario();
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  e.estado.inquilinoBloqueado = true;
+  await assert.rejects(e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO),
+    /cuenta no puede iniciar nuevas reservas/);
+  sinOperaciones(e.estado);
 });
 
 test('USD: una variacion del dolar no invalida la conversion de un presupuesto vigente', async () => {

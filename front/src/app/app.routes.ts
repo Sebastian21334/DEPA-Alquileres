@@ -4,6 +4,11 @@ import { anuncianteGuard, authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
+    path: 'terminos/:tipo',
+    loadComponent: () => import('./features/terminos/terminos.component').then((m) => m.TerminosComponent),
+    title: 'Términos y condiciones - DEPA',
+  },
+  {
     path: 'admin',
     canActivate: [adminGuard],
     loadComponent: () => import('./features/admin/admin.component').then((m) => m.AdminComponent),
@@ -21,6 +26,14 @@ export const routes: Routes = [
     data: { administracion: true },
     loadComponent: () => import('./features/publication-detail/publication-detail.component').then((m) => m.PublicationDetailComponent),
     title: 'Publicación de la reserva - DEPA',
+  },
+  {
+    // T53: el admin ve el resumen de cualquier reserva en solo lectura.
+    path: 'admin/reservas/:id',
+    canActivate: [adminGuard],
+    data: { administracion: true },
+    loadComponent: () => import('./features/reserva-resultado/reserva-resultado.component').then((m) => m.ReservaResultadoComponent),
+    title: 'Detalle de la reserva - DEPA',
   },
   {
     path: '403',
@@ -161,6 +174,20 @@ export const routes: Routes = [
         (m) => m.VerificarCuentaComponent,
       ),
     title: 'Verificar cuenta — DEPA',
+  },
+  {
+    path: 'reactivar-cuenta',
+    loadComponent: () =>
+      import('./features/auth/reactivar-cuenta/reactivar-cuenta.component').then(
+        (m) => m.ReactivarCuentaComponent,
+      ),
+    title: 'Recuperar cuenta — DEPA',
+  },
+  {
+    path: 'confirmar-baja',
+    loadComponent: () =>
+      import('./features/auth/confirmar-baja/confirmar-baja.component').then((m) => m.ConfirmarBajaComponent),
+    title: 'Confirmar baja de cuenta — DEPA',
   },
   {
     path: 'recuperar-contrasenia',

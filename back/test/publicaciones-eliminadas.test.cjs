@@ -239,7 +239,7 @@ test('el acceso opcional permite anónimos y valida tokens antes de confiar en e
   assert.equal(await guard.canActivate(context), true);
   const validar = t.mock.method(JwtAuthGuard.prototype, 'canActivate', () => { throw new Error('Token inválido'); });
   request.headers.authorization = 'Bearer invalido';
-  assert.throws(() => guard.canActivate(context), /Token inválido/);
+  await assert.rejects(guard.canActivate(context), /Token inválido/);
   assert.equal(validar.mock.callCount(), 1);
 });
 
@@ -255,7 +255,7 @@ test('HTTP: elimina con permiso y conserva el detalle solo para la sesión del i
   const { DisponibilidadService } = require('../dist/disponibilidad/service/disponibilidad.service');
   const { JwtStrategy } = require('../dist/seguridad/strategy/jwt.strategy');
   const { SeguridadService } = require('../dist/seguridad/service/seguridad.service');
-  const { UsuariosConsultaService } = require('../dist/usuarios-consulta/service/usuarios-consulta.service');
+  const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
   const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
   const e = escenario();
   const bloqueados = new Set();
@@ -273,8 +273,8 @@ test('HTTP: elimina con permiso y conserva el detalle solo para la sesión del i
         buscarPorPublicacion: async () => [{ fecha: '2030-02-12', disponible: false }],
       }, e.servicio) },
       { provide: ConfigService, useValue: { getOrThrow: () => 'secreto-local-exclusivo-de-pruebas' } },
-      { provide: UsuariosConsultaService, useValue: {
-        buscarPorId: async id => ({ id, activa: true, bloqueado: bloqueados.has(id) }),
+      { provide: UsuariosService, useValue: {
+        buscarParaSesion: async id => ({ id, activa: true, bloqueado: bloqueados.has(id) }),
       } },
       { provide: AnunciantesService, useValue: {
         buscarPorUsuario: async id => ({ idUsuario: id, verificado: true }),

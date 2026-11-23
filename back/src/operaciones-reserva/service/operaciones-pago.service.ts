@@ -14,8 +14,8 @@ import { PagosService } from '../../pagos/service/pagos.service';
 import { MercadoPagoService, type FirmaWebhookPago, type PagoExterno } from '../../mercado-pago/service/mercado-pago.service';
 import type { WebhookPago } from '../dto/webhook-pago.dto';
 import { ReservasService } from '../../reservas/service/reservas.service';
+import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
-import { DisputasService } from '../../disputas/service/disputas.service';
 import { CrearCheckoutDto } from '../dto/crear-checkout.dto';
 import type { Pago } from '../../pagos/entity/pago.entity';
 
@@ -23,7 +23,7 @@ import type { Pago } from '../../pagos/entity/pago.entity';
 export class OperacionesPagoService {
   private readonly logger = new Logger(OperacionesPagoService.name);
 
-  constructor(private readonly presupuestos: PresupuestosService, private readonly pagos: PagosService, private readonly reservasService: ReservasService, private readonly reembolsosService: ReembolsosService, private readonly disputasService: DisputasService, private readonly config: ConfigService, private readonly pasarela: MercadoPagoService, private readonly catalogos: CatalogosService, private readonly operacionesReembolso: OperacionesReembolsoService) {}
+  constructor(private readonly presupuestos: PresupuestosService, private readonly pagos: PagosService, private readonly reservasService: ReservasService, private readonly reembolsosService: ReembolsosService, private readonly config: ConfigService, private readonly pasarela: MercadoPagoService, private readonly catalogos: CatalogosService, private readonly operacionesReembolso: OperacionesReembolsoService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
   async crearCheckout(dto: CrearCheckoutDto, idUsuario: number) {
     this.pasarela.validarConfiguracionCheckout();
@@ -139,23 +139,10 @@ export class OperacionesPagoService {
     const pago = await this.pagos.buscarPorReferencia(externalReference);
     if (!pago) throw new BadRequestException('No existe el pago informado');
 
-    if (payment.status === 'charged_back') {
-      this.pagos.validarDatosExternos(pago, payment);
-      await this.disputasService.registrarContracargo({
-        idReserva: pago.reserva.id,
-        idPago: pago.id,
-        chargebackId:
-          payment.chargeback_id ??
-          `payment:${payment.id}:charged_back`,
-        importe: Number(payment.transaction_amount ?? pago.amount),
-        motivo: payment.status_detail ?? 'Contracargo informado por Mercado Pago',
-        pagoExterno: payment,
-      });
-      const actual = await this.pagos.buscarPorId(pago.id);
-      return Object.assign(actual, { reserva: pago.reserva });
-    }
+    // DEPA gestiona los contracargos fuera de la aplicación.
+    if (payment.status === 'charged_back') return pago;
 
-    await this.pagos.registrarEstadoExterno(pago, payment);
+    const actualizado = await this.pagos.registrarEstadoExterno(pago, payment);
 
     if (payment.status === 'refunded' || payment.refunds?.length) {
       const movimientos = payment.refunds?.length ? payment.refunds :
@@ -169,6 +156,8 @@ export class OperacionesPagoService {
       }
     } else if (payment.status === 'approved') {
       await this.reservasService.confirmarPago(pago.reserva.id, pago.approved_at ?? new Date());
+    } else if (actualizado && (payment.status === 'rejected' || payment.status === 'cancelled')) {
+      await this.notificaciones?.avisarPagoNoAprobado(pago.reserva.id);
     }
 
     return pago;
@@ -193,15 +182,15 @@ export class OperacionesPagoService {
     };
   }
 
-  async consultarResumen(idReserva: number, idUsuario: number) {
-    const reserva = await this.reservasService.buscarPorId(
-      idReserva,
-      idUsuario,
-    );
+  /** T53: el admin también lo consulta, en solo lectura, para ver el detalle de cualquier reserva. */
+  async consultarResumen(idReserva: number, idUsuario: number, esAdmin = false) {
+    const reserva = esAdmin
+      ? await this.reservasService.buscarParaAdministracion(idReserva)
+      : await this.reservasService.buscarPorId(idReserva, idUsuario);
     const pago = await this.pagos.buscarPorReserva(idReserva, false);
     return {
       reserva,
-      puede_reintentar: this.puedeReintentar(reserva, pago, idUsuario),
+      puede_reintentar: !esAdmin && this.puedeReintentar(reserva, pago, idUsuario),
       pago: pago
         ? {
             preference_id: pago.preference_id,

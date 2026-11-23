@@ -62,6 +62,9 @@ export class Reserva {
   @Column({ name: 'monto_pago', type: 'decimal', precision: 10, scale: 2 })
   monto_pago: number;
 
+  @Column({ name: 'porcentaje_comision_depa', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  porcentaje_comision_depa: number | null;
+
   // Condiciones aceptadas al reservar; nunca se recalculan al cambiar fechas.
   @Column({
     name: 'precio_unitario_contratado',

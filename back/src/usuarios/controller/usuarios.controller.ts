@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Header,
+  Headers,
   Patch,
   Post,
   Param,
@@ -27,10 +28,11 @@ const TIPOS_FOTO = [
   'image/heif',
 ];
 import { UsuariosService } from '../service/usuarios.service';
-import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
+import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { CambiarPausaActividadesDto } from '../dto/cambiar-pausa-actividades.dto';
+import { ConfirmarBajaDto } from '../dto/confirmar-baja.dto';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import { ResponderApelacionDto } from '../dto/responder-apelacion.dto';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
@@ -61,6 +63,14 @@ export class UsuariosController {
     return this.usuariosService.listarBloqueados();
   }
 
+  @Get('administracion/historial-bloqueos')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  listarHistorialBloqueos() {
+    return this.usuariosService.listarHistorialBloqueos();
+  }
+
   @Get('administracion/:id')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -76,6 +86,16 @@ export class UsuariosController {
     return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto);
   }
 
+  @Post(':id/bloqueo/mensajes')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  @UseInterceptors(FileInterceptor('imagen', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
+  enviarMensajeApelacion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true })) dto: ResponderApelacionDto, @Req() req: AuthenticatedRequest, @UploadedFile() archivo?: Express.Multer.File) {
+    return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto, archivo);
+  }
+
+  @PermitirAccesoLimitado()
   @Get('me')
   @UseGuards(JwtAuthGuard)
   // Perfil propio: el id sale del JWT, así un usuario solo puede leer sus datos.
@@ -120,10 +140,17 @@ export class UsuariosController {
     return this.usuariosService.eliminarFoto(req.user.id);
   }
 
-  @Delete('me')
+  @Post('me/baja')
+  @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard)
-  darDeBajaPropia(@Req() req: AuthenticatedRequest) {
-    return this.usuariosService.darDeBajaPropia(req.user.id);
+  solicitarBajaPropia(@Req() req: AuthenticatedRequest, @Headers('origin') origen?: string) {
+    return this.usuariosService.solicitarBajaPropia(req.user.id, origen);
+  }
+
+  @Post('baja/confirmar')
+  @Header('Cache-Control', 'no-store')
+  confirmarBajaPropia(@Body() dto: ConfirmarBajaDto) {
+    return this.usuariosService.confirmarBajaPropia(dto.token);
   }
 
   @Patch(':id')

@@ -29,7 +29,7 @@ describe('CP-08 · Inicio de sesión con tablas de decisión', () => {
   let idUsuario1: number;
   let tokenAdmin: string;
 
-  // Precondiciones: "Tester_LD_TD" registrado y sin verificar su email; el
+  // Precondiciones: el usuario de prueba está registrado y sin verificar su email; el
   // usuario leandrodidrig@gmail.com tiene rol Administrador.
   beforeAll(async () => {
     ctx = await crearAppDePrueba();
@@ -41,11 +41,12 @@ describe('CP-08 · Inicio de sesión con tablas de decisión', () => {
       rol: 'Administrador',
     });
     const registro = await request(ctx.app.getHttpServer()).post('/auth/register').send({
-      nombre: 'Tester_LD_TD',
+      nombre: 'Leandro',
       apellido: 'Prueba',
       email: DATA.emailUsuario1,
       telefono: '6942067',
       contrasenia: DATA.contraseniaUsuario1,
+      aceptaTerminos: true,
     });
     expect(registro.status).toBe(201);
     idUsuario1 = ctx.usuarios.porEmail(DATA.emailUsuario1)!.id;

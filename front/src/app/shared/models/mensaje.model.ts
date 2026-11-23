@@ -7,6 +7,7 @@ export interface Mensaje {
   fecha: string;
   leido: boolean;
   fecha_lectura: string | null;
+  contactoSuspendido?: boolean;
   origenUsuario: Usuario;
   destinoUsuario: Usuario;
   publicacion: { id: number; titulo: string; eliminada?: boolean };

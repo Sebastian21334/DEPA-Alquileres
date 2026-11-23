@@ -1,0 +1,6 @@
+@use '../mi-perfil/perfil-base';
+
+.volver { align-self: flex-start; color: var(--color-text-muted); font-weight: 650; text-decoration: none; }
+.volver:hover, .volver:focus-visible { color: var(--color-primary); }
+.profile-hero__id { margin: 0 0 0.2rem; color: var(--color-text-muted); font-size: 0.85rem; font-weight: 650; }
+.profile-section { padding: 1.4rem 0.2rem 0.4rem; }

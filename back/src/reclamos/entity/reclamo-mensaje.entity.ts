@@ -6,9 +6,11 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Reclamo } from './reclamo.entity';
+import { ReclamoEvidencia } from './reclamo-evidencia.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 
 export const VisibilidadMensajeReclamo = codigosCatalogo('RECLAMO_VISIBILIDAD');
@@ -45,4 +47,8 @@ export class ReclamoMensaje {
 
   @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
   creado_en: Date;
+
+  // T49: imágenes enviadas con este mensaje.
+  @OneToMany(() => ReclamoEvidencia, (evidencia) => evidencia.mensaje)
+  evidencias?: Relation<ReclamoEvidencia[]>;
 }

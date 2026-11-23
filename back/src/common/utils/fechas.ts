@@ -12,12 +12,28 @@ export function fechaArgentina(ahora = new Date()): string {
   return `${parte('year')}-${parte('month')}-${parte('day')}`;
 }
 
+/** Milisegundos de un día corrido; evita repetir el literal en cada cálculo. */
+export const MS_POR_DIA = 86_400_000;
+
 /** Días corridos entre dos fechas de calendario, sin depender de la zona del servidor. */
 export function diasDeAntelacion(fecha: string, hoy = fechaArgentina()): number {
   return Math.round(
     (Date.parse(`${fecha}T00:00:00Z`) - Date.parse(`${hoy}T00:00:00Z`)) /
-      86_400_000,
+      MS_POR_DIA,
   );
+}
+
+/** Suma días corridos a una fecha `AAAA-MM-DD`, sin depender del huso horario. */
+export function sumarDiasCalendario(fecha: string, dias: number): string {
+  const valor = new Date(`${fecha}T00:00:00Z`);
+  valor.setUTCDate(valor.getUTCDate() + dias);
+  return valor.toISOString().slice(0, 10);
+}
+
+/** `AAAA-MM-DD` → `DD/MM/AAAA` para los mensajes al usuario. */
+export function fechaParaMostrar(fecha: string): string {
+  const [anio, mes, dia] = fecha.split('-');
+  return `${dia}/${mes}/${anio}`;
 }
 
 export function esFechaCalendarioValida(fecha: string | null): fecha is string {

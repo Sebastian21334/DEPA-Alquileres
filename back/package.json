@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "db:reactivacion-cuenta": "node scripts/reactivacion-cuenta.cjs",
     "db:pausa-actividades": "node scripts/pausa-actividades.cjs",
     "db:cbu-anunciantes": "node scripts/cbu-anunciantes.cjs --aplicar",
     "db:apelaciones-bloqueo": "node scripts/apelaciones-bloqueo.cjs",
@@ -52,7 +53,10 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "oxlint src/"
+    "lint": "oxlint src/",
+    "db:comision-depa": "node scripts/comision-depa.cjs",
+    "db:comprobante-reembolso": "node scripts/comprobante-reembolso.cjs --aplicar",
+    "db:imagenes-mensajes-reclamo": "node scripts/imagenes-mensajes-reclamo.cjs --aplicar"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",

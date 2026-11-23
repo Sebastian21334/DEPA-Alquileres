@@ -113,6 +113,11 @@ const fechas = Array.from({ length: 70 }, (_, i) => ({
   disponible: true,
   reserva: null,
 }));
+const casoCancelacion = params.get('cancelacion');
+const cancelacionAnunciante = casoCancelacion?.startsWith('anunciante-') ?? false;
+const diasCancelacion = casoCancelacion === 'sin-devolucion' ? 1
+  : casoCancelacion === 'anunciante-posterior' ? -1
+  : ['iniciada', 'anunciante-ingreso', 'anunciante-validada'].includes(casoCancelacion ?? '') ? 0 : null;
 const reservas = publicaciones.map((p, i) => ({
   id: i + 1,
   publicacion: p,
@@ -121,15 +126,16 @@ const reservas = publicaciones.map((p, i) => ({
   usuario_apellido: user.apellido,
   usuario_email: user.email,
   usuario_telefono: user.telefono,
-  estado_estadia: i === 1 ? 'EN_CURSO' : 'CONFIRMADA',
+  estado_estadia: i === 1 || (i === 2 && casoCancelacion === 'anunciante-validada') ? 'EN_CURSO'
+    : i === 2 && diasCancelacion !== null && diasCancelacion <= 0 ? 'PENDIENTE_INGRESO' : 'CONFIRMADA',
   finalizada: false,
   cancelada: false,
-  fecha_inicio: fecha(10 + i),
+  fecha_inicio: fecha(i === 2 && diasCancelacion !== null ? diasCancelacion : 10 + i),
   fecha_fin: fecha(14 + i),
   fecha_pago: new Date().toISOString(),
   estado_pago: 'APROBADO',
   estado_liquidacion: i === 0 ? 'EN_REVISION' : 'RETENIDO',
-  codigo_validado_en: i === 1 ? new Date().toISOString() : null,
+  codigo_validado_en: i === 1 || (i === 2 && casoCancelacion === 'anunciante-validada') ? new Date().toISOString() : null,
   codigo_generado_en: new Date().toISOString(),
   monto_pago: 175000,
   moneda_contratada: 'ARS',
@@ -169,12 +175,20 @@ const page = <T>(datos: T[]) => ({
   totalPaginas: 1,
   totalRegistros: datos.length,
 });
+// Cancelaciones de prueba: el envío solo modifica este mapa en memoria.
+const cancelaciones = new Map<number, { id: number; estado: string; motivo: string; creada_en: string }>();
 const interceptor: HttpInterceptorFn = (req) => {
   const url = new URL(req.url, location.origin);
   const p = url.pathname.replace(/^\/api/, '');
   let body;
   if (req.method !== 'GET') {
     if (p.endsWith('/visualizacion')) body = { visualizaciones: 126 };
+    else if (location.pathname === '/mis-reservas' && /^\/reservas\/\d+\/cancelacion$/.test(p) && req.method === 'POST') {
+      const id = Number(p.split('/')[2]);
+      const datos = req.body as { motivo: string };
+      body = cancelaciones.get(id) ?? { id, estado: 'PENDIENTE', motivo: datos.motivo, creada_en: new Date().toISOString() };
+      cancelaciones.set(id, body);
+    }
     else if (location.pathname === '/mis-publicaciones' && /^\/publicaciones\/\d+\/restaurar$/.test(p) && req.method === 'PATCH') {
       const pub = publicaciones.find(pub => pub.id === Number(p.split('/')[2]))!;
       Object.assign(pub, { eliminada: false, activa: false });
@@ -264,6 +278,21 @@ const interceptor: HttpInterceptorFn = (req) => {
       validado_en: null,
       estado_liquidacion: 'RETENIDO',
     };
+  else if (/^\/reservas\/\d+\/cancelacion\/condiciones$/.test(p)) {
+    const id = Number(p.split('/')[2]);
+    const dias = id === 3 && diasCancelacion !== null ? diasCancelacion : 10 + id - 1;
+    const bloqueo = (dias <= 0 && !cancelacionAnunciante) || (id === 3 && casoCancelacion === 'anunciante-validada');
+    const sinDevolucion = dias === 1 && !cancelacionAnunciante;
+    body = {
+      solicitud: cancelaciones.get(id) ?? null,
+      motivoBloqueo: bloqueo ? 'Desde la fecha de ingreso no se puede solicitar la cancelación.' : null,
+      advertencia: sinDevolucion ? 'Faltan menos de 2 días para el ingreso. Si se aprueba la cancelación, no recibirás devolución del importe pagado (0 %).' : null,
+      admiteReembolso: true, devolucionPorTransferencia: false,
+      politica: { diasDevolucionTotal: 7, diasDevolucionParcial: 2, porcentajeTotal: 100, porcentajeParcial: 50, porcentajeFueraDePlazo: 0, porcentajeOtrosActores: 100 },
+      devolucion: bloqueo ? null : { fechaSolicitud: fecha(0), diasAnticipacion: dias, porcentaje: sinDevolucion ? 0 : 100, importe: sinDevolucion ? 0 : 175000, moneda: 'ARS' },
+    };
+  }
+  else if (p.endsWith('/reembolsos')) body = [];
   else if (p.startsWith('/reservas/')) body = reservas;
   else if (p === '/mensajes')
     body = [

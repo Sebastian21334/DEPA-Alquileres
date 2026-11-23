@@ -13,7 +13,7 @@ const { Publicacion } = require('../dist/publicaciones/entity/publicacion.entity
 const { Reserva } = require('../dist/reservas/entity/reserva.entity');
 const { JwtStrategy } = require('../dist/seguridad/strategy/jwt.strategy');
 const { SeguridadService } = require('../dist/seguridad/service/seguridad.service');
-const { UsuariosConsultaService } = require('../dist/usuarios-consulta/service/usuarios-consulta.service');
+const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
 const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
@@ -53,8 +53,8 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     providers: [JwtStrategy, SeguridadService,
       { provide: PublicacionesService, useValue: servicio },
       { provide: ConfigService, useValue: { getOrThrow: () => 'papelera-solo-pruebas' } },
-      { provide: UsuariosConsultaService, useValue: {
-        buscarPorId: async id => ({ id, activa: true, bloqueado: bloqueados.has(id), rol: { nombre: id === 9 ? 'Administrador' : 'Anunciante' } }),
+      { provide: UsuariosService, useValue: {
+        buscarParaSesion: async id => ({ id, activa: true, bloqueado: bloqueados.has(id), rol: { nombre: id === 9 ? 'Administrador' : 'Anunciante' } }),
       } },
       { provide: AnunciantesService, useValue: {
         buscarPorUsuario: async id => id === 1 ? null : ({ idUsuario: id, verificado: id !== 4 }),

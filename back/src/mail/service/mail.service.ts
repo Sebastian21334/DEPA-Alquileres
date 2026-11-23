@@ -14,16 +14,22 @@ import { MailPlantilla } from '../presentation/mail-plantilla';
 @Injectable()
 export class MailService implements IMailService {
   private readonly frontendUrl: string;
+  private readonly frontendUrls: readonly string[];
 
   constructor(@Inject(CORREO_REPOSITORY) private readonly correos: ICorreoRepository, private readonly plantillas: MailPlantilla, config: ConfigService) {
-    this.frontendUrl = config
+    this.frontendUrls = config
       .getOrThrow<string>('FRONTEND_URLS')
-      .split(',')[0]
-      .trim();
+      .split(',')
+      .map((url) => url.trim().replace(/\/+$/, ''));
+    this.frontendUrl = this.frontendUrls[0];
   }
 
-  async enviarVerificacion(destinatario: string, token: string): Promise<void> {
-    const link = `${this.frontendUrl}/verificar-cuenta?token=${token}`;
+  private frontendDeSolicitud(origen?: string): string {
+    return origen && this.frontendUrls.includes(origen) ? origen : this.frontendUrl;
+  }
+
+  async enviarVerificacion(destinatario: string, token: string, origen?: string): Promise<void> {
+    const link = `${this.frontendDeSolicitud(origen)}/verificar-cuenta?token=${token}`;
 
     await this.enviar(
       destinatario,
@@ -32,6 +38,18 @@ export class MailService implements IMailService {
        ${this.plantillas.boton('Verificar mi cuenta', link)}
        <p style="margin:20px 0 0;color:#667085;font-size:13px">Si no creaste una cuenta en DEPA, podés ignorar este mensaje con tranquilidad.</p>`,
       'Confirmá tu correo para comenzar a usar DEPA.',
+    );
+  }
+
+  enviarReactivacion(destinatario: string, token: string, origen?: string): Promise<void> {
+    const enlace = `${this.frontendDeSolicitud(origen)}/reactivar-cuenta#${encodeURIComponent(token)}`;
+    return this.enviar(
+      destinatario,
+      'Recuperá tu cuenta de DEPA',
+      `<p>Recibimos una solicitud para recuperar una cuenta dada de baja. Abrí el enlace e ingresá la contraseña que usabas en esa cuenta.</p>
+       ${this.plantillas.boton('Recuperar mi cuenta', enlace)}
+       <p>El enlace vence en 2 horas. Si no pediste recuperar la cuenta, podés ignorar este correo.</p>`,
+      'Confirmá que querés recuperar tu cuenta de DEPA.',
     );
   }
 
@@ -64,8 +82,10 @@ export class MailService implements IMailService {
       'Restablecé tu contraseña de DEPA',
       `<p style="margin:0 0 16px">Recibimos una solicitud para cambiar la contraseña de tu cuenta.</p>
        ${this.plantillas.boton('Crear una contraseña nueva', link)}
-       <p style="margin:20px 0 0;color:#667085;font-size:13px">El enlace vence en 2 horas y solo puede usarse una vez. Si pedís uno nuevo, el anterior deja de funcionar. Si no solicitaste recuperar el acceso, podés ignorar este mensaje.</p>`,
+       <p style="margin:20px 0 12px">El enlace vence en 2 horas y solo puede usarse una vez. Si pedís uno nuevo, el anterior deja de funcionar.</p>
+       <p style="margin:0">Si no solicitaste este cambio, podés ignorar este mensaje.</p>`,
       'Usá este enlace seguro para recuperar el acceso a tu cuenta.',
+      { titulo: 'Restablecé tu contraseña', icono: '🔑' },
     );
   }
 
@@ -173,12 +193,15 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string): Promise<void> {
+  async enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string, accesoLimitado = false): Promise<void> {
     const motivoSeguro = motivo
       ? `<p>Motivo: ${this.plantillas.escapar(motivo)}</p>`
       : '';
+    const avisoPendientes = accesoLimitado
+      ? '<p>Podés iniciar sesión para resolver tus operaciones pendientes. Al terminarlas, tu acceso quedará limitado a consultar y apelar el bloqueo.</p>'
+      : '';
     const contenido = bloqueado
-      ? `<p>Tu cuenta fue bloqueada.</p>${motivoSeguro}<p>Ingresá con tus credenciales para consultar el bloqueo o presentar una apelación.</p>`
+      ? `<p>Tu cuenta fue bloqueada.</p>${motivoSeguro}${avisoPendientes}<p>Ingresá con tus credenciales para consultar el bloqueo o presentar una apelación.</p>`
       : '<p>Tu cuenta fue habilitada nuevamente. Ya podés iniciar sesión.</p>';
     await this.enviar(
       destinatario,
@@ -204,11 +227,33 @@ export class MailService implements IMailService {
     );
   }
 
-  private enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.'): Promise<void> {
+  enviarConfirmacionBaja(destinatario: string, token: string, origen?: string): Promise<void> {
+    const enlace = `${this.frontendDeSolicitud(origen)}/confirmar-baja#${encodeURIComponent(token)}`;
+    return this.enviar(
+      destinatario,
+      'Confirmá la baja de tu cuenta de DEPA',
+      `<p>Recibimos una solicitud para dar de baja tu cuenta. Abrí el enlace y confirmá la baja si querés continuar.</p>
+       ${this.plantillas.boton('Revisar y confirmar la baja', enlace)}
+       <p>El enlace vence en 30 minutos. Si no pediste la baja, podés ignorar este correo.</p>`,
+      'Tu cuenta sigue activa hasta que confirmes la baja.',
+    );
+  }
+
+  enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: 'inquilino' | 'anunciante' | 'admin'): Promise<void> {
+    const rutas = { inquilino: '/mis-reservas', anunciante: '/dashboard', admin: '/admin' };
+    return this.enviar(
+      destinatario,
+      asunto,
+      `<p>${this.plantillas.escapar(mensaje)}</p><p>Reserva #${this.plantillas.escapar(String(idReserva))}</p>${this.plantillas.boton('Abrir DEPA', this.frontendUrl + rutas[panel])}`,
+      mensaje,
+    );
+  }
+
+  private enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.', encabezado = { titulo: asunto, icono: '✉' }): Promise<void> {
     return this.correos.enviar({
       destinatario,
       asunto,
-      html: this.plantillas.plantilla(preheader, html),
+      html: this.plantillas.plantilla(preheader, html, encabezado.titulo, this.frontendUrl, encabezado.icono),
     });
   }
 }

@@ -106,8 +106,14 @@
                   }
                 </div>
               </section>
-            }
 
+              <div class="terminos-consentimiento">
+                <label><input type="checkbox" formControlName="aceptaTerminos" /> <span>Leí y acepto los <a routerLink="/terminos/anunciantes" target="_blank" rel="noopener">términos y condiciones para anunciantes</a>.</span></label>
+                @if (form.controls.aceptaTerminos.invalid && form.controls.aceptaTerminos.touched) {
+                  <span class="acct-hint acct-hint--error" role="alert">Aceptá los términos para continuar.</span>
+                }
+              </div>
+            }
             <div class="acct-actions form-actions">
               <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviando()">
                 {{ enviando() ? 'Guardando…' : 'Continuar' }}
@@ -153,24 +159,8 @@
                   <div><dt>DNI del corredor</dt><dd>{{ solicitud()?.dni_corredor || '—' }}</dd></div>
                 </dl>
                 <div class="acct-grid">
-                  <div class="acct-field">
-                    <label for="constancia-matricula">Constancia de matrícula profesional</label>
-                    <input id="constancia-matricula" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'matricula')" />
-                    @if (matricula(); as archivo) {
-                      <span class="acct-hint">Archivo seleccionado: {{ archivo.name }}</span>
-                    } @else {
-                      <span class="acct-hint">PDF, JPG o PNG de hasta 5 MB.</span>
-                    }
-                  </div>
-                  <div class="acct-field">
-                    <label for="constancia-cuit">Constancia de CUIT de la inmobiliaria</label>
-                    <input id="constancia-cuit" type="file" accept=".pdf,.jpg,.jpeg,.png" (change)="seleccionarConstancia($event, 'cuit')" />
-                    @if (constanciaCuit(); as archivo) {
-                      <span class="acct-hint">Archivo seleccionado: {{ archivo.name }}</span>
-                    } @else {
-                      <span class="acct-hint">PDF, JPG o PNG de hasta 5 MB.</span>
-                    }
-                  </div>
+                  <app-carga-comprobante etiqueta="Constancia de matrícula profesional" accion="Elegí o arrastrá la constancia" [(archivo)]="matricula" [deshabilitado]="enviando()" />
+                  <app-carga-comprobante etiqueta="Constancia de CUIT de la inmobiliaria" accion="Elegí o arrastrá la constancia" [(archivo)]="constanciaCuit" [deshabilitado]="enviando()" />
                 </div>
               </section>
             }

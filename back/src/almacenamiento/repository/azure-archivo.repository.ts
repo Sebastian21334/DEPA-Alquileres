@@ -25,6 +25,13 @@ export class AzureArchivoRepository implements IArchivoRepository {
     await contenedor.deleteBlob(nombre);
   }
 
+  async eliminarArchivo(tipo: ContenedorArchivos, url: string): Promise<void> {
+    const contenedor = this.contenedor(tipo);
+    const nombre = this.nombrePropio(url, contenedor.url);
+    if (nombre === null) throw new Error('El archivo no pertenece al contenedor indicado');
+    await contenedor.getBlobClient(nombre).deleteIfExists();
+  }
+
   async firmarArchivo(tipo: ContenedorArchivos, url: string): Promise<string> {
     const contenedor = this.contenedor(tipo);
     const nombre = this.nombrePropio(url, contenedor.url);

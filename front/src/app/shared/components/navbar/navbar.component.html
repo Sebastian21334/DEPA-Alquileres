@@ -10,7 +10,9 @@
         (click)="abrirMenu()"
       >☰</button>
 
-      @if (auth.isAuthenticated) {
+      @if (accesoLimitado()) {
+        <span class="navbar__link navbar__name">{{ nombreVisible() }}</span>
+      } @else if (auth.isAuthenticated) {
         <a routerLink="/mi-perfil" class="navbar__user" title="Mi perfil">
           <app-avatar class="navbar__avatar" [foto]="perfil.usuario()?.foto_url" [nombre]="nombreVisible()" />
           <span class="navbar__link navbar__name">{{ nombreVisible() }}</span>
@@ -25,7 +27,7 @@
       }
     </div>
 
-    <a routerLink="/" class="navbar__logo" aria-label="Ir al inicio">
+    <a [routerLink]="accesoLimitado() ? '/mis-reservas' : '/'" class="navbar__logo" [attr.aria-label]="accesoLimitado() ? 'Ir a mis reservas' : 'Ir al inicio'">
       <img src="/images/Logo.png" alt="DEPA" class="navbar__logo-img">
     </a>
 
@@ -43,7 +45,7 @@
           @if (notificacionesAbiertas()) {
             <section id="notificaciones-pendientes" class="navbar__notification-panel" aria-label="Notificaciones pendientes">
               <h2>Notificaciones</h2>
-              @if (perfil.cbuEnRevision()) {
+              @if (!accesoLimitado() && perfil.cbuEnRevision()) {
                 <a routerLink="/mi-perfil/validar-cbu" (click)="cerrarMenu()">
                   <strong>CBU en revisión</strong>
                   <small>Te avisaremos por correo cuando se valide tu CBU.</small>
@@ -70,7 +72,9 @@
       } @else {
         <a routerLink="/ser-anunciante" class="navbar__owner-cta">¿Sos propietario?</a>
       }
-      <a routerLink="/publicaciones/nueva" class="btn btn--primary shine">Publicar</a>
+      @if (!accesoLimitado()) {
+        <a routerLink="/publicaciones/nueva" class="btn btn--primary shine">Publicar</a>
+      }
     </div>
   </div>
 </header>
@@ -91,7 +95,7 @@
     </button>
   </div>
 
-  @if (auth.isAuthenticated) {
+  @if (auth.isAuthenticated && !accesoLimitado()) {
     <a routerLink="/mi-perfil" class="drawer__user">
       <app-avatar class="navbar__avatar" [foto]="perfil.usuario()?.foto_url" [nombre]="nombreVisible()" />
       <span class="drawer__user-text">
@@ -104,29 +108,31 @@
   }
 
   <ul class="drawer__list">
-    <li>
-      <a routerLink="/" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" class="drawer__item">
-        <svg lucideHouse [size]="20"></svg> Inicio
-      </a>
-    </li>
-    <li>
-      <a routerLink="/publicaciones" routerLinkActive="is-active" class="drawer__item">
-        <svg lucideLayoutList [size]="20"></svg> Explorar publicaciones
-      </a>
-    </li>
-
+    @if (!accesoLimitado()) {
+      <li>
+        <a routerLink="/" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" class="drawer__item">
+          <svg lucideHouse [size]="20"></svg> Inicio
+        </a>
+      </li>
+      <li>
+        <a routerLink="/publicaciones" routerLinkActive="is-active" class="drawer__item">
+          <svg lucideLayoutList [size]="20"></svg> Explorar publicaciones
+        </a>
+      </li>
+    }
     @if (auth.isAuthenticated) {
-      <li>
-        <a routerLink="/mi-perfil" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" class="drawer__item">
-          <svg lucideUser [size]="20"></svg> Mi perfil
-        </a>
-      </li>
-      <li>
-        <a routerLink="/favoritos" routerLinkActive="is-active" class="drawer__item">
-          <svg lucideBookmark [size]="20"></svg> Mis favoritos
-        </a>
-      </li>
-
+      @if (!accesoLimitado()) {
+        <li>
+          <a routerLink="/mi-perfil" routerLinkActive="is-active" [routerLinkActiveOptions]="{ exact: true }" class="drawer__item">
+            <svg lucideUser [size]="20"></svg> Mi perfil
+          </a>
+        </li>
+        <li>
+          <a routerLink="/favoritos" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideBookmark [size]="20"></svg> Mis favoritos
+          </a>
+        </li>
+      }
       <li>
         <button type="button" class="drawer__item" [attr.aria-expanded]="chatsAbiertos()" (click)="alternarChats()">
           <svg lucideMessageCircle [size]="20"></svg> Mis chats
@@ -138,7 +144,7 @@
               [conversaciones]="conversaciones()"
               [cargando]="cargandoChats()"
               [error]="errorChats()"
-              vacio="Todavía no tenés conversaciones. Escribile a un anunciante desde una publicación."
+              [vacio]="accesoLimitado() ? 'Todavía no tenés conversaciones.' : 'Todavía no tenés conversaciones. Escribile a un anunciante desde una publicación.'"
               (seleccionar)="abrirChat($event)"
             />
           </div>
@@ -151,7 +157,13 @@
         </a>
       </li>
 
-      @if (perfil.esAnuncianteVerificado()) {
+      @if (accesoLimitado()) {
+        <li>
+          <a routerLink="/cuenta-bloqueada" routerLinkActive="is-active" class="drawer__item">
+            <svg lucideShieldCheck [size]="20"></svg> Consultar o apelar bloqueo
+          </a>
+        </li>
+      } @else if (perfil.esAnuncianteVerificado()) {
         <li class="drawer__section">Anunciante</li>
         <li>
           <a routerLink="/dashboard" routerLinkActive="is-active" class="drawer__item">

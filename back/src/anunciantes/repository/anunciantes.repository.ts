@@ -33,6 +33,14 @@ export class AnunciantesRepository implements IAnunciantesRepository {
       .execute();
   }
 
+  async restaurarCuit(idUsuario: number, transaccion: EntityManager): Promise<void> {
+    await guardarSinDuplicados(() => transaccion.createQueryBuilder()
+      .update(Anunciante)
+      .set({ cuit_cuil: () => 'cuit_cuil_historico' })
+      .where('id_usuario = :idUsuario AND cuit_cuil IS NULL AND cuit_cuil_historico IS NOT NULL', { idUsuario })
+      .execute(), [RESTRICCION_CUIT_UNICO]);
+  }
+
   async actualizarPausaActividades(idUsuario: number, pausadas: boolean, transaccion: EntityManager): Promise<boolean> {
     const resultado = await transaccion.getRepository(Anunciante)
       .update({ idUsuario, verificado: true }, { actividades_pausadas: pausadas });

@@ -7,9 +7,10 @@ import { forkJoin, Subscription } from 'rxjs';
 import { ApiError } from '../../core/interceptors/api-error';
 import { AuthService } from '../../core/services/auth.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
-import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
+import { GestionPublicacionesService, type PagoPublicacion } from '../../shared/services/gestion-publicaciones.service';
 import { Reserva, ReservationService } from '../../shared/services/reservation.service';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { HistorialLiquidacionesComponent } from '../../shared/components/historial-liquidaciones/historial-liquidaciones.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
 import { normalizarTexto } from '../../shared/utils/texto';
@@ -31,7 +32,7 @@ interface RendimientoPublicacion {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, PaginadorComponent, SearchFieldComponent],
+  imports: [RouterLink, SpinnerComponent, PaginadorComponent, SearchFieldComponent, HistorialLiquidacionesComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -46,6 +47,9 @@ export class DashboardComponent {
   protected readonly reservas = signal<Reserva[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
+  /** Historial de pagos de todas las publicaciones (T55); null mientras carga. */
+  protected readonly pagos = signal<PagoPublicacion[] | null>(null);
+  protected readonly errorPagos = signal(false);
 
   protected readonly reservasValidas = computed(() => this.reservas().filter((reserva) => !reserva.cancelada));
   protected readonly totalVisualizaciones = computed(() =>
@@ -171,6 +175,17 @@ export class DashboardComponent {
         this.error.set(error.message);
         this.cargando.set(false);
       },
+    });
+    this.cargarPagos();
+  }
+
+  /** Va aparte del resto del panel: si falla, el panel se sigue mostrando. */
+  protected cargarPagos(): void {
+    this.pagos.set(null);
+    this.errorPagos.set(false);
+    this.publicacionesApi.listarMisLiquidaciones().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (pagos) => this.pagos.set(pagos),
+      error: () => this.errorPagos.set(true),
     });
   }
 

@@ -5,6 +5,7 @@ import { EMPTY, Subscription, catchError, exhaustMap, timer } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
 import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
+import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
@@ -14,6 +15,7 @@ import { ApiError } from '../../core/interceptors/api-error';
 import { ChatService } from '../../core/services/chat.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ReservaReprogramacionComponent } from './reserva-reprogramacion.component';
+import { etiquetaSeccionAdmin, seccionAdmin } from '../admin/admin-secciones';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import {
   CodigoAlojamiento,
@@ -25,7 +27,7 @@ import {
 @Component({
   selector: 'app-reserva-resultado',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, ReservaReprogramacionComponent, ReembolsoChatComponent],
+  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, ReservaReprogramacionComponent, ReembolsoChatComponent, VerComprobanteComponent],
   templateUrl: './reserva-resultado.component.html',
   styleUrl: './reserva-resultado.component.scss',
 })
@@ -37,7 +39,10 @@ export class ReservaResultadoComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
   private readonly actividadReembolsos = inject(ActividadReembolsosService);
-  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string }[]>([]);
+  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string; comprobante_nombre?: string | null; referencia_externa?: string | null; observacion_transferencia?: string | null }[]>([]);
+  /** T44: enlace firmado del comprobante de la transferencia del reembolso. */
+  protected readonly urlComprobanteReembolso = (id: number) => () =>
+    this.http.get<{ url: string }>(`${environment.apiUrl}/reembolsos/${id}/comprobante`);
   protected readonly conversacionAbierta = signal<number | null>(null);
   private consultaResumen?: Subscription;
 
@@ -57,7 +62,16 @@ export class ReservaResultadoComponent {
   protected readonly reprogramando = signal(this.route.snapshot.queryParamMap.get('reprogramar') === '1');
   protected readonly avisoReprogramacion = signal('');
 
+  /**
+   * T53: el admin entra desde su panel (`/admin/reservas/:id`) y ve la reserva en solo lectura: sin código
+   * de ingreso, contacto, cambio de fechas ni reintento de pago, y con las dos partes enlazadas a su perfil.
+   */
+  protected readonly administracion = this.route.snapshot.data['administracion'] === true;
+  /** Sección del panel de la que vino el admin, para volver a ella. */
+  protected readonly seccionOrigen = this.administracion ? seccionAdmin(this.route.snapshot.queryParamMap.get('desde')) : null;
+  protected readonly textoVolver = this.seccionOrigen ? `Volver a ${etiquetaSeccionAdmin(this.seccionOrigen)}` : 'Volver al panel';
   protected readonly reserva = computed(() => this.resumen()?.reserva ?? null);
+  protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   protected readonly pago = computed(() => this.resumen()?.pago ?? null);
   protected readonly esInquilino = computed(
     () => this.reserva()?.usuario?.id === Number(this.auth.currentUser()?.sub),
@@ -84,17 +98,18 @@ export class ReservaResultadoComponent {
     const reserva = this.reserva();
     const otro = this.esInquilino()
       ? reserva?.publicacion?.anunciante?.usuario : reserva?.usuario;
-    return otro?.bloqueado === true || otro?.activa === false;
+    return otro?.activa === false;
   });
   protected readonly contactoDisponible = computed(() => {
     const reserva = this.reserva();
     return (
-      !this.contactoSuspendido() && reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
+      !this.contactoSuspendido() &&
+      reserva?.estado_pago === 'APROBADO' && !reserva.cancelada && Boolean(this.otroUsuarioId())
     );
   });
   protected readonly whatsappUrl = computed(() => {
     const reserva = this.reserva();
-    if (!reserva || this.contactoSuspendido()) return null;
+    if (!reserva || this.accesoLimitado() || this.contactoSuspendido()) return null;
     const telefono = this.esInquilino()
       ? (reserva.publicacion?.anunciante?.numero_contacto ??
         reserva.publicacion?.anunciante?.usuario?.telefono)
@@ -267,50 +282,57 @@ export class ReservaResultadoComponent {
   }
 
   protected nombreContacto(): string {
-    const reserva = this.reserva();
-    if (!reserva) return 'Contacto';
-    if (this.esInquilino()) {
-      const usuario = reserva.publicacion?.anunciante?.usuario;
-      return usuario ? `${usuario.nombre} ${usuario.apellido}`.trim() : 'Anfitrión';
-    }
-    return (
-      [
-        reserva.usuario_nombre ?? reserva.usuario?.nombre,
-        reserva.usuario_apellido ?? reserva.usuario?.apellido,
-      ]
-        .filter(Boolean)
-        .join(' ') || 'Huésped'
-    );
+    return this.reserva() ? this.parte(this.ladoContacto()).nombre : 'Contacto';
   }
 
   protected emailContacto(): string {
+    return this.reserva() ? this.parte(this.ladoContacto()).email : 'No informado';
+  }
+
+  protected telefonoContacto(): string {
+    return this.reserva() ? this.parte(this.ladoContacto()).telefono : 'No informado';
+  }
+
+  /** T53: el admin ve a las dos partes, cada una con enlace a su perfil. */
+  protected readonly partes = computed(() => this.reserva()
+    ? [{ rol: 'Inquilino', ...this.parte('inquilino') }, { rol: 'Anunciante', ...this.parte('anunciante') }]
+    : []);
+
+  /** La otra parte de la reserva: el inquilino contacta al anunciante y viceversa. */
+  private ladoContacto(): 'inquilino' | 'anunciante' {
+    return this.esInquilino() ? 'anunciante' : 'inquilino';
+  }
+
+  /** Datos de una de las partes. RN-37: si el anunciante se dio de baja, se muestra el email que tenía (histórico). */
+  private parte(lado: 'inquilino' | 'anunciante'): { id: number | null; nombre: string; email: string; telefono: string } {
     const reserva = this.reserva();
-    if (!reserva) return 'No informado';
-    // RN-37: si la cuenta se dio de baja, se muestra el email que tenía (histórico).
-    const anunciante = reserva.publicacion?.anunciante?.usuario;
-    return this.esInquilino()
-      ? (anunciante?.email ?? anunciante?.email_historico ?? 'No informado')
-      : (reserva.usuario_email ?? reserva.usuario?.email ?? 'No informado');
+    if (lado === 'anunciante') {
+      const anunciante = reserva?.publicacion?.anunciante;
+      const usuario = anunciante?.usuario;
+      return {
+        id: usuario?.id ?? null,
+        nombre: usuario ? `${usuario.nombre} ${usuario.apellido}`.trim() : 'Anfitrión',
+        email: usuario?.email ?? usuario?.email_historico ?? 'No informado',
+        telefono: anunciante?.numero_contacto ?? usuario?.telefono ?? 'No informado',
+      };
+    }
+    return {
+      id: reserva?.usuario?.id ?? null,
+      nombre: [reserva?.usuario_nombre ?? reserva?.usuario?.nombre, reserva?.usuario_apellido ?? reserva?.usuario?.apellido]
+        .filter(Boolean).join(' ') || 'Huésped',
+      email: reserva?.usuario_email ?? reserva?.usuario?.email ?? 'No informado',
+      telefono: reserva?.usuario_telefono ?? reserva?.usuario?.telefono ?? 'No informado',
+    };
   }
 
   /**
-   * CUIT/CUIL del anunciante para el comprobante del Inquilino. Si el anunciante
+   * CUIT/CUIL del anunciante para el comprobante del Inquilino (y para el admin). Si el anunciante
    * se dio de baja, el histórico lo sigue identificando (RN-37).
    */
   protected cuitAnunciante(): string | null {
     const anunciante = this.reserva()?.publicacion?.anunciante;
-    if (!this.esInquilino() || !anunciante) return null;
+    if (!(this.esInquilino() || this.administracion) || !anunciante) return null;
     return anunciante.cuit_cuil ?? anunciante.cuit_cuil_historico ?? null;
-  }
-
-  protected telefonoContacto(): string {
-    const reserva = this.reserva();
-    if (!reserva) return 'No informado';
-    return this.esInquilino()
-      ? (reserva.publicacion?.anunciante?.numero_contacto ??
-          reserva.publicacion?.anunciante?.usuario?.telefono ??
-          'No informado')
-      : (reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'No informado');
   }
 
   protected tituloEstado(reserva: Reserva): string {
@@ -445,6 +467,10 @@ export class ReservaResultadoComponent {
   }
 
   private obtenerIdReserva(): number | null {
+    if (this.administracion) {
+      const id = Number(this.route.snapshot.paramMap.get('id'));
+      return Number.isInteger(id) && id > 0 ? id : null;
+    }
     const directo = Number(this.route.snapshot.queryParamMap.get('reserva_id'));
     if (Number.isInteger(directo) && directo > 0) return directo;
 
