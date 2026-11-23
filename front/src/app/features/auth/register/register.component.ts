@@ -48,6 +48,7 @@ export class RegisterComponent {
       telefono: ['', [Validators.required, Validators.maxLength(20), Validators.pattern(FORMATO_TELEFONO)]],
       contrasenia: ['', [Validators.required, passwordSeguraValidator()]],
       confirmarContrasenia: ['', [Validators.required]],
+      aceptaTerminos: [false, [Validators.requiredTrue]],
     },
     { validators: contraseniasIgualesValidator() },
   );
@@ -81,7 +82,7 @@ export class RegisterComponent {
       return;
     }
 
-    const { nombre, apellido, email, telefono, contrasenia } = this.form.getRawValue();
+    const { nombre, apellido, email, telefono, contrasenia, aceptaTerminos } = this.form.getRawValue();
     if (crearCuentaNueva && this.cuentaRecuperable()?.email !== email) return;
 
     this.error.set(null);
@@ -89,7 +90,7 @@ export class RegisterComponent {
     this.enviando.set(true);
 
     this.authService.register({
-      nombre, apellido, email, telefono, contrasenia,
+      nombre, apellido, email, telefono, contrasenia, aceptaTerminos,
       crearCuentaNueva,
     }).subscribe({
       next: (res) => {

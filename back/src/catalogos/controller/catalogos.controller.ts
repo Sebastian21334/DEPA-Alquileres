@@ -22,6 +22,11 @@ import { ComisionDto } from '../dto/comision.dto';
 export class CatalogosController {
   constructor(private readonly catalogosService: CatalogosService) {}
 
+  @Get('comision-vigente')
+  async obtenerComisionVigente() {
+    return { porcentaje: await this.catalogosService.obtenerComision() };
+  }
+
   @Get('comision-depa')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')

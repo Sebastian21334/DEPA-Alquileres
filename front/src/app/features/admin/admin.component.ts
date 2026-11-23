@@ -1,4 +1,5 @@
 import { ConversationPanelComponent, mensajesApelacion } from '../../shared/components/conversation-panel/conversation-panel.component';
+import { AttachmentPreviewComponent } from '../../shared/components/conversation-panel/attachment-preview.component';
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
 import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, linkedSignal, PLATFORM_ID, signal, viewChild } from '@angular/core';
@@ -26,6 +27,9 @@ import {
   LucidePaperclip,
   LucideSend,
   LucideReceiptText,
+  LucideLockKeyhole,
+  LucideInfo,
+  LucideLayers3,
 } from '@lucide/angular';
 import {
   AdminBloqueo,
@@ -115,6 +119,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     ClaimHistoryComponent,
     ConversationComposerComponent,
     ConversationPanelComponent,
+    AttachmentPreviewComponent,
     ReembolsoChatComponent,
     CargaComprobanteComponent,
     VerComprobanteComponent,
@@ -128,6 +133,9 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideSearch,
     LucideCheck,
     LucideX,
+    LucideLockKeyhole,
+    LucideInfo,
+    LucideLayers3,
     LucideCalendarX,
     LucideMessageCircle,
     LucideChevronRight,
@@ -192,6 +200,7 @@ export class AdminComponent {
   protected motivoBloqueo = '';
   protected respuestasApelacion: Record<string, string> = {};
   protected imagenesApelacion: Record<string, File | null> = {};
+  protected vistasPreviasApelacion: Record<string, string | null> = {};
   protected readonly publications = signal<Publicacion[]>([]);
   protected readonly publicationQuery = signal('');
   protected readonly bajaId = signal<number | null>(null);
@@ -342,6 +351,9 @@ export class AdminComponent {
   );
 
   constructor() {
+    this.destroyRef.onDestroy(() => {
+      for (const url of Object.values(this.vistasPreviasApelacion)) if (url) URL.revokeObjectURL(url);
+    });
     if (this.isBrowser) {
       this.reload();
       this.loadCatalogs();
@@ -1043,8 +1055,16 @@ export class AdminComponent {
 
   protected cancelarRespuesta(bloqueo: AdminBloqueo): void {
     this.respuestasApelacion[bloqueo.detalle.id] = '';
-    this.imagenesApelacion[bloqueo.detalle.id] = null;
+    this.quitarImagenApelacion(bloqueo);
     this.bloqueadosError.set('');
+  }
+
+  protected desbloquearDesdeApelaciones(bloqueo: AdminBloqueo): void {
+    if (this.busy()) return;
+    this.run(`user-${bloqueo.usuario.id}`, () => this.api.cambiarBloqueo(bloqueo.usuario.id, false), () => {
+      this.cancelarRespuesta(bloqueo);
+      this.actualizarBloqueoUsuario(bloqueo.usuario.id, false);
+    }, 'Usuario habilitado.');
   }
 
   protected responderApelacion(bloqueo: AdminBloqueo): void {
@@ -1082,7 +1102,17 @@ export class AdminComponent {
       return;
     }
     this.bloqueadosError.set('');
+    this.quitarImagenApelacion(bloqueo);
     this.imagenesApelacion[bloqueo.detalle.id] = archivo;
+    this.vistasPreviasApelacion[bloqueo.detalle.id] = URL.createObjectURL(archivo);
+  }
+
+  protected quitarImagenApelacion(bloqueo: AdminBloqueo): void {
+    const id = bloqueo.detalle.id;
+    const url = this.vistasPreviasApelacion[id];
+    if (url) URL.revokeObjectURL(url);
+    this.vistasPreviasApelacion[id] = null;
+    this.imagenesApelacion[id] = null;
   }
   protected changeRole(user: AdminUser, select: HTMLSelectElement): void {
     const role = select.value;

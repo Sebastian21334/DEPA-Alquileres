@@ -1,4 +1,5 @@
 import {
+  Equals,
   IsNotEmpty,
   IsString,
   MaxLength,
@@ -10,6 +11,9 @@ import {
 import { CbuDto } from './cbu.dto';
 
 export class SolicitarAnuncianteDto extends CbuDto {
+  @Equals(true, { message: 'Debés aceptar los términos y condiciones para anunciantes.' })
+  aceptaTerminos: boolean;
+
   // El CUIT/CUIL y el contacto identifican la solicitud que revisará un administrador.
   @IsString()
   @IsNotEmpty()

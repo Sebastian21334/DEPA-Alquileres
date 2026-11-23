@@ -1,18 +1,19 @@
 import { ConversationPanelComponent, mensajesApelacion } from '../../../shared/components/conversation-panel/conversation-panel.component';
+import { AttachmentPreviewComponent } from '../../../shared/components/conversation-panel/attachment-preview.component';
 import { DatePipe, isPlatformBrowser } from '@angular/common';
 import { Component, DestroyRef, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideCalendar, LucideImagePlus, LucideLockKeyhole, LucideMessageCircle, LucideSend, LucideX } from '@lucide/angular';
+import { LucideArrowLeft, LucideCalendar, LucideImagePlus, LucideLockKeyhole, LucideMessageCircle, LucideSend } from '@lucide/angular';
 import { ApiError } from '../../../core/interceptors/api-error';
 import { AuthService, type VistaBloqueo } from '../../../core/services/auth.service';
 import { finalize, timer } from 'rxjs';
 
 @Component({
   selector: 'app-cuenta-bloqueada',
-  imports: [DatePipe, FormsModule, RouterLink, ConversationPanelComponent, LucideArrowLeft, LucideCalendar,
-    LucideImagePlus, LucideLockKeyhole, LucideMessageCircle, LucideSend, LucideX],
+  imports: [DatePipe, FormsModule, RouterLink, ConversationPanelComponent, AttachmentPreviewComponent, LucideArrowLeft, LucideCalendar,
+    LucideImagePlus, LucideLockKeyhole, LucideMessageCircle, LucideSend],
   templateUrl: './cuenta-bloqueada.component.html',
   styleUrl: './cuenta-bloqueada.component.scss',
 })

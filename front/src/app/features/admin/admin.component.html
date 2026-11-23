@@ -48,9 +48,21 @@
 
   <dialog #bloqueoDialog class="block-dialog" aria-labelledby="block-dialog-title" (cancel)="cerrarBloqueo($event)">
       <form class="block-form" (ngSubmit)="confirmarBloqueo()">
-        <h2 id="block-dialog-title">Bloquear a {{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</h2>
-        <p>El usuario verá este motivo al intentar iniciar sesión y podrá apelar el bloqueo.</p>
-        <p>Si tiene operaciones pendientes, solo podrá entrar para resolverlas y apelar. Al terminarlas, se aplicará el bloqueo total.</p>
+        <header class="block-form__header">
+          <span class="block-form__icon" aria-hidden="true"><svg lucideLockKeyhole [size]="24"></svg></span>
+          <div class="block-form__title">
+            <h2 id="block-dialog-title">Bloquear usuario</h2>
+            <p>{{ usuarioPorBloquear()?.nombre }} {{ usuarioPorBloquear()?.apellido }}</p>
+          </div>
+        </header>
+        <div class="block-form__notice block-form__notice--info">
+          <span class="block-form__notice-icon" aria-hidden="true"><svg lucideInfo [size]="20"></svg></span>
+          <p>El usuario verá este motivo al intentar iniciar sesión y podrá apelar el bloqueo.</p>
+        </div>
+        <div class="block-form__notice block-form__notice--warning">
+          <span class="block-form__notice-icon" aria-hidden="true"><svg lucideLayers3 [size]="20"></svg></span>
+          <p>Si tiene operaciones pendientes, solo podrá entrar para resolverlas y apelar. Al terminarlas, se aplicará el bloqueo total.</p>
+        </div>
         <label for="block-reason">Motivo del bloqueo</label>
         <textarea id="block-reason" name="motivoBloqueo" [(ngModel)]="motivoBloqueo"
           placeholder="Explicá por qué se bloquea esta cuenta" rows="5" maxlength="500" required autofocus></textarea>
@@ -957,6 +969,9 @@
                   <svg lucideClock3 [size]="15" aria-hidden="true"></svg> Sin apelación
                 }
               </span>
+              <button type="button" class="blocked-user__unblock" [disabled]="!!busy()" (click)="desbloquearDesdeApelaciones(bloqueo)">
+                {{ busy() === 'user-' + bloqueo.usuario.id ? 'Desbloqueando...' : 'Desbloquear usuario' }}
+              </button>
             </header>
             <div class="blocked-user__details">
               <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
@@ -967,7 +982,7 @@
               <p class="blocked-user__notice">Acceso limitado a operaciones pendientes y apelación.</p>
             }
             @if (bloqueo.detalle.apelacion) {
-              <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo"
+              <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true"
                 [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">
                   <div class="blocked-user__composer">
                     <textarea [(ngModel)]="respuestasApelacion[bloqueo.detalle.id]" [ngModelOptions]="{ standalone: true }" rows="1" maxlength="2000" [disabled]="!!busy()" aria-label="Respuesta de Administración" placeholder="Escribí un mensaje..." (keydown.enter)="enviarApelacionConEnter($event, bloqueo)"></textarea>
@@ -979,7 +994,9 @@
                     <button type="button" class="blocked-user__cancel" [disabled]="!!busy()" (click)="cancelarRespuesta(bloqueo)">Cancelar</button>
                   </div>
                   @if (imagenesApelacion[bloqueo.detalle.id]; as imagen) {
-                    <p class="blocked-user__attachment">{{ imagen.name }} <button type="button" (click)="imagenesApelacion[bloqueo.detalle.id] = null">Quitar imagen</button></p>
+                    @if (vistasPreviasApelacion[bloqueo.detalle.id]; as vista) {
+                      <app-attachment-preview class="blocked-user__attachment" [url]="vista" [nombre]="imagen.name" [deshabilitado]="!!busy()" (quitar)="quitarImagenApelacion(bloqueo)" />
+                    }
                   }
               </app-conversation-panel>
             }
@@ -1009,7 +1026,7 @@
               </div>
               <p class="blocked-user__history-date">Desbloqueado: {{ bloqueo.detalle.fechaDesbloqueo ? (bloqueo.detalle.fechaDesbloqueo | date: 'dd/MM/yyyy HH:mm') : 'fecha no registrada' }}</p>
               @if (bloqueo.detalle.apelacion) {
-                <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)" />
+                <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true" [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)" />
               }
             </article>
           } @empty {
