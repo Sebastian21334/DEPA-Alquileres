@@ -1,4 +1,5 @@
 @use '../../shared/components/claim-history/claim-form';
+@use './admin-shared';
 
 :host {
   display: block;
@@ -155,6 +156,10 @@
 .management {
   overflow: visible;
 }
+// Se mantiene el recorte que antes aplicaba .panel por orden de cascada.
+.panel.management {
+  overflow: hidden;
+}
 .catalog-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -177,20 +182,6 @@
 .catalog-card h3 {
   margin: 0 0 14px;
   font-size: 1rem;
-}
-.inline-form {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-.inline-form input,
-.crud-list input {
-  min-width: 0;
-  width: 100%;
-  padding: 9px 10px;
-  border: 1px solid #ccd6db;
-  border-radius: 8px;
-  font: inherit;
 }
 .button--primary {
   background: #e14414;
@@ -216,15 +207,6 @@
 .crud-list li > span:first-child {
   min-width: 0;
   overflow-wrap: anywhere;
-}
-.crud-actions {
-  display: flex;
-  gap: 7px;
-  margin-left: auto;
-}
-.link-button--edit,
-.link-button--save {
-  color: #12529b;
 }
 .location-name {
   min-width: 0;
@@ -258,57 +240,14 @@
     grid-template-columns: 1fr;
     padding: 14px;
   }
-  .inline-form {
-    align-items: stretch;
-    flex-direction: column;
-  }
 }
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 0;
-  border-radius: 9px;
-  padding: 10px 16px;
-  font-weight: 750;
-  text-decoration: none;
-  cursor: pointer;
-}
-.button:disabled,
-.link-button:disabled,
-select:disabled {
+.link-button:disabled {
   opacity: 0.5;
   cursor: wait;
 }
 .button--light {
   background: white;
   color: #102a3a;
-}
-.panel {
-  margin-top: 24px;
-  border: 1px solid #dfe6ea;
-  border-radius: 15px;
-  background: white;
-  overflow: hidden;
-  box-shadow: 0 4px 16px #102a3a0b;
-}
-.panel__title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 22px 24px;
-  border-bottom: 1px solid #e8edef;
-}
-.panel__title h2 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-.panel__title p {
-  margin: 4px 0 0;
-  color: #71818a;
-  font-size: 0.9rem;
 }
 .counter {
   padding: 5px 11px;
@@ -406,149 +345,12 @@ dd {
   gap: 9px;
   margin-top: 18px;
 }
-.button--success {
-  background: #178a53;
-  color: white;
-}
-.button--danger,
-.button--danger-outline {
-  background: #c83232;
-  color: white;
-}
-.button--danger-outline {
-  background: white;
-  color: #b52626;
-  border: 1px solid #d95555;
-}
-.button--ghost {
-  background: #eef1f3;
-  color: #344954;
-}
-.reject-box {
-  display: grid;
-  gap: 8px;
-  margin-top: 16px;
-}
-.reject-box label {
-  font-size: 0.82rem;
-  font-weight: 750;
-}
-.reject-box textarea {
-  min-height: 88px;
-  resize: vertical;
-  padding: 10px;
-  border: 1px solid #ccd6db;
-  border-radius: 8px;
-  font: inherit;
-}
-.reject-box div {
-  display: flex;
-  justify-content: end;
-  gap: 8px;
-}
-.search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: min(330px, 100%);
-  padding: 9px 12px;
-  border: 1px solid #ccd6db;
-  border-radius: 9px;
-}
-.search input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  font: inherit;
-}
-.table-wrap {
-  overflow-x: auto;
-}
 .settlement-history-caption {
   text-align: left;
 }
 .settlement-history td {
   vertical-align: top;
   overflow-wrap: anywhere;
-}
-.pagination {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid #edf0f2;
-  color: #60727c;
-  font-size: 0.88rem;
-}
-.pagination__actions {
-  display: flex;
-  gap: 8px;
-}
-
-@media (max-width: 700px) {
-  .responsive-table,
-  .responsive-table tbody,
-  .responsive-table tr,
-  .responsive-table td { display: block; width: 100%; }
-  .responsive-table thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .responsive-table tr { padding: 14px; border-bottom: 1px solid #dfe6ea; }
-  .responsive-table td { padding: 6px 0; border: 0; text-align: left; overflow-wrap: anywhere; }
-  .responsive-table td[data-label]::before {
-    content: attr(data-label);
-    display: block;
-    margin-bottom: 4px;
-    color: #60727c;
-    font-size: .72rem;
-    font-weight: 750;
-  }
-  .responsive-table td .button,
-  .responsive-table td select { width: 100%; min-height: 44px; white-space: normal; }
-  .responsive-table .link-button { min-height: 44px; padding-inline: 12px; }
-  .reject-box div { flex-direction: column; }
-  .pagination { padding: 14px; }
-  .pagination__actions { width: 100%; }
-  .pagination__actions .button { flex: 1; min-height: 44px; }
-  .panel__title > div { min-width: 0; }
-  .request, .settlement-card, .catalog-card { overflow-wrap: anywhere; }
-  .requests { grid-template-columns: minmax(0, 1fr); }
-}
-.pagination .button:disabled {
-  cursor: not-allowed;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-th,
-td {
-  padding: 15px 24px;
-  text-align: left;
-  border-bottom: 1px solid #edf0f2;
-}
-th {
-  color: #60727c;
-  background: #f8fafb;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-td {
-  font-size: 0.9rem;
-}
-td small {
-  display: block;
-  margin-top: 4px;
-  color: #7d8c94;
 }
 .settlement-history {
   padding: 0 12px 12px;
@@ -590,32 +392,6 @@ td small {
   .settlement-history__table td { padding: 6px 0; border: 0; }
   .settlement-history__table td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: #62738d; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
 }
-.right {
-  text-align: right;
-}
-select {
-  padding: 7px 9px;
-  border: 1px solid #ccd6db;
-  border-radius: 7px;
-  background: white;
-}
-.status {
-  display: inline-block;
-  padding: 5px 9px;
-  border-radius: 99px;
-  color: #147449;
-  background: #e8f8f0;
-  font-size: 0.78rem;
-  font-weight: 750;
-}
-.status--blocked {
-  color: #a92424;
-  background: #ffeded;
-}
-.status--deleted {
-  color: #4b5563;
-  background: #eceff1;
-}
 .link-button {
   border: 0;
   background: transparent;
@@ -623,15 +399,30 @@ select {
   font-weight: 750;
   cursor: pointer;
 }
-.empty {
-  padding: 28px;
-  text-align: center;
-  color: #71818a;
+
+@media (max-width: 700px) {
+  .responsive-table .link-button { min-height: 44px; padding-inline: 12px; }
+  .request, .settlement-card, .catalog-card { overflow-wrap: anywhere; }
+  .requests { grid-template-columns: minmax(0, 1fr); }
 }
 .settlement-list {
   display: grid;
   gap: 14px;
   padding: 20px 24px 24px;
+}
+.refund-action {
+  margin: 0 24px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  color: #9e2020;
+  background: #ffeded;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.refund-note {
+  margin: 0 24px;
+  color: #71818a;
+  font-size: 0.85rem;
 }
 .settlement-card {
   display: flex;
@@ -668,17 +459,9 @@ select {
   background: #ffeded;
 }
 @media (max-width: 700px) {
-  .panel__title--users {
-    align-items: stretch;
-    flex-direction: column;
-  }
   .requests {
     grid-template-columns: 1fr;
     padding: 14px;
-  }
-  th,
-  td {
-    padding: 12px 14px;
   }
   .settlement-card { align-items: stretch; flex-direction: column; }
   .settlement-card .actions { justify-content: stretch; }

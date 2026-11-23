@@ -15,3 +15,13 @@ export interface Anunciante {
   tipoAnunciante?: TipoAnunciante;
   usuario?: Usuario;
 }
+
+/** Read model público del perfil de anunciante. No incluye CUIT, matrícula ni documentos. */
+export interface AnunciantePublico {
+  idUsuario: number;
+  nombre_publico: string;
+  tipoAnunciante: TipoAnunciante | null;
+  verificado: boolean;
+  numero_contacto: string;
+  foto_url: string | null;
+}

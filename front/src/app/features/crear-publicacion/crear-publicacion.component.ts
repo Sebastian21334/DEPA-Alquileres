@@ -12,6 +12,7 @@ import { GestionPublicacionesService } from '../../shared/services/gestion-publi
 import { AvailabilityService } from '../../shared/services/availability.service';
 import { PublicacionFormulario } from '../../shared/forms/publicacion-formulario';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
+import { SoloNumerosDirective } from '../../shared/directives/solo-numeros.directive';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import { RentalDateRange } from '../../shared/utils/rental-dates';
 import {
@@ -38,6 +39,7 @@ interface ImagenSeleccionada {
     ReactiveFormsModule,
     RouterLink,
     RevealDirective,
+    SoloNumerosDirective,
     AvailabilityCalendarComponent,
     LocationPickerComponent,
     SelectorUbicacionComponent,

@@ -31,6 +31,7 @@ export interface IReembolsosRepository {
   buscarPendientesConciliacion(estados: string[], hasta: Date): Promise<Reembolso[]>;
   buscarPendientesAplicacion(estado: string, desdeId: number): Promise<Reembolso[]>;
   buscarPorOrigen(origen: Reembolso['origen'], referencia: string): Promise<Reembolso | null>;
+  contarPorEstado(): Promise<Array<{ estado: string; cantidad: string }>>;
   listarAdministracion(): Promise<Reembolso[]>;
   listarMensajes(id: number, despuesDe: number): Promise<MensajeReembolso[]>;
   actividadInquilino(idUsuario: number, estados: string[]): Promise<{

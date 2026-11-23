@@ -140,30 +140,13 @@
         </button>
         @if (chatsAbiertos()) {
           <div class="drawer__chats">
-            @if (cargandoChats()) {
-              <p class="drawer__muted">Cargando chats…</p>
-            } @else if (errorChats()) {
-              <p class="drawer__muted drawer__muted--error">{{ errorChats() }}</p>
-            } @else {
-              @for (conv of conversaciones(); track conv.idPublicacion + '-' + conv.idOtroUsuario) {
-                <button type="button" class="drawer__chat" (click)="abrirChat(conv)">
-                  <app-avatar class="drawer__chat-avatar" [foto]="otro(conv).foto_url" [nombre]="nombreOtro(conv)" />
-                  <span class="drawer__chat-text">
-                    <strong>{{ nombreOtro(conv) }}</strong>
-                    <small class="drawer__chat-title">{{ conv.ultimoMensaje.publicacion.titulo }}</small>
-                    <small>{{ conv.ultimoMensaje.texto }}</small>
-                  </span>
-                  @if (conv.cantidadNoLeidos) {
-                    <span class="drawer__unread" [attr.aria-label]="conv.cantidadNoLeidos + ' mensajes sin leer'">{{ conv.cantidadNoLeidos }}</span>
-                  }
-                </button>
-              } @empty {
-                <p class="drawer__muted">
-                  Todavía no tenés conversaciones.
-                  @if (!accesoLimitado()) { Escribile a un anunciante desde una publicación. }
-                </p>
-              }
-            }
+            <app-conversation-list
+              [conversaciones]="conversaciones()"
+              [cargando]="cargandoChats()"
+              [error]="errorChats()"
+              [vacio]="accesoLimitado() ? 'Todavía no tenés conversaciones.' : 'Todavía no tenés conversaciones. Escribile a un anunciante desde una publicación.'"
+              (seleccionar)="abrirChat($event)"
+            />
           </div>
         }
       </li>

@@ -1,0 +1,5 @@
+<label class="search">
+  <svg lucideSearch [size]="18" aria-hidden="true"></svg>
+  <input #campo type="search" [value]="value()" [attr.placeholder]="placeholder()" [attr.aria-label]="ariaLabel()"
+    [attr.maxlength]="maxlength()" [disabled]="deshabilitado()" (input)="valueChange.emit(campo.value)" />
+</label>

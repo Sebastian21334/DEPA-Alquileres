@@ -1,4 +1,5 @@
-import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import {
   BadRequestException,
   ConflictException,
@@ -246,6 +247,18 @@ export class PublicacionesService {
     return publicaciones.map((publicacion) => this.prepararRespuesta(publicacion));
   }
 
+  /** Listado paginado de las publicaciones no eliminadas del dueño. */
+  async listarMiasPaginadas(anunciante: Anunciante, consulta: ListarMisPublicacionesDto) {
+    const pagina = await this.publicacionesRepo.buscarMiasPaginadas(anunciante.idUsuario, consulta);
+    return { ...pagina, datos: pagina.datos.map((publicacion) => this.prepararRespuesta(publicacion)) };
+  }
+
+  /** Papelera simple del dueño: sin paginación ni búsqueda. */
+  async listarPapelera(anunciante: Anunciante) {
+    const publicaciones = await this.publicacionesRepo.buscarPapeleraPorAnunciante(anunciante.idUsuario);
+    return publicaciones.map((publicacion) => this.prepararRespuesta(publicacion));
+  }
+
   /** Modifica una publicación conservando la fecha original y validando propiedad. */
   async actualizar(id: number, anuncianteQueOpera: Anunciante, dto: ActualizarPublicacionDto) {
     const publicacion = await this.obtenerPropia(
@@ -309,7 +322,7 @@ export class PublicacionesService {
   }
 
   /** Incluye publicaciones activas e inactivas de todos los anunciantes. */
-  async listarAdministracion(consulta: ListarAdministracionDto) {
+  async listarAdministracion(consulta: ListarPublicacionesAdministracionDto) {
     const pagina = await this.publicacionesRepo.buscarAdministracion(consulta);
     return { ...pagina, datos: pagina.datos.map((publicacion) => this.prepararRespuesta(publicacion)) };
   }
@@ -338,6 +351,18 @@ export class PublicacionesService {
       this.logger.error(`No se pudo notificar la baja de la publicación ${id}`, error as Error);
     }
     return { publicacion, correoEnviado };
+  }
+
+  /** Levanta una baja administrativa; el controller restringe esta operación al rol Administrador. */
+  async reactivarAdministracion(id: number) {
+    const publicacion = await this.buscarPorId(id);
+    if (publicacion.eliminada) throw new ConflictException('La publicación fue eliminada por su anunciante y no se puede reactivar');
+    if (!publicacion.motivo_baja_admin) throw new ConflictException('La publicación no está dada de baja');
+    // La reactivación levanta la sanción, no republica: el anunciante decide cuándo activarla.
+    if (!await this.publicacionesRepo.reactivar(id)) throw new ConflictException('La publicación cambió. Recargá e intentá nuevamente');
+    publicacion.motivo_baja_admin = null;
+    publicacion.activa = false;
+    return this.prepararRespuesta(publicacion);
   }
 
   /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */

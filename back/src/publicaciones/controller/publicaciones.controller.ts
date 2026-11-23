@@ -1,5 +1,6 @@
 import { ListarPublicacionesDto } from '../dto/listar-publicaciones.dto';
-import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guard';
 import {
   Controller,
@@ -43,7 +44,7 @@ export class PublicacionesController {
   @Get('administracion')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
-  listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarAdministracionDto) {
+  listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarPublicacionesAdministracionDto) {
     return this.publicacionesService.listarAdministracion(consulta);
   }
 
@@ -61,6 +62,13 @@ export class PublicacionesController {
     return this.publicacionesService.darDeBajaAdministracion(id, dto.motivo);
   }
 
+  @Patch('administracion/:id/reactivar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('Administrador')
+  reactivarAdministracion(@Param('id', ParseIntPipe) id: number) {
+    return this.publicacionesService.reactivarAdministracion(id);
+  }
+
   @Get('anunciante/:idAnunciante')
   async listarPorAnunciante(@Param('idAnunciante', ParseIntPipe) idAnunciante: number, @Query('activa') activa?: string) {
     const soloActivas = activa === 'true';
@@ -76,6 +84,18 @@ export class PublicacionesController {
   @UseGuards(JwtAuthGuard, AnuncianteGuard)
   listarPropias(@Req() req: AnuncianteRequest) {
     return this.publicacionesService.listarPropias(req.anunciante);
+  }
+
+  @Get('mias/paginadas')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  listarMiasPaginadas(@Req() req: AnuncianteRequest, @Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) consulta: ListarMisPublicacionesDto) {
+    return this.publicacionesService.listarMiasPaginadas(req.anunciante, consulta);
+  }
+
+  @Get('mias/papelera')
+  @UseGuards(JwtAuthGuard, AnuncianteGuard)
+  listarPapelera(@Req() req: AnuncianteRequest) {
+    return this.publicacionesService.listarPapelera(req.anunciante);
   }
 
   @Post(':id/visualizacion')

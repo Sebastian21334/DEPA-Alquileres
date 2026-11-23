@@ -10,32 +10,90 @@
       }
       Provincia{{ required() ? ' *' : '' }}
     </label>
-    <div class="location-select">
-      <select
-        [id]="idPrefix() + '-provincia'"
-        [value]="provinciaId() ?? ''"
-        [disabled]="disabled() || cargandoProvincias()"
-        [attr.aria-invalid]="invalidProvincia()"
-        [attr.aria-required]="required()"
-        (change)="cambiarProvincia($event)"
-      >
-        <option value="" [disabled]="required()">
-          {{
-            cargandoProvincias()
-              ? 'Cargando provincias…'
-              : required()
-                ? 'Seleccioná una provincia'
-                : 'Todas las provincias'
-          }}
-        </option>
-        @for (provincia of provincias(); track provincia.id) {
-          <option [value]="provincia.id">{{ provincia.nombre }}</option>
+    @if (advanced()) {
+      <div class="location-select location-select--custom">
+        <button
+          type="button"
+          class="location-select__trigger"
+          [id]="idPrefix() + '-provincia'"
+          [disabled]="disabled() || cargandoProvincias()"
+          [attr.aria-invalid]="invalidProvincia()"
+          [attr.aria-required]="required()"
+          [attr.aria-expanded]="provinciaAbierta()"
+          aria-haspopup="listbox"
+          [attr.aria-controls]="idPrefix() + '-provincias'"
+          [attr.aria-activedescendant]="
+            provinciaAbierta() && indiceProvinciaActivo() >= 0
+              ? idPrefix() + '-provincia-opcion-' + indiceProvinciaActivo()
+              : null
+          "
+          (click)="alternarProvincias()"
+          (keydown)="tecladoProvincia($event)"
+        >
+          <span>
+            {{
+              provinciaSeleccionada()?.nombre ??
+                (cargandoProvincias()
+                  ? 'Cargando provincias…'
+                  : required()
+                    ? 'Seleccioná una provincia'
+                    : 'Todas las provincias')
+            }}
+          </span>
+          <svg
+            lucideChevronDown
+            [size]="22"
+            aria-hidden="true"
+            [class.location-select__chevron--open]="provinciaAbierta()"
+          ></svg>
+        </button>
+        @if (provinciaAbierta()) {
+          <ul
+            class="location-select__dropdown"
+            role="listbox"
+            [id]="idPrefix() + '-provincias'"
+            aria-label="Provincias"
+          >
+            @for (opcion of opcionesProvincia(); track opcion.id; let i = $index) {
+              <li
+                role="option"
+                [id]="idPrefix() + '-provincia-opcion-' + i"
+                [attr.aria-selected]="opcion.id === provinciaId()"
+                [attr.data-active]="i === indiceProvinciaActivo()"
+                (mousedown)="$event.preventDefault()"
+                (click)="elegirProvincia(opcion.id)"
+              >
+                {{ opcion.nombre }}
+              </li>
+            }
+          </ul>
         }
-      </select>
-      @if (advanced()) {
-        <svg lucideChevronDown [size]="22" aria-hidden="true"></svg>
-      }
-    </div>
+      </div>
+    } @else {
+      <div class="location-select">
+        <select
+          [id]="idPrefix() + '-provincia'"
+          [value]="provinciaId() ?? ''"
+          [disabled]="disabled() || cargandoProvincias()"
+          [attr.aria-invalid]="invalidProvincia()"
+          [attr.aria-required]="required()"
+          (change)="cambiarProvincia($event)"
+        >
+          <option value="" [disabled]="required()">
+            {{
+              cargandoProvincias()
+                ? 'Cargando provincias…'
+                : required()
+                  ? 'Seleccioná una provincia'
+                  : 'Todas las provincias'
+            }}
+          </option>
+          @for (provincia of provincias(); track provincia.id) {
+            <option [value]="provincia.id">{{ provincia.nombre }}</option>
+          }
+        </select>
+      </div>
+    }
     @if (errorProvincias()) {
       <span class="location-error" role="alert"
         >{{ errorProvincias() }}

@@ -2,6 +2,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  HostListener,
   computed,
   effect,
   inject,
@@ -26,6 +27,11 @@ const normalizar = (texto: string): string =>
     .toLocaleLowerCase('es-AR')
     .trim();
 const MAX_SUGERENCIAS = 40;
+
+interface OpcionProvincia {
+  id: number | null;
+  nombre: string;
+}
 
 @Component({
   selector: 'app-selector-ubicacion',
@@ -63,6 +69,20 @@ export class SelectorUbicacionComponent {
   protected readonly abierto = signal(false);
   protected readonly texto = signal<string | null>(null);
   protected readonly indiceActivo = signal(-1);
+  protected readonly provinciaAbierta = signal(false);
+  protected readonly indiceProvinciaActivo = signal(-1);
+  protected readonly provinciaSeleccionada = computed(
+    () => this.provincias().find((item) => item.id === this.provinciaId()) ?? null,
+  );
+  protected readonly opcionesProvincia = computed<OpcionProvincia[]>(() => {
+    const provincias = this.provincias().map((item) => ({
+      id: item.id,
+      nombre: item.nombre,
+    }));
+    return this.required()
+      ? provincias
+      : [{ id: null, nombre: 'Todas las provincias' }, ...provincias];
+  });
   protected readonly nombreElegido = computed(
     () => this.localidades().find((item) => item.id === this.localidadId())?.nombre ?? '',
   );
@@ -149,6 +169,80 @@ export class SelectorUbicacionComponent {
     this.localidadChange.emit(null);
   }
 
+  protected alternarProvincias(): void {
+    if (this.disabled() || this.cargandoProvincias()) return;
+    if (this.provinciaAbierta()) {
+      this.cerrarProvincias();
+      return;
+    }
+    this.abrirProvincias();
+  }
+
+  protected elegirProvincia(id: number | null): void {
+    this.cerrarProvincias();
+    if (id === this.provinciaId()) return;
+    this.provinciaChange.emit(id);
+    this.localidadChange.emit(null);
+  }
+
+  protected cerrarProvincias(): void {
+    this.provinciaAbierta.set(false);
+    this.indiceProvinciaActivo.set(-1);
+  }
+
+  @HostListener('document:pointerdown', ['$event'])
+  alPresionarFuera(evento: PointerEvent): void {
+    if (!this.provinciaAbierta()) return;
+    const contenedor = this.elemento.nativeElement.querySelector('.location-select--custom');
+    if (contenedor && !contenedor.contains(evento.target as Node)) this.cerrarProvincias();
+  }
+
+  protected tecladoProvincia(event: KeyboardEvent): void {
+    const abierta = this.provinciaAbierta();
+
+    if (event.key === 'Tab') {
+      this.cerrarProvincias();
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      if (!abierta) return;
+      event.preventDefault();
+      this.cerrarProvincias();
+      return;
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!abierta) {
+        this.abrirProvincias();
+        return;
+      }
+      this.moverProvincia(event.key === 'ArrowDown' ? 1 : -1);
+      return;
+    }
+
+    if (event.key === 'Home' || event.key === 'End') {
+      if (!abierta) return;
+      event.preventDefault();
+      const opciones = this.opcionesProvincia();
+      if (!opciones.length) return;
+      this.indiceProvinciaActivo.set(event.key === 'Home' ? 0 : opciones.length - 1);
+      this.desplazarProvinciaActiva();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (!abierta) {
+        this.abrirProvincias();
+        return;
+      }
+      const opcion = this.opcionesProvincia()[this.indiceProvinciaActivo()];
+      if (opcion) this.elegirProvincia(opcion.id);
+    }
+  }
+
   protected escribir(event: Event): void {
     this.texto.set((event.target as HTMLInputElement).value);
     this.abierto.set(true);
@@ -212,5 +306,36 @@ export class SelectorUbicacionComponent {
 
   protected reintentarLocalidades(): void {
     this.reintento.update((valor) => valor + 1);
+  }
+
+  private abrirProvincias(): void {
+    if (this.disabled() || this.cargandoProvincias()) return;
+    const opciones = this.opcionesProvincia();
+    const actual = opciones.findIndex((opcion) => opcion.id === this.provinciaId());
+    this.provinciaAbierta.set(true);
+    this.indiceProvinciaActivo.set(actual >= 0 ? actual : opciones.length ? 0 : -1);
+    this.desplazarProvinciaActiva();
+  }
+
+  private moverProvincia(delta: number): void {
+    const opciones = this.opcionesProvincia();
+    if (!opciones.length) return;
+    const actual = this.indiceProvinciaActivo();
+    const siguiente =
+      actual < 0
+        ? delta > 0
+          ? 0
+          : opciones.length - 1
+        : (actual + delta + opciones.length) % opciones.length;
+    this.indiceProvinciaActivo.set(siguiente);
+    this.desplazarProvinciaActiva();
+  }
+
+  private desplazarProvinciaActiva(): void {
+    requestAnimationFrame(() =>
+      this.elemento.nativeElement
+        .querySelector('.location-select__dropdown [data-active="true"]')
+        ?.scrollIntoView?.({ block: 'nearest' }),
+    );
   }
 }
