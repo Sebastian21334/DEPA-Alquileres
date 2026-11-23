@@ -1,4 +1,5 @@
 import { ListarPublicacionesDto } from '../dto/listar-publicaciones.dto';
+import { ListarPublicacionesMapaDto } from '../dto/listar-publicaciones-mapa.dto';
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
 import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import type { AnuncianteRequest } from '../../anunciantes/guards/anunciante.guard';
@@ -39,6 +40,11 @@ export class PublicacionesController {
       ...filtros,
       busqueda: q,
     });
+  }
+
+  @Get('mapa')
+  listarMapa(@Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) consulta: ListarPublicacionesMapaDto) {
+    return this.publicacionesService.listarMapa(consulta);
   }
 
   @Get('administracion')

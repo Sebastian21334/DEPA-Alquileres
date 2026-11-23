@@ -115,8 +115,14 @@
         </a>
       </li>
       <li>
-        <a routerLink="/publicaciones" routerLinkActive="is-active" class="drawer__item">
+        <a routerLink="/publicaciones" [class.is-active]="publicacionesActivas(false)" class="drawer__item">
           <svg lucideLayoutList [size]="20"></svg> Explorar publicaciones
+        </a>
+      </li>
+      <li>
+        <a routerLink="/publicaciones" [queryParams]="{ vista: 'mapa' }"
+          [class.is-active]="publicacionesActivas(true)" class="drawer__item">
+          <svg lucideMap [size]="20"></svg> Ver mapa
         </a>
       </li>
     }

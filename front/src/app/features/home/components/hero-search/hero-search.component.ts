@@ -2,7 +2,7 @@ import { Component, computed, inject, input } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { Modalidad, admiteReservasPorFecha } from '../../../../shared/models/catalogo.model';
-import { LucideSearch } from '@lucide/angular';
+import { LucideMap, LucideSearch } from '@lucide/angular';
 
 // Hero de la Home: título + selector de modalidad de alquiler (mapea a la
 // entidad Modalidad, se piden al backend en vez de hardcodear "Largo Plazo" /
@@ -11,7 +11,7 @@ import { LucideSearch } from '@lucide/angular';
 @Component({
   selector: 'app-hero-search',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, LucideSearch],
+  imports: [ReactiveFormsModule, RouterLink, LucideMap, LucideSearch],
   templateUrl: './hero-search.component.html',
   styleUrl: './hero-search.component.scss',
 })
@@ -33,9 +33,13 @@ export class HeroSearchComponent {
   }
 
   protected onSubmit(): void {
-    const q = String(this.form().controls['busqueda']?.value ?? '').trim();
+    const q = this.terminoBusqueda();
     this.router.navigate(['/publicaciones'], {
       queryParams: q ? { q } : undefined,
     });
+  }
+
+  protected terminoBusqueda(): string {
+    return String(this.form().controls['busqueda']?.value ?? '').trim();
   }
 }

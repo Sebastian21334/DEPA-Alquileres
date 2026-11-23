@@ -1,12 +1,14 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { debounceTime, Subscription } from 'rxjs';
-import { LucideSearch } from '@lucide/angular';
+import { LucideMap, LucideSearch } from '@lucide/angular';
 import { AdvancedFiltersComponent } from '../home/components/advanced-filters/advanced-filters.component';
 import { ListingGridComponent } from '../home/components/listing-grid/listing-grid.component';
-import { ListingService, OrdenPublicaciones, PaginaPublicaciones } from '../home/listing.service';
+import { FiltrosPublicaciones, ListingService, OrdenPublicaciones, PaginaPublicaciones } from '../home/listing.service';
+import { MapaPublicacionesComponent } from './mapa-publicaciones.component';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import {
   Modalidad,
@@ -20,9 +22,12 @@ import {
   imports: [
     ReactiveFormsModule,
     RouterLink,
+    NgTemplateOutlet,
+    LucideMap,
     LucideSearch,
     AdvancedFiltersComponent,
     ListingGridComponent,
+    MapaPublicacionesComponent,
   ],
   templateUrl: './explorar-publicaciones.component.html',
   styleUrl: './explorar-publicaciones.component.scss',
@@ -54,6 +59,8 @@ export class ExplorarPublicacionesComponent {
   protected readonly error = signal<string | null>(null);
   protected readonly categoria = signal<string | null>(null);
   protected readonly orden = signal<OrdenPublicaciones>('recientes');
+  protected readonly vistaMapa = signal(false);
+  protected readonly filtrosMapa = signal<FiltrosPublicaciones>({});
   protected readonly modalidades = signal<Modalidad[]>([]);
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
   protected readonly busqueda = this.fb.nonNullable.control('');
@@ -80,6 +87,7 @@ export class ExplorarPublicacionesComponent {
       const categoria = params.get('categoria');
       const orden = params.get('orden');
       this.busqueda.setValue(params.get('q') ?? '', { emitEvent: false });
+      this.vistaMapa.set(params.get('vista') === 'mapa');
       this.categoria.set(categoria);
       this.orden.set(this.esOrdenValido(orden) ? orden : 'recientes');
       this.sincronizarModalidad(categoria);
@@ -93,9 +101,10 @@ export class ExplorarPublicacionesComponent {
       });
   }
 
-  protected seleccionarCategoria(categoria: 'temporales' | 'largo-plazo'): void {
+  protected seleccionarCategoria(categoria: 'temporales' | 'largo-plazo' | null): void {
     this.router.navigate([], {
       relativeTo: this.route,
+      queryParamsHandling: 'merge',
       queryParams: { categoria, q: this.terminoBusqueda() || null, orden: this.orden(), pagina: 1 },
     });
   }
@@ -104,6 +113,7 @@ export class ExplorarPublicacionesComponent {
     evento?.preventDefault();
     this.router.navigate([], {
       relativeTo: this.route,
+      queryParamsHandling: 'merge',
       queryParams: {
         categoria: this.categoria(),
         q: this.terminoBusqueda() || null,
@@ -114,9 +124,10 @@ export class ExplorarPublicacionesComponent {
   }
 
   protected buscar(): void {
-    if (this.resultado().pagina !== 1) {
+    if (!this.vistaMapa() && this.resultado().pagina !== 1) {
       this.router.navigate([], {
         relativeTo: this.route,
+        queryParamsHandling: 'merge',
         queryParams: {
           categoria: this.categoria(),
           q: this.terminoBusqueda() || null,
@@ -133,6 +144,7 @@ export class ExplorarPublicacionesComponent {
     if (pagina < 1 || pagina > this.resultado().totalPaginas) return;
     this.router.navigate([], {
       relativeTo: this.route,
+      queryParamsHandling: 'merge',
       queryParams: {
         categoria: this.categoria(),
         q: this.terminoBusqueda() || null,
@@ -146,6 +158,7 @@ export class ExplorarPublicacionesComponent {
     if (!this.esOrdenValido(orden) || orden === this.orden()) return;
     this.router.navigate([], {
       relativeTo: this.route,
+      queryParamsHandling: 'merge',
       queryParams: {
         categoria: this.categoria(),
         q: this.terminoBusqueda() || null,
@@ -206,24 +219,26 @@ export class ExplorarPublicacionesComponent {
   private cargar(pagina: number): void {
     this.solicitudListado?.unsubscribe();
     const filtros = this.form.getRawValue();
+    const consulta: FiltrosPublicaciones = {
+      categoria: this.categoria() ?? undefined,
+      busqueda: this.terminoBusqueda(),
+      idProvincia: filtros.idProvincia ?? undefined,
+      idsCiudad: filtros.idsCiudad,
+      idsTipoPropiedad: filtros.idsTipoPropiedad,
+      idsTipoMoneda: filtros.idsTipoMoneda,
+      precioMin: filtros.precioMin,
+      precioMax: filtros.precioMax,
+      superficieMin: filtros.superficieMin,
+      ambientes: filtros.ambientesSeleccionados,
+    };
+    if (this.vistaMapa()) {
+      this.filtrosMapa.set(consulta);
+      return;
+    }
     this.cargando.set(true);
     this.error.set(null);
     this.solicitudListado = this.api
-      .getActivas({
-        pagina,
-        limite: 12,
-        categoria: this.categoria() ?? undefined,
-        orden: this.orden(),
-        busqueda: this.terminoBusqueda(),
-        idProvincia: filtros.idProvincia ?? undefined,
-        idsCiudad: filtros.idsCiudad,
-        idsTipoPropiedad: filtros.idsTipoPropiedad,
-        idsTipoMoneda: filtros.idsTipoMoneda,
-        precioMin: filtros.precioMin,
-        precioMax: filtros.precioMax,
-        superficieMin: filtros.superficieMin,
-        ambientes: filtros.ambientesSeleccionados,
-      })
+      .getActivas({ ...consulta, pagina, limite: 12, orden: this.orden() })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (resultado) => {

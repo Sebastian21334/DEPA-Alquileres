@@ -2,6 +2,46 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+/* Leaflet crea los nodos de los pines fuera del render de Angular. */
+.mapa__lienzo .depa-pin { overflow: visible; outline: none; }
+.mapa__lienzo .depa-pin span {
+  position: absolute;
+  display: block;
+  left: 0;
+  bottom: .3rem;
+  padding: .38rem .65rem;
+  border: 2px solid white;
+  border-radius: var(--radius-pill);
+  background: var(--color-secondary);
+  color: white;
+  box-shadow: 0 3px 10px rgb(16 24 40 / 25%);
+  font: 800 .8rem / 1.25 Figtree, sans-serif;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.mapa__lienzo .depa-pin--largo span { background: var(--color-primary-dark); }
+.mapa__lienzo .depa-pin--grupo span { min-width: 2rem; background: #233654; text-align: center; }
+.mapa__lienzo .depa-pin:focus-visible span { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+.mapa__lienzo .depa-pin span::after {
+  position: absolute;
+  bottom: -.4rem;
+  left: calc(50% - .3rem);
+  width: .6rem;
+  height: .6rem;
+  border: 2px solid white;
+  border-top: 0;
+  border-left: 0;
+  background: inherit;
+  transform: rotate(45deg);
+  content: '';
+}
+.mapa__lienzo .depa-pin--seleccionado span {
+  outline: 3px solid var(--color-accent);
+  box-shadow: 0 4px 16px rgb(16 24 40 / 36%);
+  transform: translateX(-50%) scale(1.14);
+  transform-origin: center bottom;
+}
+
 @font-face {
   font-family: 'Figtree';
   src: url('/fonts/figtree-variable.ttf') format('truetype');

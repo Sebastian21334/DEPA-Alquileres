@@ -19,9 +19,10 @@
       </div>
     }
 
-    <form class="hero__search" [formGroup]="form()" (ngSubmit)="onSubmit()">
+    <div class="hero__search">
       <label class="hero__search-label" for="busqueda">Buscá lo que necesitás</label>
-      <div class="hero__search-row">
+      <div class="hero__search-actions">
+      <form class="hero__search-row" [formGroup]="form()" (ngSubmit)="onSubmit()" role="search">
         <input
           id="busqueda"
           type="text"
@@ -32,7 +33,12 @@
         <button type="submit" class="btn btn--primary" aria-label="Buscar propiedades">
           <svg lucideSearch [size]="20" aria-hidden="true"></svg>
         </button>
+      </form>
+      <a class="hero__map" routerLink="/publicaciones" aria-label="Ver mapa" title="Ver mapa"
+         [queryParams]="{ vista: 'mapa', q: terminoBusqueda() || null }">
+        <svg lucideMap [size]="23" aria-hidden="true"></svg>
+      </a>
       </div>
-    </form>
+    </div>
   </div>
 </section>

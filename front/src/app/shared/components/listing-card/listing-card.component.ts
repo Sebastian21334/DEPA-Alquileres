@@ -35,6 +35,7 @@ export class ListingCardComponent {
 
   readonly publicacion = input.required<Publicacion>();
   readonly miniaturaInicio = input(false);
+  readonly vistaMapa = input(false);
   @Output() readonly favoriteChange = new EventEmitter<boolean>();
   protected readonly savingFavorite = signal(false);
   private readonly falloMiniatura = signal<string | null>(null);

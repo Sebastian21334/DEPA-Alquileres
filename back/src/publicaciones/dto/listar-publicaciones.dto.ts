@@ -20,24 +20,10 @@ const ids = (entrada: { value: unknown }): unknown => {
   return Array.isArray(valores) ? valores.map(Number) : valores;
 };
 
-export class ListarPublicacionesDto {
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  pagina = 1;
-
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  limite = 12;
-
+export class FiltrosPublicacionesDto {
   @IsOptional()
   @IsIn(['recientes', 'temporales', 'largo-plazo', 'villa-maria', 'reservadas'])
   categoria?: CategoriaInicio;
-
-  @IsOptional()
-  @IsIn(['recientes', 'antiguas', 'precio-menor', 'precio-mayor', 'titulo'])
-  orden?: OrdenPublicaciones;
 
   @IsOptional()
   @IsString()
@@ -93,4 +79,20 @@ export class ListarPublicacionesDto {
   @IsArray()
   @IsIn(['1', '2', '3', '4+'], { each: true })
   ambientes?: string[];
+}
+
+export class ListarPublicacionesDto extends FiltrosPublicacionesDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pagina = 1;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  limite = 12;
+
+  @IsOptional()
+  @IsIn(['recientes', 'antiguas', 'precio-menor', 'precio-mayor', 'titulo'])
+  orden?: OrdenPublicaciones;
 }

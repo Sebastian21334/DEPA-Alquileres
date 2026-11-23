@@ -1,4 +1,4 @@
-<article class="card" [class.card--temporary]="esTemporaria">
+<article class="card" [class.card--temporary]="esTemporaria" [class.card--map]="vistaMapa()">
   <div class="card__top">
     <a class="card__media" [routerLink]="['/publicaciones', publicacion().id]" tabindex="-1" aria-hidden="true">
       @if (imagenTarjeta(); as imagen) {
@@ -29,7 +29,9 @@
 
   <div class="card__body">
     <h3 class="card__title">{{ publicacion().titulo }}</h3>
-    <p class="card__published">{{ publicacion().fecha_publicacion | relativeTime }}</p>
+    @if (!vistaMapa()) {
+      <p class="card__published">{{ publicacion().fecha_publicacion | relativeTime }}</p>
+    }
     @if (ubicacion) {
       <p class="card__location"><svg lucideMapPin [size]="16"></svg>{{ ubicacion }}</p>
     }
@@ -48,7 +50,7 @@
         <span class="card__currency">{{ publicacion().tipoMoneda?.nombre || 'Moneda no informada' }}</span>
         <strong>${{ precioFormateado }}</strong><span class="card__period">/ {{ esTemporaria ? 'día' : 'mes' }}</span>
       </p>
-      <a class="card__cta" [routerLink]="['/publicaciones', publicacion().id]" [attr.aria-label]="'Ver propiedad: ' + publicacion().titulo">Ver propiedad <svg lucideArrowRight [size]="17" aria-hidden="true"></svg></a>
+      <a class="card__cta" [routerLink]="['/publicaciones', publicacion().id]" [attr.aria-label]="'Ver propiedad: ' + publicacion().titulo">{{ vistaMapa() ? 'Ver detalles' : 'Ver propiedad' }} <svg lucideArrowRight [size]="17" aria-hidden="true"></svg></a>
     </div>
   </div>
 </article>

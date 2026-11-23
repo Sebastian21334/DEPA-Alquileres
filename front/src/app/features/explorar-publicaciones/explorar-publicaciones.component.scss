@@ -7,3 +7,69 @@
 @media (max-width: 1248px) { .explore-head { padding-inline: 1rem; } }
 @media (max-width: 680px) { .explore-head__content { align-items: flex-start; flex-direction: column; gap: 1.25rem; }.modalidades { width: 100%; }.modalidad-btn { min-height: 48px; } }
 @media (max-width: 480px) { .catalog-search button { min-width: 48px; padding: 0 .8rem; }.catalog-search button span { display: none; } }
+.explore-view-row {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 1216px;
+  margin: .85rem auto 0;
+  padding: 0 1rem;
+}
+.explore-view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  min-height: 40px;
+  padding: .45rem .8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: white;
+  color: var(--color-secondary);
+  font-size: .85rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+.explore-view--map { background: var(--color-accent); color: var(--color-text); }
+.explore-view:hover { filter: brightness(.96); }
+.explore-view:focus-visible { outline: 2px solid var(--color-secondary); outline-offset: 2px; }
+.explore--map { padding: 0; background: white; }
+.busqueda-mapa .catalog-search { margin: 0; padding: 0; }
+.busqueda-mapa .catalog-search__field { box-shadow: none; border-radius: var(--radius-sm); }
+.busqueda-mapa .catalog-search input { padding: .62rem .75rem; font-size: .85rem; }
+.busqueda-mapa .catalog-search button { min-width: 40px; padding-inline: .7rem; }
+.busqueda-mapa .catalog-search button span { display: none; }
+
+.modalidades--map {
+  display: flex;
+  width: 100%;
+  padding: 2px;
+  border: 1px solid #d8e0eb;
+  border-radius: var(--radius-sm);
+  background: #f4f7fb;
+  box-shadow: none;
+}
+.modalidades--map .modalidad-btn {
+  flex: 1 0 auto;
+  min-height: 38px;
+  padding: 0 .65rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  background: transparent;
+  color: #172640;
+}
+.modalidades--map .modalidad-btn--all,
+.modalidades--map .modalidad-btn--all:hover { background: #182842; color: white; }
+.modalidad-btn__dot {
+  display: inline-block;
+  width: .48rem;
+  height: .48rem;
+  margin-right: .34rem;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  vertical-align: .06em;
+}
+.modalidad-btn--primary .modalidad-btn__dot { background: var(--color-primary); }
+.modalidad-btn--active .modalidad-btn__dot { background: currentColor; }
+@media (max-width: 640px) {
+  .modalidades--map .modalidad-btn { min-height: 32px; padding-inline: .52rem; font-size: .75rem; }
+}

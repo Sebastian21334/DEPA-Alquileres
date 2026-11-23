@@ -1,11 +1,41 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { EMPTY, Observable, expand, reduce } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Publicacion, PublicacionPayload } from '../../shared/models/publicacion.model';
 
 export type OrdenPublicaciones =
   'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
+
+export interface FiltrosPublicaciones {
+  categoria?: string;
+  busqueda?: string;
+  idProvincia?: number;
+  idsCiudad?: number[];
+  idsTipoPropiedad?: number[];
+  idsTipoMoneda?: number[];
+  precioMin?: number | null;
+  precioMax?: number | null;
+  superficieMin?: number | null;
+  ambientes?: string[];
+}
+
+export interface PuntoPublicacion {
+  id: number;
+  titulo: string;
+  ciudad?: string | null;
+  portada?: string | null;
+  latitud: number;
+  longitud: number;
+  precio: number;
+  moneda: string | null;
+  temporal: boolean;
+}
+
+interface PaginaMapaPublicaciones {
+  puntos: PuntoPublicacion[];
+  siguienteId: number | null;
+}
 
 /**
  * Consume el módulo `publicaciones` del backend (back/src/publicaciones).
@@ -22,12 +52,28 @@ export class ListingService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/publicaciones`;
 
-  getActivas(opciones: { pagina?: number; limite?: number; categoria?: string; orden?: OrdenPublicaciones; busqueda?: string; idProvincia?: number; idsCiudad?: number[]; idsTipoPropiedad?: number[]; idsTipoMoneda?: number[]; precioMin?: number | null; precioMax?: number | null; superficieMin?: number | null; ambientes?: string[]; } = {}): Observable<PaginaPublicaciones> {
-    let params = new HttpParams();
+  getActivas(opciones: FiltrosPublicaciones & { pagina?: number; limite?: number; orden?: OrdenPublicaciones } = {}): Observable<PaginaPublicaciones> {
+    let params = this.parametrosFiltros(opciones);
     if (opciones.pagina) params = params.set('pagina', opciones.pagina);
     if (opciones.limite) params = params.set('limite', opciones.limite);
-    if (opciones.categoria) params = params.set('categoria', opciones.categoria);
     if (opciones.orden) params = params.set('orden', opciones.orden);
+    return this.http.get<PaginaPublicaciones>(this.baseUrl, { params });
+  }
+
+  getMapa(filtros: FiltrosPublicaciones): Observable<PuntoPublicacion[]> {
+    const params = this.parametrosFiltros(filtros);
+    const pedirPagina = (antesDe?: number) => this.http.get<PaginaMapaPublicaciones>(`${this.baseUrl}/mapa`, {
+      params: antesDe === undefined ? params : params.set('antesDe', antesDe),
+    });
+    return pedirPagina().pipe(
+      expand(({ siguienteId }) => siguienteId == null ? EMPTY : pedirPagina(siguienteId)),
+      reduce((puntos, pagina) => puntos.concat(pagina.puntos), [] as PuntoPublicacion[]),
+    );
+  }
+
+  private parametrosFiltros(opciones: FiltrosPublicaciones): HttpParams {
+    let params = new HttpParams();
+    if (opciones.categoria) params = params.set('categoria', opciones.categoria);
     if (opciones.busqueda?.trim()) params = params.set('q', opciones.busqueda.trim());
     if (opciones.idProvincia) params = params.set('idProvincia', opciones.idProvincia);
     if (opciones.idsCiudad?.length) params = params.set('idsCiudad', opciones.idsCiudad.join(','));
@@ -39,7 +85,7 @@ export class ListingService {
     if (opciones.precioMax != null) params = params.set('precioMax', opciones.precioMax);
     if (opciones.superficieMin != null) params = params.set('superficieMin', opciones.superficieMin);
     if (opciones.ambientes?.length) params = params.set('ambientes', opciones.ambientes.join(','));
-    return this.http.get<PaginaPublicaciones>(this.baseUrl, { params });
+    return params;
   }
 
   getById(id: number): Observable<Publicacion> {
