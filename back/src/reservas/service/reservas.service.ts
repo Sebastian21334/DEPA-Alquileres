@@ -4,11 +4,7 @@ import {
   type IReservaRepository,
   RESERVA_REPOSITORY,
 } from '../repository/reserva.repository.interface';
-import {
-  decimalEntero,
-  importeTexto,
-  monedaPublicacion,
-} from '../../common/utils/importes';
+import { importeTexto } from '../../common/utils/importes';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
@@ -17,7 +13,7 @@ import { generarCodigoAlojamiento } from './reservas.utils';
 import { MAX_INTENTOS_CODIGO, ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
 import { timingSafeEqual } from 'node:crypto';
-import { esFechaCalendarioValida, fechaArgentina, fechaParaMostrar } from '../../common/utils/fechas';
+import { diasInclusivos, esFechaCalendarioValida, fechaArgentina, fechaParaMostrar } from '../../common/utils/fechas';
 import {
   Inject,
   Injectable,
@@ -37,6 +33,11 @@ import { PublicacionesService } from '../../publicaciones/service/publicaciones.
 import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { OrigenReembolso, Reembolso } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+
+import type { Publicacion } from '../../publicaciones/entity/publicacion.entity';
+import type { Usuario } from '../../usuarios/entity/usuario.entity';
+
+const PLAZO_INICIO_PAGO_MS = 15 * 60_000;
 
 export type CondicionesCobro = {
   precio_unitario_origen: string;
@@ -167,59 +168,29 @@ export class ReservasService
     const publicacion = await this.publicacionesService.buscarPorId(
       dto.id_publicacion,
     );
-    this.validarActividadesAnunciante(publicacion.anunciante?.actividades_pausadas);
-    if (publicacion.eliminada || !publicacion.activa || !this.publicacionesService.cuentaAnuncianteHabilitada(publicacion)) {
-      throw new BadRequestException(
-        'No se puede reservar: la publicación no está disponible',
-      );
-    }
-    if (this.publicacionesService.perteneceA(publicacion, idUsuario)) {
-      throw new BadRequestException('No podés reservar tu propia publicación');
-    }
-    if (!this.publicacionesService.admiteReservaPorFecha(publicacion)) {
-      throw new BadRequestException(
-        'Solo las publicaciones temporales o de alquiler diario admiten reservas por fecha',
-      );
-    }
+    this.publicacionesService.validarNuevaReserva(publicacion, idUsuario, 'reserva');
     const hoy = fechaArgentina();
     if (dto.fecha_inicio < hoy || dto.fecha_fin < hoy) {
       throw new BadRequestException(
         'Las fechas de la reserva no pueden ser anteriores a hoy',
       );
     }
-    const cantidadDias =
-      Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) +
-      1;
-    let moneda: 'ARS' | 'USD', original: string;
-    try {
-      moneda = monedaPublicacion(publicacion.tipoMoneda?.nombre);
-      original = importeTexto(
-        decimalEntero(publicacion.precio, 2) * BigInt(cantidadDias),
-      );
-      if (decimalEntero(original, 2) <= 0n)
-        throw new Error('El precio debe ser mayor a cero');
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'Precio inválido',
-      );
-    }
+    const tarifa = this.publicacionesService.calcularTarifaReserva(publicacion, diasInclusivos(inicio, fin), 'reserva');
     if ((this.config.get<string>('MP_CURRENCY_ID') ?? 'ARS') !== 'ARS') {
       throw new BadRequestException(
         'Esta integración solo admite cobros en ARS',
       );
     }
     if (
-      condiciones.moneda_origen !== moneda ||
-      condiciones.total_origen !== original ||
-      condiciones.precio_unitario_origen !==
-        importeTexto(decimalEntero(publicacion.precio, 2))
+      condiciones.moneda_origen !== tarifa.moneda ||
+      condiciones.total_origen !== tarifa.total ||
+      condiciones.precio_unitario_origen !== importeTexto(tarifa.unitario)
     ) {
       throw new ConflictException(
         'El precio o la moneda cambiaron. Solicitá un nuevo presupuesto.',
       );
     }
     const precioDiario = Number(publicacion.precio);
-    const montoCalculado = Number(condiciones.total_cobro);
 
     const usuario = await this.usuariosService.buscarPorId(idUsuario);
     if (!usuario) {
@@ -235,33 +206,7 @@ export class ReservasService
       async (reservaRepository, transaccion) => {
         await this.usuariosService.validarCuentaParaNuevaReserva(idUsuario, transaccion);
         await this.publicacionesService.bloquearParaModificacion(dto.id_publicacion, transaccion);
-        const actual = await this.publicacionesService.buscarCondicionesDeReserva(
-          dto.id_publicacion,
-          transaccion,
-        );
-        this.validarActividadesAnunciante(actual?.anunciante?.actividades_pausadas);
-        let monedaActual: 'ARS' | 'USD' | undefined;
-        try {
-          monedaActual = monedaPublicacion(actual?.tipoMoneda?.nombre);
-        } catch {
-          monedaActual = undefined;
-        }
-        if (
-          !actual?.activa ||
-          actual.eliminada ||
-          !this.publicacionesService.cuentaAnuncianteHabilitada(actual) ||
-          Number(actual.precio) !== precioDiario ||
-          monedaActual !== moneda
-        ) {
-          throw new ConflictException(
-            'La publicación cambió. Volvé a cotizar antes de pagar.',
-          );
-        }
-        if (new Date(condiciones.vence_en).getTime() <= Date.now()) {
-          throw new ConflictException(
-            'El presupuesto venció. Volvé a cotizar antes de pagar.',
-          );
-        }
+        await this.validarPresupuestoBajoBloqueo(dto.id_publicacion, precioDiario, tarifa.moneda, condiciones, transaccion);
         // Delegamos la pregunta "¿está libre este rango?" al módulo que es
         // dueño de esa lógica (Disponibilidad), en vez de duplicarla acá
         const disponible =
@@ -278,47 +223,11 @@ export class ReservasService
           );
         }
 
-        // Las relaciones se crean con solo el ID: TypeORM puede resolver las FK sin cargar entidades completas.
         const ahora = new Date();
-        const reserva = reservaRepository.crear({
-          finalizada: false,
-          cancelada: false,
-          fecha_cancelacion: null,
-          monto_pago: montoCalculado,
-          porcentaje_comision_depa: await this.catalogos.obtenerComision(transaccion),
-          precio_unitario_contratado: precioDiario,
-          importe_contratado: montoCalculado,
-          moneda_contratada: 'ARS',
-          moneda_origen: moneda,
-          importe_origen: Number(original),
-          cotizacion_dolar: condiciones.cotizacion_id
-            ? Object.assign(new CotizacionDolar(), {
-                id: condiciones.cotizacion_id,
-              })
-            : null,
-          cotizacion_aceptada_en: ahora,
-          presupuesto_emitido_en: new Date(condiciones.emitida_en),
-          presupuesto_vence_en: new Date(condiciones.vence_en),
-          fecha_pago: null,
-          estado_pago: this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'),
-          estado_liquidacion: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA'),
-          codigo_alojamiento: null,
-          codigo_generado_en: null,
-          codigo_validado_en: null,
-          intentos_codigo: 0,
-          fecha_resolucion_liquidacion: null,
-          referencia_liquidacion: null,
-          observacion_liquidacion: null,
-          pago_vencimiento: new Date(ahora.getTime() + 15 * 60_000),
-          fecha_inicio: inicio.toISOString().slice(0, 10),
-          fecha_fin: fin.toISOString().slice(0, 10),
-          usuario_nombre: usuario.nombre,
-          usuario_apellido: usuario.apellido,
-          usuario_email: usuario.email,
-          usuario_telefono: usuario.telefono,
-          usuario,
-          publicacion,
-        });
+        const comision = await this.catalogos.obtenerComision(transaccion);
+        const reserva = reservaRepository.crear(this.datosReservaPendiente(
+          publicacion, usuario, { inicio, fin }, tarifa, condiciones, { ahora, comision },
+        ));
 
         // Persistimos la reserva primero para obtener su ID antes de asociarlo a las fechas.
         const reservaGuardada = await reservaRepository.guardar(reserva);
@@ -342,13 +251,70 @@ export class ReservasService
     return this.prepararRespuesta(guardada);
   }
 
-  private validarActividadesAnunciante(pausadas?: boolean): void {
-    if (pausadas) {
-      throw new ConflictException('El anunciante pausó sus actividades. Por el momento, no acepta nuevas reservas.');
+  /** Vuelve a comprobar el precio, la moneda, la publicación y el vencimiento mientras la publicación está bloqueada. */
+  private async validarPresupuestoBajoBloqueo(idPublicacion: number, precio: number, moneda: CondicionesCobro['moneda_origen'], condiciones: CondicionesCobro, transaccion: EntityManager): Promise<void> {
+    const actual = await this.publicacionesService.buscarCondicionesDeReserva(idPublicacion, transaccion);
+    this.publicacionesService.validarAnuncianteDisponible(actual);
+    let monedaActual: CondicionesCobro['moneda_origen'] | undefined;
+    try {
+      monedaActual = this.publicacionesService.monedaParaReserva(actual);
+    } catch {
+      monedaActual = undefined;
+    }
+    if (!actual?.activa || actual.eliminada || !this.publicacionesService.cuentaAnuncianteHabilitada(actual) ||
+        Number(actual.precio) !== precio || monedaActual !== moneda) {
+      throw new ConflictException('La publicación cambió. Volvé a cotizar antes de pagar.');
+    }
+    if (new Date(condiciones.vence_en).getTime() <= Date.now()) {
+      throw new ConflictException('El presupuesto venció. Volvé a cotizar antes de pagar.');
     }
   }
 
-  /** Confirma la reserva únicamente después de verificar el pago con Mercado Pago. */
+  /** Prepara el registro inicial y conserva las condiciones contratadas y los datos históricos del inquilino. */
+  private datosReservaPendiente(publicacion: Publicacion, usuario: Usuario, { inicio, fin }: { inicio: Date; fin: Date }, tarifa: ReturnType<PublicacionesService['calcularTarifaReserva']>, condiciones: CondicionesCobro, { ahora, comision }: { ahora: Date; comision: number }): Partial<Reserva> {
+    const montoCalculado = Number(condiciones.total_cobro);
+    const precioDiario = Number(publicacion.precio);
+    return {
+      finalizada: false,
+      cancelada: false,
+      fecha_cancelacion: null,
+      monto_pago: montoCalculado,
+      porcentaje_comision_depa: comision,
+      precio_unitario_contratado: precioDiario,
+      importe_contratado: montoCalculado,
+      moneda_contratada: 'ARS',
+      moneda_origen: tarifa.moneda,
+      importe_origen: Number(tarifa.total),
+      cotizacion_dolar: condiciones.cotizacion_id
+        ? Object.assign(new CotizacionDolar(), {
+            id: condiciones.cotizacion_id,
+          })
+        : null,
+      cotizacion_aceptada_en: ahora,
+      presupuesto_emitido_en: new Date(condiciones.emitida_en),
+      presupuesto_vence_en: new Date(condiciones.vence_en),
+      fecha_pago: null,
+      estado_pago: this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'),
+      estado_liquidacion: this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'NO_APLICA'),
+      codigo_alojamiento: null,
+      codigo_generado_en: null,
+      codigo_validado_en: null,
+      intentos_codigo: 0,
+      fecha_resolucion_liquidacion: null,
+      referencia_liquidacion: null,
+      observacion_liquidacion: null,
+      pago_vencimiento: new Date(ahora.getTime() + PLAZO_INICIO_PAGO_MS),
+      fecha_inicio: inicio.toISOString().slice(0, 10),
+      fecha_fin: fin.toISOString().slice(0, 10),
+      usuario_nombre: usuario.nombre,
+      usuario_apellido: usuario.apellido,
+      usuario_email: usuario.email,
+      usuario_telefono: usuario.telefono,
+      usuario,
+      publicacion,
+    };
+  }
+
   async confirmarPago(id: number, fechaPago: Date): Promise<Reserva> {
     const { reserva: guardada, devolucionPendiente } = await this.reservaRepository.conTransaccion(
       async (reservaRepository, transaccion) => {

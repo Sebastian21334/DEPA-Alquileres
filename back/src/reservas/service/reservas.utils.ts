@@ -23,3 +23,16 @@ export function generarCodigoAlojamiento(): string {
 export function nombreInquilinoReserva(reserva: Reserva): string {
   return [reserva.usuario_nombre, reserva.usuario_apellido].filter(Boolean).join(' ');
 }
+
+/** Datos de la conversión que se registró al aceptar el presupuesto. */
+export function conversionContratada(reserva: Reserva) {
+  const { cotizacion_dolar, importe_origen, moneda_origen } = reserva;
+  if (!cotizacion_dolar || importe_origen == null || !moneda_origen) return undefined;
+  return {
+    importeOrigen: Number(importe_origen),
+    monedaOrigen: moneda_origen,
+    cotizacionVenta: Number(cotizacion_dolar.venta),
+    fechaFuente: new Date(cotizacion_dolar.actualizada_fuente_en).toISOString(),
+    proveedor: cotizacion_dolar.proveedor,
+  };
+}

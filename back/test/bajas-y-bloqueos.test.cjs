@@ -1,3 +1,5 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
+const { operacionesCuentaDePrueba } = require('./soporte/operaciones-cuenta-pruebas.cjs');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
@@ -131,7 +133,7 @@ function servicioUsuarios(db) {
   });
   return new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     new PublicacionesService(new PublicacionesRepository()),
-    { archivarCuitPorBajaDeCuenta: async () => {} });
+    { archivarCuitPorBajaDeCuenta: async () => {} }, undefined, operacionesCuentaDePrueba(), preparacionImagenes);
 }
 
 test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de publicaciones', async () => {
@@ -151,13 +153,12 @@ test('bloquear y habilitar conserva reservas, reclamos, liquidaciones y pausa de
     },
     guardar: async (usuario) => db.prepare('UPDATE usuario SET bloqueado = ? WHERE id = ?')
       .run(usuario.bloqueado ? 1 : 0, usuario.id),
-    contarOperacionesPendientes: async (_id, participacion) => ({
-      reservasPendientes: participacion === 'Anunciante' ? 1 : 0,
-    }),
   };
   const usuarios = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => {} },
-    { buscarPorUsuario: async () => ({ verificado: true }) });
+    { buscarPorUsuario: async () => ({ verificado: true }) }, undefined, {
+      contarOperacionesPendientes: async (_id, participacion) => ({ reservasPendientes: participacion === 'Anunciante' ? 1 : 0 }),
+    }, preparacionImagenes);
   const servicio = new BloqueoAnuncianteService(usuarios, {});
   assert.equal((await servicio.cambiarBloqueo(2, true, 99, 'Moderación')).accesoLimitado, true);
   assert.equal(db.prepare('SELECT bloqueado FROM usuario WHERE id = 2').get().bloqueado, 1);

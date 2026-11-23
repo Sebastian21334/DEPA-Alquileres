@@ -1,3 +1,6 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
+const { BcryptAdapter } = require('../dist/usuarios/proveedor/bcrypt.adapter');
+const { operacionesCuentaDePrueba } = require('./soporte/operaciones-cuenta-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -60,9 +63,9 @@ test('el bloqueo usa el perfil y las operaciones propias sin otorgar privilegios
   const repo = new UsuariosRepository(source.getRepository(Usuario));
   const catalogos = catalogosDePrueba();
   const publicaciones = new PublicacionesService(new PublicacionesRepository(source.getRepository(Publicacion)), catalogos);
-  const credenciales = new UsuariosCredencialesService(repo, {});
+  const credenciales = new UsuariosCredencialesService(repo, new BcryptAdapter({ get: () => undefined }));
   const anunciantes = new AnunciantesService(new AnunciantesRepository(source.getRepository(Anunciante)));
-  const usuarios = new UsuariosService(repo, catalogos, credenciales, mail, {}, publicaciones, anunciantes);
+  const usuarios = new UsuariosService(repo, catalogos, credenciales, mail, {}, publicaciones, anunciantes, undefined, operacionesCuentaDePrueba(), preparacionImagenes);
   const bloqueo = new BloqueoAnuncianteService(usuarios, mail);
   const secreto = 'clave-local-de-bloqueo-para-pruebas';
   const jwt = new JwtService({ secret: secreto, signOptions: { expiresIn: 300 } });

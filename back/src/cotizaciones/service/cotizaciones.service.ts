@@ -2,9 +2,6 @@ import {
   BadRequestException,
   Inject,
   Injectable,
-  Logger,
-  OnApplicationBootstrap,
-  OnModuleDestroy,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -24,11 +21,7 @@ interface EstadoDolar {
 const TOLERANCIA_FUTURO_MS = 5 * 60 * 1000;
 
 @Injectable()
-export class CotizacionesService
-  implements OnApplicationBootstrap, OnModuleDestroy
-{
-  private readonly logger = new Logger(CotizacionesService.name);
-  private timer?: ReturnType<typeof setInterval>;
+export class CotizacionesService {
   private actualizacion?: Promise<EstadoDolar>;
   private readonly intervalo = 3 * 60 * 60 * 1000;
   private readonly reintento = 5 * 60 * 1000;
@@ -42,21 +35,6 @@ export class CotizacionesService
         'DOLAR_MAX_ANTIGUEDAD_FUENTE_HORAS debe estar entre 3 y 168',
       );
     this.maxAntiguedad = horas * 60 * 60 * 1000;
-  }
-  onApplicationBootstrap() {
-    const revisar = () => {
-      void this.actualizarSiCorresponde().catch(() =>
-        this.logger.warn(
-          'No se pudo revisar el dólar; se reintentará con el backend activo',
-        ),
-      );
-    };
-    revisar();
-    this.timer = setInterval(revisar, 60000);
-    this.timer.unref();
-  }
-  onModuleDestroy() {
-    if (this.timer) clearInterval(this.timer);
   }
   private fuenteVigente(actualizadaEn: Date, ahora: number): boolean {
     const edad = ahora - new Date(actualizadaEn).getTime();
@@ -103,6 +81,7 @@ export class CotizacionesService
       ? this.estaVigente(estado, ahora)
       : this.dentroDeVentana(estado.consulta.realizada_en, ahora, this.reintento);
   }
+  /** Evita consultas duplicadas y guarda una nueva cotización solo cuando corresponde actualizarla. */
   async actualizarSiCorresponde(): Promise<EstadoDolar> {
     // La promesa solo agrupa peticiones simultáneas; la vigencia siempre sale de la BD.
     if (this.actualizacion) return this.actualizacion;
@@ -112,37 +91,13 @@ export class CotizacionesService
     this.actualizacion = this.repo.conBloqueo(async (repo) => {
       const actual = await this.estado(repo);
       if (this.esperarRevision(actual)) return actual;
-      try {
-        const datos = await this.proveedor.consultar();
-        const compra = datos.compra.toFixed(6);
-        const venta = datos.venta.toFixed(6);
-        if (
-          !this.importesValidos(datos.compra, datos.venta) ||
-          !this.importesValidos(Number(compra), Number(venta)) ||
-          !this.fuenteVigente(datos.actualizadaEn, Date.now()) ||
-          (actual.cotizacion &&
-            datos.actualizadaEn.getTime() <
-              new Date(actual.cotizacion.actualizada_fuente_en).getTime())
-        ) {
-          throw new Error(
-            'La fuente devolvió una cotización inválida o demasiado antigua',
-          );
-        }
-        await repo.guardar({
-          compra,
-          venta,
-          actualizada_fuente_en: datos.actualizadaEn,
-          tipo: 'blue',
-          proveedor: 'DolarApi / DolarHoy',
-        });
+      const resultado = await this.consultarFuente(actual.cotizacion);
+      if ('error' in resultado) {
+        // Solo un fallo de la fuente justifica esperar antes de reintentar.
+        await repo.registrarConsulta(false, resultado.error);
+      } else {
+        await repo.guardar(resultado.cotizacion);
         await repo.registrarConsulta(true, null);
-      } catch (error) {
-        // Persiste el fallo para no insistir en cada reserva tras despertar.
-        const mensaje =
-          error instanceof Error
-            ? error.message
-            : 'Error consultando la fuente';
-        await repo.registrarConsulta(false, mensaje.slice(0, 300));
       }
       return this.estado(repo);
     });
@@ -152,6 +107,31 @@ export class CotizacionesService
       this.actualizacion = undefined;
     }
   }
+  /** Consulta y valida el dólar del proveedor. Devuelve un error descriptivo si la fuente no es utilizable. */
+  private async consultarFuente(anterior: CotizacionDolar | null): Promise<{ cotizacion: Partial<CotizacionDolar> } | { error: string }> {
+    try {
+      const datos = await this.proveedor.consultar();
+      const compra = datos.compra.toFixed(6);
+      const venta = datos.venta.toFixed(6);
+      if (!this.importesValidos(datos.compra, datos.venta) ||
+          !this.importesValidos(Number(compra), Number(venta)) ||
+          !this.fuenteVigente(datos.actualizadaEn, Date.now()) ||
+          (anterior && datos.actualizadaEn.getTime() < new Date(anterior.actualizada_fuente_en).getTime())) {
+        throw new Error('La fuente devolvió una cotización inválida o demasiado antigua');
+      }
+      return {
+        cotizacion: {
+          compra, venta, actualizada_fuente_en: datos.actualizadaEn,
+          tipo: 'blue', proveedor: this.proveedor.nombre,
+        },
+      };
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message : 'Error consultando la fuente';
+      return { error: mensaje.slice(0, 300) };
+    }
+  }
+
+  /** Obtiene una cotización verificada y vigente o informa que el servicio no está disponible. */
   async obtenerVigente(): Promise<CotizacionDolar> {
     let estado: EstadoDolar;
     try {

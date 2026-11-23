@@ -5,5 +5,6 @@ export interface DatosDolar {
   actualizadaEn: Date;
 }
 export interface IProveedorDolar {
+  readonly nombre: string;
   consultar(): Promise<DatosDolar>;
 }

@@ -9,6 +9,7 @@ const { AuthService } = require('../dist/auth/service/auth.service');
 const { VerificacionAnuncianteController } = require('../dist/verificacion-anunciante/controller/verificacion-anunciante.controller');
 const { VerificacionAnuncianteService } = require('../dist/verificacion-anunciante/service/verificacion-anunciante.service');
 const { PruebaVidaService } = require('../dist/verificacion-anunciante/service/prueba-vida.service');
+const { PerfilAnunciantePublicoService } = require('../dist/verificacion-anunciante/service/perfil-anunciante-publico.service');
 const { JwtAuthGuard } = require('../dist/seguridad/guards/jwt-auth.guard');
 
 test('los dos registros requieren aceptación expresa por HTTP', async () => {
@@ -20,6 +21,7 @@ test('los dos registros requieren aceptación expresa por HTTP', async () => {
       { provide: AuthService, useValue: { register: () => { registros++; return { mensaje: 'ok' }; } } },
       { provide: VerificacionAnuncianteService, useValue: { solicitarAlta: () => { solicitudes++; return { mensaje: 'ok' }; } } },
       { provide: PruebaVidaService, useValue: {} },
+      { provide: PerfilAnunciantePublicoService, useValue: {} },
     ],
   }).overrideGuard(JwtAuthGuard).useValue({ canActivate: (context) => { context.switchToHttp().getRequest().user = { id: 1 }; return true; } }).compile();
   const app = module.createNestApplication();

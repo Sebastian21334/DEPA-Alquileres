@@ -13,7 +13,7 @@ export class FavoritosService {
     return favoritos
       .map((favorito) => favorito.publicacion)
       .filter((publicacion) => this.publicaciones.esVisible(publicacion))
-      .map((publicacion) => this.publicaciones.prepararRespuesta(publicacion));
+      .map((publicacion) => this.publicaciones.prepararRespuestaPublica(publicacion));
   }
 
   async agregar(idUsuario: number, idPublicacion: number) {

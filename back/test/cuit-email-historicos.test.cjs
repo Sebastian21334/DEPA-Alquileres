@@ -1,3 +1,5 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
+const { operacionesCuentaDePrueba } = require('./soporte/operaciones-cuenta-pruebas.cjs');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test, before } = require('node:test');
@@ -116,7 +118,7 @@ function servicioUsuarios(db) {
   const repo = new UsuariosRepository({ manager: { transaction: (fn) => fn(manager) } });
   return new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     new PublicacionesService(new PublicacionesRepository()),
-    new AnunciantesService(new AnunciantesRepository()));
+    new AnunciantesService(new AnunciantesRepository()), undefined, operacionesCuentaDePrueba(), preparacionImagenes);
 }
 
 const fila = (db, sql, id) => db.prepare(sql).get(id);
@@ -126,14 +128,11 @@ test('la baja de la cuenta mueve el email al histórico y lo libera', async () =
   const repo = {
     conTransaccion: (operacion) => operacion({}),
     buscarBloqueado: async () => usuario,
-    contarOperacionesPendientes: async () => ({
-      reservasPendientes: 0, estadiasVigentes: 0, liquidacionesPendientes: 0, pagosSinConciliar: 0,
-    }),
     guardar: async (cuenta) => cuenta,
   };
   const servicio = new UsuariosService(repo, catalogosDePrueba(), {}, {}, {},
     { bloquearPublicacionesParaCambioDeCuenta: async () => false, desactivarPorBajaDeCuenta: async () => {} },
-    { archivarCuitPorBajaDeCuenta: async () => {} });
+    { archivarCuitPorBajaDeCuenta: async () => {} }, undefined, { contarOperacionesPendientes: async () => ({}) }, preparacionImagenes);
   await servicio.eliminar(usuario.id, 0);
   assert.equal(usuario.activa, false);
   assert.equal(usuario.email, null);

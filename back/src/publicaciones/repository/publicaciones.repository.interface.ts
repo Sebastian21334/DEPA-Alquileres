@@ -3,16 +3,6 @@ import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicacione
 import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import { Pagina } from '../../common/persistence/paginacion';
 import type { EntityManager } from 'typeorm';
-import type { Reserva } from '../../reservas/entity/reserva.entity';
-
-export interface ConsultaReservasAcceso {
-  idPublicacion: number;
-  idUsuario: number;
-  fechaFinDesde: string;
-  cancelada: boolean;
-  finalizada: boolean;
-  pagos: { estado: Reserva['estado_pago']; venceDespues?: Date }[];
-}
 
 export type CategoriaInicio =
   'recientes' | 'temporales' | 'largo-plazo' | 'villa-maria' | 'reservadas';
@@ -56,9 +46,7 @@ export interface IPublicacionesRepository {
   reactivar(id: number): Promise<boolean>;
   incrementarVisualizaciones(id: number): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
-  existeReserva(consulta: ConsultaReservasAcceso): Promise<boolean>;
   buscarTodasActivas(): Promise<Publicacion[]>;
-  buscarTodas(): Promise<Publicacion[]>;
   buscarAdministracion(consulta: ListarPublicacionesAdministracionDto): Promise<Pagina<Publicacion>>;
   buscarMiasPaginadas(idAnunciante: number, consulta: ListarMisPublicacionesDto): Promise<Pagina<Publicacion> & { activas: number }>;
   buscarPapeleraPorAnunciante(idAnunciante: number): Promise<Publicacion[]>;

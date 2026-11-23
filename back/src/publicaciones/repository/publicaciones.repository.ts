@@ -5,16 +5,14 @@ import type { EstadoPublicacionAdministracion } from '../dto/listar-publicacione
 import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MoreThan, MoreThanOrEqual, Not, Repository, SelectQueryBuilder } from 'typeorm';
+import { IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
 import {
   CategoriaInicio,
   ConsultaPublicaciones,
-  ConsultaReservasAcceso,
   IPublicacionesRepository,
   PaginaPublicaciones,
 } from './publicaciones.repository.interface';
-import { Reserva } from '../../reservas/entity/reserva.entity';
 import { PATRON_RESERVA_POR_FECHA } from '../../catalogos/entity/modalidad.entity';
 
 @Injectable()
@@ -63,7 +61,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .where('id_anunciante = :idUsuario', { idUsuario })
       .execute();
   }
-  constructor(@InjectRepository(Publicacion) private readonly repo: Repository<Publicacion>, @InjectRepository(Reserva) private readonly reservasRepo: Repository<Reserva>) {}
+  constructor(@InjectRepository(Publicacion) private readonly repo: Repository<Publicacion>) {}
 
   crear(datos: Partial<Publicacion>): Publicacion {
     return this.repo.create(datos);
@@ -115,30 +113,6 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       },
       // La primera foto según el orden elegido es la portada; el ID desempata datos históricos.
       order: { imagenes: { orden: 'ASC', id: 'ASC' } },
-    });
-  }
-
-  buscarTodas(): Promise<Publicacion[]> {
-    return this.repo.find({
-      relations: { anunciante: { usuario: true }, ciudad: true, provincia: true },
-      order: { fecha_publicacion: 'DESC', id: 'DESC' },
-    });
-  }
-
-  existeReserva(consulta: ConsultaReservasAcceso): Promise<boolean> {
-    const vigente = {
-      publicacion: { id: consulta.idPublicacion },
-      usuario: { id: consulta.idUsuario },
-      cancelada: consulta.cancelada,
-      finalizada: consulta.finalizada,
-      fecha_fin: MoreThanOrEqual(consulta.fechaFinDesde),
-    };
-    return this.reservasRepo.exists({
-      where: consulta.pagos.map(({ estado, venceDespues }) => ({
-        ...vigente,
-        estado_pago: estado,
-        ...(venceDespues ? { pago_vencimiento: MoreThan(venceDespues) } : {}),
-      })),
     });
   }
 
@@ -319,12 +293,12 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     }
     const total = await base.clone().getCount();
 
-    const reservas = this.reservasRepo
-      .createQueryBuilder('reserva')
-      .select('reserva.id_publicacion', 'idPublicacion')
+    const reservas = this.repo.createQueryBuilder('anuncio')
+      .innerJoin('anuncio.reservas', 'reserva')
+      .select('anuncio.id', 'idPublicacion')
       .addSelect('COUNT(*)', 'cantidad')
       .where('reserva.cancelada = :cancelada', { cancelada: false })
-      .groupBy('reserva.id_publicacion');
+      .groupBy('anuncio.id');
 
     const ordenes = {
       recientes: {

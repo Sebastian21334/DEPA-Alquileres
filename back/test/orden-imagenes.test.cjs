@@ -1,3 +1,4 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
@@ -63,7 +64,7 @@ function escenario() {
   const publicaciones = new PublicacionesService(new PublicacionesRepository({
     findOne: async () => ({ id: 7, activa: true, anunciante: { idUsuario: 88 } }),
   }));
-  const servicio = new ImagenesService(repository, publicaciones, { subir: async () => 'd.jpg' });
+  const servicio = new ImagenesService(repository, publicaciones, { subir: async () => 'd.jpg' }, preparacionImagenes);
   return { servicio, estado, fotos: () => fotos };
 }
 
@@ -96,7 +97,7 @@ test('el servicio exige propiedad antes de permitir ordenar', async () => {
   let escrituras = 0;
   const servicio = new ImagenesService({ conTransaccion: async () => { escrituras++; } }, {
     obtenerPropia: async () => { throw new ForbiddenException(); },
-  }, {});
+  }, {}, preparacionImagenes);
   await assert.rejects(servicio.ordenar(7, [30, 10, 20], { idUsuario: 88 }), { status: 403 });
   assert.equal(escrituras, 0);
 });
@@ -113,7 +114,7 @@ test('el dueño puede ordenar y recibe la galería actualizada', async () => {
     }, {}),
   }, { obtenerPropia: async (id, usuario) => {
     assert.equal(id, 7); assert.equal(usuario, 88);
-  }, bloquearParaModificacion: async () => {} }, {});
+  }, bloquearParaModificacion: async () => {} }, {}, preparacionImagenes);
   assert.deepEqual(await servicio.ordenar(7, [30, 10], { idUsuario: 88 }), esperado);
 });
 

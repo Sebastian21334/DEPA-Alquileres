@@ -1,3 +1,4 @@
+import { ActualizacionCotizacionesService } from './service/actualizacion-cotizaciones.service';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SeguridadModule } from '../seguridad/seguridad.module';
@@ -18,6 +19,7 @@ import { CotizacionesController } from './controller/cotizaciones.controller';
   controllers: [CotizacionesController],
   providers: [
     CotizacionesService,
+    ActualizacionCotizacionesService,
     { provide: COTIZACION_REPOSITORY, useClass: CotizacionRepository },
     { provide: PROVEEDOR_DOLAR, useClass: DolarApiAdapter },
   ],

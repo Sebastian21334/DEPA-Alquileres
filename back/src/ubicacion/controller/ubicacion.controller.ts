@@ -1,3 +1,4 @@
+import { BuscarDireccionDto } from '../dto/buscar-direccion.dto';
 import {
   Controller,
   Get,
@@ -21,8 +22,8 @@ export class UbicacionController {
 
   @Get('buscar-direccion')
   @UseGuards(JwtAuthGuard)
-  async buscarDireccion(@Query('direccion') direccion: string, @Query('ciudad') ciudad: string, @Query('provincia') provincia: string) {
-    return this.ubicacionService.buscarDireccion(direccion, ciudad, provincia);
+  async buscarDireccion(@Query() consulta: BuscarDireccionDto) {
+    return this.ubicacionService.buscarDireccion(consulta.direccion, consulta.ciudad, consulta.provincia);
   }
 
   @Get('provincias/:id/ciudades')

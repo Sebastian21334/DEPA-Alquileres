@@ -35,6 +35,7 @@ function escenario({ cotizacion = null, consulta = null, datos } = {}) {
     conBloqueo: async (operacion) => operacion(repo),
   };
   const proveedor = {
+    nombre: 'Proveedor simulado',
     async consultar() {
       intentos++;
       return { compra: 1200, venta: 1220, actualizadaEn: new Date(), ...datos };
@@ -187,3 +188,36 @@ test(
     assert.equal(cancelada, true);
   },
 );
+
+test('si falla la segunda escritura, se revierte la cotización y las solicitudes simultáneas la reintentan una sola vez', async (t) => {
+  const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
+  const { CotizacionDolar } = require('../dist/cotizaciones/entity/cotizacion-dolar.entity');
+  const { ConsultaCotizacion } = require('../dist/cotizaciones/entity/consulta-cotizacion.entity');
+  const { CotizacionRepository } = require('../dist/cotizaciones/repository/cotizacion.repository');
+  const base = await crearPostgresPruebas();
+  t.after(() => base.cerrar());
+
+  const cotizaciones = base.source.getRepository(CotizacionDolar);
+  const consultas = base.source.getRepository(ConsultaCotizacion);
+  let llamadas = 0;
+  const servicio = new CotizacionesService(new CotizacionRepository(cotizaciones), {
+    nombre: 'Proveedor de prueba',
+    async consultar() {
+      llamadas++;
+      return { compra: 1200, venta: 1220, actualizadaEn: new Date() };
+    },
+  }, { get: () => undefined });
+
+  await base.db.exec('ALTER TABLE consulta_cotizacion ADD CONSTRAINT fallo_temporal CHECK (NOT exitosa)');
+  await assert.rejects(servicio.actualizarSiCorresponde(), { code: '23514' });
+  assert.equal(await cotizaciones.count(), 0);
+  assert.equal(await consultas.count(), 0);
+
+  await base.db.exec('ALTER TABLE consulta_cotizacion DROP CONSTRAINT fallo_temporal');
+  const resultados = await Promise.all([servicio.obtenerVigente(), servicio.obtenerVigente()]);
+  assert.equal(resultados[0].id, resultados[1].id);
+  assert.equal(resultados[0].proveedor, 'Proveedor de prueba');
+  assert.equal(await cotizaciones.count(), 1);
+  assert.equal(await consultas.count(), 1);
+  assert.equal(llamadas, 2);
+});

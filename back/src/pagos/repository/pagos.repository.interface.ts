@@ -1,9 +1,11 @@
+import type { ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 import { Pago } from '../entity/pago.entity';
 import type { DeepPartial, EntityManager } from 'typeorm';
 
 export const PAGOS_REPOSITORY = 'PAGOS_REPOSITORY';
 
 export interface IPagosRepository {
+  contarSinConciliar(idUsuario: number, participacion: ParticipacionEnReserva, limiteCheckout: Date, transaccion: EntityManager, estadosFinales: string[]): Promise<number>;
   crear(datos: DeepPartial<Pago>): Pago;
   guardar(pago: Pago, transaccion?: EntityManager): Promise<Pago>;
   actualizar(id: number, datos: Partial<Pago>, transaccion?: EntityManager): Promise<void>;

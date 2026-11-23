@@ -1,3 +1,4 @@
+import type { ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
@@ -21,6 +22,13 @@ export type DatosPagoExterno = {
 @Injectable()
 export class PagosService {
   constructor(@Inject(PAGOS_REPOSITORY) private readonly pagosRepo: IPagosRepository) {}
+
+  /** Define los estados finales y pide el conteo de los pagos que todavía requieren conciliación. */
+  contarSinConciliar(idUsuario: number, participacion: ParticipacionEnReserva, limiteCheckout: Date, transaccion: EntityManager): Promise<number> {
+    return this.pagosRepo.contarSinConciliar(idUsuario, participacion, limiteCheckout, transaccion, [
+      'approved', 'rejected', 'cancelled', 'refunded',
+    ]);
+  }
 
   async buscarPorId(idPago: number, transaccion?: EntityManager): Promise<Pago> {
     const pago = transaccion

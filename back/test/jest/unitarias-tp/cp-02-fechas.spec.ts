@@ -67,6 +67,10 @@ describe('CP-02 · Fechas de reserva · PDF Pruebas Unitarias - TP', () => {
       } },
       { provide: PublicacionesService, useValue: {
         buscarPorId: jest.fn(async () => publicacion),
+        validarAnuncianteDisponible: PublicacionesService.prototype.validarAnuncianteDisponible,
+        validarNuevaReserva: PublicacionesService.prototype.validarNuevaReserva,
+        monedaParaReserva: PublicacionesService.prototype.monedaParaReserva,
+        calcularTarifaReserva: PublicacionesService.prototype.calcularTarifaReserva,
         cuentaAnuncianteHabilitada: jest.fn(() => true),
         perteneceA: jest.fn(() => false),
         admiteReservaPorFecha: jest.fn(() => true),

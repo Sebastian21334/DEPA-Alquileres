@@ -4,12 +4,15 @@ import type {
   IGeocodificacion,
 } from './geocodificacion.interface';
 
+const MAX_CONSULTAS_PENDIENTES = 8;
+
 @Injectable()
 export class NominatimAdapter implements IGeocodificacion {
   private readonly geocodificaciones = new Map<
     string,
     Array<{ nombre: string; latitud: number; longitud: number }>
   >();
+  private consultasPendientes = 0;
   private colaGeocodificacion: Promise<void> = Promise.resolve();
   private proximaConsultaPermitida = 0;
 
@@ -17,6 +20,10 @@ export class NominatimAdapter implements IGeocodificacion {
     const clave = consulta.toLocaleLowerCase('es-AR');
     const cacheado = this.geocodificaciones.get(clave);
     if (cacheado) return cacheado;
+    if (this.consultasPendientes >= MAX_CONSULTAS_PENDIENTES) {
+      throw new Error('La cola de geocodificación está llena');
+    }
+    this.consultasPendientes++;
 
     let resultado: Array<{
       nombre: string;
@@ -71,6 +78,7 @@ export class NominatimAdapter implements IGeocodificacion {
         throw new Error('No se pudo consultar el proveedor de geocodificación');
       } finally {
         this.proximaConsultaPermitida = Date.now() + 1000;
+        this.consultasPendientes--;
       }
     });
 

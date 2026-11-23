@@ -1,7 +1,8 @@
+import { filtrarReservasPorCuenta } from '../../common/persistence/participacion-en-reserva';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
-import { Usuario } from '../../usuarios/entity/usuario.entity';
+import type { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Reclamo } from '../entity/reclamo.entity';
 import { ReclamoEvidencia } from '../entity/reclamo-evidencia.entity';
 import { ReclamoMensaje } from '../entity/reclamo-mensaje.entity';
@@ -32,8 +33,8 @@ export class ReclamosRepository implements IReclamosRepository {
     return this.reclamos.manager.transaction((transaccion) => trabajo(this.enTransaccion(transaccion)));
   }
 
-  async bloquear(idReclamo: number): Promise<void> {
-    await this.reclamos.findOne({ where: { id: idReclamo }, lock: { mode: 'pessimistic_write' } });
+  buscarBloqueado(idReclamo: number): Promise<Reclamo | null> {
+    return this.reclamos.findOne({ where: { id: idReclamo }, lock: { mode: 'pessimistic_write' } });
   }
 
   existeAbierto(idReserva: number, estados: string[], excluirCategoria?: Reclamo['categoria']): Promise<boolean> {
@@ -87,11 +88,22 @@ export class ReclamosRepository implements IReclamosRepository {
   }
 
   async guardarMensaje(mensaje: Omit<Partial<ReclamoMensaje>, 'autor'> & { autor: Pick<Usuario, 'id'> }): Promise<ReclamoMensaje> {
-    const autor = await this.mensajes.manager.getRepository(Usuario).findOneOrFail({
-      where: { id: mensaje.autor.id },
-      select: { id: true, nombre: true, apellido: true, rol: { id: true, nombre: true } },
-      relations: { rol: true },
+    const guardado = await this.mensajes.save(this.mensajes.create(mensaje));
+    return this.mensajes.findOneOrFail({
+      where: { id: guardado.id },
+      select: { autor: { id: true, nombre: true, apellido: true, rol: { id: true, nombre: true } } },
+      relations: { autor: { rol: true } },
     });
-    return this.mensajes.save(this.mensajes.create({ ...mensaje, autor }));
   }
+
+  /** Comprueba si existe un reclamo que coincida con los estados y la participación de la cuenta. */
+  tienePendientesDeCuenta(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: string[]): Promise<boolean> {
+    // El reclamo se vincula a la cuenta a través de la reserva. Los estados llegan del catálogo.
+    const consulta = transaccion.getRepository(Reclamo).createQueryBuilder('tramite')
+      .innerJoin('tramite.reserva', 'reserva')
+      .andWhere('tramite.estado IN (:...estados)', { estados });
+    // Para un anunciante verificado también se incluyen reservas de sus publicaciones. Solo se consulta si existe algún reclamo.
+    return filtrarReservasPorCuenta(consulta, idUsuario, anuncianteVerificado ? 'Ambos' : 'Inquilino').getExists();
+  }
+
 }

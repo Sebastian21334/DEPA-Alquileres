@@ -1,3 +1,5 @@
+import { OperacionesCuentaService } from './operaciones-cuenta.service';
+import type { ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 import { UsuariosCredencialesService } from './usuarios-credenciales.service';
 import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
 import { AlmacenamientoService } from '../../almacenamiento/service/almacenamiento.service';
@@ -16,11 +18,11 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { USUARIOS_REPOSITORY } from '../repository/usuarios.repository.interface';
-import type { IUsuariosRepository, ParticipacionEnReserva } from '../repository/usuarios.repository.interface';
+import type { IUsuariosRepository } from '../repository/usuarios.repository.interface';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Usuario, type DetalleBloqueo } from '../entity/usuario.entity';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
-import sharp from 'sharp';
+import { PreparacionImagenesService } from '../../almacenamiento/service/preparacion-imagenes.service';
 import type { EntityManager } from 'typeorm';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
@@ -59,7 +61,7 @@ type CrearUsuarioDatos = {
 export class UsuariosService {
   private readonly logger = new Logger(UsuariosService.name);
 
-  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService, private readonly jwtService: JwtService) {}
+  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService, private readonly jwtService: JwtService, private readonly operacionesCuenta: OperacionesCuentaService, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
   /** Busca un usuario por correo para validar duplicados o iniciar sesion. */
   async buscarPorEmail(email: string): Promise<Usuario | null> {
@@ -97,6 +99,7 @@ export class UsuariosService {
     });
   }
 
+  /** Registra el bloqueo o archiva su detalle al desbloquear. Evalúa los pendientes al bloquear para decidir el acceso limitado. */
   async cambiarBloqueoAdministrativo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
     if (idUsuario === idOperador)
       throw new BadRequestException('No podés bloquearte o habilitarte a vos mismo');
@@ -131,6 +134,7 @@ export class UsuariosService {
 
   }
 
+  /** Reevalúa el bloqueo vigente. Si ya no quedan pendientes, registra que terminó el acceso limitado. */
   async verificarAccesoLimitado(usuario: Usuario): Promise<{ anuncianteVerificado: boolean } | null> {
     const detalle = usuario.bloqueoDetalle;
     if (!usuario.activa || !usuario.bloqueado || !detalle || detalle.accesoLimitado === false) return null;
@@ -150,6 +154,7 @@ export class UsuariosService {
     });
   }
 
+  /** Consulta el acceso limitado dentro de la transacción del llamador. Si un bloqueo antiguo no trae ese dato, lo calcula. */
   async consultarAccesoPendiente(idUsuario: number, transaccion: EntityManager): Promise<boolean> {
     const usuario = await this.usuariosRepo.buscarConBloqueo(idUsuario, transaccion, false);
     if (!usuario?.activa || !usuario.bloqueado || !usuario.bloqueoDetalle) return false;
@@ -157,6 +162,7 @@ export class UsuariosService {
       (await this.evaluarPendientesDeBloqueo(idUsuario, transaccion) !== null);
   }
 
+  /** Comprueba si una cuenta activa puede seguir conversando por estar habilitada o conservar acceso limitado. */
   async puedeContinuarConversaciones(usuario: Usuario, transaccion?: EntityManager): Promise<boolean> {
     if (!usuario.activa) return false;
     if (!usuario.bloqueado) return true;
@@ -336,6 +342,7 @@ export class UsuariosService {
     }
   }
 
+  /** Bloquea las publicaciones antes de verificar si la cuenta se puede dar de baja. */
   private async validarBajaEnCurso(idUsuario: number, transaccion: EntityManager): Promise<void> {
     // Comparte el bloqueo de publicaciones con el calendario de reservas.
     const tienePublicaciones = await this.publicacionesService
@@ -343,6 +350,7 @@ export class UsuariosService {
     await this.validarOperacionesResueltas(transaccion, idUsuario, tienePublicaciones);
   }
 
+  /** Impide la baja cuando quedan operaciones pendientes e informa los motivos por rol. */
   private async validarOperacionesResueltas(transaccion: EntityManager, idUsuario: number, tienePublicaciones: boolean): Promise<void> {
     const pendientes = await this.obtenerOperacionesPendientes(idUsuario, tienePublicaciones, transaccion);
     if (pendientes.length) {
@@ -354,6 +362,7 @@ export class UsuariosService {
     }
   }
 
+  /** Agrupa los motivos pendientes como inquilino y, cuando corresponde, como anunciante. */
   private async obtenerOperacionesPendientes(idUsuario: number, tienePublicaciones: boolean, transaccion: EntityManager): Promise<string[]> {
     const pendientes: string[] = [];
     if (tienePublicaciones) {
@@ -366,13 +375,15 @@ export class UsuariosService {
     return pendientes;
   }
 
+  /** Devuelve si el anunciante está verificado cuando quedan pendientes. Si todo está resuelto, devuelve null. */
   private async evaluarPendientesDeBloqueo(idUsuario: number, transaccion: EntityManager): Promise<{ anuncianteVerificado: boolean } | null> {
     const perfil = await this.anunciantesService.buscarPorUsuario(idUsuario, transaccion);
     const anuncianteVerificado = perfil?.verificado === true;
     if ((await this.obtenerOperacionesPendientes(idUsuario, anuncianteVerificado, transaccion)).length > 0) {
       return { anuncianteVerificado };
     }
-    const tramitesPendientes = await this.usuariosRepo.tieneTramitesPendientes(idUsuario, anuncianteVerificado, transaccion, {
+    // Aunque no haya reservas, pagos o liquidaciones pendientes, la cuenta todavía puede tener trámites que resolver.
+    const tramitesPendientes = await this.operacionesCuenta.tieneTramitesPendientes(idUsuario, anuncianteVerificado, transaccion, {
       reclamos: [
         this.catalogosService.codigoEstado('RECLAMO', 'ABIERTO'),
         this.catalogosService.codigoEstado('RECLAMO', 'EN_REVISION'),
@@ -387,10 +398,11 @@ export class UsuariosService {
     return tramitesPendientes ? { anuncianteVerificado } : null;
   }
 
+  /** Convierte los conteos de reservas, liquidaciones y pagos en motivos para el rol evaluado. */
   private async pendientesCuenta(idUsuario: number, participacion: ParticipacionEnReserva, transaccion: EntityManager): Promise<string[]> {
     const {
       reservasPendientes, estadiasVigentes, liquidacionesPendientes, pagosSinConciliar,
-    } = await this.usuariosRepo.contarOperacionesPendientes(
+    } = await this.operacionesCuenta.contarOperacionesPendientes(
       idUsuario,
       participacion,
       fechaArgentina(),
@@ -510,7 +522,7 @@ export class UsuariosService {
     if (archivo.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png'].includes(archivo.mimetype))
       throw new BadRequestException('La imagen debe ser JPEG o PNG y pesar hasta 5 MB');
     let contenido: Buffer;
-    try { contenido = await sharp(archivo.buffer).rotate().resize(1600, 1600, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer(); }
+    try { contenido = await this.preparacionImagenes.preparar(archivo.buffer, 'apelacion'); }
     catch { throw new BadRequestException('La imagen no es válida'); }
     const imagen = await this.almacenamientoService.subir('reclamos', `apelaciones/${randomUUID()}.jpg`, contenido, 'image/jpeg');
     try { return await operar(imagen); }
@@ -540,11 +552,7 @@ export class UsuariosService {
     let contenido: Buffer;
     try {
       // Sharp valida que sea una imagen real y la recorta cuadrada para el avatar.
-      contenido = await sharp(archivo.buffer)
-        .rotate()
-        .resize(400, 400, { fit: 'cover' })
-        .jpeg({ quality: 80 })
-        .toBuffer();
+      contenido = await this.preparacionImagenes.preparar(archivo.buffer, 'avatar');
     } catch {
       throw new BadRequestException('El archivo no es una imagen válida');
     }

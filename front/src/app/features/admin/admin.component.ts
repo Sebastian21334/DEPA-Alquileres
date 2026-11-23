@@ -6,7 +6,7 @@ import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, I
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { finalize, forkJoin, Subscription, timer } from 'rxjs';
+import { catchError, EMPTY, finalize, forkJoin, merge, type Observable, Subscription, tap, timer } from 'rxjs';
 import { ADMIN_NAVIGATION, AdminSection, seccionAdmin } from './admin-secciones';
 import { ToastService } from '../../core/services/toast.service';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
@@ -159,6 +159,7 @@ export class AdminComponent {
   private readonly api = inject(AdminService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
+  private cargaResumen?: Subscription;
   private readonly publicacionesAdmin = viewChild(PublicacionesAdminComponent);
   private usersRequest?: Subscription;
   private bloqueadosRequest?: Subscription;
@@ -361,82 +362,49 @@ export class AdminComponent {
   protected reload(): void {
     if (this.activeSection() === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
     if (this.activeSection() === 'comision') this.cargarComision();
+    this.cargaResumen?.unsubscribe();
     this.otherLoading.set(true);
     this.summaryError.set(false);
     this.publicacionesAdmin()?.recargar();
     this.loadUsers(this.usersPage());
     this.cargarBloqueados();
-    let pending = 6;
-    const done = () => {
-      if (--pending === 0) this.otherLoading.set(false);
-    };
-    this.api.listarPendientes().subscribe({
-      next: (v) => {
-        this.requests.set(v);
-        done();
-      },
-      error: (e: Error) => {
-        this.summaryError.set(true);
-        this.toast.mostrar(e.message, 'error');
-        done();
-      },
-    });
-    this.api.listarLiquidaciones().subscribe({
-      next: (v) => {
-        this.settlements.set(v);
-        done();
-      },
-      error: (e: Error) => {
-        this.toast.mostrar(e.message, 'error');
-        done();
-      },
-    });
-    this.api.listarReclamos().subscribe({
-      next: (v) => {
-        this.claims.set(v);
+    this.cargaResumen = merge(
+      this.cargarDatoResumen(this.api.listarPendientes(), (valor) => this.requests.set(valor)),
+      this.cargarDatoResumen(this.api.listarLiquidaciones(), (valor) => this.settlements.set(valor),
+        (error) => this.toast.mostrar(error.message, 'error')),
+      this.cargarDatoResumen(this.api.listarReclamos(), (valor) => {
+        this.claims.set(valor);
         this.errorReclamos.set('');
-        done();
-      },
-      error: (e: Error) => {
+      }, (error) => {
         this.summaryError.set(true);
-        this.errorReclamos.set(e.message);
-        done();
-      },
-    });
-    this.api.listarSolicitudesCancelacion().subscribe({
-      next: (v) => {
-        this.cancellations.set(v);
-        done();
-      },
-      error: (e: Error) => {
-        this.summaryError.set(true);
-        this.toast.mostrar(e.message, 'error');
-        done();
-      },
-    });
-    this.api.listarReembolsos().subscribe({
-      next: (v) => {
-        this.refunds.set(v);
-        done();
-      },
-      error: (e: Error) => {
-        this.summaryError.set(true);
-        this.toast.mostrar(e.message, 'error');
-        done();
-      },
-    });
-    this.api.resumenReembolsos().subscribe({
-      next: (v) => {
-        this.resumenReembolsos.set(v);
-        done();
-      },
-      error: (e: Error) => {
-        this.resumenReembolsos.set(null);
-        this.summaryError.set(true);
-        this.toast.mostrar(e.message, 'error');
-        done();
-      },
-    });
+        this.errorReclamos.set(error.message);
+      }),
+      this.cargarDatoResumen(this.api.listarSolicitudesCancelacion(), (valor) => this.cancellations.set(valor)),
+      this.cargarDatoResumen(this.api.listarReembolsos(), (valor) => this.refunds.set(valor)),
+      this.cargarDatoResumen(this.api.resumenReembolsos(), (valor) => this.resumenReembolsos.set(valor),
+        (error) => {
+          this.resumenReembolsos.set(null);
+          this.mostrarErrorResumen(error);
+        }),
+    ).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.otherLoading.set(false)),
+    ).subscribe();
+  }
+
+  private cargarDatoResumen<T>(peticion: Observable<T>, aplicar: (valor: T) => void, informar = (error: Error) => this.mostrarErrorResumen(error)): Observable<T> {
+    return peticion.pipe(
+      tap(aplicar),
+      catchError((error: Error) => {
+        informar(error);
+        return EMPTY;
+      }),
+    );
+  }
+
+  private mostrarErrorResumen(error: Error): void {
+    this.summaryError.set(true);
+    this.toast.mostrar(error.message, 'error');
   }
 
   protected openSection(section: AdminSection, caseId?: number): void {

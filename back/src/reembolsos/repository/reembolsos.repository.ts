@@ -1,3 +1,4 @@
+import { filtrarReservasPorCuenta } from '../../common/persistence/participacion-en-reserva';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, MoreThan, Not, Repository, type EntityManager } from 'typeorm';
@@ -215,4 +216,15 @@ export class ReembolsosRepository implements IReembolsosRepository {
     );
     return mensaje;
   }
+
+  /** Comprueba si alguno de los reembolsos de la cuenta aún necesita resolución o aplicación. */
+  tienePendientesDeCuenta(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: string[], estadoAprobado: string): Promise<boolean> {
+    // Un reembolso aprobado sigue pendiente para la cuenta hasta que se aplica a la reserva.
+    const consulta = transaccion.getRepository(Reembolso).createQueryBuilder('tramite')
+      .innerJoin('tramite.reserva', 'reserva')
+      .andWhere('(tramite.estado IN (:...estados) OR (tramite.estado = :estadoAprobado AND tramite.aplicado_en IS NULL))', { estados, estadoAprobado });
+    // Siempre cuenta las reservas como inquilino; un anunciante verificado también puede tener pendientes en sus publicaciones.
+    return filtrarReservasPorCuenta(consulta, idUsuario, anuncianteVerificado ? 'Ambos' : 'Inquilino').getExists();
+  }
+
 }

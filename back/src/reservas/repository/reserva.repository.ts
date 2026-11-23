@@ -1,7 +1,9 @@
+import type { ConsultaReservasAcceso, EstadosOperacionesReserva, OperacionesReservaPendientes } from './reserva.repository.interface';
+import { filtrarReservasPorCuenta, type ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThan, Repository, type EntityManager } from 'typeorm';
+import { In, LessThan, MoreThan, MoreThanOrEqual, Repository, type EntityManager } from 'typeorm';
 import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
@@ -74,10 +76,6 @@ export class ReservaRepository implements IReservaRepository {
 
   guardar(reserva: Reserva): Promise<Reserva> {
     return this.repository.save(reserva);
-  }
-
-  guardarVarias(reservas: Reserva[]): Promise<Reserva[]> {
-    return this.repository.save(reservas);
   }
 
   private async bloquear(id: number, modo: 'pessimistic_write' | 'for_no_key_update' = 'pessimistic_write'): Promise<void> {
@@ -220,4 +218,62 @@ export class ReservaRepository implements IReservaRepository {
       },
     });
   }
+
+  /** Cuenta por separado los pendientes de cobro, estadía y liquidación de las reservas de la cuenta. */
+  async contarPendientesDeCuenta(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, transaccion: EntityManager, estados: EstadosOperacionesReserva): Promise<OperacionesReservaPendientes> {
+    const esAnunciante = participacion === 'Anunciante';
+    const reservas = () => filtrarReservasPorCuenta(
+      transaccion.getRepository(Reserva).createQueryBuilder('reserva'), idUsuario, participacion,
+    );
+    const reservasPendientes = await reservas()
+      .andWhere('reserva.estado_pago = :pendiente', { pendiente: estados.pagoPendiente })
+      .getCount();
+    // Conserva como pendientes las reservas aprobadas con fechas faltantes o inconsistentes.
+    const estadiasVigentes = await reservas()
+      .andWhere('reserva.estado_pago = :aprobado', { aprobado: estados.pagoAprobado })
+      .andWhere('reserva.cancelada = false')
+      .andWhere('reserva.finalizada = false')
+      .andWhere(`(
+        reserva.fecha_inicio IS NULL OR reserva.fecha_fin IS NULL
+        OR reserva.fecha_inicio > reserva.fecha_fin
+        OR reserva.fecha_fin >= :hoy
+      )`, { hoy })
+      .getCount();
+
+    // Para el anunciante cuenta las liquidaciones sin resolver; para el inquilino, las que están en revisión.
+    const liquidaciones = reservas().leftJoin('reserva.liquidacion', 'liquidacion');
+    if (esAnunciante) {
+      liquidaciones
+        .andWhere('reserva.estado_pago = :aprobado', { aprobado: estados.pagoAprobado })
+        .andWhere('(liquidacion.estado IS NULL OR liquidacion.estado NOT IN (:...resueltas))', {
+          resueltas: estados.liquidacionesResueltas,
+        });
+    } else {
+      liquidaciones.andWhere('liquidacion.estado = :enRevision', {
+        enRevision: estados.enRevision,
+      });
+    }
+    const liquidacionesPendientes = await liquidaciones.getCount();
+
+    return { reservasPendientes, estadiasVigentes, liquidacionesPendientes };
+  }
+
+  /** Busca una reserva de ese inquilino y publicación que cumpla las condiciones de fecha y pago recibidas. */
+  existeReserva(consulta: ConsultaReservasAcceso): Promise<boolean> {
+    const vigente = {
+      publicacion: { id: consulta.idPublicacion },
+      usuario: { id: consulta.idUsuario },
+      cancelada: consulta.cancelada,
+      finalizada: consulta.finalizada,
+      fecha_fin: MoreThanOrEqual(consulta.fechaFinDesde),
+    };
+    return this.repository.exists({
+      where: consulta.pagos.map(({ estado, venceDespues }) => ({
+        ...vigente,
+        estado_pago: estado,
+        ...(venceDespues ? { pago_vencimiento: MoreThan(venceDespues) } : {}),
+      })),
+    });
+  }
+
 }

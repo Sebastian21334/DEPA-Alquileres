@@ -1,3 +1,4 @@
+import { ReservasLecturaModule } from '../reservas/reservas-lectura.module';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Publicacion } from './entity/publicacion.entity';
@@ -9,7 +10,6 @@ import { CatalogosModule } from '../catalogos/catalogos.module';
 import { UbicacionModule } from '../ubicacion/ubicacion.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
-import { Reserva } from '../reservas/entity/reserva.entity';
 import { MailModule } from '../mail/mail.module';
 
 @Module({
@@ -25,7 +25,8 @@ import { MailModule } from '../mail/mail.module';
   ],
   imports: [
     // Registra el repositorio TypeORM de publicaciones.
-    TypeOrmModule.forFeature([Publicacion, Reserva]),
+    TypeOrmModule.forFeature([Publicacion]),
+    ReservasLecturaModule,
     // Se necesitan para resolver los IDs relacionales al crear una publicación.
     CatalogosModule,
     UbicacionModule,
