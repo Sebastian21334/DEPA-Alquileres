@@ -1,4 +1,12 @@
-import { Component, DestroyRef, HostListener, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  HostListener,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -28,6 +36,7 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
+import { ConfirmDialogComponent } from '../../shared/components/confirm-dialog/confirm-dialog.component';
 import {
   DIAS_MINIMOS_REPROGRAMACION,
   RentalDateRange,
@@ -51,6 +60,7 @@ import { esInmobiliaria } from '../../shared/utils/anunciante';
     RevealDirective,
     AvatarComponent,
     AvailabilityCalendarComponent,
+    ConfirmDialogComponent,
     RelativeTimePipe,
     LucideBadgeCheck,
     LucideBookmark,
@@ -81,6 +91,8 @@ export class PublicationDetailComponent {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly destroyRef = inject(DestroyRef);
   private consultaPresupuesto?: Subscription;
+  private readonly confirmacionWhatsapp =
+    viewChild.required<ConfirmDialogComponent>('confirmacionWhatsapp');
 
   protected readonly publication = signal<Publicacion | null>(null);
   protected readonly perfilAnunciante = signal<AnunciantePublico | null>(null);
@@ -106,6 +118,7 @@ export class PublicationDetailComponent {
   protected readonly errorIngresos = signal(false);
   protected readonly validandoIngreso = signal<number | null>(null);
   protected readonly resultadoIngreso = signal<{ reservaId: number; error: boolean; mensaje: string } | null>(null);
+  protected readonly whatsappPendiente = signal<string | null>(null);
 
   protected readonly images = computed(() => this.publication()?.imagenes ?? []);
   protected readonly currentImage = computed(() => this.images()[this.selectedImage()] ?? null);
@@ -468,11 +481,23 @@ export class PublicationDetailComponent {
     return value.toLocaleString('es-AR', { maximumFractionDigits: 0 });
   }
 
-  protected confirmarWhatsapp(event: Event): void {
-    const continuar = window.confirm(
-      'Vas a continuar la conversación por WhatsApp. DEPA no podrá revisar esos mensajes ni ayudarte con acuerdos realizados fuera de la plataforma. ¿Querés continuar?',
-    );
-    if (!continuar) event.preventDefault();
+  protected confirmarWhatsapp(event: MouseEvent, url: string): void {
+    event.preventDefault();
+    this.whatsappPendiente.set(url);
+    const disparador = event.currentTarget instanceof HTMLElement ? event.currentTarget : undefined;
+    this.confirmacionWhatsapp().abrir(disparador);
+  }
+
+  protected abrirWhatsappConfirmado(): void {
+    const url = this.whatsappPendiente();
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    this.cerrarConfirmacionWhatsapp();
+  }
+
+  protected cerrarConfirmacionWhatsapp(): void {
+    this.confirmacionWhatsapp().cerrar();
+    this.whatsappPendiente.set(null);
   }
 
   private loadAvailability(idPublication: number): void {

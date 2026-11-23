@@ -1,0 +1,99 @@
+:host {
+  display: contents;
+}
+
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(32rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: clamp(1.25rem, 4vw, 1.75rem);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: #fff;
+  color: var(--color-text);
+  box-shadow: 0 20px 48px #0f172a40;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.confirm-dialog::backdrop {
+  background: #10182880;
+}
+.confirm-dialog__close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.confirm-dialog__close:hover:not(:disabled) {
+  background: #f2f4f7;
+}
+.confirm-dialog__close:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.confirm-dialog__icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #fff7e8;
+  color: #a35a00;
+}
+.confirm-dialog--peligro .confirm-dialog__icon {
+  background: #ffeded;
+  color: #b91c1c;
+}
+.confirm-dialog h2 {
+  margin: 0.9rem 0 0.45rem;
+  padding-right: 2rem;
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
+  line-height: 1.2;
+}
+.confirm-dialog p {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+.confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+.confirm-dialog__confirm {
+  background: #17324a;
+  color: #fff;
+}
+.confirm-dialog__confirm:hover:not(:disabled) {
+  background: #0f2537;
+}
+.confirm-dialog--peligro .confirm-dialog__confirm {
+  background: var(--color-danger);
+}
+.confirm-dialog--peligro .confirm-dialog__confirm:hover:not(:disabled) {
+  background: #b91c1c;
+}
+.confirm-dialog button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+@media (max-width: 480px) {
+  .confirm-dialog__actions {
+    flex-direction: column;
+  }
+  .confirm-dialog__actions .acct-btn {
+    width: 100%;
+  }
+}
