@@ -228,14 +228,20 @@
               <p><strong>Inquilino:</strong> {{ solicitud.reserva?.usuario?.nombre }} {{ solicitud.reserva?.usuario?.apellido }}</p>
               <p><strong>Publicación:</strong> {{ solicitud.reserva?.publicacion?.titulo ?? '—' }}</p>
               <p><strong>Fechas:</strong> {{ solicitud.reserva?.fecha_inicio }} — {{ solicitud.reserva?.fecha_fin }}</p>
-              <p><strong>Importe:</strong> {{ solicitud.reserva?.monto_pago | currency: (solicitud.reserva?.moneda_contratada ?? 'ARS') }}</p>
+              <p><strong>Total de la reserva:</strong> {{ solicitud.reserva?.monto_pago | currency: (solicitud.reserva?.moneda_contratada ?? 'ARS') }}</p>
+              @if (solicitud.devolucion; as devolucion) {
+                <p class="cancellation-refund"><strong>Monto a devolver al inquilino:</strong> {{ devolucion.importe | currency: devolucion.moneda : 'code' : '1.2-2' }} ({{ devolucion.porcentaje }} %)</p>
+                @if (devolucion.porcentaje === 0) { <p class="settlement-note">La cancelación se aprobará sin devolución.</p> }
+              } @else {
+                <p class="refund-error">No se puede calcular la devolución: falta el pago registrado.</p>
+              }
               <p class="settlement-note">{{ solicitud.motivo }}</p>
             </div>
             <div class="actions">
               @if (solicitud.reserva?.id; as idReserva) {
                 <a class="button button--ghost" [routerLink]="['/admin/reservas', idReserva]" [queryParams]="{ desde: 'cancelaciones' }">Ver reserva</a>
               }
-              <button type="button" class="button button--success" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="abrirAprobacionCancelacion(solicitud)">Aprobar</button>
+              <button type="button" class="button button--success" [disabled]="!solicitud.devolucion || busy() === 'cancellation-' + solicitud.id" (click)="abrirAprobacionCancelacion(solicitud)">Aprobar</button>
               <button type="button" class="button button--danger-outline" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="rechazarCancelacion(solicitud)">Rechazar</button>
             </div>
           </article>
@@ -434,6 +440,18 @@
       <h2 id="cancellation-approval-title">Aprobar cancelación</h2>
       @if (solicitudPorAprobar(); as solicitud) {
         <p class="refund-meta">Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '-' }}</p>
+        @if (solicitud.devolucion; as devolucion) {
+          <div class="cancellation-refund cancellation-refund--summary">
+            <p>Monto a devolver al inquilino</p>
+            <strong>{{ devolucion.importe | currency: devolucion.moneda : 'code' : '1.2-2' }} ({{ devolucion.porcentaje }} %)</strong>
+            <p>Calculado a la fecha de solicitud: {{ devolucion.fechaSolicitud | date: 'dd/MM/yyyy' : 'UTC' }}.</p>
+          </div>
+          @if (devolucion.porcentaje === 0) {
+            <p>La reserva se cancelará sin devolución al inquilino.</p>
+          } @else {
+            <p>Al confirmar se generará una devolución pendiente de gestión en Reembolsos.</p>
+          }
+        }
       }
       <label for="cancellation-approval-note">Observación de la aprobación <span class="muted">(opcional)</span></label>
       <textarea id="cancellation-approval-note" name="observacionAprobacion" [(ngModel)]="observacionAprobacion"
@@ -443,7 +461,7 @@
       @if (errorAprobacion()) { <p class="refund-error" role="alert">{{ errorAprobacion() }}</p> }
       <div class="block-actions">
         <button type="button" class="button button--ghost" [disabled]="aprobandoCancelacion()" (click)="cerrarAprobacionCancelacion()">Volver</button>
-        <button type="submit" class="button button--success" [disabled]="aprobandoCancelacion()">
+        <button type="submit" class="button button--success" [disabled]="aprobandoCancelacion() || !solicitudPorAprobar()?.devolucion">
           {{ aprobandoCancelacion() ? 'Aprobando…' : 'Confirmar aprobación' }}
         </button>
       </div>
@@ -599,7 +617,7 @@
                     } @else {
                       <option value="SIN_DEVOLUCION">Sin devolución</option>
                       <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
-                      <option value="DEVOLUCION_TOTAL">Devolución total</option>
+                      <option value="DEVOLUCION_TOTAL">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}</option>
                     }
                   </select>
                 </label>
@@ -607,15 +625,15 @@
                   <p class="refund-help">El pago al anunciante se habilita en la fecha habitual, a los 5 días del fin de la estadía.</p>
                 }
                 @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
-                  <label>Importe a devolver en pesos
+                  <label>Importe a devolver ({{ claim.devolucion_cancelacion?.moneda || claim.reserva?.moneda_contratada || 'ARS' }})
                     <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required
                       [attr.max]="totalPagadoReclamo(claim)" [attr.aria-invalid]="parcialCubreElTotal(claim)" [disabled]="!!busy()" />
                   </label>
                   @if (totalPagadoReclamo(claim); as total) {
-                    <p class="refund-help">Pagó el inquilino {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
+                    <p class="refund-help">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Faltante disponible:' : 'Pagó el inquilino' }} {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
                   }
                   @if (parcialCubreElTotal(claim)) {
-                    <p class="refund-error" role="alert">Para devolver todo elegí «Devolución total».</p>
+                    <p class="refund-error" role="alert">Para devolver todo elegí «{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}».</p>
                   }
                 }
                 <label>Conclusión de la revisión

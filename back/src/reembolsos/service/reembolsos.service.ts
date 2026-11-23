@@ -131,7 +131,7 @@ export class ReembolsosService {
       importe,
       moneda: pago.currency,
       estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
-      transferencia_manual: pago.payment_method_id !== 'account_money',
+      transferencia_manual: this.requiereTransferencia(pago),
       motivo: datos.motivo.trim().slice(0, 500),
       referencia_interna: datos.referenciaInterna ?? null,
       referencia_externa: null,
@@ -742,6 +742,17 @@ export class ReembolsosService {
 
   async buscarPagoPorReserva(idReserva: number, transaccion?: EntityManager): Promise<Pago | null> {
     return this.pagos.buscarPorReserva(idReserva, !transaccion, transaccion);
+  }
+
+  requiereTransferencia(pago: Pago): boolean {
+    // Un medio confirmado por Mercado Pago usa el mismo circuito de devolución,
+    // tanto para tarjetas como para dinero en cuenta. Sin medio, requiere revisión manual.
+    return !pago.payment_method_id?.trim();
+  }
+
+  async buscarPagoParaReembolsoReserva(idReserva: number, transaccion: EntityManager): Promise<Pago | null> {
+    const pago = await this.buscarPagoPorReserva(idReserva, transaccion);
+    return pago ? this.pagos.buscarParaReembolso(pago.id, transaccion) : null;
   }
 
   async tieneDevolucionDeCancelacionActiva(idReserva: number, transaccion?: EntityManager): Promise<boolean> {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
+import { In, Not, Repository, type EntityManager, type FindOptionsRelations } from 'typeorm';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
 import { Reclamo } from '../entity/reclamo.entity';
 import { ReclamoEvidencia } from '../entity/reclamo-evidencia.entity';
@@ -36,10 +36,11 @@ export class ReclamosRepository implements IReclamosRepository {
     await this.reclamos.findOne({ where: { id: idReclamo }, lock: { mode: 'pessimistic_write' } });
   }
 
-  existeAbierto(idReserva: number, estados: string[]): Promise<boolean> {
+  existeAbierto(idReserva: number, estados: string[], excluirCategoria?: Reclamo['categoria']): Promise<boolean> {
     return this.reclamos.existsBy({
       reserva: { id: idReserva },
       estado: In(estados),
+      ...(excluirCategoria ? { categoria: Not(excluirCategoria) } : {}),
     });
   }
 

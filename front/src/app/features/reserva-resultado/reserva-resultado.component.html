@@ -226,7 +226,7 @@
               <dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd>
             </div>
             @if (cuitAnunciante(); as cuit) {
-              <div>
+              <div class="payment-card__tax-id">
                 <dt>CUIT/CUIL del anunciante</dt>
                 <dd>{{ cuit }}</dd>
               </div>

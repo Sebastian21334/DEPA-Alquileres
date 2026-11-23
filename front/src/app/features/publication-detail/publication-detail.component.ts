@@ -51,6 +51,7 @@ import { AnunciantePublicoService } from '../../shared/services/anunciante-publi
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { esInmobiliaria } from '../../shared/utils/anunciante';
+import { PaymentSummaryComponent } from './payment-summary/payment-summary.component';
 
 @Component({
   selector: 'app-publication-detail',
@@ -63,6 +64,7 @@ import { esInmobiliaria } from '../../shared/utils/anunciante';
     AvatarComponent,
     AvailabilityCalendarComponent,
     ConfirmDialogComponent,
+    PaymentSummaryComponent,
     RelativeTimePipe,
     LucideBadgeCheck,
     LucideBookmark,
@@ -413,20 +415,6 @@ export class PublicationDetailComponent {
   protected presupuestoVencido(): boolean {
     return !this.presupuesto() || Date.now() >= new Date(this.presupuesto()!.vence_en).getTime();
   }
-  protected aceptarConversion(evento: Event): void {
-    this.aceptaConversion.set(evento.target instanceof HTMLInputElement && evento.target.checked);
-  }
-  protected formatCurrency(valor: string | number, moneda: string, decimales = 2): string {
-    return Number(valor).toLocaleString('es-AR', {
-      style: 'currency',
-      currency: moneda,
-      maximumFractionDigits: decimales,
-    });
-  }
-  protected fechaCotizacion(valor: string): string {
-    return new Date(valor).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
-  }
-
   protected confirmPayment(event: Event): void {
     event.preventDefault();
     const item = this.publication();

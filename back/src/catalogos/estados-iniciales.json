@@ -146,6 +146,9 @@
       "OTRO": {
         "nombre": "OTRO"
       },
+      "DEMORA_ADMINISTRATIVA": {
+        "nombre": "Demora administrativa"
+        },
       "CODIGO_BLOQUEADO": {
         "nombre": "CODIGO BLOQUEADO"
       }

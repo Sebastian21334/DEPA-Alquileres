@@ -8,6 +8,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
   CondicionesCancelacion,
+  DemoraAdministrativa,
+  FaltanteCancelacion,
   Reserva,
   ReprogramacionReserva,
   Reclamo,
@@ -57,6 +59,45 @@ export class MisReservasComponent {
   protected readonly esAnunciante = computed(() => this.accesoLimitado()
     ? this.auth.currentUser()?.anuncianteVerificado === true
     : this.perfil.esAnuncianteVerificado());
+
+  protected readonly demorasAdministrativas = signal<DemoraAdministrativa[]>([]);
+  protected readonly errorDemorasAdministrativas = signal('');
+  private readonly dialogoDemora = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoDemora');
+  protected readonly demoraSeleccionada = signal<DemoraAdministrativa | null>(null);
+  protected readonly enviandoDemora = signal(false);
+  protected readonly errorDemora = signal('');
+  protected descripcionDemora = '';
+
+  protected abrirDemora(item: DemoraAdministrativa): void {
+    if (item.reclamoAbierto || this.enviandoDemora()) return;
+    this.demoraSeleccionada.set(item);
+    this.descripcionDemora = '';
+    this.errorDemora.set('');
+    this.dialogoDemora().nativeElement.showModal();
+  }
+
+  protected cerrarDemora(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.enviandoDemora()) return;
+    this.dialogoDemora().nativeElement.close();
+    this.demoraSeleccionada.set(null);
+  }
+
+  protected enviarDemora(): void {
+    const item = this.demoraSeleccionada();
+    const descripcion = this.descripcionDemora.trim();
+    if (!item || this.enviandoDemora() || descripcion.length < 20 || descripcion.length > 1000) return;
+    this.enviandoDemora.set(true);
+    this.errorDemora.set('');
+    this.reservasApi.createClaim({ id_reserva: item.reservaId, categoria: 'DEMORA_ADMINISTRATIVA', descripcion }).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.enviandoDemora.set(false))).subscribe({
+      next: (reclamo) => {
+        this.enviandoDemora.set(false);
+        this.cerrarDemora();
+        this.finalizarReclamo(reclamo, 'Reclamo por demora administrativa enviado. La reserva sigue en curso; administración revisará los inconvenientes informados.');
+      },
+      error: (error: ApiError) => this.errorDemora.set(error.message),
+    });
+  }
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
@@ -140,6 +181,59 @@ export class MisReservasComponent {
   protected readonly reclamoDescripcion = signal('');
   protected readonly reclamoArchivos = signal<File[]>([]);
   protected readonly reclamoEnviando = signal(false);
+  private readonly dialogoFaltante = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoFaltante');
+  private consultaFaltante?: Subscription;
+  protected readonly reservaFaltante = signal<Reserva | null>(null);
+  protected readonly saldoFaltante = signal<FaltanteCancelacion | null>(null);
+  protected readonly cargandoFaltante = signal(false);
+  protected readonly enviandoFaltante = signal(false);
+  protected readonly errorFaltante = signal('');
+  protected descripcionFaltante = '';
+
+  protected abrirFaltante(reserva: Reserva): void {
+    this.consultaFaltante?.unsubscribe();
+    this.reservaFaltante.set(reserva);
+    this.saldoFaltante.set(null);
+    this.descripcionFaltante = '';
+    this.errorFaltante.set('');
+    this.cargandoFaltante.set(true);
+    this.dialogoFaltante().nativeElement.showModal();
+    this.consultaFaltante = this.reservasApi.cancellationRefundBalance(reserva.id).pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: saldo => { this.saldoFaltante.set(saldo); this.cargandoFaltante.set(false); },
+        error: (error: ApiError) => { this.errorFaltante.set(error.message); this.cargandoFaltante.set(false); },
+      });
+  }
+
+  protected cerrarFaltante(evento?: Event): void {
+    evento?.preventDefault();
+    if (this.enviandoFaltante()) return;
+    this.consultaFaltante?.unsubscribe();
+    this.dialogoFaltante().nativeElement.close();
+    this.reservaFaltante.set(null);
+  }
+
+  protected enviarFaltante(): void {
+    const reserva = this.reservaFaltante();
+    const saldo = this.saldoFaltante();
+    const descripcion = this.descripcionFaltante.trim();
+    if (!reserva || !saldo?.devolucion?.importeReclamable || saldo.reclamoAbierto || this.enviandoFaltante()) return;
+    if (descripcion.length < 20 || descripcion.length > 1000) {
+      this.errorFaltante.set('La descripción debe tener entre 20 y 1000 caracteres.');
+      return;
+    }
+    this.enviandoFaltante.set(true);
+    this.errorFaltante.set('');
+    this.reservasApi.claimMissingRefund(reserva.id, descripcion).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.enviandoFaltante.set(false)))
+      .subscribe({
+        next: (reclamo) => {
+          this.enviandoFaltante.set(false);
+          this.cerrarFaltante();
+          this.finalizarReclamo(reclamo, 'Reclamo por el faltante enviado. Administración revisará la diferencia.');
+        },
+        error: (error: ApiError) => this.errorFaltante.set(error.message),
+      });
+  }
   constructor() {
     const paymentResult = this.route.snapshot.queryParamMap.get('payment');
     if (paymentResult) {
@@ -163,6 +257,10 @@ export class MisReservasComponent {
     this.consultaReservas?.unsubscribe();
     const anunciante = this.accesoLimitado() ? of(this.esAnunciante()) : this.perfil.esAnunciante();
     this.consultaReservas = forkJoin({
+      demoras: this.reservasApi.myAdministrativeDelays().pipe(catchError((error: ApiError) => {
+        this.errorDemorasAdministrativas.set(error.message);
+        return of(null);
+      })),
       propias: this.reservasApi.mine(),
       recibidas: anunciante.pipe(
         switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received() : of<Reserva[]>([])),
@@ -172,7 +270,8 @@ export class MisReservasComponent {
         return of(null);
       })),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ propias, recibidas, reclamos }) => {
+      next: ({ propias, recibidas, reclamos, demoras }) => {
+        if (demoras) { this.demorasAdministrativas.set(demoras); this.errorDemorasAdministrativas.set(''); }
         this.propias.set(propias);
         this.recibidas.set(recibidas);
         if (reclamos) {
@@ -500,16 +599,16 @@ export class MisReservasComponent {
         next: (reclamo) => {
           const archivos = this.reclamoArchivos();
           if (!archivos.length) {
-            this.finalizarReclamo();
+            this.finalizarReclamo(reclamo);
             return;
           }
           this.reservasApi
             .uploadClaimEvidence(reclamo.id, archivos)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({
-              next: () => this.finalizarReclamo(),
+              next: () => this.finalizarReclamo(reclamo),
               error: (err: ApiError) => {
-                this.finalizarReclamo(`El reclamo #${reclamo.id} se registró. La carga de imágenes quedó incompleta: ${err.message}`);
+                this.finalizarReclamo(reclamo, `El reclamo #${reclamo.id} se registró. La carga de imágenes quedó incompleta: ${err.message}`);
               },
             });
         },
@@ -553,8 +652,8 @@ export class MisReservasComponent {
       });
   }
 
-  private finalizarReclamo(advertencia?: string): void {
-    const pedido = this.reclamoCategoria() === 'CODIGO_BLOQUEADO';
+  private finalizarReclamo(reclamo: Reclamo, advertencia?: string): void {
+    const pedido = reclamo.categoria === 'CODIGO_BLOQUEADO';
     this.reclamoEnviando.set(false);
     this.reclamoAbierto.set(null);
     this.reclamoArchivos.set([]);
@@ -564,8 +663,8 @@ export class MisReservasComponent {
         : 'Reclamo enviado. Podés seguirlo y responder desde esta sección.'),
     );
     this.vista.set('reclamos');
-    // El pedido de reinicio del código lo hace el anunciante; el reclamo, el inquilino.
-    this.vistaReclamos.set(pedido ? 'anunciante' : 'inquilino');
+    // La demora puede reclamarla cualquiera de las partes; se muestra el rol del reclamo creado.
+    this.vistaReclamos.set(rolEnReclamo(reclamo, this.idUsuario()) ?? (pedido ? 'anunciante' : 'inquilino'));
     this.cargarReservas(true);
   }
 

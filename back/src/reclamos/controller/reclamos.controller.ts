@@ -20,6 +20,7 @@ import { MAX_BYTES_IMAGEN, MAX_IMAGENES_POR_ENVIO, ReclamosService } from '../se
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
+import { ReclamarFaltanteCancelacionDto } from '../dto/reclamo-faltante-cancelacion.dto';
 
 // T49: mismo límite al crear el reclamo y en cada mensaje del chat; el servicio controla el total del reclamo.
 const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', MAX_IMAGENES_POR_ENVIO, {
@@ -30,6 +31,24 @@ const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', MAX_IMAGENES_POR_E
 @UseGuards(JwtAuthGuard)
 export class ReclamosController {
   constructor(private readonly reclamosService: ReclamosService) {}
+
+  @PermitirAccesoLimitado()
+  @Get('demoras/mias')
+  listarDemoras(@Req() req: AuthenticatedRequest) {
+    return this.reclamosService.listarDemorasMias(req.user.id);
+  }
+
+  @PermitirAccesoLimitado()
+  @Get('cancelacion/:idReserva')
+  consultarFaltante(@Param('idReserva', ParseIntPipe) idReserva: number, @Req() req: AuthenticatedRequest) {
+    return this.reclamosService.consultarFaltanteCancelacion(idReserva, req.user.id);
+  }
+
+  @PermitirAccesoLimitado()
+  @Post('cancelacion/:idReserva')
+  reclamarFaltante(@Param('idReserva', ParseIntPipe) idReserva: number, @Body() dto: ReclamarFaltanteCancelacionDto, @Req() req: AuthenticatedRequest) {
+    return this.reclamosService.reclamarFaltanteCancelacion(idReserva, dto, req.user.id);
+  }
 
   @PermitirAccesoLimitado()
   @Post()

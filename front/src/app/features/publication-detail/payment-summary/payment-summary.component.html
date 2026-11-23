@@ -1,0 +1,157 @@
+<div class="backdrop" (click)="cerrarModal()">
+  <section
+    class="summary"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="payment-title"
+    aria-describedby="payment-intro"
+    (click)="$event.stopPropagation()"
+  >
+    <header class="summary__head">
+      <span class="eyebrow">Resumen de la transacción</span>
+      <h2 id="payment-title">Revisá tu reserva</h2>
+      <p id="payment-intro">Comprobá los datos antes de continuar a Mercado Pago.</p>
+      <button
+        class="close"
+        type="button"
+        aria-label="Cerrar resumen"
+        [disabled]="procesando()"
+        (click)="cerrarModal()"
+      >
+        <svg lucideX [size]="21" aria-hidden="true"></svg>
+      </button>
+    </header>
+    <form (submit)="continuar.emit($event)" [attr.aria-busy]="cotizando() || procesando()">
+      <div class="transaction">
+        <div class="stay">
+          <section class="property" aria-labelledby="payment-property">
+            <h3 id="payment-property">{{ publicacion().titulo }}</h3>
+            <p>{{ ubicacion() }}</p>
+            <p><span>Anunciante:</span> {{ anunciante() }}</p>
+          </section>
+          <dl class="dates">
+            <div>
+              <dt>Primer día</dt>
+              <dd>{{ fecha(inicio()) }}</dd>
+            </div>
+            <div>
+              <dt>Último día incluido</dt>
+              <dd>{{ fecha(fin()) }}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="breakdown">
+          @if (cotizando()) {
+            <p class="notice" role="status">Verificando precio y cotización…</p>
+          }
+          @if (presupuesto(); as precio) {
+            <dl class="amounts">
+              <div>
+                <dt>Duración</dt>
+                <dd>
+                  {{ precio.cantidad_dias }} {{ precio.cantidad_dias === 1 ? 'día' : 'días' }}
+                </dd>
+              </div>
+              <div>
+                <dt>Moneda de publicación</dt>
+                <dd>{{ precio.moneda_origen }}</dd>
+              </div>
+              <div>
+                <dt>Precio por día</dt>
+                <dd>{{ importe(precio.precio_unitario_origen, precio.moneda_origen) }}</dd>
+              </div>
+              <div>
+                <dt>
+                  Subtotal · {{ precio.cantidad_dias }}
+                  {{ precio.cantidad_dias === 1 ? 'día' : 'días' }}
+                </dt>
+                <dd>{{ importe(precio.total_origen, precio.moneda_origen) }}</dd>
+              </div>
+            </dl>
+            @if (precio.cotizacion; as dolar) {
+              <section class="conversion" aria-labelledby="payment-conversion">
+                <h3 id="payment-conversion">Conversión de dólares a pesos</h3>
+                <p>
+                  Dólar blue venta: <strong>{{ importe(dolar.venta, 'ARS', 6) }} por USD</strong>
+                </p>
+                <details>
+                  <summary>Ver fuente y fechas de la cotización</summary>
+                  <p>
+                    Fuente: {{ dolar.proveedor }} ·
+                    <a href="https://dolarapi.com" target="_blank" rel="noopener noreferrer"
+                      >DolarApi / DolarHoy</a
+                    >.
+                  </p>
+                  <p>Publicada: {{ fechaHora(dolar.actualizada_fuente_en) }}.</p>
+                  <p>Consultada: {{ fechaHora(dolar.consultada_en) }}.</p>
+                </details>
+                <label class="accept"
+                  ><input
+                    type="checkbox"
+                    [checked]="conversionAceptada()"
+                    (change)="cambiarConversion($event)"
+                    [disabled]="procesando()"
+                  /><span
+                    >Acepto esta cotización y pagar
+                    {{ importe(precio.total_cobro, precio.moneda_cobro) }} en pesos.</span
+                  ></label
+                >
+              </section>
+            }
+            <div class="total">
+              <span>Total a pagar <small>Pesos argentinos (ARS)</small></span
+              ><strong>{{ importe(precio.total_cobro, precio.moneda_cobro) }}</strong>
+            </div>
+            <details class="validity">
+              <summary>Válido hasta {{ fechaHora(precio.vence_en) }}</summary>
+              <p>Presupuesto emitido: {{ fechaHora(precio.emitida_en) }}.</p>
+              <p>Al continuar, las fechas quedarán reservadas hasta ese vencimiento.</p>
+            </details>
+            @if (vencido()) {
+              <p class="notice notice--error" role="alert">
+                El presupuesto venció. Volvé a cotizar para continuar.
+              </p>
+            }
+          }
+          @if (error()) {
+            <p class="notice notice--error" role="alert">{{ error() }}</p>
+          }
+        </div>
+      </div>
+      <div class="actions">
+        @if (presupuesto(); as precio) {
+          <button
+            class="mercado-pago"
+            type="submit"
+            [disabled]="
+              procesando() ||
+              cotizando() ||
+              vencido() ||
+              (precio.moneda_origen === 'USD' && !conversionAceptada())
+            "
+          >
+            <img
+              class="mercado-pago__logo"
+              src="/images/mercado-pago.png"
+              alt=""
+              aria-hidden="true"
+            />
+            <span>{{ procesando() ? 'Conectando…' : 'Pagar con Mercado Pago' }}</span>
+          </button>
+          <p class="secure">
+            <svg lucideLockKeyhole [size]="14" aria-hidden="true"></svg> Pagá de forma segura
+          </p>
+          <p class="redirect">
+            Elegís el medio de pago e ingresás los datos en Mercado Pago. DEPA no almacena los datos
+            de tu tarjeta.
+          </p>
+        }
+        <div class="secondary">
+          <button type="button" (click)="recotizar.emit()" [disabled]="procesando() || cotizando()">
+            {{ cotizando() ? 'Cotizando…' : 'Volver a cotizar' }}
+          </button>
+        </div>
+      </div>
+    </form>
+  </section>
+</div>
