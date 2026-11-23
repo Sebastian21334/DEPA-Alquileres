@@ -43,6 +43,7 @@
     "test:reprogramaciones": "npm run build && node --test test/reprogramaciones.test.cjs",
     "test:actualizar-datos-solicitud": "npm run build && node --test test/actualizar-datos-solicitud.test.cjs",
     "test:perfil-anunciante-publico": "npm run build && node --test test/perfil-anunciante-publico.test.cjs",
+    "test:reembolsos-resumen": "npm run build && node --test test/reembolsos-resumen.test.cjs",
     "test:jest": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config test/jest/jest.config.cjs",
     "db:retirar-metodo-pago": "node scripts/retirar-metodo-pago.cjs --aplicar",
     "deploy": "nest deploy",

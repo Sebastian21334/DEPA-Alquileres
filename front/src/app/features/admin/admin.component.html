@@ -78,7 +78,7 @@
       </button>
       <button type="button" class="dashboard-metric metric-refund" (click)="openSection('reembolsos')">
         <svg lucideWallet [size]="29" aria-hidden="true"></svg>
-        <span>Reembolsos pendientes<strong>{{ otherLoading() ? '…' : pendingRefunds().length }}</strong></span>
+        <span>Reembolsos pendientes<strong>{{ otherLoading() ? '…' : conteoPendientes() }}</strong></span>
       </button>
       <button type="button" class="dashboard-metric" (click)="openSection('verificaciones')">
         <svg lucideShieldCheck [size]="29" aria-hidden="true"></svg>
@@ -205,11 +205,17 @@
   <section class="panel admin-module" [hidden]="activeSection() !== 'reembolsos'">
     <div class="panel__title">
       <div>
-        <h2>Reembolsos pendientes</h2>
+        <h2>Reembolsos</h2>
         <p>Devoluciones creadas por cancelaciones, reclamos o contracargos.</p>
       </div>
-      <span class="counter">{{ refunds().length }}</span>
+      <span class="counter">{{ conteoPendientes() }} pendientes</span>
     </div>
+    @if (conteoFallidos() > 0) {
+      <p class="refund-action" role="alert">Hay {{ conteoFallidos() }} reembolso(s) fallido(s) que requieren acción manual.</p>
+    }
+    @if (totalReembolsos() > refunds().length) {
+      <p class="refund-note" role="status">Mostrando los últimos {{ refunds().length }} de {{ totalReembolsos() }}.</p>
+    }
     @if (!refunds().length) {
       <p class="empty">No hay reembolsos registrados.</p>
     } @else {

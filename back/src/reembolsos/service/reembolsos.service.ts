@@ -718,6 +718,16 @@ export class ReembolsosService {
     return reembolsos.map((reembolso) => this.prepararRespuesta(reembolso));
   }
 
+  async resumenAdministracion(): Promise<{ pendientes: number; fallidos: number; total: number }> {
+    const filas = await this.reembolsos.contarPorEstado();
+    const porEstado = new Map(filas.map((fila) => [fila.estado, Number(fila.cantidad)]));
+    const pendientes = (porEstado.get(this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE')) ?? 0) +
+      (porEstado.get(this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO')) ?? 0);
+    const fallidos = porEstado.get(this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')) ?? 0;
+    const total = [...porEstado.values()].reduce((acumulado, cantidad) => acumulado + cantidad, 0);
+    return { pendientes, fallidos, total };
+  }
+
   async listarPendientesAplicacion(desdeId = 0): Promise<Reembolso[]> {
     return this.reembolsos.buscarPendientesAplicacion(this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'), desdeId);
   }

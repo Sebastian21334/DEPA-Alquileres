@@ -294,6 +294,20 @@ dd {
   gap: 14px;
   padding: 20px 24px 24px;
 }
+.refund-action {
+  margin: 0 24px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  color: #9e2020;
+  background: #ffeded;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.refund-note {
+  margin: 0 24px;
+  color: #71818a;
+  font-size: 0.85rem;
+}
 .settlement-card {
   display: flex;
   align-items: center;
