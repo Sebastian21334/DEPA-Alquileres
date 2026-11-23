@@ -1,3 +1,16 @@
+/* Mismo fondo que el acceso, para que el alta se sienta parte del ingreso. */
+.acct-page.solicitud-page {
+  background:
+    linear-gradient(180deg, rgba(10, 12, 20, 0.45) 0%, rgba(10, 12, 20, 0.75) 100%),
+    var(--auth-bg-image, none) center / cover no-repeat,
+    radial-gradient(circle at 20% 10%, rgba(216, 71, 30, 0.3), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(14, 70, 161, 0.35), transparent 45%),
+    var(--color-dark);
+}
+.solicitud-page .acct-heading h1 { color: #fff; }
+.solicitud-page .acct-heading p { color: rgba(255, 255, 255, 0.78); }
+.solicitud-page .acct-state { color: rgba(255, 255, 255, 0.8); }
+
 .steps {
   list-style: none;
   margin: 0;
