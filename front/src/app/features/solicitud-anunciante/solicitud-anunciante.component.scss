@@ -7,8 +7,15 @@
     radial-gradient(circle at 85% 85%, rgba(14, 70, 161, 0.35), transparent 45%),
     var(--color-dark);
 }
-.solicitud-page .acct-heading h1 { color: #fff; }
-.solicitud-page .acct-heading p { color: rgba(255, 255, 255, 0.78); }
+.solicitud-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.solicitud-heading h1 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; }
+.solicitud-heading p { max-width: 36rem; margin: 0.4rem 0 0; font-weight: 700; }
+.solicitud-heading .acct-btn { margin-top: 1rem; }
 .solicitud-page .acct-state { color: rgba(255, 255, 255, 0.8); }
 
 .steps {
