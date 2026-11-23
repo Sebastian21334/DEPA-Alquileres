@@ -23,6 +23,14 @@ export const routes: Routes = [
     title: 'Publicación de la reserva - DEPA',
   },
   {
+    // T53: el admin ve el resumen de cualquier reserva en solo lectura.
+    path: 'admin/reservas/:id',
+    canActivate: [adminGuard],
+    data: { administracion: true },
+    loadComponent: () => import('./features/reserva-resultado/reserva-resultado.component').then((m) => m.ReservaResultadoComponent),
+    title: 'Detalle de la reserva - DEPA',
+  },
+  {
     path: '403',
     loadComponent: () =>
       import('./features/forbidden/forbidden.component').then((m) => m.ForbiddenComponent),

@@ -25,6 +25,7 @@ import { Publicacion } from '../../shared/models/publicacion.model';
 import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
+import { VolverDirective } from '../../shared/directives/volver.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import {
@@ -45,6 +46,7 @@ import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
     RouterLink,
     SpinnerComponent,
     RevealDirective,
+    VolverDirective,
     AvatarComponent,
     AvailabilityCalendarComponent,
     RelativeTimePipe,

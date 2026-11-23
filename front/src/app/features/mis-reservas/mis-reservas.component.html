@@ -205,7 +205,18 @@
           </div>
           @if (errorHistorial()) { <p class="claim-error" role="alert">{{ errorHistorial() }}</p> }
           @if (errorAccionReclamo()) { <p class="claim-error" role="alert">{{ errorAccionReclamo() }}</p> }
-          @for (reclamo of reclamos(); track reclamo.id) {
+          <!-- T53: los reclamos como inquilino y como anunciante van separados; sin subpestañas si no es anunciante. -->
+          @if (separarReclamos()) {
+            <div class="reservation-tabs reservation-tabs--sub" role="tablist" aria-label="Rol en los reclamos">
+              <button type="button" role="tab" [attr.aria-selected]="vistaReclamos() === 'inquilino'" [class.is-active]="vistaReclamos() === 'inquilino'" (click)="vistaReclamos.set('inquilino')">
+                Como inquilino <span>{{ reclamosComoInquilino().length }}</span>
+              </button>
+              <button type="button" role="tab" [attr.aria-selected]="vistaReclamos() === 'anunciante'" [class.is-active]="vistaReclamos() === 'anunciante'" (click)="vistaReclamos.set('anunciante')">
+                Como anunciante <span>{{ reclamosComoAnunciante().length }}</span>
+              </button>
+            </div>
+          }
+          @for (reclamo of reclamosVisibles(); track reclamo.id) {
             <article class="acct-card reservation claim-card">
               <app-claim-history [reclamo]="reclamo" [mostrarVerReembolso]="esInquilinoDelReclamo(reclamo)"
                 (verReembolso)="verReembolsoReclamo(reclamo)">
@@ -223,7 +234,9 @@
               </app-claim-history>
             </article>
           } @empty {
-            @if (!errorHistorial()) { <div class="acct-card empty">No tenés reclamos registrados.</div> }
+            @if (!errorHistorial()) {
+              <div class="acct-card empty">{{ separarReclamos() ? 'No tenés reclamos como ' + vistaReclamos() + '.' : 'No tenés reclamos registrados.' }}</div>
+            }
           }
         </section>
       }
