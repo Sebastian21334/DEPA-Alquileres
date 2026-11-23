@@ -208,11 +208,11 @@
           @for (reclamo of reclamos(); track reclamo.id) {
             <article class="acct-card reservation claim-card">
               <app-claim-history [reclamo]="reclamo" [mostrarVerReembolso]="esInquilinoDelReclamo(reclamo)"
-                (verArchivo)="verEvidenciaReclamo(reclamo.id, $event.id)" (verReembolso)="verReembolsoReclamo(reclamo)">
+                (verReembolso)="verReembolsoReclamo(reclamo)">
                 @if (reclamo.estado !== 'CERRADO') {
                   @if (respuestaReclamo() === reclamo.id) {
-                    <app-conversation-composer [(texto)]="textoRespuesta" etiqueta="Mensaje para el reclamo"
-                      [deshabilitado]="enviandoRespuesta()" (enviar)="responderReclamo(reclamo)" />
+                    <app-conversation-composer [(texto)]="textoRespuesta" [(imagenes)]="imagenesRespuesta" [adjuntos]="imagenesDisponibles(reclamo)"
+                      etiqueta="Mensaje para el reclamo" [deshabilitado]="enviandoRespuesta()" (enviar)="responderReclamo(reclamo)" />
                     <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="respuestaReclamo.set(null)"
                       [disabled]="enviandoRespuesta()">Cancelar</button>
                   } @else {
@@ -221,14 +221,6 @@
                   }
                 }
               </app-claim-history>
-              @if ((reclamo.estado === 'ABIERTO' || reclamo.estado === 'EN_REVISION') && (reclamo.evidencias?.length ?? 0) < 5) {
-                <div class="claim-form">
-                  <label>{{ subiendoEvidencia() === reclamo.id ? 'Subiendo imágenes…' : 'Adjuntar imágenes al reclamo' }}
-                    <input type="file" accept="image/jpeg,image/png" multiple (change)="adjuntarEvidencias(reclamo, $event)" [disabled]="subiendoEvidencia() !== null" />
-                    <small>JPEG o PNG · Hasta 5 MB por imagen</small>
-                  </label>
-                </div>
-              }
             </article>
           } @empty {
             @if (!errorHistorial()) { <div class="acct-card empty">No tenés reclamos registrados.</div> }
@@ -421,7 +413,7 @@
     <h4>{{ pedido ? 'Pedir el reinicio del código de la reserva #' : 'Reportar un problema en la reserva #' }}{{ reserva.id }}</h4>
     <p class="muted">{{ pedido
       ? 'Contale a Administración qué pasó con el código. El huésped también ve el pedido y lo podés seguir desde la pestaña Reclamos.'
-      : 'La liquidación quedará en revisión.' }} Podés adjuntar hasta cinco imágenes JPEG o PNG de hasta 5 MB.</p>
+      : 'La liquidación quedará en revisión.' }}</p>
     @if (!pedido) {
       <label for="categoria-reclamo-{{ reserva.id }}">¿Qué tipo de problema tuviste?
         <select
@@ -455,21 +447,7 @@
       ></textarea>
       <small id="ayuda-descripcion-{{ reserva.id }}">Mínimo 20 caracteres · {{ reclamoDescripcion().length }}/1000</small>
     </label>
-    <label for="evidencias-reclamo-{{ reserva.id }}">Imágenes (opcional)
-      <input
-        id="evidencias-reclamo-{{ reserva.id }}"
-        type="file"
-        accept="image/jpeg,image/png"
-        multiple
-        (change)="seleccionarArchivos($event)"
-        [disabled]="reclamoEnviando()"
-      />
-    </label>
-    @if (reclamoArchivos().length) {
-      <ul class="claim-files">
-        @for (archivo of reclamoArchivos(); track $index) { <li>{{ archivo.name }}</li> }
-      </ul>
-    }
+    <app-carga-imagenes [(archivos)]="reclamoArchivos" [maximo]="maxImagenesPorEnvio" [deshabilitado]="reclamoEnviando()" />
     @if (errorReclamo()) { <p class="claim-error" role="alert">{{ errorReclamo() }}</p> }
     <div class="reschedule-form__actions">
       <button type="submit" class="acct-btn acct-btn--primary acct-btn--sm" [disabled]="reclamoEnviando()">

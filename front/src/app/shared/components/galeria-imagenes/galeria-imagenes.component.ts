@@ -1,5 +1,7 @@
 import { Component, input, output, signal } from '@angular/core';
 
+export interface FotoGaleria { url: string; nombre?: string; }
+
 @Component({
   selector: 'app-galeria-imagenes',
   standalone: true,
@@ -7,15 +9,22 @@ import { Component, input, output, signal } from '@angular/core';
   styleUrl: './galeria-imagenes.component.scss',
 })
 export class GaleriaImagenesComponent {
-  readonly fotos = input.required<readonly { url: string }[]>();
+  readonly fotos = input.required<readonly FotoGaleria[]>();
   readonly disabled = input(false);
   readonly minimo = input(0);
+  /** T05: en false (adjuntos de un formulario) no hay portada ni orden; solo la miniatura, el nombre y «Quitar». */
+  readonly ordenable = input(true);
   readonly reordenar = output<{ desde: number; hasta: number }>();
   readonly quitar = output<number>();
   protected readonly arrastrada = signal<number | null>(null);
 
+  protected textoAlternativo(foto: FotoGaleria, index: number): string {
+    if (!this.ordenable()) return foto.nombre ?? `imagen ${index + 1}`;
+    return `Foto ${index + 1}${index === 0 ? ', portada' : ''}`;
+  }
+
   protected iniciar(event: DragEvent, index: number): void {
-    if (this.disabled()) { event.preventDefault(); return; }
+    if (this.disabled() || !this.ordenable()) { event.preventDefault(); return; }
     this.arrastrada.set(index);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';

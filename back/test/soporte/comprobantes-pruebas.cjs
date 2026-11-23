@@ -17,4 +17,11 @@ function almacenamientoDePrueba() {
   return { almacenamiento, archivos };
 }
 
-module.exports = { comprobantePdf, almacenamientoDePrueba };
+/** T49: imagen PNG mínima, real, para las imágenes de los reclamos (pasa por sharp). */
+async function imagenPng(nombre = 'foto.png') {
+  const sharp = require('sharp');
+  const buffer = await sharp({ create: { width: 4, height: 4, channels: 3, background: '#ffffff' } }).png().toBuffer();
+  return { buffer, size: buffer.length, originalname: nombre, mimetype: 'image/png' };
+}
+
+module.exports = { comprobantePdf, almacenamientoDePrueba, imagenPng };

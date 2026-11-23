@@ -22,12 +22,14 @@ import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
+import { CargaImagenesComponent } from '../../shared/components/carga-imagenes/carga-imagenes.component';
+import { imagenesDisponibles, MAX_IMAGENES_POR_ENVIO } from '../../shared/utils/reclamo-imagenes';
 
 @Component({
   selector: 'app-mis-reservas',
   standalone: true,
   imports: [
-    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, NgTemplateOutlet, DatePipe,
+    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, NgTemplateOutlet, DatePipe,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
   ],
@@ -102,8 +104,11 @@ export class MisReservasComponent {
   protected readonly errorReclamo = signal('');
   protected readonly respuestaReclamo = signal<number | null>(null);
   protected readonly enviandoRespuesta = signal(false);
-  protected readonly subiendoEvidencia = signal<number | null>(null);
   protected textoRespuesta = '';
+  /** T49: imágenes del próximo mensaje del reclamo. */
+  protected readonly imagenesRespuesta = signal<File[]>([]);
+  protected readonly imagenesDisponibles = imagenesDisponibles;
+  protected readonly maxImagenesPorEnvio = MAX_IMAGENES_POR_ENVIO;
   protected readonly codigos = signal<Record<number, string>>({});
   protected codigoIngresado: Record<number, string> = {};
   protected readonly mensaje = signal('');
@@ -463,26 +468,6 @@ export class MisReservasComponent {
     this.reclamoAbierto.set(null);
   }
 
-  protected seleccionarArchivos(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    const error = this.validarEvidencias(archivos, 5);
-    if (error) input.value = '';
-    this.errorReclamo.set(error);
-    this.reclamoArchivos.set(error ? [] : archivos);
-  }
-
-  private validarEvidencias(archivos: File[], disponibles: number): string {
-    if (archivos.length > disponibles) return 'Cada reclamo admite hasta cinco imágenes.';
-    if (archivos.some((archivo) => !['image/jpeg', 'image/png'].includes(archivo.type))) {
-      return 'Solo se admiten imágenes JPEG o PNG.';
-    }
-    if (archivos.some((archivo) => archivo.size > 5 * 1024 * 1024)) {
-      return 'Cada imagen puede pesar hasta 5 MB.';
-    }
-    return '';
-  }
-
   protected enviarReclamo(): void {
     const reserva = this.reclamoAbierto();
     if (!reserva || this.reclamoEnviando()) return;
@@ -527,55 +512,26 @@ export class MisReservasComponent {
   protected abrirRespuestaReclamo(id: number): void {
     this.errorAccionReclamo.set('');
     this.textoRespuesta = '';
+    this.imagenesRespuesta.set([]);
     this.respuestaReclamo.set(id);
   }
 
-  protected adjuntarEvidencias(reclamo: Reclamo, event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    input.value = '';
-    if (!archivos.length || this.subiendoEvidencia() !== null) return;
-    const error = this.validarEvidencias(archivos, 5 - (reclamo.evidencias?.length ?? 0));
-    if (error) {
-      this.errorAccionReclamo.set(error);
-      return;
-    }
-    this.errorAccionReclamo.set('');
-    this.subiendoEvidencia.set(reclamo.id);
-    this.reservasApi.uploadClaimEvidence(reclamo.id, archivos).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: () => {
-        this.subiendoEvidencia.set(null);
-        this.mensaje.set('Imágenes adjuntadas al reclamo.');
-        this.cargarReservas(true);
-      },
-      error: (err: ApiError) => {
-        this.subiendoEvidencia.set(null);
-        this.errorAccionReclamo.set(err.message);
-        this.cargarReservas(true);
-      },
-    });
-  }
-
-  protected verEvidenciaReclamo(id: number, evidencia: number): void {
-    this.reservasApi.claimEvidenceUrl(id, evidencia).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ url }) => window.open(url, '_blank', 'noopener'),
-      error: (err: ApiError) => this.errorAccionReclamo.set(err.message),
-    });
-  }
-
+  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   protected responderReclamo(reclamo: Reclamo): void {
     const texto = this.textoRespuesta.trim();
-    if (!texto || texto.length > 1000 || this.enviandoRespuesta()) return;
+    const imagenes = this.imagenesRespuesta();
+    if ((!texto && !imagenes.length) || texto.length > 1000 || this.enviandoRespuesta()) return;
     this.errorAccionReclamo.set('');
     this.enviandoRespuesta.set(true);
     this.reservasApi
-      .sendClaimMessage(reclamo.id, texto)
+      .sendClaimMessage(reclamo.id, texto, imagenes)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.enviandoRespuesta.set(false);
           this.respuestaReclamo.set(null);
           this.textoRespuesta = '';
+          this.imagenesRespuesta.set([]);
           this.mensaje.set('Mensaje enviado al hilo del reclamo.');
           this.cargarReservas(true);
         },
