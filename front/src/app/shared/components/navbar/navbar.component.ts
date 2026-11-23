@@ -12,6 +12,7 @@ import {
   LucideLayoutList,
   LucideLogIn,
   LucideLogOut,
+  LucideMap,
   LucideMessageCircle,
   LucideShieldCheck,
   LucideSquarePlus,
@@ -49,6 +50,7 @@ import { ConversationListComponent } from '../chat-dock/conversation-list.compon
     LucideLayoutList,
     LucideLogIn,
     LucideLogOut,
+    LucideMap,
     LucideMessageCircle,
     LucideShieldCheck,
     LucideSquarePlus,
@@ -72,6 +74,12 @@ export class NavbarComponent {
   protected readonly totalNotificaciones = computed(() =>
     this.chatsNoLeidos().length + this.actividadReembolsos.notificaciones().length + Number(this.perfil.cbuEnRevision()));
   private readonly router = inject(Router);
+
+  protected publicacionesActivas(mapa: boolean): boolean {
+    const url = this.router.parseUrl(this.router.url);
+    return url.root.children['primary']?.segments[0]?.path === 'publicaciones'
+      && (url.queryParams['vista'] === 'mapa') === mapa;
+  }
 
   protected readonly etiquetaRol = etiquetaRol;
   protected readonly menuAbierto = signal(false);

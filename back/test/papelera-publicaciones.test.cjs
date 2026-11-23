@@ -75,6 +75,20 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
   const estadoDe = async id => (await db.query('SELECT activa, eliminada, motivo_baja_admin FROM publicacion WHERE id_publicacion=$1', [id])).rows[0];
   const feed = async () => (await (await request('')).json()).datos.map(p => p.id);
 
+  await t.test('el mapa es público, valida el área y devuelve solo los campos del pin', async () => {
+    await db.exec('UPDATE publicacion SET latitud = -32.41, longitud = -63.24');
+    const respuesta = await request('/mapa?sur=-33&norte=-32&oeste=-64&este=-63');
+    assert.equal(respuesta.status, 200);
+    const mapa = await respuesta.json();
+    assert.equal(mapa.recortado, false);
+    assert.equal(mapa.siguienteId, null);
+    assert.deepEqual(mapa.puntos.map(punto => punto.id), [10]);
+    assert.equal(mapa.puntos[0].latitud, -32.41);
+    assert.equal('anunciante' in mapa.puntos[0], false);
+    assert.equal((await request('/mapa?sur=-33')).status, 400);
+    assert.equal((await request('/mapa?antesDe=0')).status, 400);
+  });
+
   await t.test('autentica y limita la papelera al anunciante verificado y propietario', async () => {
     assert.equal((await request('/mias')).status, 401);
     for (const id of [1, 4]) {

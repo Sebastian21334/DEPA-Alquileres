@@ -1,0 +1,106 @@
+<div class="mapa-disposicion" [class.mapa-disposicion--listado]="listadoAbierto()">
+  @if (listadoAbierto()) {
+    <aside id="listado-mapa" class="mapa-listado" aria-labelledby="resultados-mapa-titulo"
+      (keydown.escape)="alternarListado()">
+      <header class="mapa-listado__cabecera">
+        <div>
+          <h2 id="resultados-mapa-titulo">Alquileres en el mapa</h2>
+          <p aria-live="polite">
+            @if (cargando()) { Buscando publicaciones… }
+            @else if (error()) { No pudimos cargar los resultados. }
+            @else { {{ cantidad() }} {{ cantidad() === 1 ? 'publicación' : 'publicaciones' }} }
+          </p>
+        </div>
+        <button #botonCerrarListado type="button" class="mapa-listado__cerrar" aria-label="Ocultar listado"
+          (click)="alternarListado()">
+          <svg lucidePanelLeftClose [size]="19" aria-hidden="true"></svg>
+        </button>
+      </header>
+      <div class="mapa-listado__contenido">
+        @if (error()) {
+          <button type="button" class="mapa-listado__enlace" (click)="reintentar()">Reintentar</button>
+        } @else if (!cargando() && !cantidad()) {
+          <p class="mapa-listado__vacio">No encontramos publicaciones con ubicación para esta búsqueda.</p>
+        }
+        <ul class="mapa-listado__resultados">
+          @for (punto of puntos(); track punto.id) {
+            <li>
+              <button type="button" class="mapa-listado__resultado"
+                [attr.aria-pressed]="seleccionado() === punto.id" (click)="seleccionarDesdeListado(punto)">
+                <span class="mapa-listado__datos">
+                  <span class="mapa-listado__modalidad" [class.mapa-listado__modalidad--temporal]="punto.temporal">
+                    {{ punto.temporal ? 'Temporal' : 'Largo plazo' }}
+                  </span>
+                  <strong>{{ punto.titulo }}</strong>
+                  @if (punto.ciudad) { <span class="mapa-listado__ciudad">{{ punto.ciudad }}</span> }
+                  <span class="mapa-listado__precio">{{ textoPrecio(punto) }}</span>
+                </span>
+                <span class="mapa-listado__foto">
+                  @if (punto.portada) {
+                    <img [src]="punto.portada" alt="" loading="lazy" decoding="async" width="88" height="84" />
+                  } @else {
+                    <svg lucideHouse [size]="24" aria-hidden="true"></svg>
+                  }
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      </div>
+      <a class="mapa-listado__enlace mapa-listado__catalogo" [routerLink]="[]"
+        [queryParams]="{ vista: null, pagina: null }" queryParamsHandling="merge">Abrir catálogo completo</a>
+    </aside>
+  }
+
+  <section class="mapa" aria-label="Mapa de publicaciones">
+    <div #contenedor class="mapa__lienzo" aria-label="Mapa interactivo de alquileres"></div>
+
+    <div class="mapa__leyenda" aria-label="Referencias del mapa">
+      <span><span class="mapa__punto mapa__punto--temporal"></span> Temporal</span>
+      <span><span class="mapa__punto mapa__punto--largo"></span> Largo plazo</span>
+    </div>
+    <button #botonListado type="button" class="mapa__listado" (click)="alternarListado()"
+      [attr.aria-expanded]="listadoAbierto()" [attr.aria-controls]="listadoAbierto() ? 'listado-mapa' : null">
+      <svg lucideList [size]="19" aria-hidden="true"></svg>
+      {{ listadoAbierto() ? 'Ocultar listado' : 'Ver listado' }}
+    </button>
+
+    <div class="mapa__acciones">
+      <div aria-live="polite">
+        @if (errorMapa()) {
+          <p class="mapa__estado">No pudimos abrir el mapa. Podés seguir desde el listado.</p>
+        } @else if (error()) {
+          <p class="mapa__estado">No pudimos cargar las publicaciones. <button type="button" (click)="reintentar()">Reintentar</button></p>
+        } @else if (cargando()) {
+          <p class="mapa__estado">Buscando publicaciones…</p>
+        } @else if (errorFondo()) {
+          <p class="mapa__estado">El fondo del mapa no está disponible por el momento.</p>
+        } @else if (!cantidad()) {
+          <p class="mapa__estado">No hay publicaciones con ubicación para esta búsqueda.</p>
+        }
+      </div>
+    </div>
+
+    @if (detalleAbierto() || grupo().length) {
+      <aside class="mapa__vista" aria-label="Publicaciones seleccionadas" (keydown.escape)="cerrarDetalle()">
+        <button class="mapa__cerrar" type="button" (click)="cerrarDetalle()" aria-label="Cerrar vista previa">
+          <svg lucideX [size]="18" aria-hidden="true"></svg>
+        </button>
+        @if (grupo().length) {
+          <p class="mapa__mensaje">{{ grupo().length }} publicaciones en este punto</p>
+          <ul class="mapa__grupo">
+            @for (punto of grupo(); track punto.id) {
+              <li><button type="button" (click)="seleccionar(punto)">
+                {{ punto.titulo }} <small>{{ textoPrecio(punto) }}</small>
+              </button></li>
+            }
+          </ul>
+        } @else if (detalle(); as publicacion) {
+          <app-listing-card [publicacion]="publicacion" [vistaMapa]="true" />
+        } @else {
+          <p class="mapa__mensaje" role="status">{{ errorDetalle() ? 'Esta publicación ya no está disponible o no pudimos cargarla.' : 'Cargando vista previa…' }}</p>
+        }
+      </aside>
+    }
+  </section>
+</div>

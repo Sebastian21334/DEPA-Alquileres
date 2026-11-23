@@ -96,7 +96,8 @@ const publicaciones = Array.from({ length: 4 }, (_, i) => ({
   cantidad_ambientes: tarjetasConImportesGrandes && i === 1 ? 10000000 : 3,
   superficie: tarjetasConImportesGrandes && i === 1 ? 9999 : 75,
   tipoMoneda: params.get('pago') === 'usd' ? catalogos['tipos-moneda'][1] : tarjetasConImportesGrandes ? { id: i === 1 ? 2 : 1, nombre: i === 1 ? 'Dólar (USD)' : 'Peso (ARS)' } : catalogos['tipos-moneda'][0],
-  modalidad: catalogos.modalidades[(location.pathname === '/mis-publicaciones' || tarjetasConImportesGrandes) && i === 1 ? 1 : 0],
+  modalidad: catalogos.modalidades[params.has('vista') ? i % 2 :
+    (location.pathname === '/mis-publicaciones' || tarjetasConImportesGrandes) && i === 1 ? 1 : 0],
   tipoPropiedad: catalogos['tipos-propiedad'][0],
   provincia: { id: 1, nombre: 'Córdoba' },
   ciudad: { id: 1, nombre: 'Villa María' },
@@ -327,7 +328,9 @@ const interceptor: HttpInterceptorFn = (req) => {
       },
     ];
   else if (p.startsWith('/catalogos/')) body = catalogos[p.split('/').pop() as keyof typeof catalogos] || [];
-  else if (p.startsWith('/ubicacion/provincias'))
+  else if (/^\/ubicacion\/provincias\/\d+\/ciudades$/.test(p))
+    body = [{ id: 1, nombre: 'Villa María' }];
+  else if (p === '/ubicacion/provincias')
     body = [
       { id: 1, nombre: 'Córdoba' },
       { id: 2, nombre: 'Buenos Aires' },
@@ -349,8 +352,28 @@ const interceptor: HttpInterceptorFn = (req) => {
       ...publicaciones[i % publicaciones.length], id: i + 1,
     }));
   }
+  else if (p === '/publicaciones/mapa') {
+    const categoria = req.params.get('categoria');
+    const mismaDireccion = params.get('pines') === 'misma-direccion';
+    const puntos = publicaciones.map((pub, indice) => ({
+      id: pub.id,
+      titulo: pub.titulo,
+      ciudad: pub.ciudad.nombre,
+      portada: pub.imagenes[0]?.url,
+      precio: pub.precio,
+      moneda: pub.tipoMoneda.nombre,
+      latitud: pub.latitud + (mismaDireccion && indice < 2 ? 0 : indice % 2) * .025,
+      longitud: pub.longitud + Math.floor(indice / 2) * .025,
+      temporal: pub.modalidad.admite_reservas_por_fecha,
+    })).filter((punto) => categoria === 'temporales' ? punto.temporal :
+      categoria === 'largo-plazo' ? !punto.temporal : true);
+    body = { puntos, recortado: false, siguienteId: null };
+  }
   else if (p === '/publicaciones') body = page(publicaciones);
-  else if (/^\/publicaciones\/\d+$/.test(p)) body = publicaciones[0];
+  else if (/^\/publicaciones\/\d+$/.test(p)) {
+    const id = Number(p.split('/').at(-1));
+    body = publicaciones.find((pub) => pub.id === id) ?? publicaciones[0];
+  }
   else if (p.startsWith('/disponibilidad/')) body = fechas;
   else if (p === '/favoritos') body = publicaciones;
   else if (p.startsWith('/cotizaciones/'))

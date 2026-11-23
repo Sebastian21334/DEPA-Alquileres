@@ -41,3 +41,32 @@
 .card__save:focus-visible, .card__cta:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 3px; }
 
 @media (max-width: 540px) { .card__body { min-height: 0; }.card__title { font-size: 1.15rem; }.card__price strong { font-size: 1.55rem; } }
+
+.card--map {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  height: auto;
+  padding: .5rem;
+  box-shadow: none;
+}
+.card--map:hover { transform: none; box-shadow: none; }
+.card--map .card__top { min-width: 0; min-height: 8rem; }
+.card--map .card__media {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+  border-radius: var(--radius-sm);
+}
+.card--map:hover .card__media img { transform: none; }
+.card--map .card__body { min-height: 0; padding: .25rem .3rem .2rem .75rem; }
+.card--map .card__title { padding-right: 1.5rem; font-size: 1rem; }
+.card--map .card__location, .card--map .card__specs { margin-bottom: .4rem; }
+.card--map .card__footer { gap: .45rem; }
+.card--map .card__price strong { font-size: 1.15rem; }
+.card--map .card__save, .card--map .badge--verified { display: none; }
+.card--map .badge--modalidad { top: .35rem; left: .35rem; padding: .32rem .45rem; font-size: .65rem; }
+
+@media (max-width: 360px) {
+  .card--map { grid-template-columns: minmax(0, 1fr) minmax(0, 1.85fr); }
+  .card--map .card__body { padding-left: .5rem; }
+}

@@ -7,11 +7,15 @@ import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
+import { Imagen } from '../../imagenes/entity/imagen.entity';
 import {
+  AreaMapaPublicaciones,
   CategoriaInicio,
   ConsultaPublicaciones,
+  FiltrosPublicaciones,
   IPublicacionesRepository,
   PaginaPublicaciones,
+  PuntoPublicacion,
 } from './publicaciones.repository.interface';
 import { PATRON_RESERVA_POR_FECHA } from '../../catalogos/entity/modalidad.entity';
 
@@ -223,74 +227,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * Así una petición nunca materializa el catálogo completo en memoria.
    */
   async buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones> {
-    const {
-      pagina,
-      limite,
-      categoria,
-      orden,
-      busqueda,
-      idsCiudad,
-      idProvincia,
-      idsTipoPropiedad,
-      idsTipoMoneda,
-      precioMin,
-      precioMax,
-      superficieMin,
-      ambientes,
-    } = consulta;
-    const base = this.repo
-      .createQueryBuilder('publicacion')
-      .innerJoin('publicacion.imagenes', 'imagen')
-      .leftJoin('publicacion.modalidad', 'modalidad')
-      .leftJoin('publicacion.ciudad', 'ciudad')
-      .leftJoin('publicacion.provincia', 'provincia')
-      .leftJoin('publicacion.tipoPropiedad', 'tipoPropiedad')
-      .leftJoin('publicacion.tipoMoneda', 'tipoMoneda')
-      .leftJoin('publicacion.anunciante', 'anunciante')
-      .leftJoin('anunciante.usuario', 'usuario')
-      .leftJoin('anunciante.tipoAnunciante', 'tipoAnunciante')
-      .where('publicacion.activa = :activa', { activa: true })
-      .andWhere('publicacion.eliminada = false')
-      .andWhere('usuario.activa = true AND usuario.bloqueado = false')
-      .andWhere('anunciante.actividades_pausadas = false')
-      .distinct(true);
-
-    this.aplicarCategoria(base, categoria);
-    this.aplicarBusqueda(base, busqueda);
-    if (idProvincia != null)
-      base.andWhere('provincia.id = :idProvincia', { idProvincia });
-    if (idsCiudad?.length)
-      base.andWhere('ciudad.id IN (:...idsCiudad)', { idsCiudad });
-    if (idsTipoPropiedad?.length) {
-      base.andWhere('tipoPropiedad.id IN (:...idsTipoPropiedad)', {
-        idsTipoPropiedad,
-      });
-    }
-    if (idsTipoMoneda?.length) {
-      base.andWhere('tipoMoneda.id IN (:...idsTipoMoneda)', { idsTipoMoneda });
-    }
-    if (precioMin != null)
-      base.andWhere('publicacion.precio >= :precioMin', { precioMin });
-    if (precioMax != null)
-      base.andWhere('publicacion.precio <= :precioMax', { precioMax });
-    if (superficieMin != null)
-      base.andWhere('publicacion.superficie >= :superficieMin', { superficieMin });
-    if (ambientes?.length) {
-      const exactos = ambientes
-        .filter((ambiente) => ambiente !== '4+')
-        .map(Number);
-      const condiciones = [
-        ...(exactos.length
-          ? ['publicacion.cantidad_ambientes IN (:...ambientesExactos)']
-          : []),
-        ...(ambientes.includes('4+')
-          ? ['publicacion.cantidad_ambientes >= 4']
-          : []),
-      ];
-      base.andWhere(`(${condiciones.join(' OR ')})`, {
-        ambientesExactos: exactos,
-      });
-    }
+    const { pagina, limite, categoria, orden } = consulta;
+    const base = this.consultaCatalogoPublico(consulta);
     const total = await base.clone().getCount();
 
     const reservas = this.repo.createQueryBuilder('anuncio')
@@ -376,6 +314,112 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       total,
       totalPaginas: Math.ceil(total / limite),
     };
+  }
+
+  async buscarPuntos(filtros: FiltrosPublicaciones, area: AreaMapaPublicaciones | undefined, limite: number, antesDe?: number): Promise<PuntoPublicacion[]> {
+    const query = this.consultaCatalogoPublico(filtros)
+      .andWhere('publicacion.latitud BETWEEN -90 AND 90')
+      .andWhere('publicacion.longitud BETWEEN -180 AND 180');
+    if (area) {
+      query.andWhere('publicacion.latitud BETWEEN :sur AND :norte AND publicacion.longitud BETWEEN :oeste AND :este', { ...area });
+    }
+    if (antesDe != null) query.andWhere('publicacion.id < :antesDe', { antesDe });
+
+    const filas = await query.select('publicacion.id', 'id')
+      .addSelect('publicacion.titulo', 'titulo')
+      .addSelect('ciudad.nombre', 'ciudad')
+      .addSelect((subconsulta) => subconsulta
+        .select('portada.url')
+        .from(Imagen, 'portada')
+        .where('portada.id_publicacion = publicacion.id_publicacion')
+        .orderBy('portada.orden', 'ASC')
+        .addOrderBy('portada.id', 'ASC')
+        .limit(1), 'portada')
+      .addSelect('publicacion.latitud', 'latitud')
+      .addSelect('publicacion.longitud', 'longitud')
+      .addSelect('publicacion.precio', 'precio')
+      .addSelect('tipoMoneda.nombre', 'moneda')
+      .addSelect(this.sqlAdmiteReservaPorFecha('modalidad'), 'temporal')
+      .orderBy('publicacion.id', 'DESC')
+      .limit(limite)
+      .getRawMany<PuntoPublicacion>();
+
+    // PostgreSQL devuelve los decimales como cadenas cuando se leen filas crudas.
+    return filas.map((fila) => ({
+      ...fila,
+      latitud: Number(fila.latitud),
+      longitud: Number(fila.longitud),
+      precio: Number(fila.precio),
+    }));
+  }
+
+  private consultaCatalogoPublico(filtros: FiltrosPublicaciones): SelectQueryBuilder<Publicacion> {
+    const {
+      categoria,
+      busqueda,
+      idsCiudad,
+      idProvincia,
+      idsTipoPropiedad,
+      idsTipoMoneda,
+      precioMin,
+      precioMax,
+      superficieMin,
+      ambientes,
+    } = filtros;
+    const base = this.repo
+      .createQueryBuilder('publicacion')
+      .innerJoin('publicacion.imagenes', 'imagen')
+      .leftJoin('publicacion.modalidad', 'modalidad')
+      .leftJoin('publicacion.ciudad', 'ciudad')
+      .leftJoin('publicacion.provincia', 'provincia')
+      .leftJoin('publicacion.tipoPropiedad', 'tipoPropiedad')
+      .leftJoin('publicacion.tipoMoneda', 'tipoMoneda')
+      .leftJoin('publicacion.anunciante', 'anunciante')
+      .leftJoin('anunciante.usuario', 'usuario')
+      .leftJoin('anunciante.tipoAnunciante', 'tipoAnunciante')
+      .where('publicacion.activa = :activa', { activa: true })
+      .andWhere('publicacion.eliminada = false')
+      .andWhere('usuario.activa = true AND usuario.bloqueado = false')
+      .andWhere('anunciante.actividades_pausadas = false')
+      .distinct(true);
+
+    this.aplicarCategoria(base, categoria);
+    this.aplicarBusqueda(base, busqueda);
+    if (idProvincia != null)
+      base.andWhere('provincia.id = :idProvincia', { idProvincia });
+    if (idsCiudad?.length)
+      base.andWhere('ciudad.id IN (:...idsCiudad)', { idsCiudad });
+    if (idsTipoPropiedad?.length) {
+      base.andWhere('tipoPropiedad.id IN (:...idsTipoPropiedad)', {
+        idsTipoPropiedad,
+      });
+    }
+    if (idsTipoMoneda?.length) {
+      base.andWhere('tipoMoneda.id IN (:...idsTipoMoneda)', { idsTipoMoneda });
+    }
+    if (precioMin != null)
+      base.andWhere('publicacion.precio >= :precioMin', { precioMin });
+    if (precioMax != null)
+      base.andWhere('publicacion.precio <= :precioMax', { precioMax });
+    if (superficieMin != null)
+      base.andWhere('publicacion.superficie >= :superficieMin', { superficieMin });
+    if (ambientes?.length) {
+      const exactos = ambientes
+        .filter((ambiente) => ambiente !== '4+')
+        .map(Number);
+      const condiciones = [
+        ...(exactos.length
+          ? ['publicacion.cantidad_ambientes IN (:...ambientesExactos)']
+          : []),
+        ...(ambientes.includes('4+')
+          ? ['publicacion.cantidad_ambientes >= 4']
+          : []),
+      ];
+      base.andWhere(`(${condiciones.join(' OR ')})`, {
+        ambientesExactos: exactos,
+      });
+    }
+    return base;
   }
 
   private aplicarCategoria(query: SelectQueryBuilder<Publicacion>, categoria?: CategoriaInicio): void {

@@ -2,5 +2,6 @@
 // (App Service / Container Apps, etc.). Se resuelve vía fileReplacements en angular.json.
 export const environment = {
   production: true,
+  mapTileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   apiUrl: 'https://depa-alquileres-auepdya0fqgsfwhx.brazilsouth-01.azurewebsites.net',
 };

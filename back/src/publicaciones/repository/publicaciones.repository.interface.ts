@@ -9,11 +9,8 @@ export type CategoriaInicio =
 export type OrdenPublicaciones =
   'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
 
-export interface ConsultaPublicaciones {
-  pagina: number;
-  limite: number;
+export interface FiltrosPublicaciones {
   categoria?: CategoriaInicio;
-  orden?: OrdenPublicaciones;
   busqueda?: string;
   idsCiudad?: number[];
   idProvincia?: number;
@@ -23,6 +20,31 @@ export interface ConsultaPublicaciones {
   precioMax?: number;
   superficieMin?: number;
   ambientes?: string[];
+}
+
+export interface ConsultaPublicaciones extends FiltrosPublicaciones {
+  pagina: number;
+  limite: number;
+  orden?: OrdenPublicaciones;
+}
+
+export interface AreaMapaPublicaciones {
+  sur: number;
+  norte: number;
+  oeste: number;
+  este: number;
+}
+
+export interface PuntoPublicacion {
+  id: number;
+  titulo: string;
+  ciudad: string | null;
+  portada: string | null;
+  latitud: number;
+  longitud: number;
+  precio: number;
+  moneda: string | null;
+  temporal: boolean;
 }
 
 export interface PaginaPublicaciones {
@@ -51,6 +73,7 @@ export interface IPublicacionesRepository {
   buscarMiasPaginadas(idAnunciante: number, consulta: ListarMisPublicacionesDto): Promise<Pagina<Publicacion> & { activas: number }>;
   buscarPapeleraPorAnunciante(idAnunciante: number): Promise<Publicacion[]>;
   buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones>;
+  buscarPuntos(filtros: FiltrosPublicaciones, area: AreaMapaPublicaciones | undefined, limite: number, antesDe?: number): Promise<PuntoPublicacion[]>;
   buscarPorAnunciante(idAnunciante: number, soloActivas: boolean, incluirEliminadas?: boolean): Promise<Publicacion[]>;
   restaurar(id: number): Promise<boolean>;
   eliminar(publicacion: Publicacion): Promise<Publicacion>;

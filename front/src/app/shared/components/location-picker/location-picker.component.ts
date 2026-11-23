@@ -4,6 +4,7 @@ import { finalize } from 'rxjs';
 import type { LeafletMouseEvent, Map as LeafletMap, Marker } from 'leaflet';
 import { ApiError } from '../../../core/interceptors/api-error';
 import { ResultadoGeocodificacion, UbicacionService } from '../../services/ubicacion.service';
+import { crearCapaMapaBase } from '../../utils/mapa-base';
 
 export interface UbicacionConfirmada {
   latitud: number;
@@ -74,10 +75,7 @@ export class LocationPickerComponent implements AfterViewInit, OnDestroy {
       this.leaflet = moduleWithDefault.default ?? imported;
       const L = this.leaflet;
       this.map = L.map(this.mapElement.nativeElement, { center: [-32.5, -63.5], zoom: 5 });
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      }).addTo(this.map);
+      crearCapaMapaBase(L).addTo(this.map);
       this.map.on('click', (event: LeafletMouseEvent) => this.choosePoint(event.latlng.lat, event.latlng.lng));
 
       if (this.pendingInitial) {

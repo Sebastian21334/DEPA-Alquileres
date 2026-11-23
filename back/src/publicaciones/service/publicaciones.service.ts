@@ -1,6 +1,7 @@
 import { ReservasLecturaService } from '../../reservas/service/reservas-lectura.service';
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
 import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
+import type { ListarPublicacionesMapaDto } from '../dto/listar-publicaciones-mapa.dto';
 import {
   BadRequestException,
   ConflictException,
@@ -13,7 +14,9 @@ import {
 import { PUBLICACIONES_REPOSITORY } from '../repository/publicaciones.repository.interface';
 import type {
   CategoriaInicio,
+  AreaMapaPublicaciones,
   ConsultaPublicaciones,
+  FiltrosPublicaciones,
   IPublicacionesRepository,
   OrdenPublicaciones,
 } from '../repository/publicaciones.repository.interface';
@@ -265,15 +268,6 @@ export class PublicacionesService {
 
   /** Lista pública paginada; el límite se acota para proteger la base de datos. */
   async listarActivas(pagina = 1, limite = 12, categoria?: CategoriaInicio, filtros: Omit<Partial<ConsultaPublicaciones>, 'pagina' | 'limite' | 'categoria'> = {}) {
-    if (
-      filtros.precioMin != null &&
-      filtros.precioMax != null &&
-      filtros.precioMin > filtros.precioMax
-    ) {
-      throw new BadRequestException(
-        'El precio mínimo no puede superar al máximo',
-      );
-    }
     const ordenesValidos: OrdenPublicaciones[] = [
       'recientes',
       'antiguas',
@@ -287,15 +281,42 @@ export class PublicacionesService {
         ? Math.min(Math.max(1, Math.trunc(limite)), 50)
         : 12,
       categoria,
-      ...filtros,
+      ...this.normalizarFiltrosPublicos(filtros),
       orden:
         filtros.orden && ordenesValidos.includes(filtros.orden)
           ? filtros.orden
           : undefined,
-      busqueda: filtros.busqueda?.trim().slice(0, 200) || undefined,
     };
     const resultado = await this.publicacionesRepo.buscarPaginadas(consulta);
     return { ...resultado, datos: resultado.datos.map((publicacion) => this.prepararRespuestaPublica(publicacion)) };
+  }
+
+  async listarMapa(consulta: ListarPublicacionesMapaDto) {
+    const { sur, norte, oeste, este, q, antesDe, ...filtros } = consulta;
+    let area: AreaMapaPublicaciones | undefined;
+    if ([sur, norte, oeste, este].some((valor) => valor != null)) {
+      if (sur == null || norte == null || oeste == null || este == null || sur >= norte || oeste >= este) {
+        throw new BadRequestException('El área debe tener cuatro límites en orden válido.');
+      }
+      area = { sur, norte, oeste, este };
+    }
+    const limite = 500;
+    const puntos = await this.publicacionesRepo.buscarPuntos(
+      this.normalizarFiltrosPublicos({ ...filtros, busqueda: q }), area, limite + 1, antesDe,
+    );
+    const recortado = puntos.length > limite;
+    return {
+      puntos: puntos.slice(0, limite),
+      recortado,
+      siguienteId: recortado ? puntos[limite - 1].id : null,
+    };
+  }
+
+  private normalizarFiltrosPublicos(filtros: FiltrosPublicaciones): FiltrosPublicaciones {
+    if (filtros.precioMin != null && filtros.precioMax != null && filtros.precioMin > filtros.precioMax) {
+      throw new BadRequestException('El precio mínimo no puede superar al máximo');
+    }
+    return { ...filtros, busqueda: filtros.busqueda?.trim().slice(0, 200) || undefined };
   }
 
   /** Lista publicaciones de un anunciante, opcionalmente solo las activas. */
