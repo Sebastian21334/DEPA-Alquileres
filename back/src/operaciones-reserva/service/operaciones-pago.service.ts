@@ -182,15 +182,15 @@ export class OperacionesPagoService {
     };
   }
 
-  async consultarResumen(idReserva: number, idUsuario: number) {
-    const reserva = await this.reservasService.buscarPorId(
-      idReserva,
-      idUsuario,
-    );
+  /** T53: el admin también lo consulta, en solo lectura, para ver el detalle de cualquier reserva. */
+  async consultarResumen(idReserva: number, idUsuario: number, esAdmin = false) {
+    const reserva = esAdmin
+      ? await this.reservasService.buscarParaAdministracion(idReserva)
+      : await this.reservasService.buscarPorId(idReserva, idUsuario);
     const pago = await this.pagos.buscarPorReserva(idReserva, false);
     return {
       reserva,
-      puede_reintentar: this.puedeReintentar(reserva, pago, idUsuario),
+      puede_reintentar: !esAdmin && this.puedeReintentar(reserva, pago, idUsuario),
       pago: pago
         ? {
             preference_id: pago.preference_id,

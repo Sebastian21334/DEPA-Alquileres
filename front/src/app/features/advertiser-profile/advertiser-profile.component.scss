@@ -16,6 +16,14 @@ aside { display: grid; gap: 18px; position: sticky; top: 96px; }
 .owner-card__meta { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--color-border); display: grid; gap: 10px; text-align: left; }
 .owner-card__meta li { display: flex; align-items: center; gap: 8px; color: #475467; font-size: .88rem; }
 .owner-card__meta svg { color: var(--color-accent); flex-shrink: 0; }
+.owner-cities { margin-top: 14px; text-align: left; }
+.owner-cities h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; color: #475467; font-size: .88rem; font-weight: 700; }
+.owner-cities h2 svg { color: var(--color-accent); flex-shrink: 0; }
+.owner-cities__list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.owner-cities__list li { padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-bg); color: #344054; font-size: .78rem; font-weight: 600; overflow-wrap: anywhere; }
+.owner-cities__more { margin-top: 10px; padding: 0; border: 0; background: none; color: var(--color-secondary); font: inherit; font-size: .84rem; font-weight: 700; cursor: pointer; }
+.owner-cities__more:hover { text-decoration: underline; }
+.owner-cities__more:focus-visible { outline: 2px solid var(--color-secondary); outline-offset: 3px; border-radius: 4px; }
 
 .public-data h2 { margin: 0 0 6px; font-size: 1.02rem; font-weight: 800; }
 .public-data span { display: block; margin-top: 14px; color: var(--color-text-muted); font-size: .74rem; }

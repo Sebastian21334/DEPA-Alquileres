@@ -282,6 +282,15 @@
   align-items: center;
   gap: 1.2rem;
 }
+/* T53: partes de la reserva en la vista del admin. */
+.admin-parties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1.2rem;
+}
+.admin-parties > div { min-width: 0; overflow-wrap: anywhere; }
+.admin-parties h2 { margin: 0; }
+.admin-parties p { margin: 0.35rem 0; color: var(--color-text-muted); }
 .contact-actions {
   display: flex;
   gap: 0.7rem;

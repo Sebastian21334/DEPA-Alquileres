@@ -61,7 +61,7 @@ export class PagosController {
   @PermitirAccesoLimitado()
   @Get('reservas/:id/resumen')
   consultarResumen(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
-    return this.operaciones.consultarResumen(id, req.user.id);
+    return this.operaciones.consultarResumen(id, req.user.id, req.user.rol === 'Administrador');
   }
 
   @Post('webhook')

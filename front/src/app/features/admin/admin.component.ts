@@ -5,7 +5,9 @@ import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
 import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, linkedSignal, PLATFORM_ID, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin, Subscription, timer } from 'rxjs';
+import { ADMIN_NAVIGATION, AdminSection, seccionAdmin } from './admin-secciones';
 import { ToastService } from '../../core/services/toast.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
@@ -70,30 +72,6 @@ const ORDEN_ESTADO_REEMBOLSO: Record<AdminReembolso['estado'], number> = {
   CANCELADO: 2,
 };
 
-const ADMIN_NAVIGATION = [
-  { label: 'Operaciones', items: [
-    { id: 'cancelaciones', label: 'Cancelaciones' },
-    { id: 'reclamos', label: 'Reclamos' },
-    { id: 'reembolsos', label: 'Reembolsos' },
-    { id: 'liquidaciones', label: 'Liquidaciones pendientes' },
-    { id: 'historial-liquidaciones', label: 'Historial de liquidaciones' },
-  ] },
-  { label: 'Gestión', items: [
-    { id: 'verificaciones', label: 'Verificaciones' },
-    { id: 'publicaciones', label: 'Publicaciones' },
-    { id: 'usuarios', label: 'Usuarios' },
-    { id: 'bloqueos', label: 'Bloqueos y apelaciones' },
-  ] },
-  { label: 'Configuración', items: [
-    { id: 'catalogos', label: 'Catálogos' },
-    { id: 'ubicaciones', label: 'Ubicaciones' },
-    { id: 'cotizaciones', label: 'Cotizaciones' },
-    { id: 'comision', label: 'Comisión DEPA' },
-  ] },
-] as const;
-
-type AdminSection = 'resumen' | typeof ADMIN_NAVIGATION[number]['items'][number]['id'];
-
 const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   resumen: 'Consultá los casos que requieren atención y accedé a cada operación.',
   cancelaciones: 'Revisá las solicitudes para cancelar reservas y decidí si corresponde aprobarlas.',
@@ -127,6 +105,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     CurrencyPipe,
     DatePipe,
     FormsModule,
+    RouterLink,
     LucideUsers,
     LucideShieldCheck,
     LucideRefreshCw,
@@ -158,6 +137,8 @@ export class AdminComponent {
   protected readonly comisionError = signal('');
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   protected readonly navigation = ADMIN_NAVIGATION;
   protected readonly activeSection = signal<AdminSection>('resumen');
   protected readonly sectionDescription = computed(() => SECTION_DESCRIPTIONS[this.activeSection()]);
@@ -358,6 +339,11 @@ export class AdminComponent {
       this.reload();
       this.loadCatalogs();
       this.loadProvinces();
+      // T53: abre la sección que indica la URL, por ejemplo al volver del detalle de una reserva.
+      this.route.fragment.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((fragmento) => {
+        const seccion = seccionAdmin(fragmento);
+        if (seccion && seccion !== this.activeSection()) this.openSection(seccion);
+      });
       timer(15_000, 15_000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
         if (this.activeSection() !== 'bloqueos' || this.busy() || this.bloqueadosCargando() || this.actualizandoBloqueados) return;
         const vista = this.vistaBloqueos();
@@ -445,6 +431,9 @@ export class AdminComponent {
 
   protected openSection(section: AdminSection, caseId?: number): void {
     this.activeSection.set(section);
+    // T53: la sección queda en la URL, así «Volver» desde el detalle de una reserva (o un perfil) vuelve a ella.
+    if (this.route.snapshot.fragment !== (section === 'resumen' ? null : section))
+      void this.router.navigate([], { relativeTo: this.route, fragment: section === 'resumen' ? undefined : section, replaceUrl: true });
     if (section === 'comision') this.cargarComision();
     if (section === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
     if (section === 'reembolsos' && caseId !== undefined) {
