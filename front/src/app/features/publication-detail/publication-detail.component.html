@@ -207,7 +207,7 @@
             @if (bookingSuccess()) { <p class="booking-message booking-message--success">{{ bookingSuccess() }}</p> }
             <div class="booking-actions">
               @if (whatsappUrl(item); as whatsapp) {
-                <a class="button button--whatsapp button--outline" [href]="whatsapp" target="_blank" rel="noopener" (click)="confirmarWhatsapp($event)">Contactar por WhatsApp</a>
+                <a class="button button--whatsapp button--outline" [href]="whatsapp" target="_blank" rel="noopener noreferrer" (click)="confirmarWhatsapp($event, whatsapp)">Contactar por WhatsApp</a>
               }
               @if (!esMiPublicacion()) {
                 <button type="button" class="button button--secondary" (click)="chatear(item)"><svg lucideMail [size]="18"></svg> Enviar mensaje</button>
@@ -224,7 +224,7 @@
           </div>
           <div class="actions">
             @if (whatsappUrl(item); as whatsapp) {
-              <a class="button button--whatsapp shine" [href]="whatsapp" target="_blank" rel="noopener" (click)="confirmarWhatsapp($event)">Contactar por WhatsApp</a>
+              <a class="button button--whatsapp shine" [href]="whatsapp" target="_blank" rel="noopener noreferrer" (click)="confirmarWhatsapp($event, whatsapp)">Contactar por WhatsApp</a>
             } @else {
               <span class="button button--whatsapp is-disabled" aria-disabled="true">Contactar por WhatsApp</span>
             }
@@ -294,5 +294,16 @@
         </section>
       </div>
     }
+
+    <app-confirm-dialog
+      #confirmacionWhatsapp
+      identificador="whatsapp-confirm"
+      titulo="Continuar por WhatsApp"
+      mensaje="Vas a continuar la conversación por WhatsApp. DEPA no podrá revisar esos mensajes ni ayudarte con acuerdos realizados fuera de la plataforma."
+      textoConfirmar="Continuar por WhatsApp"
+      textoCancelar="Volver a DEPA"
+      tono="advertencia"
+      (confirmar)="abrirWhatsappConfirmado()"
+      (cancelar)="cerrarConfirmacionWhatsapp()" />
   }
 </section>

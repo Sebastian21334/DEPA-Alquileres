@@ -1,0 +1,45 @@
+<dialog
+  #dialogo
+  class="confirm-dialog"
+  [class.confirm-dialog--peligro]="tono() === 'peligro'"
+  aria-modal="true"
+  [attr.aria-labelledby]="tituloId()"
+  [attr.aria-describedby]="mensajeId()"
+  (cancel)="alCancelar($event)"
+  (close)="alCerrar()"
+  (click)="alClicDialogo($event)"
+>
+  <button
+    type="button"
+    class="confirm-dialog__close"
+    aria-label="Cerrar"
+    [disabled]="procesando()"
+    (click)="solicitarCancelacion()"
+  >
+    <svg lucideX [size]="20" aria-hidden="true"></svg>
+  </button>
+  <div class="confirm-dialog__icon" aria-hidden="true">
+    <svg lucideTriangleAlert [size]="28"></svg>
+  </div>
+  <h2 [id]="tituloId()">{{ titulo() }}</h2>
+  <p [id]="mensajeId()">{{ mensaje() }}</p>
+  <div class="confirm-dialog__actions">
+    <button
+      type="button"
+      class="acct-btn acct-btn--ghost"
+      [disabled]="procesando()"
+      (click)="solicitarCancelacion()"
+      autofocus
+    >
+      {{ textoCancelar() }}
+    </button>
+    <button
+      type="button"
+      class="acct-btn confirm-dialog__confirm"
+      [disabled]="procesando()"
+      (click)="solicitarConfirmacion()"
+    >
+      {{ procesando() ? 'Procesando…' : textoConfirmar() }}
+    </button>
+  </div>
+</dialog>
