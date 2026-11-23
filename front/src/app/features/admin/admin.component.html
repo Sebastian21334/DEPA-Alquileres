@@ -1,6 +1,7 @@
 <section class="admin" aria-label="Panel administrativo">
   <aside class="admin-sidebar">
-    <div class="admin-brand"><img src="/images/Logo.png" alt="DEPA" /><span>Alquileres</span></div>
+    <!-- T58: el logo lleva al inicio del sitio. -->
+    <a class="admin-brand" routerLink="/" title="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" /><span>Alquileres</span></a>
     <nav class="admin-nav" aria-label="Secciones del panel">
       <button type="button" [attr.aria-current]="activeSection() === 'resumen' ? 'page' : null" (click)="openSection('resumen')">
         <svg lucideHouse [size]="19" aria-hidden="true"></svg> Resumen
