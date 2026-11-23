@@ -8,6 +8,7 @@ export interface IUbicacionRepository {
 
   // Ciudades
   buscarCiudadPorId(id: number): Promise<Ciudad | null>;
+  buscarIdsCiudadesPorNombre(nombre: string): Promise<number[]>;
   buscarCiudadesPorProvincia(idProvincia: number): Promise<Ciudad[]>;
 }
 

@@ -7,6 +7,7 @@ import { LucideArrowRight, LucideHouse, LucideLandmark, LucideLockKeyhole } from
 import { NavbarComponent } from './shared/components/navbar/navbar.component';
 import { FooterComponent } from './shared/components/footer/footer.component';
 import { ChatDockComponent } from './shared/components/chat-dock/chat-dock.component';
+import { AsistenteDepaComponent } from './shared/components/asistente-depa/asistente-depa.component';
 import { ToastComponent } from './shared/components/toast/toast.component';
 import { PerfilService } from './core/services/perfil.service';
 import { AuthService } from './core/services/auth.service';
@@ -14,7 +15,7 @@ import { AuthService } from './core/services/auth.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, NavbarComponent, FooterComponent, ChatDockComponent, ToastComponent, LucideArrowRight, LucideHouse, LucideLandmark, LucideLockKeyhole],
+  imports: [RouterOutlet, RouterLink, NavbarComponent, FooterComponent, ChatDockComponent, AsistenteDepaComponent, ToastComponent, LucideArrowRight, LucideHouse, LucideLandmark, LucideLockKeyhole],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
