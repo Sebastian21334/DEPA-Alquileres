@@ -32,9 +32,7 @@ h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2;
 .photo-review img { display: block; width: 100%; max-height: 45dvh; object-fit: contain; }
 .photo-review figcaption { padding: 12px; background: #fff4e5; color: #92400e; text-align: center; font-weight: 700; }
 .document-step { margin: 0 0 8px; color: #b54708; text-align: center; font-size: .78rem; font-weight: 800; letter-spacing: .08em; }
-.document-hint, .capture-message { margin: 12px 0 0; text-align: center; font-size: .9rem; line-height: 1.5; }
-.document-hint { color: #667085; }
-.capture-message { font-weight: 700; }
+.document-hint { margin: 12px 0 0; text-align: center; font-size: .9rem; line-height: 1.5; color: #667085; }
 .live-feedback { display: flex; align-items: center; gap: 10px; min-height: 62px; margin-top: 12px; padding: 12px; border: 1px solid #d0d5dd; border-radius: 10px; background: #f9fafb; }
 .live-feedback p { margin: 0; font-size: .88rem; font-weight: 700; line-height: 1.4; }
 .live-feedback--ok { color: #166534; background: #f0fdf4; border-color: #86efac; }
@@ -51,7 +49,6 @@ h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2;
 .face-guide { display: block; color: #ff9800; opacity: .78; }
 .face-guide.is-detected { color: #22c55e; opacity: .92; }
 .face-guide__head-shape,
-.face-guide__ear,
 .face-guide__nose,
 .face-guide__mouth,
 .face-guide__mouth-open { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }

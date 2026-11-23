@@ -42,7 +42,6 @@
         <canvas #capture hidden></canvas>
         @if (paso() === 'dni_frente' || paso() === 'dni_dorso') {
           <p class="document-hint">Apoyá el DNI sobre una superficie lisa. Acercá la cámara hasta que el documento entre en el recuadro.</p>
-          <p class="capture-message" role="status">{{ mensaje() }}</p>
         }
         @if (paso() === 'liveness' && cameraReady() && fase() !== 'error') {
           <div class="live-feedback" [class.live-feedback--ok]="estadoEnVivo() === 'detected'" [class.live-feedback--adjust]="estadoEnVivo() === 'adjust'" role="status" aria-live="polite">
@@ -114,8 +113,6 @@
   <svg class="face-guide" [class.face-guide--overlay]="overlay" [class.is-detected]="detectado" [attr.data-gesture]="gesto" viewBox="0 0 120 150" aria-hidden="true" focusable="false">
     <g class="face-guide__head">
       <ellipse class="face-guide__head-shape" cx="60" cy="72" rx="30" ry="42" />
-      <circle class="face-guide__ear" cx="30" cy="76" r="7" />
-      <circle class="face-guide__ear" cx="90" cy="76" r="7" />
       <g class="face-guide__features">
         <circle class="face-guide__eye face-guide__eye--left" cx="47" cy="64" r="3.5" />
         <circle class="face-guide__eye face-guide__eye--right" cx="73" cy="64" r="3.5" />
