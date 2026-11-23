@@ -7,6 +7,7 @@ import { ActualizarPerfilDto, PerfilUsuario, SolicitudVerificacion } from '../..
 import { AuthService } from './auth.service';
 
 export interface SolicitarAnuncianteDto {
+  aceptaTerminos: boolean;
   cuit: string;
   cbu: string;
   titularidad_declarada: boolean;

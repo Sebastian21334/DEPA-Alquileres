@@ -4,6 +4,11 @@ import { anuncianteGuard, authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
+    path: 'terminos/:tipo',
+    loadComponent: () => import('./features/terminos/terminos.component').then((m) => m.TerminosComponent),
+    title: 'Términos y condiciones - DEPA',
+  },
+  {
     path: 'admin',
     canActivate: [adminGuard],
     loadComponent: () => import('./features/admin/admin.component').then((m) => m.AdminComponent),

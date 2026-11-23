@@ -68,6 +68,12 @@
               </div>
             </div>
             @if (esInmobiliaria()) { <ng-container [ngTemplateOutlet]="datosEmpresa" /> }
+            <div class="terminos-consentimiento">
+              <label><input type="checkbox" formControlName="aceptaTerminos" /> <span>Leí y acepto los <a routerLink="/terminos/anunciantes" target="_blank" rel="noopener">términos y condiciones para anunciantes</a>.</span></label>
+              @if (form.controls.aceptaTerminos.invalid && form.controls.aceptaTerminos.touched) {
+                <span class="acct-hint acct-hint--error" role="alert">Aceptá los términos para continuar.</span>
+              }
+            </div>
             <div class="acct-actions form-actions">
               <button type="submit" class="acct-btn acct-btn--primary" [disabled]="enviando()">
                 {{ enviando() ? 'Guardando…' : 'Continuar' }}

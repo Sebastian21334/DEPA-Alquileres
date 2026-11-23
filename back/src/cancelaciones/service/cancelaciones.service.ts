@@ -146,6 +146,12 @@ export class CancelacionesService {
       : null;
   }
 
+  async obtenerPoliticaVigente(): Promise<PoliticaCancelacion> {
+    const politica = await this.cancelaciones.buscarPolitica(fechaArgentina());
+    if (!politica) throw new InternalServerErrorException('No hay una política de cancelación vigente');
+    return politica;
+  }
+
   private async politicaAplicable(cancelaciones: ICancelacionesRepository, reserva: Reserva): Promise<PoliticaCancelacion> {
     const politica = await cancelaciones.buscarPolitica(reserva.fecha_pago ? fechaArgentina(reserva.fecha_pago) : null);
     if (!politica) throw new InternalServerErrorException('Falta la política de cancelación aplicable a la reserva');

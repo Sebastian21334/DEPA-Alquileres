@@ -155,14 +155,7 @@ textarea::placeholder {
 .appeal-attachment__select--disabled { opacity: .55; cursor: not-allowed; }
 .appeal-attachment__input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .appeal-attachment__heading:has(.appeal-attachment__input:focus-visible) .appeal-attachment__select { outline: 2px solid #0755cb; outline-offset: 3px; }
-.appeal-attachment__preview { display: flex; align-items: center; gap: 12px; min-width: 0; margin-top: 14px; padding: 9px; border: 1px solid #dce5f1; border-radius: 9px; background: #fff; }
-.appeal-attachment__preview img { flex: none; width: 76px; height: 76px; border-radius: 7px; object-fit: cover; background: #eaf0f8; }
-.appeal-attachment__details { display: grid; flex: 1; gap: 4px; min-width: 0; }
-.appeal-attachment__details strong { overflow: hidden; color: #243247; font-size: .85rem; text-overflow: ellipsis; white-space: nowrap; }
-.appeal-attachment__details span { color: #64748b; font-size: .78rem; }
-.appeal-attachment__remove { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: #f2f5fa; color: #52627a; cursor: pointer; }
-.appeal-attachment__remove:hover:not(:disabled) { background: #ffeceb; color: #b42318; }
-.appeal-attachment__remove:disabled { opacity: .55; cursor: not-allowed; }
+.appeal-attachment__preview { margin-top: 14px; }
 
 .blocked-actions {
   display: flex;
