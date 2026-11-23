@@ -1,4 +1,5 @@
 import {
+  Equals,
   IsBoolean,
   IsEmail,
   IsNotEmpty,
@@ -14,6 +15,9 @@ const FORMATO_NOMBRE = /^\p{L}[\p{L}\p{M}]*(?: +\p{L}[\p{L}\p{M}]*)*$/u;
 const FORMATO_TELEFONO = /^\+?(?:[0-9]-?){0,14}[0-9]$/;
 
 export class RegisterDto extends ContraseniaSeguraDto {
+  @Equals(true, { message: 'Debés aceptar los términos y condiciones.' })
+  aceptaTerminos: boolean;
+
   @IsString()
   @IsNotEmpty()
   @MinLength(2)

@@ -47,7 +47,7 @@ describe('CP-07 · Valores límite de las contraseñas de usuario', () => {
   const registrar = (datos: object, contrasenia: string) =>
     request(ctx.app.getHttpServer())
       .post('/auth/register')
-      .send({ ...datos, contrasenia });
+      .send({ ...datos, contrasenia, aceptaTerminos: true });
 
   /** El registro se rechaza con 400 y la cuenta no se crea. */
   const esperarRechazo = async (datos: { email: string }, contrasenia: string) => {

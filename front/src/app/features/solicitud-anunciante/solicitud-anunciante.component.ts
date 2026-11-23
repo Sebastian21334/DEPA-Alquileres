@@ -60,6 +60,7 @@ export class SolicitudAnuncianteComponent {
     cuit: ['', [Validators.required, Validators.pattern(/^\d{2}-?\d{8}-?\d$/), Validators.maxLength(15)]],
     cbu: ['', [Validators.required, Validators.pattern(/^\d{22}$/)]],
     titularidad_declarada: [false, Validators.requiredTrue],
+    aceptaTerminos: [false, Validators.requiredTrue],
     numero_contacto: ['', [Validators.required, Validators.maxLength(20)]],
   });
 

@@ -25,6 +25,11 @@ import { CancelacionesService } from '../service/cancelaciones.service';
 export class CancelacionesController {
   constructor(private readonly cancelacionesService: CancelacionesService) {}
 
+  @Get('politica-cancelacion/vigente')
+  politicaVigente() {
+    return this.cancelacionesService.obtenerPoliticaVigente();
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   @Get('cancelaciones/administracion')

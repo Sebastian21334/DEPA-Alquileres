@@ -1,0 +1,14 @@
+.terminos { max-width: 920px; margin: 0 auto; padding: 2rem 1.25rem 5rem; color: #28323a; }
+.terminos__back { display: inline-block; margin-bottom: 1.5rem; color: #9d4b30; text-decoration: none; font-weight: 600; }
+.terminos__card { background: #fff; border: 1px solid #eee6e0; border-radius: 20px; padding: clamp(1.5rem, 5vw, 3.5rem); box-shadow: 0 12px 40px #3328200d; }
+.terminos__logo { width: 115px; height: auto; margin-bottom: 2rem; }
+.terminos__eyebrow { color: #b45b3b; font-size: .75rem; font-weight: 700; letter-spacing: .12em; }
+h1 { font-size: clamp(1.8rem, 5vw, 2.7rem); line-height: 1.15; margin: .5rem 0 1rem; color: #202a30; }
+h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; color: #202a30; }
+p, li { line-height: 1.75; }
+p { margin: .7rem 0; }
+ul { padding-left: 1.5rem; }
+a { color: #a64f31; }
+.terminos__intro { font-size: 1.08rem; color: #68737a; }
+.terminos__notice { background: #fff6ed; border-radius: 8px; padding: .75rem 1rem; }
+.terminos__foot { border-top: 1px solid #eee6e0; margin-top: 2rem; padding-top: 1rem; color: #68737a; font-size: .9rem; }

@@ -32,6 +32,7 @@ const accionesCorreo = {
 const datos = {
   nombre: 'Inquilino', apellido: 'Prueba', telefono: '3515550123',
   email: 'cuenta@example.com', contrasenia: 'ContraseniaDePrueba123!',
+  aceptaTerminos: true,
 };
 const servidor = () => app.getHttpServer();
 const usuarios = () => source.getRepository(Usuario);

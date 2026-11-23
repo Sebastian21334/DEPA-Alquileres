@@ -23,6 +23,7 @@ interface EstadoSesion {
 
 // DTOs alineados con back/src/auth/dto/register.dto.ts y login.dto.ts.
 export interface RegisterDto {
+  aceptaTerminos: boolean;
   nombre: string;
   apellido: string;
   email: string;
