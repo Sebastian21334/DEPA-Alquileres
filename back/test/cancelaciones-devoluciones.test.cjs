@@ -1591,12 +1591,20 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       await request(http).post(`/pagos/${ruta}`).send({}).expect(401);
       await request(http).post(`/pagos/${ruta}`).set('Authorization', tenant).send({}).expect(400);
     }
+    // El usuario 4 es administrador en este escenario: para una persona ajena se usa una cuenta de inquilino.
+    await source.query(`INSERT INTO usuario (id_usuario,nombre,apellido,email,telefono,contrasenia,email_verificado,id_rol)
+      VALUES (5,'Persona','Ajena','usuario5@example.invalid','123','hash',true,1) ON CONFLICT DO NOTHING`);
+    const ajena = `Bearer ${token(5)}`;
     for (const ruta of ['estado', 'resumen']) {
       const url = `/pagos/reservas/${reserva.id}/${ruta}`;
       await request(http).get(url).expect(401);
-      await request(http).get(url).set('Authorization', ajeno).expect(403);
+      await request(http).get(url).set('Authorization', ajena).expect(403);
       await request(http).get(url).set('Authorization', tenant).expect(200);
     }
+    // T53: el admin ve el resumen de cualquier reserva en solo lectura; el estado sigue siendo solo de las partes.
+    await request(http).get(`/pagos/reservas/${reserva.id}/estado`).set('Authorization', admin).expect(403);
+    const { body: resumenAdmin } = await request(http).get(`/pagos/reservas/${reserva.id}/resumen`).set('Authorization', admin).expect(200);
+    assert.deepEqual([resumenAdmin.reserva.id, resumenAdmin.puede_reintentar], [reserva.id, false]);
     await request(http).post('/pagos/webhook?data.id=123').send({ type: 'payment' }).expect(503);
     ajustes.MP_WEBHOOK_SECRET = firmaPruebas;
     await request(http).post('/pagos/webhook?data.id=123').send({ type: 'payment' }).expect(401);

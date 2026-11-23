@@ -567,6 +567,11 @@ export class ReservasService
     return this.prepararRespuesta(reserva);
   }
 
+  /** T53: detalle de cualquier reserva para el panel admin, sin el control de participante. */
+  async buscarParaAdministracion(id: number): Promise<Reserva> {
+    return this.prepararRespuesta(await this.obtenerReserva(id));
+  }
+
   async obtenerReserva(id: number, transaccion?: EntityManager): Promise<Reserva> {
     const reservas = transaccion ? this.reservaRepository.enTransaccion(transaccion) : this.reservaRepository;
     // Serializa cambios de la reserva y permite las lecturas de clave foránea.
