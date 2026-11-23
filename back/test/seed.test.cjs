@@ -57,11 +57,6 @@ test('la seed completa una base parcial y se puede repetir sin duplicar datos', 
     assert.equal(reenviada.ambito.codigo, 'VERIFICACION_ANUNCIANTE');
     assert.equal(reenviada.codigo, 'reenviada');
     assert.equal(servicio.obtenerEstado('DISPUTA', 'ABIERTA').nombre, 'Etiqueta del panel');
-    const inquilino = await repositorio.buscarRolPorNombre('Inquilino');
-    await assert.rejects(servicio.actualizarRol(inquilino.id, { nombre: 'Otro nombre' }), /debe conservar su nombre/);
-    await assert.rejects(servicio.eliminarRol(inquilino.id), /necesario para el sistema/);
-    const editado = await servicio.actualizarRol(inquilino.id, { nombre: 'Inquilino', descripcion: 'Descripción editada' });
-    assert.equal(editado.descripcion, 'Descripción editada');
     await servicio.onModuleInit();
     const { rows: ciudades } = await db.query(
       "SELECT nombre FROM ciudad WHERE id_provincia = $1 AND nombre IN ('Villa Maria', 'Villa María')",

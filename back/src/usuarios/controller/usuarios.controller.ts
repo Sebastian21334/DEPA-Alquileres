@@ -31,7 +31,6 @@ import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import { CambiarPausaActividadesDto } from '../dto/cambiar-pausa-actividades.dto';
-import { CambiarRolDto } from '../dto/cambiar-rol.dto';
 import { ActualizarUsuarioDto } from '../dto/actualizar-usuario.dto';
 import { ResponderApelacionDto } from '../dto/responder-apelacion.dto';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
@@ -145,11 +144,4 @@ export class UsuariosController {
     return this.usuariosService.eliminar(id, req.user.id);
   }
 
-  @Patch(':id/rol')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  // Solo administradores pueden cambiar el rol persistido de otro usuario.
-  async cambiarRol(@Param('id', ParseIntPipe) id: number, @Body() dto: CambiarRolDto) {
-    return this.usuariosService.cambiarRol(id, dto.nombreRol);
-  }
 }
