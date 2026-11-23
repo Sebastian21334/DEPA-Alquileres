@@ -1,3 +1,4 @@
+import { Reserva } from '../../reservas/entity/reserva.entity';
 import type { Relation } from 'typeorm';
 import {
   Entity,
@@ -108,5 +109,8 @@ export class Publicacion {
 
   @OneToMany(() => Imagen, (imagen) => imagen.publicacion)
   imagenes: Relation<Imagen[]>;
+
+  @OneToMany(() => Reserva, (reserva) => reserva.publicacion)
+  reservas?: Relation<Reserva[]>;
 
 }

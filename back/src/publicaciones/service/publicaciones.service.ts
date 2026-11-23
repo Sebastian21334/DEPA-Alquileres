@@ -1,3 +1,4 @@
+import { ReservasLecturaService } from '../../reservas/service/reservas-lectura.service';
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
 import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import {
@@ -26,12 +27,15 @@ import { Publicacion } from '../entity/publicacion.entity';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import type { IMailService } from '../../mail/mail.interface';
 import type { EntityManager } from 'typeorm';
+import { decimalEntero, importeTexto, monedaPublicacion } from '../../common/utils/importes';
 import { fechaArgentina } from '../../common/utils/fechas';
+
+type EtapaReserva = 'cotizacion' | 'reserva';
 
 @Injectable()
 export class PublicacionesService {
   private readonly logger = new Logger(PublicacionesService.name);
-  constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService) {}
+  constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly reservasLectura: ReservasLecturaService) {}
 
   /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
   async crear(anunciante: Anunciante, dto: CrearPublicacionDto) {
@@ -99,9 +103,13 @@ export class PublicacionesService {
     return publicacion;
   }
 
+  async consultarDetallePublico(id: number, idUsuario?: number) {
+    return this.prepararRespuestaPublica(await this.buscarPublicaPorId(id, idUsuario));
+  }
+
   private tieneReservaVigente(idPublicacion: number, idUsuario: number): Promise<boolean> {
     const ahora = new Date();
-    return this.publicacionesRepo.existeReserva({
+    return this.reservasLectura.existeReserva({
       idPublicacion, idUsuario, fechaFinDesde: fechaArgentina(ahora),
       cancelada: false, finalizada: false,
       pagos: [
@@ -114,6 +122,49 @@ export class PublicacionesService {
   esVisible(publicacion: Publicacion): boolean {
     return !publicacion.eliminada && publicacion.activa && this.cuentaAnuncianteHabilitada(publicacion) &&
       !publicacion.motivo_baja_admin && (publicacion.imagenes?.length ?? 0) > 0;
+  }
+
+  validarAnuncianteDisponible(publicacion?: Publicacion | null): void {
+    if (publicacion?.anunciante?.actividades_pausadas) {
+      throw new ConflictException('El anunciante pausó sus actividades. Por el momento, no acepta nuevas reservas.');
+    }
+  }
+
+  validarNuevaReserva(publicacion: Publicacion, idInquilino: number, etapa: EtapaReserva): void {
+    this.validarAnuncianteDisponible(publicacion);
+    if (publicacion.eliminada || !publicacion.activa || !this.cuentaAnuncianteHabilitada(publicacion)) {
+      throw new BadRequestException(etapa === 'cotizacion'
+        ? 'Esta publicación no admite reservas'
+        : 'No se puede reservar: la publicación no está disponible');
+    }
+    const admiteReserva = this.admiteReservaPorFecha(publicacion);
+    if (etapa === 'cotizacion' && !admiteReserva) {
+      throw new BadRequestException('Esta publicación no admite reservas');
+    }
+    if (this.perteneceA(publicacion, idInquilino)) {
+      throw new BadRequestException('No podés reservar tu propia publicación');
+    }
+    if (!admiteReserva) {
+      throw new BadRequestException('Solo las publicaciones temporales o de alquiler diario admiten reservas por fecha');
+    }
+  }
+
+  monedaParaReserva(publicacion?: Publicacion | null): 'ARS' | 'USD' {
+    return monedaPublicacion(publicacion?.tipoMoneda?.nombre);
+  }
+
+  calcularTarifaReserva(publicacion: Publicacion, dias: number, etapa: EtapaReserva) {
+    try {
+      const moneda = this.monedaParaReserva(publicacion);
+      const unitario = decimalEntero(publicacion.precio, 2);
+      if (unitario <= 0n) {
+        throw new Error(etapa === 'cotizacion' ? 'La tarifa debe ser mayor a cero' : 'El precio debe ser mayor a cero');
+      }
+      const centavos = unitario * BigInt(dias);
+      return { moneda, unitario, centavos, total: importeTexto(centavos) };
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Precio inválido');
+    }
   }
 
   perteneceA(publicacion: Publicacion | null | undefined, idUsuario: number): boolean {
@@ -140,6 +191,24 @@ export class PublicacionesService {
       publicacion.modalidad = this.catalogosService.prepararModalidad(publicacion.modalidad);
     }
     return publicacion;
+  }
+
+  prepararRespuestaPublica<T extends Publicacion>(publicacion: T) {
+    const { anunciante, ...datos } = this.prepararRespuesta(publicacion);
+    const usuario = anunciante?.usuario;
+    return {
+      ...datos,
+      anunciante: anunciante ? {
+        idUsuario: anunciante.idUsuario,
+        verificado: anunciante.verificado,
+        actividades_pausadas: anunciante.actividades_pausadas,
+        tipoAnunciante: anunciante.tipoAnunciante,
+        numero_contacto: anunciante.numero_contacto,
+        usuario: usuario ? {
+          id: usuario.id, nombre: usuario.nombre, apellido: usuario.apellido, foto_url: usuario.foto_url,
+        } : null,
+      } : anunciante,
+    };
   }
 
   bloquearPublicacionesParaCambioDeCuenta(idUsuario: number, transaccion: EntityManager): Promise<boolean> {
@@ -226,7 +295,7 @@ export class PublicacionesService {
       busqueda: filtros.busqueda?.trim().slice(0, 200) || undefined,
     };
     const resultado = await this.publicacionesRepo.buscarPaginadas(consulta);
-    return { ...resultado, datos: resultado.datos.map((publicacion) => this.prepararRespuesta(publicacion)) };
+    return { ...resultado, datos: resultado.datos.map((publicacion) => this.prepararRespuestaPublica(publicacion)) };
   }
 
   /** Lista publicaciones de un anunciante, opcionalmente solo las activas. */
@@ -238,7 +307,7 @@ export class PublicacionesService {
     // El dueño ve todas (para poder completarlas); la vista pública solo las que cumplen la regla.
     return publicaciones.filter((p) => !p.eliminada && this.cuentaAnuncianteHabilitada(p) &&
       (!soloActivas || (!p.anunciante?.actividades_pausadas && this.esVisible(p))))
-      .map((publicacion) => this.prepararRespuesta(publicacion));
+      .map((publicacion) => this.prepararRespuestaPublica(publicacion));
   }
 
   /** La papelera solo se entrega al dueño autenticado, nunca al listado público. */

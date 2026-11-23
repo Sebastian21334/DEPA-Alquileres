@@ -7,11 +7,11 @@ import type { EntityManager } from 'typeorm';
 export const RECLAMOS_REPOSITORY = 'RECLAMOS_REPOSITORY';
 
 export interface IReclamosRepository {
+  tienePendientesDeCuenta(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: string[]): Promise<boolean>;
   enTransaccion(transaccion: EntityManager): IReclamosRepository;
   /** Abre una transacción propia del reclamo (T49: mensaje e imágenes se guardan juntos). */
   transaccion<T>(trabajo: (reclamos: IReclamosRepository) => Promise<T>): Promise<T>;
-  /** Bloquea la fila del reclamo hasta el fin de la transacción, para controlar el cupo de imágenes. */
-  bloquear(idReclamo: number): Promise<void>;
+  buscarBloqueado(idReclamo: number): Promise<Reclamo | null>;
   existeAbierto(idReserva: number, estados: string[], excluirCategoria?: Reclamo['categoria']): Promise<boolean>;
   guardar(reclamo: Partial<Reclamo>): Promise<Reclamo>;
   listarPorParticipante(idUsuario: number): Promise<Reclamo[]>;

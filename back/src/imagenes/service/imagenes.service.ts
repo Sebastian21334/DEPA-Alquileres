@@ -8,7 +8,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import sharp from 'sharp';
+import { PreparacionImagenesService } from '../../almacenamiento/service/preparacion-imagenes.service';
 import { IMAGENES_REPOSITORY } from '../repository/imagenes.repository.interface';
 import type { IImagenesRepository } from '../repository/imagenes.repository.interface';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
@@ -16,7 +16,7 @@ import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 
 @Injectable()
 export class ImagenesService {
-  constructor(@Inject(IMAGENES_REPOSITORY) private readonly imagenesRepo: IImagenesRepository, private readonly publicacionesService: PublicacionesService, private readonly almacenamientoService: AlmacenamientoService) {}
+  constructor(@Inject(IMAGENES_REPOSITORY) private readonly imagenesRepo: IImagenesRepository, private readonly publicacionesService: PublicacionesService, private readonly almacenamientoService: AlmacenamientoService, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
   /** Procesa una imagen, la guarda en Azure y registra su URL en la base. */
   async subir(idPublicacion: number, anuncianteQueOpera: Anunciante, archivo: Express.Multer.File) {
@@ -30,10 +30,7 @@ export class ImagenesService {
     let bufferProcesado: Buffer;
     try {
       // Sharp valida el contenido binario y normaliza todos los formatos a JPEG.
-      bufferProcesado = await sharp(archivo.buffer)
-        .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 75 })
-        .toBuffer();
+      bufferProcesado = await this.preparacionImagenes.preparar(archivo.buffer, 'publicacion');
     } catch {
       throw new BadRequestException('El archivo no es una imagen válida');
     }

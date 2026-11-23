@@ -12,6 +12,7 @@ export interface MensajeReembolso {
 export const REEMBOLSOS_REPOSITORY = 'REEMBOLSOS_REPOSITORY';
 
 export interface IReembolsosRepository {
+  tienePendientesDeCuenta(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: string[], estadoAprobado: string): Promise<boolean>;
   conTransaccion<T>(operacion: (repositorio: IReembolsosRepository, transaccion: EntityManager) => Promise<T>): Promise<T>;
   enTransaccion(transaccion: EntityManager): IReembolsosRepository;
   crear(datos: Partial<Reembolso>): Reembolso;

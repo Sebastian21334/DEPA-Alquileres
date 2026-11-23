@@ -238,7 +238,7 @@ export class Reserva {
   usuario: Relation<Usuario | null>;
 
   // Publicación que se está reservando
-  @ManyToOne(() => Publicacion, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Publicacion, (publicacion) => publicacion.reservas, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Relation<Publicacion | null>;
 

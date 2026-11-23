@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type { EntityManager } from 'typeorm';
-import sharp from 'sharp';
+import { PreparacionImagenesService } from '../../almacenamiento/service/preparacion-imagenes.service';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
 import { CancelacionesService } from '../../cancelaciones/service/cancelaciones.service';
 import type { FaltanteCancelacionDto, ReclamoRespuestaDto, ReclamarFaltanteCancelacionDto } from '../dto/reclamo-faltante-cancelacion.dto';
@@ -65,7 +65,7 @@ function autorRespuesta(usuario: Usuario | null | undefined): AutorReclamo | nul
 export class ReclamosService {
   private readonly logger = new Logger(ReclamosService.name);
 
-  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly cancelaciones: CancelacionesService, private readonly notificaciones?: ReservaNotificacionesService) {}
+  constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly cancelaciones: CancelacionesService, @Inject(ReservaNotificacionesService) private readonly notificaciones: ReservaNotificacionesService | undefined, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
   async listarDemorasMias(idUsuario: number): Promise<DemoraAdministrativaDto[]> {
     const solicitudes = await this.cancelaciones.listarDemorasParaReclamo(idUsuario);
@@ -234,10 +234,9 @@ export class ReclamosService {
     if (!texto && !archivos.length)
       throw new BadRequestException('Escribí un mensaje o adjuntá al menos una imagen');
     const subidas = archivos.length ? await this.subirImagenes(reclamo, await this.prepararImagenes(id, archivos)) : [];
-    const { mensaje, evidencias } = await this.guardarConImagenes(id, subidas, async (reclamos) => {
-      if (esAdmin && reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
-        reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION');
-        await reclamos.guardar(reclamo);
+    const { mensaje, evidencias } = await this.guardarConImagenes(id, subidas, async (reclamos, vigente) => {
+      if (esAdmin && vigente.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
+        await reclamos.guardar({ id, estado: this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION') });
       }
       const guardado = await reclamos.guardarMensaje({ reclamo, autor: referenciaUsuario(idUsuario), texto, visible_para: visibilidad });
       return {
@@ -270,7 +269,8 @@ export class ReclamosService {
     const resultado: { reclamo: Reclamo; reembolso?: Reembolso } = { reclamo };
     await this.reservas.conReservaBloqueada(reserva.id, async (actual, transaccion) => {
       const repositorio = this.reclamos.enTransaccion(transaccion);
-      const expediente = await repositorio.buscarPorId(id);
+      const bloqueado = await repositorio.buscarBloqueado(id);
+      const expediente = bloqueado && await repositorio.buscarPorId(id);
       if (!expediente || estadosCerrados.includes(expediente.estado))
         throw new ConflictException('El reclamo ya fue resuelto');
       const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
@@ -515,10 +515,7 @@ export class ReclamosService {
       if (!['image/jpeg', 'image/png'].includes(archivo.mimetype))
         throw new BadRequestException('Solo se admiten imágenes JPEG o PNG');
       try {
-        const contenido = await sharp(archivo.buffer)
-          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 80 })
-          .toBuffer();
+        const contenido = await this.preparacionImagenes.preparar(archivo.buffer, 'reclamo');
         imagenes.push({ nombre: archivo.originalname.slice(0, 255), contenido });
       } catch {
         throw new BadRequestException('El archivo no es una imagen válida');
@@ -551,16 +548,15 @@ export class ReclamosService {
   }
 
   /** T49: guarda en una transacción lo que acompaña a las imágenes ya subidas; si algo falla, las borra. */
-  private async guardarConImagenes<T>(idReclamo: number, subidas: ImagenSubida[], guardar: (reclamos: IReclamosRepository) => Promise<T>): Promise<T> {
+  private async guardarConImagenes<T>(idReclamo: number, subidas: ImagenSubida[], guardar: (reclamos: IReclamosRepository, vigente: Reclamo) => Promise<T>): Promise<T> {
     let guardado = false;
     try {
       const resultado = await this.reclamos.transaccion(async (reclamos) => {
-        if (subidas.length) {
-          // Otro envío pudo ocupar el cupo mientras se subían los archivos.
-          await reclamos.bloquear(idReclamo);
-          await this.verificarCupo(reclamos, idReclamo, subidas.length);
-        }
-        return guardar(reclamos);
+        const vigente = await reclamos.buscarBloqueado(idReclamo);
+        if (!vigente) throw new NotFoundException('Reclamo no encontrado');
+        this.verificarNoCerrado(vigente);
+        if (subidas.length) await this.verificarCupo(reclamos, idReclamo, subidas.length);
+        return guardar(reclamos, vigente);
       });
       guardado = true;
       return resultado;

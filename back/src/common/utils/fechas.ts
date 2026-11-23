@@ -44,3 +44,8 @@ export function esFechaCalendarioValida(fecha: string | null): fecha is string {
     valor.toISOString().slice(0, 10) === fecha
   );
 }
+
+/** El día de entrada y el de salida se incluyen en la reserva. */
+export function diasInclusivos(inicio: Date, fin: Date): number {
+  return Math.floor((fin.getTime() - inicio.getTime()) / MS_POR_DIA) + 1;
+}

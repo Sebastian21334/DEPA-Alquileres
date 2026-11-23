@@ -1,3 +1,4 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
@@ -77,7 +78,7 @@ beforeEach(async () => {
   reclamos = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia),
       source.getRepository(ReclamoMensaje)),
-    reservas, reembolsos, {}, catalogosDePrueba(), cancelaciones,
+    reservas, reembolsos, {}, catalogosDePrueba(), cancelaciones, undefined, preparacionImagenes,
   );
   operacionesReembolso = new OperacionesReembolsoService(reembolsos, reservas, reclamos);
 });
@@ -1471,9 +1472,9 @@ function reclamosConImagenes() {
   const { almacenamiento, archivos } = almacenamientoDePrueba();
   const servicio = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia), source.getRepository(ReclamoMensaje)),
-    reservas, reembolsos, almacenamiento, catalogosDePrueba(), cancelaciones, { avisarCambio: async () => {} },
+    reservas, reembolsos, almacenamiento, catalogosDePrueba(), cancelaciones, { avisarCambio: async () => {} }, preparacionImagenes,
   );
-  return { servicio, archivos };
+  return { servicio, archivos, almacenamiento };
 }
 
 async function reclamoDePrueba() {
@@ -1535,6 +1536,31 @@ test('T49: si el mensaje no se guarda, no queda a medias y se borran las imágen
   assert.equal(archivos.subidos.length, 2);
   assert.deepEqual([...archivos.borrados].sort(), archivos.subidos.map((nombre) => `https://privado.example/${nombre}`).sort());
   assert.equal(await source.getRepository(ReclamoMensaje).countBy({ reclamo: { id: reclamo.id } }), 0);
+});
+
+test('un envío en curso conserva la resolución del reclamo que se decidió mientras se subía la imagen', async () => {
+  const { servicio, archivos, almacenamiento } = reclamosConImagenes();
+  const reclamo = await reclamoDePrueba();
+  const subir = almacenamiento.subir.bind(almacenamiento);
+  const { promise: subiendo, resolve: avisar } = Promise.withResolvers();
+  const { promise: resuelto, resolve: continuar } = Promise.withResolvers();
+  almacenamiento.subir = async (...args) => {
+    const url = await subir(...args);
+    avisar();
+    await resuelto;
+    return url;
+  };
+  const mensaje = servicio.enviarMensaje(reclamo.id, { texto: 'Nota en curso' }, 3, true, [await imagenPng()]);
+  await subiendo;
+  try {
+    await servicio.resolver(reclamo.id, { resolucion: 'SIN_DEVOLUCION' }, 3);
+  } finally {
+    continuar();
+  }
+  const enviado = await mensaje;
+  assert.equal(enviado.evidencias.length, 1);
+  assert.equal(archivos.borrados.length, 0);
+  assert.equal((await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id })).estado, 'RESUELTO_ANUNCIANTE');
 });
 
 test('T49: la migración une imágenes y mensajes, conserva las imágenes existentes y se puede repetir', async () => {
@@ -1601,7 +1627,7 @@ function reclamosConAvisos() {
   const servicio = new ReclamosService(
     new ReclamosRepository(source.getRepository(Reclamo), source.getRepository(ReclamoEvidencia), source.getRepository(ReclamoMensaje)),
     reservas, reembolsos, {}, catalogosDePrueba(), cancelaciones,
-    { avisarCambio: async (_reserva, destinos, asunto, mensaje) => { avisos.push({ destinos, asunto, mensaje }); } },
+    { avisarCambio: async (_reserva, destinos, asunto, mensaje) => { avisos.push({ destinos, asunto, mensaje }); } }, preparacionImagenes,
   );
   return { servicio, avisos };
 }
@@ -2063,7 +2089,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       correos.push(mensaje);
       return { pollUntilDone: async () => ({ status: 'Succeeded' }) };
     } })
-    .overrideProvider(PROVEEDOR_DOLAR).useValue({ consultar: async () => ({ venta: 1200, compra: 1180, actualizadaEn: new Date(), proveedor: 'prueba' }) })
+    .overrideProvider(PROVEEDOR_DOLAR).useValue({ nombre: 'prueba', consultar: async () => ({ venta: 1200, compra: 1180, actualizadaEn: new Date(), proveedor: 'prueba' }) })
     .overrideProvider(AlmacenamientoService).useValue(almacenamientoDePrueba().almacenamiento)
     .compile();
   const app = modulo.createNestApplication({ logger: false });

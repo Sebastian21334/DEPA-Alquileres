@@ -1,10 +1,35 @@
+import type { ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 import { Reserva } from '../entity/reserva.entity';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
 import type { EntityManager } from 'typeorm';
 
+export interface EstadosOperacionesReserva {
+  pagoPendiente: string;
+  pagoAprobado: string;
+  liquidacionesResueltas: string[];
+  enRevision: string;
+}
+
+export interface OperacionesReservaPendientes {
+  reservasPendientes: number;
+  estadiasVigentes: number;
+  liquidacionesPendientes: number;
+}
+
+export interface ConsultaReservasAcceso {
+  idPublicacion: number;
+  idUsuario: number;
+  fechaFinDesde: string;
+  cancelada: boolean;
+  finalizada: boolean;
+  pagos: { estado: Reserva['estado_pago']; venceDespues?: Date }[];
+}
+
 export const RESERVA_REPOSITORY = 'RESERVA_REPOSITORY';
 
 export interface IReservaRepository {
+  contarPendientesDeCuenta(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, transaccion: EntityManager, estados: EstadosOperacionesReserva): Promise<OperacionesReservaPendientes>;
+  existeReserva(consulta: ConsultaReservasAcceso): Promise<boolean>;
   finalizarEstadiasVencidas(hoy: string, aprobado: string): Promise<number[]>;
   conTransaccion<T>(operacion: (reservas: IReservaRepository, transaccion: EntityManager) => Promise<T>): Promise<T>;
   enTransaccion(transaccion: EntityManager): IReservaRepository;
@@ -14,7 +39,6 @@ export interface IReservaRepository {
   registrarNotificaciones(id: number, datos: Partial<Pick<Reserva, | 'email_confirmacion_inquilino_enviado' | 'email_nueva_reserva_anunciante_enviado'>>): Promise<void>;
   crear(datos: Partial<Reserva>): Reserva;
   guardar(reserva: Reserva): Promise<Reserva>;
-  guardarVarias(reservas: Reserva[]): Promise<Reserva[]>;
   buscarPorId(id: number, modoBloqueo?: 'pessimistic_write' | 'for_no_key_update'): Promise<Reserva | null>;
   buscarParaReclamo(id: number): Promise<Reserva | null>;
   buscarPorIdConCodigo(id: number): Promise<Reserva | null>;

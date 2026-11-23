@@ -29,7 +29,7 @@ import { SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 import { PruebaVidaService } from './prueba-vida.service';
 import type { RevisarVerificacionDto } from '../dto/revisar-verificacion.dto';
-import sharp from 'sharp';
+import { PreparacionImagenesService } from '../../almacenamiento/service/preparacion-imagenes.service';
 import { EliminacionDocumentosService } from './eliminacion-documentos.service';
 import {
   CAMPOS_PRUEBA_PRIVADOS,
@@ -40,7 +40,7 @@ import {
 export class VerificacionAnuncianteService {
   private readonly logger = new Logger(VerificacionAnuncianteService.name);
 
-  constructor(private readonly anunciantesService: AnunciantesService, private readonly usuariosService: UsuariosService, private readonly catalogosService: CatalogosService, @Inject(VERIFICACION_REPOSITORY) private readonly verificacionRepo: IVerificacionRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly pruebaVidaService: PruebaVidaService, private readonly eliminacionDocumentos: EliminacionDocumentosService) {}
+  constructor(private readonly anunciantesService: AnunciantesService, private readonly usuariosService: UsuariosService, private readonly catalogosService: CatalogosService, @Inject(VERIFICACION_REPOSITORY) private readonly verificacionRepo: IVerificacionRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly pruebaVidaService: PruebaVidaService, private readonly eliminacionDocumentos: EliminacionDocumentosService, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
   /** Guarda los datos como borrador y evita que un usuario tenga dos solicitudes. */
   async solicitarAlta(idUsuario: number, dto: SolicitarAnuncianteDto) {
@@ -683,7 +683,7 @@ export class VerificacionAnuncianteService {
     }
     let contenido: Buffer;
     try {
-      contenido = await sharp(archivo.buffer).jpeg({ quality: 80 }).toBuffer();
+      contenido = await this.preparacionImagenes.preparar(archivo.buffer, 'verificacion');
     } catch {
       throw new BadRequestException(
         `El archivo de ${tipo} no es una imagen válida`,

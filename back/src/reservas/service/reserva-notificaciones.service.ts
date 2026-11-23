@@ -10,11 +10,13 @@ import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
 import type { IReservaRepository } from '../repository/reserva.repository.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import type { IMailService } from '../../mail/mail.interface';
-import { nombreInquilinoReserva, normalizarFechaReserva } from './reservas.utils';
+import { conversionContratada, nombreInquilinoReserva, normalizarFechaReserva } from './reservas.utils';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
+
+import { diasInclusivos } from '../../common/utils/fechas';
 
 type DestinoAviso = 'inquilino' | 'anunciante' | 'admin';
 
@@ -105,9 +107,7 @@ export class ReservaNotificacionesService {
     const fin = reserva.fecha_fin
       ? normalizarFechaReserva(reserva.fecha_fin)
       : inicio;
-    const cantidadDias =
-      Math.floor((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) +
-      1;
+    const cantidadDias = diasInclusivos(inicio, fin);
     const nombreInquilino = nombreInquilinoReserva(reserva);
     const contactoAnunciante = this.anunciantesService.datosContacto(
       reserva.publicacion?.anunciante,
@@ -116,20 +116,7 @@ export class ReservaNotificacionesService {
     const nombreAnunciante = contactoAnunciante.nombre || 'Anfitrión';
     const direccion = this.publicacionesService.direccionCompleta(reserva.publicacion);
     const datosComunes = {
-      conversion:
-        reserva.cotizacion_dolar &&
-        reserva.importe_origen != null &&
-        reserva.moneda_origen
-          ? {
-              importeOrigen: Number(reserva.importe_origen),
-              monedaOrigen: reserva.moneda_origen,
-              cotizacionVenta: Number(reserva.cotizacion_dolar.venta),
-              fechaFuente: new Date(
-                reserva.cotizacion_dolar.actualizada_fuente_en,
-              ).toISOString(),
-              proveedor: reserva.cotizacion_dolar.proveedor,
-            }
-          : undefined,
+      conversion: conversionContratada(reserva),
       idReserva: reserva.id,
       titulo,
       direccion,

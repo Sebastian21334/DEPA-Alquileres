@@ -6,29 +6,24 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
+import { HASH_CONTRASENIAS, type IHashContrasenias } from '../proveedor/contrasenias.interface';
 import * as crypto from 'crypto';
 import { Usuario } from '../entity/usuario.entity';
 import {
   USUARIOS_REPOSITORY,
-  type IUsuariosRepository,
+  type IUsuariosCredencialesRepository,
 } from '../repository/usuarios.repository.interface';
 
 @Injectable()
 export class UsuariosCredencialesService {
-  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly configService: ConfigService) {}
+  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosCredencialesRepository, @Inject(HASH_CONTRASENIAS) private readonly hash: IHashContrasenias) {}
 
   hashearContrasenia(contrasenia: string): Promise<string> {
-    const rounds = Number(this.configService.get<string>('BCRYPT_COST') ?? '12',);
-    if (!Number.isInteger(rounds) || rounds < 12 || rounds > 31) {
-      throw new Error('BCRYPT_COST debe ser un entero entre 12 y 31');
-    }
-    return bcrypt.hash(contrasenia, rounds);
+    return this.hash.hashear(contrasenia);
   }
 
   coincideContrasenia(contrasenia: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(contrasenia, hash);
+    return this.hash.coincide(contrasenia, hash);
   }
 
   async validarCredenciales(email: string, contrasenia: string, permitirBloqueado = false) {
@@ -93,10 +88,10 @@ export class UsuariosCredencialesService {
     if (!usuario || usuario.bloqueado) {
       throw new ForbiddenException('No podés cambiar la contraseña de esta cuenta');
     }
-    if (!(await bcrypt.compare(contraseniaActual, usuario.contrasenia))) {
+    if (!(await this.coincideContrasenia(contraseniaActual, usuario.contrasenia))) {
       throw new BadRequestException('La contraseña actual es incorrecta');
     }
-    if (await bcrypt.compare(nuevaContrasenia, usuario.contrasenia)) {
+    if (await this.coincideContrasenia(nuevaContrasenia, usuario.contrasenia)) {
       throw new BadRequestException('La nueva contraseña debe ser distinta de la actual');
     }
     const actualizado = await this.usuariosRepo.cambiarContrasenia(

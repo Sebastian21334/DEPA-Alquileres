@@ -1,3 +1,4 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
 require('reflect-metadata');
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -59,7 +60,7 @@ function crearEscenario(opciones = {}) {
     {},
     {},
     {},
-    {},
+    {}, preparacionImagenes,
   );
   return { servicio, solicitud, estado: estadoEscenario };
 }

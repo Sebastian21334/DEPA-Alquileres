@@ -7,17 +7,17 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { createHmac } from 'node:crypto';
+import type { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import { CotizacionesService } from '../../cotizaciones/service/cotizaciones.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { DisponibilidadService } from '../../disponibilidad/service/disponibilidad.service';
 import {
   decimalEntero,
   importeTexto,
-  monedaPublicacion,
 } from '../../common/utils/importes';
 import type { CondicionesCobro } from '../../reservas/service/reservas.service';
 import type { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
-import { fechaArgentina } from '../../common/utils/fechas';
+import { diasInclusivos, esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
 
 interface PresupuestoFirmado extends CondicionesCobro {
   usuario: number;
@@ -26,6 +26,8 @@ interface PresupuestoFirmado extends CondicionesCobro {
   fin: string;
   purpose: 'presupuesto_reserva';
 }
+
+const VIGENCIA_PRESUPUESTO_SEGUNDOS = 15 * 60;
 
 @Injectable()
 export class PresupuestosService {
@@ -36,49 +38,19 @@ export class PresupuestosService {
       .update('depa:presupuesto:v1')
       .digest('hex');
   }
+  /** Valida la reserva y su disponibilidad, calcula el cobro y firma las condiciones ofrecidas al usuario. */
   async cotizar(dto: CrearReservaDto, idUsuario: number) {
     if ((this.config.get<string>('MP_CURRENCY_ID') ?? 'ARS') !== 'ARS') {
       throw new ServiceUnavailableException(
         'Esta integración requiere configurar los cobros de Mercado Pago en ARS',
       );
     }
-    const inicio = new Date(dto.fecha_inicio),
-      fin = new Date(dto.fecha_fin);
-    const hoyTexto = fechaArgentina();
-    if (
-      !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_inicio) ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_fin) ||
-      !Number.isFinite(inicio.getTime()) ||
-      !Number.isFinite(fin.getTime()) ||
-      inicio.toISOString().slice(0, 10) !== dto.fecha_inicio ||
-      fin.toISOString().slice(0, 10) !== dto.fecha_fin ||
-      inicio > fin ||
-      dto.fecha_inicio < hoyTexto
-    )
-      throw new BadRequestException('Las fechas de la reserva no son válidas');
-    const publicacion = await this.publicaciones.buscarPorId(
-      dto.id_publicacion,
-    );
-    if (publicacion.anunciante?.actividades_pausadas) {
-      throw new ConflictException('El anunciante pausó sus actividades. Por el momento, no acepta nuevas reservas.');
-    }
-    if (publicacion.eliminada || !publicacion.activa || !this.publicaciones.cuentaAnuncianteHabilitada(publicacion) ||
-        !this.publicaciones.admiteReservaPorFecha(publicacion))
-      throw new BadRequestException('Esta publicación no admite reservas');
-    if (this.publicaciones.perteneceA(publicacion, idUsuario))
-      throw new BadRequestException('No podés reservar tu propia publicación');
-    const dias = Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
-    let moneda: 'ARS' | 'USD', unitario: bigint, origen: string;
-    try {
-      moneda = monedaPublicacion(publicacion.tipoMoneda?.nombre);
-      unitario = decimalEntero(publicacion.precio, 2);
-      if (unitario <= 0n) throw new Error('La tarifa debe ser mayor a cero');
-      origen = importeTexto(unitario * BigInt(dias));
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'Precio inválido',
-      );
-    }
+    const { inicio, fin } = this.validarFechas(dto);
+    const publicacion = await this.publicaciones.buscarPorId(dto.id_publicacion);
+    this.publicaciones.validarNuevaReserva(publicacion, idUsuario, 'cotizacion');
+
+    const dias = diasInclusivos(inicio, fin);
+    const tarifa = this.publicaciones.calcularTarifaReserva(publicacion, dias, 'cotizacion');
     if (
       !(await this.disponibilidad.verificarDisponibilidad(
         publicacion.id,
@@ -88,34 +60,19 @@ export class PresupuestosService {
     )
       throw new ConflictException('El rango de fechas no está disponible');
     // La consulta externa termina antes de bloquear el calendario o crear una reserva.
-    const cotizacion =
-      moneda === 'USD' ? await this.cotizaciones.obtenerVigente() : null;
-    let cobro: string;
-    try {
-      const centavos = unitario * BigInt(dias);
-      cobro = importeTexto(
-        cotizacion
-          ? (centavos * decimalEntero(cotizacion.venta, 6) + 500000n) / 1000000n
-          : centavos,
-      );
-      if (decimalEntero(cobro, 2) <= 0n)
-        throw new Error('El importe a cobrar debe ser mayor a cero');
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : 'No se pudo calcular el cobro',
-      );
-    }
+    const cotizacion = tarifa.moneda === 'USD' ? await this.cotizaciones.obtenerVigente() : null;
+    const cobro = this.calcularCobro(tarifa.centavos, cotizacion);
     const emitida = new Date();
-    const vence = new Date((Math.floor(emitida.getTime() / 1000) + 900) * 1000);
+    const vence = new Date((Math.floor(emitida.getTime() / 1000) + VIGENCIA_PRESUPUESTO_SEGUNDOS) * 1000);
     const condiciones: PresupuestoFirmado = {
       purpose: 'presupuesto_reserva',
       usuario: idUsuario,
       publicacion: publicacion.id,
       inicio: dto.fecha_inicio,
       fin: dto.fecha_fin,
-      precio_unitario_origen: importeTexto(unitario),
-      moneda_origen: moneda,
-      total_origen: origen,
+      precio_unitario_origen: importeTexto(tarifa.unitario),
+      moneda_origen: tarifa.moneda,
+      total_origen: tarifa.total,
       total_cobro: cobro,
       cotizacion_id: cotizacion?.id ?? null,
       emitida_en: emitida.toISOString(),
@@ -125,7 +82,7 @@ export class PresupuestosService {
       secret: this.secreto,
       audience: 'depa-checkout',
       algorithm: 'HS256',
-      expiresIn: 900,
+      expiresIn: VIGENCIA_PRESUPUESTO_SEGUNDOS,
     });
     return {
       token,
@@ -135,6 +92,28 @@ export class PresupuestosService {
       cotizacion,
     };
   }
+  /** Rechaza fechas inexistentes, invertidas o anteriores al día actual en Argentina. */
+  private validarFechas({ fecha_inicio, fecha_fin }: CrearReservaDto): { inicio: Date; fin: Date } {
+    if (!esFechaCalendarioValida(fecha_inicio) || !esFechaCalendarioValida(fecha_fin) ||
+        fecha_inicio > fecha_fin || fecha_inicio < fechaArgentina()) {
+      throw new BadRequestException('Las fechas de la reserva no son válidas');
+    }
+    return { inicio: new Date(fecha_inicio), fin: new Date(fecha_fin) };
+  }
+
+  /** Convierte el total a pesos con precisión entera y redondea a centavos cuando corresponde. */
+  private calcularCobro(centavos: bigint, cotizacion: CotizacionDolar | null): string {
+    try {
+      const total = cotizacion ? (centavos * decimalEntero(cotizacion.venta, 6) + 500000n) / 1000000n : centavos;
+      const cobro = importeTexto(total);
+      if (total <= 0n) throw new Error('El importe a cobrar debe ser mayor a cero');
+      return cobro;
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'No se pudo calcular el cobro');
+    }
+  }
+
+  /** Verifica la firma, la vigencia y que el presupuesto corresponda al usuario, publicación y fechas solicitadas. */
   async validar(token: string, dto: CrearReservaDto, usuario: number): Promise<CondicionesCobro> {
     let condiciones: PresupuestoFirmado;
     try {

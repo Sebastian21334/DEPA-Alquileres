@@ -8,16 +8,8 @@ import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import type {
   IUsuariosRepository,
   BloqueoAdministrativo,
-  EstadosTramitesPendientes,
-  OperacionesPendientesCuenta,
-  ParticipacionEnReserva,
 } from './usuarios.repository.interface';
 import { digitosCuit } from '../../common/utils/cuit';
-import { Reserva } from '../../reservas/entity/reserva.entity';
-import { Pago } from '../../pagos/entity/pago.entity';
-import { Reclamo } from '../../reclamos/entity/reclamo.entity';
-import { Reembolso } from '../../reembolsos/entity/reembolso.entity';
-import { SolicitudCancelacion } from '../../cancelaciones/entity/solicitud-cancelacion.entity';
 import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
 
 const RESTRICCION_EMAIL_UNICO = 'UQ_2863682842e688ca198eb25c124';
@@ -48,83 +40,8 @@ export class UsuariosRepository implements IUsuariosRepository {
     return consulta.getOne();
   }
 
-  async contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager, estados: { pagoPendiente: string; pagoAprobado: string; liquidacionesResueltas: string[]; enRevision: string }): Promise<OperacionesPendientesCuenta> {
-    const esAnunciante = participacion === 'Anunciante';
-    const reservas = () => {
-      const consulta = transaccion.getRepository(Reserva).createQueryBuilder('reserva');
-      return esAnunciante
-        ? consulta.innerJoin('reserva.publicacion', 'publicacion')
-            .where('publicacion.id_anunciante = :idUsuario', { idUsuario })
-        : consulta.where('reserva.id_usuario = :idUsuario', { idUsuario });
-    };
-
-    const reservasPendientes = await reservas()
-      .andWhere('reserva.estado_pago = :pendiente', { pendiente: estados.pagoPendiente })
-      .getCount();
-    const estadiasVigentes = await reservas()
-      .andWhere('reserva.estado_pago = :aprobado', { aprobado: estados.pagoAprobado })
-      .andWhere('reserva.cancelada = false')
-      .andWhere('reserva.finalizada = false')
-      .andWhere(`(
-        reserva.fecha_inicio IS NULL OR reserva.fecha_fin IS NULL
-        OR reserva.fecha_inicio > reserva.fecha_fin
-        OR reserva.fecha_fin >= :hoy
-      )`, { hoy })
-      .getCount();
-
-    const liquidaciones = reservas().leftJoin('reserva.liquidacion', 'liquidacion');
-    if (esAnunciante) {
-      liquidaciones
-        .andWhere('reserva.estado_pago = :aprobado', { aprobado: estados.pagoAprobado })
-        .andWhere('(liquidacion.estado IS NULL OR liquidacion.estado NOT IN (:...resueltas))', {
-          resueltas: estados.liquidacionesResueltas,
-        });
-    } else {
-      liquidaciones.andWhere('liquidacion.estado = :enRevision', {
-        enRevision: estados.enRevision,
-      });
-    }
-    const liquidacionesPendientes = await liquidaciones.getCount();
-
-    const pagos = transaccion.getRepository(Pago).createQueryBuilder('pago')
-      .innerJoin('pago.reserva', 'reserva');
-    if (esAnunciante) {
-      pagos.innerJoin('reserva.publicacion', 'publicacion')
-        .where('publicacion.id_anunciante = :idUsuario', { idUsuario });
-    } else {
-      pagos.where('reserva.id_usuario = :idUsuario', { idUsuario });
-    }
-    const pagosSinConciliar = await pagos
-      .andWhere('pago.status NOT IN (:...finales)', {
-        finales: ['approved', 'rejected', 'cancelled', 'refunded'],
-      })
-      .andWhere('(pago.payment_id IS NOT NULL OR pago.created_at > :limiteCheckout)', { limiteCheckout })
-      .getCount();
-    return { reservasPendientes, estadiasVigentes, liquidacionesPendientes, pagosSinConciliar };
-  }
-
   buscarPorEmail(email: string): Promise<Usuario | null> {
     return this.repo.findOneBy({ email });
-  }
-
-  tieneTramitesPendientes(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: EstadosTramitesPendientes): Promise<boolean> {
-    const reservas = transaccion.getRepository(Reserva).createQueryBuilder('reserva');
-    if (anuncianteVerificado) {
-      reservas.leftJoin('reserva.publicacion', 'publicacion')
-        .where('(reserva.id_usuario = :idUsuario OR publicacion.id_anunciante = :idUsuario)', { idUsuario });
-    } else {
-      reservas.where('reserva.id_usuario = :idUsuario', { idUsuario });
-    }
-    const reclamos = reservas.subQuery().select('1').from(Reclamo, 'reclamo')
-      .where('reclamo.id_reserva = reserva.id').andWhere('reclamo.estado IN (:...reclamos)').getQuery();
-    const cancelaciones = reservas.subQuery().select('1').from(SolicitudCancelacion, 'solicitud')
-      .where('solicitud.id_reserva = reserva.id').andWhere('solicitud.estado = :cancelacion').getQuery();
-    const reembolsos = reservas.subQuery().select('1').from(Reembolso, 'reembolso')
-      .where('reembolso.id_reserva = reserva.id')
-      .andWhere('(reembolso.estado IN (:...reembolsos) OR (reembolso.estado = :reembolsoAprobado AND reembolso.aplicado_en IS NULL))')
-      .getQuery();
-    return reservas.andWhere(`(EXISTS ${reclamos} OR EXISTS ${cancelaciones} OR EXISTS ${reembolsos})`, { ...estados })
-      .getExists();
   }
 
   buscarBajaRecuperable(email: string): Promise<Usuario | null> {

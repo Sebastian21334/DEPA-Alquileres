@@ -1,3 +1,4 @@
+import { filtrarReservasPorCuenta, type ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type DeepPartial, type EntityManager } from 'typeorm';
@@ -55,5 +56,15 @@ export class PagosRepository implements IPagosRepository {
       where: { id },
       lock: { mode: 'pessimistic_write' },
     });
+  }
+
+  /** Cuenta pagos no finales si tienen ID externo o si su checkout se creó después del límite. */
+  contarSinConciliar(idUsuario: number, participacion: ParticipacionEnReserva, limiteCheckout: Date, transaccion: EntityManager, estadosFinales: string[]): Promise<number> {
+    const pagos = transaccion.getRepository(Pago).createQueryBuilder('pago')
+      .innerJoin('pago.reserva', 'reserva');
+    return filtrarReservasPorCuenta(pagos, idUsuario, participacion)
+      .andWhere('pago.status NOT IN (:...estadosFinales)', { estadosFinales })
+      .andWhere('(pago.payment_id IS NOT NULL OR pago.created_at > :limiteCheckout)', { limiteCheckout })
+      .getCount();
   }
 }

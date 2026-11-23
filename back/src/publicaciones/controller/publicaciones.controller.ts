@@ -106,7 +106,7 @@ export class PublicacionesController {
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   async buscarPorId(@Param('id', ParseIntPipe) id: number, @Req() req: Partial<AuthenticatedRequest>) {
-    return this.publicacionesService.buscarPublicaPorId(id, req.user?.id);
+    return this.publicacionesService.consultarDetallePublico(id, req.user?.id);
   }
 
   @Post()

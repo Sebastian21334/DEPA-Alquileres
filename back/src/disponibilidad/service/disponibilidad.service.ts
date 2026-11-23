@@ -14,7 +14,10 @@ import { FECHA_REPOSITORY } from '../repository/fecha.repository.interface';
 import { FechaDisponibilidadPublicaDto } from '../dto/fecha-disponibilidad-publica.dto';
 import { FechaDisponibilidadAdministracionDto } from '../dto/fecha-disponibilidad-administracion.dto';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
+import { diasDeAntelacion, esFechaCalendarioValida } from '../../common/utils/fechas';
 import { Reserva } from '../../reservas/entity/reserva.entity';
+
+const MAX_DIAS_POR_RANGO = 366;
 
 @Injectable()
 export class DisponibilidadService {
@@ -47,23 +50,26 @@ export class DisponibilidadService {
    * ocupados sin afectar el resto del rango.
    */
   async crear(dto: CrearDisponibilidadDto): Promise<FechaDisponibilidadAdministracionDto[]> {
-    // Se trabaja con fechas completas para poder generar una fila por cada dia.
+    if (!esFechaCalendarioValida(dto.fecha_inicio) || !esFechaCalendarioValida(dto.fecha_fin)) {
+      throw new BadRequestException('Ingresá fechas de calendario válidas');
+    }
+    const dias = diasDeAntelacion(dto.fecha_fin, dto.fecha_inicio) + 1;
+    if (dias <= 0) {
+      throw new BadRequestException('La fecha de inicio no puede ser posterior a la de fin');
+    }
+    if (dias > MAX_DIAS_POR_RANGO) {
+      throw new BadRequestException('Podés cargar hasta ' + MAX_DIAS_POR_RANGO + ' días por vez');
+    }
+    const inicio = new Date(dto.fecha_inicio);
+    const fin = new Date(dto.fecha_fin);
+
+    // Se trabaja con fechas completas para poder generar una fila por cada día.
     const publicacion = await this.publicacionesService.buscarPorId(
       dto.id_publicacion,
     );
     if (!this.publicacionesService.admiteReservaPorFecha(publicacion)) {
       throw new BadRequestException(
         'Solo las publicaciones temporales o de alquiler diario admiten disponibilidad por fecha',
-      );
-    }
-
-    const inicio = new Date(dto.fecha_inicio);
-    const fin = new Date(dto.fecha_fin);
-
-    // Validación de negocio simple, antes de tocar el repositorio
-    if (inicio > fin) {
-      throw new BadRequestException(
-        'La fecha de inicio no puede ser posterior a la de fin',
       );
     }
 

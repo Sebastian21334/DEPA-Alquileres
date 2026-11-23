@@ -1,12 +1,9 @@
+import { ReembolsosLecturaModule } from './reembolsos-lectura.module';
 import { CatalogosModule } from '../catalogos/catalogos.module';
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { PagosModule } from '../pagos/pagos.module';
 import { MercadoPagoModule } from '../mercado-pago/mercado-pago.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
-import { Reembolso } from './entity/reembolso.entity';
-import { ReembolsosRepository } from './repository/reembolsos.repository';
-import { REEMBOLSOS_REPOSITORY } from './repository/reembolsos.repository.interface';
 import { ReembolsosController } from './controller/reembolsos.controller';
 import { ReembolsosService } from './service/reembolsos.service';
 import { ReservasConsultaModule } from '../reservas-consulta/reservas-consulta.module';
@@ -16,7 +13,7 @@ import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
   imports: [
     AlmacenamientoModule,
     CatalogosModule,
-    TypeOrmModule.forFeature([Reembolso]),
+    ReembolsosLecturaModule,
     PagosModule,
     MercadoPagoModule,
     SeguridadModule,
@@ -25,8 +22,6 @@ import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
   controllers: [ReembolsosController],
   providers: [
     ReembolsosService,
-    ReembolsosRepository,
-    { provide: REEMBOLSOS_REPOSITORY, useExisting: ReembolsosRepository },
   ],
   exports: [ReembolsosService],
 })

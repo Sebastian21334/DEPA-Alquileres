@@ -1,3 +1,8 @@
+import { PreparacionImagenesService } from '../../../src/almacenamiento/service/preparacion-imagenes.service';
+import { BcryptAdapter } from '../../../src/usuarios/proveedor/bcrypt.adapter';
+import { HASH_CONTRASENIAS } from '../../../src/usuarios/proveedor/contrasenias.interface';
+import { OperacionesCuentaService } from '../../../src/usuarios/service/operaciones-cuenta.service';
+import { ReservasLecturaService } from '../../../src/reservas/service/reservas-lectura.service';
 import { forwardRef, INestApplication, Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -251,7 +256,11 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
     imports: [forwardRef(() => SeguridadModule)],
     providers: [
       UsuariosService,
+      { provide: PreparacionImagenesService, useValue: {} },
+      { provide: OperacionesCuentaService, useValue: usuarios },
+      { provide: ReservasLecturaService, useValue: { existeReserva: async () => false } },
       UsuariosCredencialesService,
+      { provide: HASH_CONTRASENIAS, useClass: BcryptAdapter },
       AnunciantesService,
       PublicacionesService,
       usuariosRepository,

@@ -5,6 +5,8 @@ const MAX_BYTES_RESPUESTA = 16 * 1024;
 
 @Injectable()
 export class DolarApiAdapter implements IProveedorDolar {
+  readonly nombre = 'DolarApi / DolarHoy';
+
   async consultar(): Promise<DatosDolar> {
     const respuesta = await fetch('https://dolarapi.com/v1/dolares/blue', {
       signal: AbortSignal.timeout(5000),

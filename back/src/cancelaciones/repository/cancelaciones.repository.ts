@@ -1,3 +1,4 @@
+import { filtrarReservasPorCuenta } from '../../common/persistence/participacion-en-reserva';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThanOrEqual, MoreThan, Repository, type EntityManager } from 'typeorm';
@@ -98,4 +99,13 @@ export class CancelacionesRepository implements ICancelacionesRepository {
       order: { id: 'ASC' },
     });
   }
+
+  /** Busca una solicitud en el estado indicado y verifica su vínculo con la cuenta a través de la reserva. */
+  tienePendientesDeCuenta(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estado: string): Promise<boolean> {
+    const consulta = transaccion.getRepository(SolicitudCancelacion).createQueryBuilder('tramite')
+      .innerJoin('tramite.reserva', 'reserva')
+      .andWhere('tramite.estado = :estado', { estado });
+    return filtrarReservasPorCuenta(consulta, idUsuario, anuncianteVerificado ? 'Ambos' : 'Inquilino').getExists();
+  }
+
 }

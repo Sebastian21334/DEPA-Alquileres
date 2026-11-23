@@ -1,3 +1,4 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { PruebaVidaService } = require('../dist/verificacion-anunciante/service/prueba-vida.service');
@@ -118,7 +119,7 @@ function escenario(s = solicitud()) {
   const mail = { async enviarResultadoVerificacion(...args) { correos.push(args); } };
   const anunciantes = new AnunciantesService(new AnunciantesRepository({}));
   const catalogos = { esInmobiliaria: (tipo) => tipo?.nombre === 'Inmobiliaria' };
-  const servicio = new VerificacionAnuncianteService(anunciantes, {}, catalogosDePrueba(catalogos), repo, mail, archivos, new PruebaVidaService(undefined, undefined, undefined, catalogosDePrueba()), limpieza);
+  const servicio = new VerificacionAnuncianteService(anunciantes, {}, catalogosDePrueba(catalogos), repo, mail, archivos, new PruebaVidaService(undefined, undefined, undefined, catalogosDePrueba()), limpieza, preparacionImagenes);
   return { repo, limpieza, servicio, borrados, avisos, consultas, correos,
     get estado() { return estado; },
     fallarRevision: v => { falloRevision = v; }, fallarCommit: v => { falloCommit = v; },

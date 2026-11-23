@@ -1,3 +1,6 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
+const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
+const { ReservasLecturaService } = require('../dist/reservas/service/reservas-lectura.service');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const { test, before } = require('node:test');
@@ -25,7 +28,8 @@ before(async () => source.buildMetadatas());
 function escenario() {
   const publicacion = Object.assign(new Publicacion(), {
     id: 10, activa: true, eliminada: false, imagenes: [{ id: 50, url: 'foto.jpg' }],
-    anunciante: { idUsuario: 2, usuario: { activa: true, bloqueado: false } },
+    anunciante: { idUsuario: 2, numero_contacto: '1234', cuit_cuil: 'cuit-privado', cbu_validado: 'cbu-privado',
+      usuario: { id: 2, nombre: 'Anunciante', activa: true, bloqueado: false, email: 'privado@example.invalid', telefono: 'privado' } },
   });
   const reservas = [{ id: 1, publicacion, usuario: { id: 1 }, pendiente: true }];
   const repository = new PublicacionesRepository({
@@ -33,10 +37,10 @@ function escenario() {
   }, {});
   repository.buscarPorId = async () => publicacion;
   repository.buscarPorAnunciante = async () => [publicacion];
-  repository.existeReserva = async ({ idPublicacion, idUsuario }) => reservas.some(
+  const existeReserva = async ({ idPublicacion, idUsuario }) => reservas.some(
     r => r.publicacion.id === idPublicacion && r.usuario.id === idUsuario && r.pendiente,
   );
-  const servicio = new PublicacionesService(repository, catalogosDePrueba(), {}, {});
+  const servicio = new PublicacionesService(repository, catalogosDePrueba(), {}, {}, {}, { existeReserva });
   return { publicacion, reservas, servicio };
 }
 
@@ -149,7 +153,7 @@ test('el dueño no puede borrar las fotos conservadas para una reserva vigente',
   await e.servicio.eliminar(10, { idUsuario: 2 });
   const imagenes = new ImagenesService({
     buscarPorId: async () => ({ publicacion: e.publicacion }),
-  }, e.servicio, {});
+  }, e.servicio, {}, preparacionImagenes);
   await assert.rejects(imagenes.eliminar(50, { idUsuario: 2 }), { status: 400 });
 });
 
@@ -168,14 +172,15 @@ test('la consulta real de reservas respeta usuario, publicación, fechas, pago y
     INSERT INTO usuario VALUES (1), (2);
   `);
   const repoReservas = source.getRepository(Reserva);
-  const repository = new PublicacionesRepository({}, {
+  const repository = new PublicacionesRepository({});
+  const reservasLectura = new ReservasLecturaService(new ReservaRepository({
     exists: async (options) => {
       const [sql, params] = repoReservas.createQueryBuilder('reserva')
         .setFindOptions(options).select('1').getQueryAndParameters();
       const valores = params.map(v => v instanceof Date ? v.toISOString() : typeof v === 'boolean' ? Number(v) : v);
       return !!db.prepare(sql.replace(/\$(\d+)/g, '?$1')).get(...valores);
     },
-  });
+  }));
   const casos = [
     [{}, true],
     [{ fecha_fin: '2030-02-10' }, true],
@@ -196,7 +201,7 @@ test('la consulta real de reservas respeta usuario, publicación, fechas, pago y
     db.exec('DELETE FROM reserva');
     db.prepare(`INSERT INTO reserva VALUES (1, :id_publicacion, :id_usuario, :cancelada,
       :finalizada, :fecha_fin, :estado_pago, :pago_vencimiento)`).run(fila);
-    const servicio = new PublicacionesService(repository, catalogosDePrueba());
+    const servicio = new PublicacionesService(repository, catalogosDePrueba(), {}, {}, {}, reservasLectura);
     repository.buscarPorId = async () => ({ id: 10, eliminada: true });
     if (esperado) assert.equal((await servicio.buscarPublicaPorId(10, 1)).id, 10);
     else await assert.rejects(servicio.buscarPublicaPorId(10, 1), { status: 404 }, JSON.stringify(cambio));
@@ -268,7 +273,7 @@ test('HTTP: elimina con permiso y conserva el detalle solo para la sesión del i
       { provide: PublicacionesService, useValue: e.servicio },
       { provide: ImagenesService, useValue: new ImagenesService({
         buscarPorPublicacion: async () => e.publicacion.imagenes,
-      }, e.servicio, {}) },
+      }, e.servicio, {}, preparacionImagenes) },
       { provide: DisponibilidadService, useValue: new DisponibilidadService({
         buscarPorPublicacion: async () => [{ fecha: '2030-02-12', disponible: false }],
       }, e.servicio) },
@@ -379,7 +384,7 @@ test('una eliminación confirmada mientras se espera el bloqueo impide modificar
     e.servicio.publicacionesRepo.bloquearPorId = async () => ({ ...e.publicacion, eliminada: true });
     const imagenes = new ImagenesService(repositorio, e.servicio, {
       eliminarImagenPropia: async () => { escrituras++; },
-    });
+    }, preparacionImagenes);
     const mensajes = new MensajesService(repositorio, e.servicio, {}, {}, {});
     const accion = operacion === 'ordenar'
       ? imagenes.ordenar(10, [50], { idUsuario: 2 })
@@ -491,4 +496,17 @@ test('los repositorios reales revierten un mensaje fallido y conservan el histor
   assert.equal(historial.length, 1);
   assert.equal(historial[0].publicacion.eliminada, true);
   assert.equal(correos, 1);
+});
+
+test('el detalle mantiene el contacto comercial y excluye los datos privados del anunciante', async () => {
+  const { servicio } = escenario();
+  const { anunciante } = await servicio.consultarDetallePublico(10);
+  assert.equal(anunciante.numero_contacto, '1234');
+  assert.equal(anunciante.usuario.id, 2);
+  for (const campo of ['cuit_cuil', 'cuit_cuil_historico', 'cbu_validado']) {
+    assert.equal(Object.hasOwn(anunciante, campo), false);
+  }
+  for (const campo of ['email', 'email_historico', 'telefono']) {
+    assert.equal(Object.hasOwn(anunciante.usuario, campo), false);
+  }
 });

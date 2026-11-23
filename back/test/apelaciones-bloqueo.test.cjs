@@ -1,3 +1,6 @@
+const { preparacionImagenes } = require('./soporte/imagenes-pruebas.cjs');
+const { BcryptAdapter } = require('../dist/usuarios/proveedor/bcrypt.adapter');
+const { operacionesCuentaDePrueba } = require('./soporte/operaciones-cuenta-pruebas.cjs');
 const { catalogosDePrueba } = require('./soporte/catalogos-pruebas.cjs');
 require('reflect-metadata');
 const assert = require('node:assert/strict');
@@ -43,9 +46,9 @@ test('F-04 conserva bloqueos anteriores y permite apelar únicamente el bloqueo 
     firmarArchivo: async (_contenedor, url) => `firmado:${url}`,
     eliminarArchivo: async (_contenedor, url) => { almacenados.delete(url); },
   };
-  const credenciales = new UsuariosCredencialesService(repo, {});
+  const credenciales = new UsuariosCredencialesService(repo, new BcryptAdapter({ get: () => undefined }));
   const usuarios = new UsuariosService(repo, catalogosDePrueba(), credenciales, mail, almacenamiento,
-    { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, { buscarPorUsuario: async () => null });
+    { bloquearPublicacionesParaCambioDeCuenta: async () => {} }, { buscarPorUsuario: async () => null }, undefined, operacionesCuentaDePrueba(), preparacionImagenes);
   const bloqueo = new BloqueoAnuncianteService(usuarios, mail);
   const jwt = new JwtService({ secret: 'clave-jwt-solo-para-pruebas' });
   const auth = new AuthService(usuarios, credenciales, jwt, mail);
