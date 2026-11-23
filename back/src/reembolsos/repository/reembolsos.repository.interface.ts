@@ -37,6 +37,6 @@ export interface IReembolsosRepository {
     reembolsoId: number; reservaId: number; pendiente: boolean;
     mensajeId: number | null; texto: string | null; fecha: Date | null;
   }[]>;
-  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado' | 'comprobante_nombre'>[]>;
+  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado' | 'comprobante_nombre' | 'referencia_externa' | 'observacion_transferencia'>[]>;
   guardarMensaje(id: number, idAutor: number, administracion: boolean, texto: string): Promise<MensajeReembolso>;
 }

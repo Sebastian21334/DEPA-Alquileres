@@ -261,12 +261,16 @@ Antes de iniciar esta versión del backend, ejecutar `npm run db:liquidaciones` 
 separado los avisos de disponibilidad enviados a Administración y al anunciante.
 Es reejecutable y conserva las liquidaciones existentes.
 
-# Comprobante del reembolso por transferencia (T44)
+# Comprobante del reembolso por transferencia (T44 y T56)
 
 Antes de iniciar esta versión del backend, ejecutar `npm run db:comprobante-reembolso`
 desde `back`. La migración `20261123-comprobante-reembolso.sql` agrega a `reembolso`
-las columnas `comprobante_url` y `comprobante_nombre`. Los reembolsos existentes quedan
-sin comprobante. Es reejecutable.
+las columnas `comprobante_url`, `comprobante_nombre` y `observacion_transferencia`. Los
+reembolsos existentes quedan sin comprobante ni observación. Es reejecutable: si ya se
+aplicó la versión de T44, volver a correrla agrega solo la observación.
+
+El comprobante del pago al anunciante (T56) se guarda dentro de `liquidacion.pagos_anunciante`
+(jsonb) y no requiere migración.
 
 # Pedido de reinicio del código de alojamiento (T34)
 

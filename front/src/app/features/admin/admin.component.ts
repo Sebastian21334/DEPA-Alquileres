@@ -25,6 +25,7 @@ import {
   LucideClock3,
   LucidePaperclip,
   LucideSend,
+  LucideReceiptText,
 } from '@lucide/angular';
 import {
   AdminBloqueo,
@@ -45,6 +46,8 @@ import { ClaimHistoryComponent } from '../../shared/components/claim-history/cla
 import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
 import { CargaComprobanteComponent } from '../../shared/components/carga-comprobante/carga-comprobante.component';
 import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
+import { DatoCopiableComponent } from '../../shared/components/dato-copiable/dato-copiable.component';
+import { formatearCbu, formatearCuit, tipoCuentaBancaria } from '../../shared/utils/cuenta-bancaria';
 
 interface CatalogSection {
   key: CatalogKey;
@@ -114,6 +117,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     ReembolsoChatComponent,
     CargaComprobanteComponent,
     VerComprobanteComponent,
+    DatoCopiableComponent,
     CurrencyPipe,
     DatePipe,
     FormsModule,
@@ -133,6 +137,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideClock3,
     LucidePaperclip,
     LucideSend,
+    LucideReceiptText,
   ],
   templateUrl: './admin.component.html',
   styleUrls: ['./admin.component.scss', './admin-dashboard.scss'],
@@ -247,10 +252,23 @@ export class AdminComponent {
   protected readonly registrandoPagoAnunciante = signal(false);
   protected readonly errorPagoAnunciante = signal('');
   protected readonly cbuParaPago = signal<string | null>(null);
+  /** T56: CUIT/CUIL del anunciante, para confirmar el destinatario en el banco. */
+  protected readonly cuitParaPago = signal<string | null>(null);
   protected readonly consultandoCbuParaPago = signal(false);
   private consultaCbuParaPago?: Subscription;
   protected referenciaPagoAnunciante = '';
   protected observacionPagoAnunciante = '';
+  /** T56: comprobante obligatorio del pago al anunciante. */
+  protected readonly comprobantePago = signal<File | null>(null);
+  protected readonly formatearCbu = formatearCbu;
+  protected readonly formatearCuit = formatearCuit;
+  protected readonly tipoCuentaBancaria = tipoCuentaBancaria;
+  protected readonly urlComprobantePago = (pago: AdminPagoLiquidacion) => () => this.api.urlComprobantePago(pago.reservaId, pago.indice);
+
+  /** T56: importe para pegar en el home banking, con coma decimal y sin separador de miles. */
+  protected importeParaCopiar(importe: number | string | null | undefined): string {
+    return Number(importe ?? 0).toFixed(2).replace('.', ',');
+  }
   protected readonly estadosReembolso = {
     PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', APROBADO: 'Aprobado',
     RECHAZADO: 'Rechazado', FALLIDO: 'Fallido', CANCELADO: 'Cancelado',
@@ -528,8 +546,10 @@ export class AdminComponent {
     this.pagoAnuncianteSeleccionado.set(settlement);
     this.referenciaPagoAnunciante = '';
     this.observacionPagoAnunciante = '';
+    this.comprobantePago.set(null);
     this.errorPagoAnunciante.set('');
     this.cbuParaPago.set(null);
+    this.cuitParaPago.set(null);
     this.consultaCbuParaPago?.unsubscribe();
     this.consultandoCbuParaPago.set(true);
     this.dialogoPagoAnunciante().nativeElement.showModal();
@@ -537,7 +557,10 @@ export class AdminComponent {
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.consultandoCbuParaPago.set(false)),
     ).subscribe({
-      next: ({ cbu }) => this.cbuParaPago.set(cbu),
+      next: ({ cbu, cuit_cuil }) => {
+        this.cbuParaPago.set(cbu);
+        this.cuitParaPago.set(cuit_cuil);
+      },
       error: (error: Error) => this.errorPagoAnunciante.set(error.message),
     });
   }
@@ -548,25 +571,26 @@ export class AdminComponent {
     this.dialogoPagoAnunciante().nativeElement.close();
     this.consultaCbuParaPago?.unsubscribe();
     this.cbuParaPago.set(null);
+    this.cuitParaPago.set(null);
+    this.comprobantePago.set(null);
     this.pagoAnuncianteSeleccionado.set(null);
   }
 
   protected confirmarPagoAnunciante(): void {
     const settlement = this.pagoAnuncianteSeleccionado();
+    const comprobante = this.comprobantePago();
     const referencia = this.referenciaPagoAnunciante.trim();
     const observacion = this.observacionPagoAnunciante.trim();
-    if (!settlement || settlement.estado_liquidacion !== 'PENDIENTE_PAGO_PROPIETARIO' || !this.cbuParaPago() ||
+    if (!settlement || settlement.estado_liquidacion !== 'PENDIENTE_PAGO_PROPIETARIO' || !this.cbuParaPago() || !comprobante ||
         this.diasEsperaLiquidacion(settlement) !== 0 ||
         this.registrandoPagoAnunciante() || referencia.length > 150 || observacion.length > 500) return;
 
     this.errorPagoAnunciante.set('');
     this.registrandoPagoAnunciante.set(true);
-    this.api.resolverLiquidacion(
-      settlement.id,
-      'PAGADO_PROPIETARIO',
+    this.api.registrarPagoAnunciante(settlement.id, comprobante, {
       referencia,
-      observacion || 'Transferencia manual al propietario registrada',
-    ).pipe(
+      observacion: observacion || 'Transferencia manual al propietario registrada',
+    }).pipe(
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.registrandoPagoAnunciante.set(false)),
     ).subscribe({
@@ -696,11 +720,13 @@ export class AdminComponent {
 
   /** T44: comprobante elegido para registrar la transferencia del reembolso. */
   protected readonly comprobanteReembolso = signal<File | null>(null);
+  protected observacionReembolso = '';
   protected readonly urlComprobanteReembolso = (id: number) => () => this.api.urlComprobanteReembolso(id);
 
   protected abrirReembolso(reembolso: AdminReembolso): void {
     this.reembolsoSeleccionado.set(reembolso);
     this.referenciaReembolso = '';
+    this.observacionReembolso = '';
     this.comprobanteReembolso.set(null);
     this.errorReembolso.set('');
     this.dialogoReembolso().nativeElement.showModal();
@@ -725,8 +751,9 @@ export class AdminComponent {
 
   protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
     const referencia = this.referenciaReembolso.trim();
-    // T44: el comprobante es obligatorio y la referencia, opcional.
-    if (this.puedeRegistrarTransferencia(reembolso)) return !!this.comprobanteReembolso() && referencia.length <= 150;
+    // T44: el comprobante es obligatorio; la referencia y la observación, opcionales.
+    if (this.puedeRegistrarTransferencia(reembolso))
+      return !!this.comprobanteReembolso() && referencia.length <= 150 && this.observacionReembolso.trim().length <= 500;
     if (this.puedeConciliarReembolso(reembolso)) return /^\d{1,100}$/.test(referencia);
     return this.puedeSolicitarReembolso(reembolso);
   }
@@ -739,7 +766,7 @@ export class AdminComponent {
     this.guardandoReembolso.set(true);
     const comprobante = this.comprobanteReembolso();
     const operacion = this.puedeRegistrarTransferencia(reembolso) && comprobante
-      ? this.api.registrarTransferenciaReembolso(reembolso.id, comprobante, referencia)
+      ? this.api.registrarTransferenciaReembolso(reembolso.id, comprobante, { referencia, observacion: this.observacionReembolso.trim() })
       : this.puedeConciliarReembolso(reembolso)
       ? this.api.conciliarReembolso(reembolso.id, referencia)
       : this.api.solicitarReembolso(reembolso.id);

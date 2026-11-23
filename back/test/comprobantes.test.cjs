@@ -62,3 +62,30 @@ test('T04: la carpeta la define el código y el nombre visible se limpia', async
   assert.equal(subido.nombre, '..bancocomprobante.pdf');
   assert.match(await almacenamiento.firmarComprobante(subido.url), /contenedor=reclamos$/);
 });
+
+test('T44/T56: la migración del comprobante del reembolso conserva los datos y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const { readFileSync } = require('node:fs');
+  const migracion = readFileSync('migrations/20261123-comprobante-reembolso.sql', 'utf8');
+  const db = new PGlite();
+  try {
+    // Base con la versión anterior: un reembolso existente y las columnas de T44 ya agregadas.
+    await db.exec(`CREATE TABLE reembolso (id integer primary key, motivo varchar(500) NOT NULL);
+      INSERT INTO reembolso VALUES (1, 'Cancelación');
+      ALTER TABLE reembolso ADD COLUMN comprobante_url varchar(1000), ADD COLUMN comprobante_nombre varchar(255);
+      UPDATE reembolso SET comprobante_url = 'https://privado.example/a.pdf', comprobante_nombre = 'a.pdf';`);
+    await db.exec(migracion);
+    await db.exec(migracion);
+    const { rows } = await db.query('SELECT motivo, comprobante_url, comprobante_nombre, observacion_transferencia FROM reembolso');
+    assert.deepEqual(rows, [{
+      motivo: 'Cancelación', comprobante_url: 'https://privado.example/a.pdf', comprobante_nombre: 'a.pdf', observacion_transferencia: null,
+    }]);
+    // Sin la versión de T44 aplicada, agrega las tres columnas de una vez.
+    await db.exec('DROP TABLE reembolso; CREATE TABLE reembolso (id integer primary key); INSERT INTO reembolso VALUES (2);');
+    await db.exec(migracion);
+    const { rows: nueva } = await db.query('SELECT id, comprobante_url, comprobante_nombre, observacion_transferencia FROM reembolso');
+    assert.deepEqual(nueva, [{ id: 2, comprobante_url: null, comprobante_nombre: null, observacion_transferencia: null }]);
+  } finally {
+    await db.close();
+  }
+});

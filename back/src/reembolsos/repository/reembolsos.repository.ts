@@ -190,9 +190,9 @@ export class ReembolsosRepository implements IReembolsosRepository {
     );
   }
 
-  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado' | 'comprobante_nombre'>[]> {
+  listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado' | 'comprobante_nombre' | 'referencia_externa' | 'observacion_transferencia'>[]> {
     return this.repository.find({
-      select: { id: true, importe: true, moneda: true, estado: true, comprobante_nombre: true },
+      select: { id: true, importe: true, moneda: true, estado: true, comprobante_nombre: true, referencia_externa: true, observacion_transferencia: true },
       where: { transferencia_manual: true, reserva: { id: idReserva, usuario: { id: idInquilino } } },
       order: { id: 'DESC' },
     });

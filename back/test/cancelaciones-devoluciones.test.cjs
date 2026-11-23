@@ -16,6 +16,8 @@ const { PagosRepository } = require('../dist/pagos/repository/pagos.repository')
 const { Reembolso, OrigenReembolso, TipoReembolso } = require('../dist/reembolsos/entity/reembolso.entity');
 const { ReembolsosService } = require('../dist/reembolsos/service/reembolsos.service');
 const { AlmacenamientoService } = require('../dist/almacenamiento/service/almacenamiento.service');
+// T44/T56: almacenamiento privado de prueba para los comprobantes de transferencia.
+const { comprobantePdf, almacenamientoDePrueba } = require('./soporte/comprobantes-pruebas.cjs');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
@@ -63,7 +65,7 @@ beforeEach(async () => {
     new ReembolsosRepository(source.getRepository(Reembolso)),
     pasarela,
     new PagosService(new PagosRepository(source.getRepository(Pago))),
-    estadoReserva, catalogosDePrueba(), almacenamientoDePrueba(),
+    estadoReserva, catalogosDePrueba(), almacenamientoDePrueba().almacenamiento,
   );
   const repositorio = new ReservaRepository(source.getRepository(Reserva));
   disponibilidad = { liberarReserva: async () => {} };
@@ -84,19 +86,6 @@ after(async () => {
   if (base) await base.cerrar();
 });
 
-// T44: almacenamiento privado de prueba para los comprobantes de transferencia.
-function almacenamientoDePrueba() {
-  return new AlmacenamientoService({
-    subir: async (_contenedor, nombre) => `https://privado.example/${nombre}`,
-    firmarArchivo: async (_contenedor, url) => `${url}?firmado`,
-    eliminarArchivo: async () => {},
-  });
-}
-
-const comprobantePdf = () => {
-  const buffer = Buffer.from('%PDF-1.7 comprobante de prueba');
-  return { buffer, size: buffer.length, originalname: 'transferencia.pdf', mimetype: 'application/pdf' };
-};
 
 async function escenario(fechaInicio = '2099-01-10') {
   const reserva = await source.getRepository(Reserva).save({
@@ -142,7 +131,7 @@ test('T47-Extra: el código bloqueado con la estadía terminada llega al pago de
   await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
   const operaciones = new OperacionesLiquidacionService(
-    reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => '0010000700000000000017' }, reclamos,
+    reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => '0010000700000000000017' }, reclamos, undefined, almacenamientoDePrueba().almacenamiento,
   );
   const liquidacion = () => source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
   const actual = () => source.getRepository(Reserva).findOneByOrFail({ id: reserva.id });
@@ -163,14 +152,14 @@ test('T47-Extra: el código bloqueado con la estadía terminada llega al pago de
   t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
   await operaciones.avisarLiquidacionesDisponibles();
   assert.equal((await liquidacion()).estado, 'RETENIDO');
-  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'pago-anticipado' }, 3),
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'pago-anticipado' }, comprobantePdf(), 3),
     (error) => error.getStatus() === 409);
 
   // 4. Al vencer el plazo, T36 lo deja pendiente de pago a favor del anunciante y el admin paga sin código.
   t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
   await operaciones.avisarLiquidacionesDisponibles();
   assert.equal((await liquidacion()).estado, 'PENDIENTE_PAGO_PROPIETARIO');
-  await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'transferencia-1' }, 3);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'transferencia-1' }, comprobantePdf(), 3);
   const pagada = await liquidacion();
   assert.equal(pagada.estado, 'PAGADO_PROPIETARIO');
   assert.equal(Number(pagada.importe), 100);
@@ -266,9 +255,16 @@ test('T34: el admin habilita intentos sin límite de reinicios o confirma el ing
   const confirmado = await servicio.resolver(segundo.id, { resolucion: 'CONFIRMAR_INGRESO' }, 3);
   assert.deepEqual([confirmado.estado, confirmado.resolucion], ['RESUELTO_ANUNCIANTE', 'CONFIRMAR_INGRESO']);
   assert.equal((await liquidacionDe(reserva)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
-  assert.equal((await reservas.obtenerReserva(reserva.id)).codigo_validado_en, null);
+  // El ingreso queda validado: la estadía se ve como con el código (En curso / Finalizada).
+  const confirmada = await reservas.obtenerReserva(reserva.id);
+  assert.ok(confirmada.codigo_validado_en);
+  assert.notEqual(reservas.calcularEstadoEstadia(confirmada), 'PENDIENTE_INGRESO');
+  assert.notEqual(reservas.calcularEstadoEstadia(confirmada), 'INGRESO_NO_VERIFICADO');
   assert.equal(avisos.at(-1).asunto, 'Ingreso confirmado por la administración');
   assert.equal(await source.getRepository(Reembolso).count(), 0);
+  // Con el ingreso confirmado, el código sigue bloqueado pero ya no se puede pedir otro reinicio.
+  await assert.rejects(pedirReinicio(servicio, reserva), /ya se validó/);
+  assert.equal((await liquidacionDe(reserva)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
 
   // Las salidas del pedido no se usan en otros reclamos.
   const otra = await reservaParaReclamo({}, { estado: 'RETENIDO' });
@@ -419,10 +415,14 @@ test('una estadía sin código vence y permite registrar el pago sin marcar el i
   const { reserva } = await escenario();
   await source.getRepository(Liquidacion).save({ reserva, estado: 'RETENIDO', moneda: 'ARS' });
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
-  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos);
+  const { almacenamiento, archivos } = almacenamientoDePrueba();
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos, undefined, almacenamiento);
   await operaciones.avisarLiquidacionesDisponibles(new Date());
   assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
-  await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }, 3);
+  // T56: el endpoint genérico ya no registra pagos; hace falta el comprobante.
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), { status: 400 });
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, undefined, 3), /Adjuntá el comprobante/);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'pago-prueba', observacion: 'Banco Nación' }, comprobantePdf('pago.pdf'), 3);
   const actual = await reservas.obtenerReserva(reserva.id);
   assert.equal(actual.estado_liquidacion, 'PAGADO_PROPIETARIO');
   assert.equal(actual.codigo_validado_en, null);
@@ -430,6 +430,36 @@ test('una estadía sin código vence y permite registrar el pago sin marcar el i
   const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
   assert.equal(Number(liquidacion.importe), 100);
   assert.equal(liquidacion.referencia, 'pago-prueba');
+  // Las relaciones de otros módulos (reclamos, reembolsos) no traen los pagos ni la URL privada.
+  assert.equal(liquidacion.pagos_anunciante, undefined);
+  const [pago] = await operaciones.listarPagosDelAnunciante(2);
+  assert.deepEqual({ indice: pago.indice, comprobante: pago.comprobante, referencia: pago.referencia, observacion: pago.observacion },
+    { indice: 0, comprobante: 'pago.pdf', referencia: 'pago-prueba', observacion: 'Banco Nación' });
+  assert.equal(JSON.stringify(await operaciones.listarPagosRegistrados()).includes('privado.example'), false);
+  // El comprobante lo ven el admin y el anunciante; el inquilino y terceros, no.
+  assert.match((await operaciones.urlComprobantePago(reserva.id, 0, { id: 3, rol: 'Administrador' })).url, /comprobantes\/liquidaciones\/\d+\/.+\.pdf\?firmado$/);
+  assert.match((await operaciones.urlComprobantePago(reserva.id, 0, { id: 2 })).url, /\?firmado$/);
+  for (const actor of [{ id: 1 }, { id: 4 }])
+    await assert.rejects(operaciones.urlComprobantePago(reserva.id, 0, actor), { status: 404 });
+  await assert.rejects(operaciones.urlComprobantePago(reserva.id, 1, { id: 3, rol: 'Administrador' }), { status: 404 });
+  // Un segundo registro se rechaza antes de subir otro archivo.
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), { status: 409 });
+  assert.equal(archivos.subidos.length, 1);
+  assert.deepEqual(archivos.borrados, []);
+});
+
+test('T56: si el pago no queda registrado, el comprobante subido se borra', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-25T03:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const { almacenamiento, archivos } = almacenamientoDePrueba();
+  // Sin CBU validado el registro falla dentro de la transacción, después de subir el archivo.
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => null }, reclamos, undefined, almacenamiento);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /CBU validado/);
+  assert.equal(archivos.subidos.length, 1);
+  assert.deepEqual(archivos.borrados, [`https://privado.example/${archivos.subidos[0]}`]);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
 test('un reclamo en una estadía con ingreso validado bloquea el pago hasta resolverse y vencer el plazo', async (t) => {
@@ -440,12 +470,12 @@ test('un reclamo en una estadía con ingreso validado bloquea el pago hasta reso
   await reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2);
   const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Problema de la estadía' }, 1);
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
-  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos);
-  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), /pendiente|revisión/i);
+  const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos, undefined, almacenamientoDePrueba().almacenamiento);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /pendiente|revisión/i);
   await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
-  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO' }, 3), /cinco días/i);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /cinco días/i);
   t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
-  await operaciones.resolverLiquidacion(reserva.id, { estado: 'PAGADO_PROPIETARIO', referencia: 'transferencia' }, 3);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'transferencia' }, comprobantePdf(), 3);
   assert.equal((await reservas.obtenerReserva(reserva.id)).estado_liquidacion, 'PAGADO_PROPIETARIO');
 });
 
@@ -1236,7 +1266,7 @@ test('la devolución total por transferencia deja el reclamo resuelto al decidir
 
   const decidido = await source.getRepository(Reclamo).findOneOrFail({ where: { id: reclamo.id }, relations: { administrador_resolucion: true } });
   // Otro administrador registra la transferencia.
-  await operacionesReembolso.registrarTransferencia(pendiente.id, 'trf-inquilino', comprobantePdf(), 4);
+  await operacionesReembolso.registrarTransferencia(pendiente.id, { referencia: 'trf-inquilino' }, comprobantePdf(), 4);
   const conComprobante = await source.getRepository(Reembolso).findOneOrFail({
     where: { id: pendiente.id }, select: { id: true, comprobante_url: true, comprobante_nombre: true },
   });
@@ -1304,7 +1334,7 @@ test('un reclamo con la devolución pedida antes de este cambio se completa al c
     motivo: `Reclamo #${reclamo.id}: decisión previa`, idSolicitadoPor: 3,
     idempotencyKey: `rec:${reclamo.id}`, referenciaInterna: `rec:${reclamo.id}`,
   });
-  await operacionesReembolso.registrarTransferencia(anterior.id, 'trf-previa', comprobantePdf(), 3);
+  await operacionesReembolso.registrarTransferencia(anterior.id, { referencia: 'trf-previa' }, comprobantePdf(), 3);
   const completo = await source.getRepository(Reclamo).findOneByOrFail({ id: reclamo.id });
   assert.deepEqual([completo.estado, completo.resolucion, Number(completo.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_PARCIAL', 30]);
   assert.ok(completo.resuelto_en);
@@ -1441,6 +1471,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       return { pollUntilDone: async () => ({ status: 'Succeeded' }) };
     } })
     .overrideProvider(PROVEEDOR_DOLAR).useValue({ consultar: async () => ({ venta: 1200, compra: 1180, actualizadaEn: new Date(), proveedor: 'prueba' }) })
+    .overrideProvider(AlmacenamientoService).useValue(almacenamientoDePrueba().almacenamiento)
     .compile();
   const app = modulo.createNestApplication({ logger: false });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
@@ -1546,7 +1577,14 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const consultaCbu = `/reservas/${ingreso.id}/liquidacion/cbu`;
     await request(http).get(consultaCbu).set('Authorization', anunciante).expect(403);
     const cbu = '0010000700000000000017';
-    await source.query('UPDATE anunciante SET cbu_validado = $1 WHERE id_usuario = 2', [cbu]);
+    await source.query('UPDATE anunciante SET cbu_validado = $1, cuit_cuil = $2 WHERE id_usuario = 2', [cbu, '20-12345678-3']);
+    // T56: el pago se registra por multipart con el comprobante.
+    const rutaPago = `${rutaLiquidacion}/pago`;
+    const pagar = (datos = {}, archivo = 'banco.pdf', actor = admin) => {
+      const pedido = request(http).patch(rutaPago).set('Authorization', actor);
+      for (const [campo, valor] of Object.entries(datos)) pedido.field(campo, valor);
+      return archivo ? pedido.attach('comprobante', Buffer.from('%PDF-1.7 pago'), { filename: archivo, contentType: 'application/pdf' }) : pedido;
+    };
     const operacionesLiquidacion = app.get(OperacionesLiquidacionService);
     const correosDeLiquidacion = () => correos.filter(({ content }) => content.subject === 'Liquidación disponible para pago manual');
     const configurarFin = async (dias) => {
@@ -1565,8 +1603,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     fechaHabilitacion.setUTCDate(fechaHabilitacion.getUTCDate() + 1);
     assert.equal(liquidacionEnEspera.fecha_disponible_pago, fechaHabilitacion.toISOString().slice(0, 10));
     await request(http).get(consultaCbu).set('Authorization', admin).expect(409);
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin)
-      .send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-anticipado' }).expect(409);
+    await pagar({ referencia: 'pago-anticipado' }).expect(409);
     await operacionesLiquidacion.avisarLiquidacionesDisponibles();
     assert.equal(correosDeLiquidacion().length, 0);
 
@@ -1590,14 +1627,15 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const avisosEnviados = await repositorioLiquidaciones.findOneByOrFail({ reserva: { id: ingreso.id } });
     assert.deepEqual(avisosEnviados.aviso_pago_admin_en, primerAviso.aviso_pago_admin_en);
     assert.ok(avisosEnviados.aviso_pago_anunciante_en);
-    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu });
+    await request(http).get(consultaCbu).set('Authorization', admin).expect(200, { cbu, cuit_cuil: '20-12345678-3' });
     // T47: el plazo de reclamos termina el día anterior a que se habilite el pago (T35).
     const { sumarDiasCalendario } = require('../dist/common/utils/fechas');
     const filaPagable = lista.body.find(fila => fila.id === ingreso.id);
     assert.equal(filaPagable.fin_plazo_reclamo, sumarDiasCalendario(filaPagable.fecha_disponible_pago, -1));
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({
-      estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
-    }).expect(200);
+    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }).expect(400);
+    await pagar({ referencia: 'pago-prueba' }, null).expect(400);
+    await pagar({}, 'banco.pdf', tenant).expect(403);
+    await pagar({ referencia: 'pago-prueba', observacion: 'Transferencia acreditada' }).expect(200);
     await request(http).get(historialAnunciante).expect(401);
     await request(http).get(historialAnunciante).set('Authorization', tenant).expect(200, []);
     await request(http).get(historialAnunciante).set('Authorization', ajeno).expect(200, []);
@@ -1611,15 +1649,25 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.ok(historialAdministracion.body.some(item => item.reservaId === ingreso.id));
     assert.deepEqual(historialPropio, [{
       id: idPago, reservaId: ingreso.id, publicacion: 'Publicación de prueba', fecha: fechaPago, importe: 100, moneda: 'ARS',
-      referencia: 'pago-prueba', observacion: 'Transferencia acreditada',
+      referencia: 'pago-prueba', observacion: 'Transferencia acreditada', indice: 0, comprobante: 'banco.pdf',
     }]);
+    // T56: el enlace firmado del comprobante, solo para el admin y el anunciante; la URL privada no viaja.
+    const rutaComprobante = `/reservas/${ingreso.id}/liquidacion/pagos/0/comprobante`;
+    await request(http).get(rutaComprobante).expect(401);
+    for (const actor of [admin, anunciante]) {
+      const { body } = await request(http).get(rutaComprobante).set('Authorization', actor).expect(200);
+      assert.match(body.url, /comprobantes\/liquidaciones\/\d+\/.+\.pdf\?firmado$/);
+    }
+    // El usuario 4 (`ajeno`) es administrador en este escenario; el inquilino no ve el pago al anunciante.
+    await request(http).get(rutaComprobante).set('Authorization', tenant).expect(404);
+    assert.equal(JSON.stringify(historialAdministracion.body).includes('privado.example'), false);
     // T55: el panel del anunciante muestra el mismo pago, una sola vez, y nadie más lo ve.
     const misPagos = '/reservas/liquidaciones/mias';
     await request(http).get(misPagos).expect(401);
     await request(http).get(misPagos).set('Authorization', tenant).expect(200, []);
     await request(http).get(misPagos).set('Authorization', ajeno).expect(200, []);
     await request(http).get(misPagos).set('Authorization', anunciante).expect(200, historialPropio);
-    await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-repetido' }).expect(409);
+    await pagar({ referencia: 'pago-repetido' }).expect(409);
     assert.equal(correos.filter(({ content }) => content.subject === 'Pago al anunciante registrado').length, 1);
     await source.query(`INSERT INTO fecha (fecha,disponible,id_publicacion,id_reserva)
       VALUES ('2099-01-10',false,1,$1)`, [reserva.id]);

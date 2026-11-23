@@ -144,6 +144,10 @@ export class Reembolso {
   @Column({ name: 'comprobante_nombre', type: 'varchar', length: 255, nullable: true })
   comprobante_nombre: string | null;
 
+  /** T56: observación opcional del admin al registrar la transferencia; la ve el inquilino. */
+  @Column({ name: 'observacion_transferencia', type: 'varchar', length: 500, nullable: true })
+  observacion_transferencia: string | null;
+
   @Column({
     name: 'error_detalle',
     type: 'varchar',

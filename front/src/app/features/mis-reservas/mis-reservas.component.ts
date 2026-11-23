@@ -16,7 +16,7 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
-import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
+import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedePedirReinicioCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -49,6 +49,7 @@ export class MisReservasComponent {
   protected readonly imagenesConError = signal<Record<number, string>>({});
   protected readonly puedeConsultarCodigo = puedeConsultarCodigo;
   protected readonly puedeValidarCodigo = puedeValidarCodigo;
+  protected readonly puedePedirReinicioCodigo = puedePedirReinicioCodigo;
   protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   protected readonly esAnunciante = computed(() => this.accesoLimitado()
     ? this.auth.currentUser()?.anuncianteVerificado === true
@@ -385,10 +386,6 @@ export class MisReservasComponent {
   /** T34: el mensaje del código se muestra en la tarjeta de esa reserva, junto al campo. */
   protected readonly avisoCodigo = signal<{ id: number; tipo: 'error' | 'exito'; texto: string } | null>(null);
 
-  protected codigoBloqueado(reserva: Reserva): boolean {
-    return !reserva.cancelada && !reserva.codigo_validado_en && reserva.intentos_codigo_restantes === 0;
-  }
-
   protected validarCodigo(reserva: Reserva): void {
     if (!puedeValidarCodigo(reserva)) return;
     const codigo = (this.codigoIngresado[reserva.id] ?? '').trim().toUpperCase();
@@ -616,7 +613,10 @@ export class MisReservasComponent {
     const etiquetas: Partial<Record<Reserva['estado_liquidacion'], string>> = {
       NO_APLICA: 'Sin liquidación',
       RETENIDO: 'Dinero retenido hasta el ingreso',
-      PENDIENTE_PAGO_PROPIETARIO: 'Ingreso confirmado · pago administrativo pendiente',
+      // Sin ingreso validado (venció el plazo de T36) no se habla de «ingreso confirmado», igual que la etiqueta de la estadía.
+      PENDIENTE_PAGO_PROPIETARIO: reserva.codigo_validado_en
+        ? 'Ingreso confirmado · pago administrativo pendiente'
+        : 'Ingreso no verificado · pago administrativo pendiente',
       EN_REVISION: 'En revisión administrativa',
       PAGADO_PROPIETARIO: 'Pago al propietario registrado',
     };

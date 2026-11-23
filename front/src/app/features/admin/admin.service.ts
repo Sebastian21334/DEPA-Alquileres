@@ -99,6 +99,21 @@ export interface AdminPagoLiquidacion {
   moneda: string | null;
   referencia: string | null;
   observacion: string | null;
+  /** Posición del pago dentro de la liquidación, para pedir su comprobante (T56). */
+  indice: number;
+  comprobante: string | null;
+}
+
+/** T56: datos para transferir al anunciante. */
+export interface DatosTransferenciaAnunciante {
+  cbu: string | null;
+  cuit_cuil: string | null;
+}
+
+/** T44/T56: campos opcionales que acompañan al comprobante de una transferencia manual. */
+export interface DatosTransferencia {
+  referencia?: string;
+  observacion?: string;
 }
 
 export interface AdminReembolso {
@@ -118,6 +133,7 @@ export interface AdminReembolso {
   referencia_externa?: string | null;
   /** T44: nombre del comprobante de la transferencia; null en los registros anteriores. */
   comprobante_nombre?: string | null;
+  observacion_transferencia?: string | null;
   resuelto_en?: string | null;
   resuelto_por?: { nombre?: string; apellido?: string } | null;
   pago?: { id: number; payment_id?: string | null } | null;
@@ -180,7 +196,7 @@ export class AdminService {
     return this.http.get<AdminSettlement[]>(`${this.api}/reservas/liquidaciones/administracion`);
   }
   consultarCbuParaPago(id: number) {
-    return this.http.get<{ cbu: string | null }>(`${this.api}/reservas/${id}/liquidacion/cbu`);
+    return this.http.get<DatosTransferenciaAnunciante>(`${this.api}/reservas/${id}/liquidacion/cbu`);
   }
   listarHistorialLiquidaciones() {
     return this.http.get<AdminPagoLiquidacion[]>(`${this.api}/reservas/liquidaciones/administracion/historial`);
@@ -217,11 +233,25 @@ export class AdminService {
   }
 
   /** T44: multipart con el comprobante obligatorio y la referencia opcional. */
-  registrarTransferenciaReembolso(id: number, comprobante: File, referencia?: string) {
-    const datos = new FormData();
-    datos.append('comprobante', comprobante);
-    if (referencia) datos.append('referencia', referencia);
-    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, datos);
+  registrarTransferenciaReembolso(id: number, comprobante: File, datos: DatosTransferencia = {}) {
+    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, this.formularioTransferencia(comprobante, datos));
+  }
+
+  /** T56: el pago al anunciante se registra con el comprobante de la transferencia. */
+  registrarPagoAnunciante(idReserva: number, comprobante: File, datos: DatosTransferencia = {}) {
+    return this.http.patch<AdminSettlement>(`${this.api}/reservas/${idReserva}/liquidacion/pago`, this.formularioTransferencia(comprobante, datos));
+  }
+
+  urlComprobantePago(idReserva: number, indice: number) {
+    return this.http.get<{ url: string }>(`${this.api}/reservas/${idReserva}/liquidacion/pagos/${indice}/comprobante`);
+  }
+
+  private formularioTransferencia(comprobante: File, { referencia, observacion }: DatosTransferencia): FormData {
+    const formulario = new FormData();
+    formulario.append('comprobante', comprobante);
+    if (referencia) formulario.append('referencia', referencia);
+    if (observacion) formulario.append('observacion', observacion);
+    return formulario;
   }
 
   urlComprobanteReembolso(id: number) {
