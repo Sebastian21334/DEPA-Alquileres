@@ -5,7 +5,6 @@ import { concatMap, forkJoin, from, type Subscription } from 'rxjs';
 import { LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
 import { GestionPublicacionesService, type PaginaMisPublicaciones, type PagoPublicacion } from '../../shared/services/gestion-publicaciones.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
-import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
@@ -19,7 +18,7 @@ const MAX_IMAGEN = 10 * 1024 * 1024;
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, GaleriaImagenesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, GaleriaImagenesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideImagePlus, LucideMapPin, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
