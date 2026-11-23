@@ -112,13 +112,12 @@
 <ng-template #rostroGuia let-gesto let-detectado="detectado" let-overlay="overlay">
   <svg class="face-guide" [class.face-guide--overlay]="overlay" [class.is-detected]="detectado" [attr.data-gesture]="gesto" viewBox="0 0 120 150" aria-hidden="true" focusable="false">
     <g class="face-guide__head">
-      <ellipse class="face-guide__head-shape" cx="60" cy="72" rx="30" ry="42" />
+      <circle class="face-guide__head-shape" cx="60" cy="72" r="44" />
       <g class="face-guide__features">
-        <circle class="face-guide__eye face-guide__eye--left" cx="47" cy="64" r="3.5" />
-        <circle class="face-guide__eye face-guide__eye--right" cx="73" cy="64" r="3.5" />
-        <path class="face-guide__nose" d="M60 68 l-4 18 h8" />
-        <path class="face-guide__mouth" d="M46 98 q14 8 28 0" />
-        <ellipse class="face-guide__mouth-open" cx="60" cy="98" rx="11" ry="8" />
+        <circle class="face-guide__eye face-guide__eye--left" cx="46" cy="62" r="4.5" />
+        <circle class="face-guide__eye face-guide__eye--right" cx="74" cy="62" r="4.5" />
+        <path class="face-guide__mouth" d="M44 92 q16 12 32 0" />
+        <ellipse class="face-guide__mouth-open" cx="60" cy="94" rx="11" ry="9" />
       </g>
     </g>
   </svg>

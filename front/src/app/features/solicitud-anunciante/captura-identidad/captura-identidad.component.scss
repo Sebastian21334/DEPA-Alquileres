@@ -49,7 +49,6 @@ h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2;
 .face-guide { display: block; color: #ff9800; opacity: .78; }
 .face-guide.is-detected { color: #22c55e; opacity: .92; }
 .face-guide__head-shape,
-.face-guide__nose,
 .face-guide__mouth,
 .face-guide__mouth-open { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .face-guide__eye { fill: currentColor; stroke: none; }
