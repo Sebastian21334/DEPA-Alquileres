@@ -32,10 +32,13 @@
     }
 
     @if (cargando()) {
-      <div class="acct-state"><app-spinner /><p>Cargando tus publicaciones…</p></div>
+      <p class="empty">Cargando publicaciones…</p>
     } @else if (error()) {
       <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
     } @else {
+      @if (cargandoPublicaciones()) {
+        <p class="empty">Cargando publicaciones…</p>
+      } @else {
       @for (pub of publicaciones(); track pub.id) {
         <article class="acct-card item" [class.is-busy]="ocupada() === pub.id">
           <div class="item__main">
@@ -177,6 +180,7 @@
           [deshabilitado]="cargandoPublicaciones() || ocupada() !== null"
           (paginaCambia)="cargarPublicaciones($event)"
         />
+      }
       }
 
       <section class="trash" aria-labelledby="papelera-titulo">
