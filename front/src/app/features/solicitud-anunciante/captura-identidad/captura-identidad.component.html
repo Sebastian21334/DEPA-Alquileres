@@ -15,9 +15,15 @@
   <div class="dialog-body">
     <div class="capture-layout" [class.capture-layout--face]="paso() === 'liveness'">
       <div class="camera-column">
+        @if (paso() === 'dni_frente' || paso() === 'dni_dorso') {
+          <p class="document-step">{{ paso() === 'dni_frente' ? 'DNI — FRENTE' : 'DNI — DORSO' }}</p>
+        }
         <div class="camera-shell" [hidden]="paso() === 'complete' || !!fotoPendientePreview() || !cameraReady()" [style.aspect-ratio]="cameraAspectRatio()" [style.--camera-ratio]="cameraAspectRatio()">
           <video #video autoplay muted playsinline [class.mirrored]="paso() === 'liveness'"></video>
           <canvas #overlay></canvas>
+          @if (paso() === 'liveness' && cameraReady() && fase() !== 'validating' && fase() !== 'complete' && fase() !== 'error') {
+            <ng-container [ngTemplateOutlet]="rostroGuia" [ngTemplateOutletContext]="{ $implicit: gestoGuia(), detectado: estadoEnVivo() === 'detected', overlay: true }" />
+          }
           @if (paso() === 'liveness') { <span class="camera-label">Tu cámara · vista espejo</span> }
         </div>
         @if (!cameraReady() && !fotoPendientePreview() && fase() !== 'complete' && fase() !== 'error') {
@@ -28,7 +34,10 @@
           </div>
         }
         @if (fotoPendientePreview(); as preview) {
-          <figure class="photo-review"><img [src]="preview" alt="Foto del DNI para revisar" /><figcaption>¿Se ve completo, nítido y sin reflejos?</figcaption></figure>
+          <figure class="photo-review">
+            <img [src]="preview" [alt]="'Foto de ' + (paso() === 'dni_frente' ? 'DNI — FRENTE' : 'DNI — DORSO') + ' para revisar'" />
+            <figcaption>{{ paso() === 'dni_frente' ? 'DNI — FRENTE' : 'DNI — DORSO' }}: ¿se ve completo, nítido y sin reflejos?</figcaption>
+          </figure>
         }
         <canvas #capture hidden></canvas>
         @if (paso() === 'dni_frente' || paso() === 'dni_dorso') {
@@ -49,13 +58,8 @@
         <aside class="gesture-panel">
           <p class="eyebrow">{{ fase() === 'calibrating' ? 'Preparación' : 'Movimiento ' + (indiceInstruccion() + 1) + ' de ' + instrucciones().length }}</p>
           @if (fase() === 'actions' && instruccionActual(); as instruction) {
-            <div class="gesture-visual" [attr.data-gesture]="instruction.type" aria-hidden="true">
-              @switch (instruction.type) {
-                @case ('TURN_LEFT') { <span>←</span> }
-                @case ('TURN_RIGHT') { <span>→</span> }
-                @case ('TILT_HEAD') { <span>↷</span> }
-                @case ('OPEN_MOUTH') { <span>○</span> }
-              }
+            <div class="gesture-visual" aria-hidden="true">
+              <ng-container [ngTemplateOutlet]="rostroGuia" [ngTemplateOutletContext]="{ $implicit: gestoGuia(), detectado: estadoEnVivo() === 'detected' }" />
             </div>
             <h3>{{ instruction.label }}</h3><p>{{ ayudaGesto() }}</p>
           } @else if (fase() === 'calibrating') {
@@ -105,3 +109,20 @@
     <button type="button" class="text-button" (click)="cancelar()">Continuar más tarde</button>
   </footer>
 </dialog>
+
+<ng-template #rostroGuia let-gesto let-detectado="detectado" let-overlay="overlay">
+  <svg class="face-guide" [class.face-guide--overlay]="overlay" [class.is-detected]="detectado" [attr.data-gesture]="gesto" viewBox="0 0 120 150" aria-hidden="true" focusable="false">
+    <g class="face-guide__head">
+      <ellipse class="face-guide__head-shape" cx="60" cy="72" rx="30" ry="42" />
+      <circle class="face-guide__ear" cx="30" cy="76" r="7" />
+      <circle class="face-guide__ear" cx="90" cy="76" r="7" />
+      <g class="face-guide__features">
+        <circle class="face-guide__eye face-guide__eye--left" cx="47" cy="64" r="3.5" />
+        <circle class="face-guide__eye face-guide__eye--right" cx="73" cy="64" r="3.5" />
+        <path class="face-guide__nose" d="M60 68 l-4 18 h8" />
+        <path class="face-guide__mouth" d="M46 98 q14 8 28 0" />
+        <ellipse class="face-guide__mouth-open" cx="60" cy="98" rx="11" ry="8" />
+      </g>
+    </g>
+  </svg>
+</ng-template>

@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   AfterViewInit,
   Component,
@@ -77,7 +78,7 @@ const puntuarCamaraTrasera = (label: string): number => {
 @Component({
   selector: 'app-captura-identidad',
   standalone: true,
-  imports: [],
+  imports: [NgTemplateOutlet],
   templateUrl: './captura-identidad.component.html',
   styleUrl: './captura-identidad.component.scss',
 })
@@ -136,12 +137,17 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
   });
   protected readonly ayudaGesto = computed(() => {
     switch (this.instruccionActual()?.type) {
-      case 'TURN_LEFT': return 'Girá la nariz hacia tu hombro izquierdo, sin mover el celular.';
-      case 'TURN_RIGHT': return 'Girá la nariz hacia tu hombro derecho, sin mover el celular.';
-      case 'TILT_HEAD': return 'Acercá una oreja al hombro, manteniendo la mirada hacia adelante.';
-      case 'OPEN_MOUTH': return 'Mantené la cabeza de frente y abrí bien la boca.';
+      case 'TURN_LEFT': return 'Girá la nariz apenas hacia tu hombro izquierdo, sin mover el celular.';
+      case 'TURN_RIGHT': return 'Girá la nariz apenas hacia tu hombro derecho, sin mover el celular.';
+      case 'TILT_HEAD': return 'Inclinala apenas hacia un costado, como si apoyaras una oreja en el hombro.';
+      case 'OPEN_MOUTH': return 'Mantené la cabeza de frente y abrí la boca sin exagerar.';
       default: return '';
     }
+  });
+  /** Posición final que debe imitar el rostro durante la prueba de vida. */
+  protected readonly gestoGuia = computed<AccionVitalidad | 'FRONTAL'>(() => {
+    if (this.fase() !== 'actions') return 'FRONTAL';
+    return this.instruccionActual()?.type ?? 'FRONTAL';
   });
 
   private frente: File | null = null;
@@ -525,7 +531,6 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
             this.fase.set('error');
             this.showError(this.errorText(error));
           });
-          this.drawFaceGuide(context, this.estadoEnVivo() === 'detected');
         } catch (error: unknown) {
           this.fase.set('error');
           this.stopCamera();
@@ -869,58 +874,6 @@ export class CapturaIdentidadComponent implements AfterViewInit, OnDestroy {
     context.setLineDash([14, 9]);
     context.strokeRect((width - boxWidth) / 2, (height - boxHeight) / 2, boxWidth, boxHeight);
     context.setLineDash([]);
-    this.drawLabel(context, this.paso() === 'dni_frente' ? 'DNI — FRENTE' : 'DNI — DORSO');
-  }
-
-  private drawFaceGuide(context: CanvasRenderingContext2D, detected: boolean): void {
-    const { width, height } = context.canvas;
-    context.strokeStyle = detected ? '#22c55e' : '#ff9800';
-    context.lineWidth = Math.max(4, width / 150);
-    context.setLineDash([14, 9]);
-    context.beginPath();
-    context.ellipse(width / 2, height * 0.53, width * 0.2, height * 0.36, 0, 0, Math.PI * 2);
-    context.stroke();
-    context.setLineDash([]);
-    if (this.fase() === 'actions') this.drawActionArrow(context, this.instruccionActual()?.type ?? null, detected);
-  }
-
-  private drawLabel(context: CanvasRenderingContext2D, text: string): void {
-    const { width, height } = context.canvas;
-    context.font = `700 ${Math.max(18, width / 31)}px Arial`;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillStyle = 'rgba(10, 18, 28, 0.78)';
-    context.fillRect(width * 0.08, height * 0.05, width * 0.84, height * 0.1);
-    context.fillStyle = '#fff';
-    context.fillText(text, width / 2, height * 0.1, width * 0.78);
-  }
-
-  private drawActionArrow(context: CanvasRenderingContext2D, action: AccionVitalidad | null, detected: boolean): void {
-    const { width, height } = context.canvas;
-    const centerX = width / 2;
-    const centerY = height / 2;
-    if (action === 'OPEN_MOUTH') {
-      // No tapar los labios con un dibujo en una posición fija.
-      return;
-    }
-    if (action === 'TURN_LEFT') this.arrow(context, centerX + width * 0.2, centerY, centerX - width * 0.2, centerY, detected);
-    if (action === 'TURN_RIGHT') this.arrow(context, centerX - width * 0.2, centerY, centerX + width * 0.2, centerY, detected);
-    if (action === 'TILT_HEAD') this.arrow(context, centerX - width * 0.15, centerY + height * 0.14, centerX + width * 0.15, centerY - height * 0.14, detected);
-  }
-
-  private arrow(context: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number, detected: boolean): void {
-    const angle = Math.atan2(y2 - y1, x2 - x1);
-    const head = Math.max(18, context.canvas.width / 23);
-    context.strokeStyle = detected ? '#22c55e' : '#ff9800';
-    context.lineWidth = Math.max(5, context.canvas.width / 100);
-    context.lineCap = 'round';
-    context.beginPath();
-    context.moveTo(x1, y1);
-    context.lineTo(x2, y2);
-    context.lineTo(x2 - head * Math.cos(angle - Math.PI / 6), y2 - head * Math.sin(angle - Math.PI / 6));
-    context.moveTo(x2, y2);
-    context.lineTo(x2 - head * Math.cos(angle + Math.PI / 6), y2 - head * Math.sin(angle + Math.PI / 6));
-    context.stroke();
   }
 
   private resizeOverlay(): void {
