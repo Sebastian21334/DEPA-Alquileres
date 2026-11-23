@@ -38,11 +38,24 @@ import {
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
+import type { AutorReclamo, ImagenReclamo, MensajeReclamoRespuesta, ReclamoRespuesta } from '../dto/reclamo-respuesta.dto';
 import { RECLAMOS_REPOSITORY } from '../repository/reclamos.repository.interface';
 import type { IReclamosRepository } from '../repository/reclamos.repository.interface';
+import type { Usuario } from '../../usuarios/entity/usuario.entity';
 
-const MAX_EVIDENCIAS = 5;
-const MAX_BYTES = 5 * 1024 * 1024;
+/** T49: imágenes por envío (al crear el reclamo o en un mensaje) y por reclamo, sumando las de todas las partes. */
+export const MAX_IMAGENES_POR_ENVIO = 10;
+export const MAX_IMAGENES_POR_RECLAMO = 30;
+export const MAX_BYTES_IMAGEN = 5 * 1024 * 1024;
+
+interface ImagenPreparada { nombre: string; contenido: Buffer; }
+interface ImagenSubida { nombre: string; url: string; }
+
+/** Datos mínimos de un autor: nunca su email, teléfono ni documento. */
+function autorRespuesta(usuario: Usuario | null | undefined): AutorReclamo | null {
+  if (!usuario) return null;
+  return { id: usuario.id, nombre: usuario.nombre, apellido: usuario.apellido, rol: usuario.rol ? { nombre: usuario.rol.nombre } : null };
+}
 
 @Injectable()
 export class ReclamosService {
@@ -118,113 +131,78 @@ export class ReclamosService {
       throw new ConflictException('El código no está bloqueado: todavía podés cargarlo desde la reserva');
   }
 
-  async listarMios(idUsuario: number): Promise<Reclamo[]> {
+  async listarMios(idUsuario: number): Promise<ReclamoRespuesta[]> {
     const reclamos = await this.reclamos.listarPorParticipante(idUsuario);
-    return reclamos.map((reclamo) => this.sinNotasInternas(reclamo));
+    return Promise.all(reclamos.map((reclamo) => this.responder(reclamo, false)));
   }
 
-  async listarAdministracion(): Promise<Reclamo[]> {
+  async listarAdministracion(): Promise<ReclamoRespuesta[]> {
     const reclamos = await this.reclamos.listarAdministracion();
-    return reclamos.map((reclamo) => this.prepararRespuesta(reclamo));
+    return Promise.all(reclamos.map((reclamo) => this.responder(reclamo, true)));
   }
 
-  async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<Reclamo> {
-    const reclamo = await this.reclamos.buscarPorId(id);
-    if (!reclamo) throw new NotFoundException('Reclamo no encontrado');
-    if (esAdmin) return this.prepararRespuesta(reclamo);
-    this.verificarParticipante(reclamo, idUsuario);
-    return this.sinNotasInternas(reclamo);
+  async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<ReclamoRespuesta> {
+    return this.responder(await this.buscarComoParticipante(id, idUsuario, esAdmin), esAdmin);
   }
 
-  async subirEvidencias(id: number, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[]): Promise<ReclamoEvidencia[]> {
-    const reclamo = await this.obtener(id, idUsuario, esAdmin);
+  /** Imágenes de la descripción: las que se suben al crear el reclamo, sin mensaje. */
+  async subirEvidencias(id: number, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[]): Promise<ImagenReclamo[]> {
+    const reclamo = await this.buscarComoParticipante(id, idUsuario, esAdmin);
     if (!archivos?.length)
       throw new BadRequestException('No se recibieron imágenes');
-    if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'CERRADO'))
-      throw new ConflictException('El reclamo está cerrado');
-    const existentes = await this.reclamos.contarEvidencias(id);
-    if (existentes + archivos.length > MAX_EVIDENCIAS)
-      throw new BadRequestException(
-        `Un reclamo admite hasta ${MAX_EVIDENCIAS} imágenes`,
-      );
-
-    const guardadas: ReclamoEvidencia[] = [];
-    for (const archivo of archivos) {
-      if (archivo.size > MAX_BYTES)
-        throw new BadRequestException('Cada imagen puede pesar hasta 5 MB');
-      if (!['image/jpeg', 'image/png'].includes(archivo.mimetype))
-        throw new BadRequestException('Solo se admiten imágenes JPEG o PNG');
-      let contenido: Buffer;
-      try {
-        contenido = await sharp(archivo.buffer)
-          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 80 })
-          .toBuffer();
-      } catch {
-        throw new BadRequestException('El archivo no es una imagen válida');
-      }
-      const url = await this.almacenamientoService.subir(
-        'reclamos',
-        `reservas/${reclamo.reserva.id}/reclamos/${id}-${randomUUID()}.jpg`,
-        contenido,
-        'image/jpeg',
-      );
-      const evidencia = await this.reclamos.guardarEvidencia({
-        reclamo,
-        usuario: referenciaUsuario(idUsuario),
-        url,
-        nombre_archivo: archivo.originalname.slice(0, 255),
-        tipo: 'image/jpeg',
-      });
-      evidencia.reclamo = this.prepararRespuesta(evidencia.reclamo);
-      guardadas.push(evidencia);
-    }
-    return guardadas;
+    this.verificarNoCerrado(reclamo);
+    const subidas = await this.subirImagenes(reclamo, await this.prepararImagenes(id, archivos));
+    const guardadas = await this.guardarConImagenes(id, subidas, (reclamos) =>
+      reclamos.guardarEvidencias(this.evidenciasDe(reclamo, subidas, this.participante(reclamo, idUsuario), null)));
+    return this.imagenesRespuesta(guardadas);
   }
 
   async urlEvidencia(idReclamo: number, idEvidencia: number, idUsuario: number, esAdmin: boolean): Promise<{ url: string }> {
-    await this.obtener(idReclamo, idUsuario, esAdmin);
-    const evidencia = await this.reclamos.buscarEvidencia(idReclamo, idEvidencia);
-    if (!evidencia) throw new NotFoundException('Evidencia no encontrada');
+    const reclamo = await this.buscarComoParticipante(idReclamo, idUsuario, esAdmin);
+    const evidencia = reclamo.evidencias?.find((actual) => actual.id === idEvidencia);
+    if (!evidencia || (!esAdmin && !this.visibleParaLasPartes(evidencia)))
+      throw new NotFoundException('Evidencia no encontrada');
     return {
       url: await this.almacenamientoService.firmarArchivo('reclamos', evidencia.url),
     };
   }
 
-  async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean): Promise<ReclamoMensaje> {
-    const reclamo = await this.obtener(id, idUsuario, esAdmin);
-    if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'CERRADO'))
-      throw new ConflictException('El reclamo está cerrado');
-    if (dto.visible_para === VisibilidadMensajeReclamo.ADMIN && !esAdmin)
+  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
+  async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[] = []): Promise<MensajeReclamoRespuesta> {
+    const reclamo = await this.buscarComoParticipante(id, idUsuario, esAdmin);
+    this.verificarNoCerrado(reclamo);
+    const visibilidad = dto.visible_para ?? VisibilidadMensajeReclamo.TODOS;
+    if (visibilidad === VisibilidadMensajeReclamo.ADMIN && !esAdmin)
       throw new ForbiddenException('Solo el Administrador puede dejar notas internas');
-    if (esAdmin && reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
-      reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION');
-      await this.reclamos.guardar(reclamo);
-    }
-    const mensaje = await this.reclamos.guardarMensaje({
-      reclamo,
-      autor: referenciaUsuario(idUsuario),
-      texto: dto.texto.trim(),
-      visible_para: dto.visible_para ?? VisibilidadMensajeReclamo.TODOS,
+    // Las imágenes de un mensaje las ven todas las partes: una nota interna no puede llevarlas.
+    if (visibilidad === VisibilidadMensajeReclamo.ADMIN && archivos.length)
+      throw new BadRequestException('Las notas internas no admiten imágenes');
+    const texto = dto.texto?.trim() ?? '';
+    if (!texto && !archivos.length)
+      throw new BadRequestException('Escribí un mensaje o adjuntá al menos una imagen');
+    const subidas = archivos.length ? await this.subirImagenes(reclamo, await this.prepararImagenes(id, archivos)) : [];
+    const { mensaje, evidencias } = await this.guardarConImagenes(id, subidas, async (reclamos) => {
+      if (esAdmin && reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
+        reclamo.estado = this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION');
+        await reclamos.guardar(reclamo);
+      }
+      const guardado = await reclamos.guardarMensaje({ reclamo, autor: referenciaUsuario(idUsuario), texto, visible_para: visibilidad });
+      return {
+        mensaje: guardado,
+        evidencias: subidas.length ? await reclamos.guardarEvidencias(this.evidenciasDe(reclamo, subidas, guardado.autor, guardado)) : [],
+      };
     });
-    if (mensaje.visible_para === VisibilidadMensajeReclamo.TODOS)
+    if (visibilidad === VisibilidadMensajeReclamo.TODOS)
       await this.notificaciones?.avisarCambio(reclamo.reserva, esAdmin ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', idUsuario);
-    mensaje.reclamo = this.prepararRespuesta(mensaje.reclamo);
-    return mensaje;
+    return this.mensajeRespuesta(mensaje, await this.imagenesRespuesta(evidencias));
   }
 
-  async listarMensajes(id: number, idUsuario: number, esAdmin: boolean): Promise<ReclamoMensaje[]> {
-    const reclamo = await this.obtener(id, idUsuario, esAdmin);
-    return reclamo.mensajes
-      .filter(
-        (mensaje) =>
-          esAdmin || mensaje.visible_para === VisibilidadMensajeReclamo.TODOS,
-      )
-      .sort((a, b) => a.id - b.id);
+  async listarMensajes(id: number, idUsuario: number, esAdmin: boolean): Promise<MensajeReclamoRespuesta[]> {
+    return (await this.obtener(id, idUsuario, esAdmin)).mensajes;
   }
 
-  async resolver(id: number, dto: ResolverReclamoDto, idAdmin: number): Promise<Reclamo> {
-    const reclamo = await this.obtener(id, idAdmin, true);
+  async resolver(id: number, dto: ResolverReclamoDto, idAdmin: number): Promise<ReclamoRespuesta> {
+    const reclamo = await this.buscarComoParticipante(id, idAdmin, true);
     const estadosCerrados: string[] = [
       this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO'),
       this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE'),
@@ -290,14 +268,14 @@ export class ReclamosService {
     if (!resultado.reembolso) {
       const [asunto, mensaje] = this.avisoSinDevolucion(dto.resolucion);
       await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], asunto, mensaje);
-      return this.prepararRespuesta(resultado.reclamo);
+      return this.responder(resultado.reclamo, true);
     }
     const aplicado = await this.ejecutarDevolucion(resultado.reembolso, idAdmin);
     if (aplicado)
       await this.notificaciones?.avisarCambio(aplicado.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La devolución quedó registrada y el reclamo se resolvió. Consultá el detalle en DEPA.');
     else
       await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La administración resolvió el reclamo con devolución. La devolución está en gestión; consultá su estado en DEPA.');
-    return this.prepararRespuesta(aplicado ?? await this.obtener(id, idAdmin, true));
+    return this.responder(aplicado ?? await this.buscarComoParticipante(id, idAdmin, true), true);
   }
 
   /**
@@ -385,6 +363,13 @@ export class ReclamosService {
     return reclamos.guardar(reclamo);
   }
 
+  private async buscarComoParticipante(id: number, idUsuario: number, esAdmin: boolean): Promise<Reclamo> {
+    const reclamo = await this.reclamos.buscarPorId(id);
+    if (!reclamo) throw new NotFoundException('Reclamo no encontrado');
+    if (!esAdmin) this.verificarParticipante(reclamo, idUsuario);
+    return reclamo;
+  }
+
   private verificarParticipante(reclamo: Reclamo, idUsuario: number): void {
     if (
       reclamo.inquilino?.id !== idUsuario &&
@@ -393,11 +378,122 @@ export class ReclamosService {
       throw new ForbiddenException('No formás parte de este reclamo');
   }
 
-  private sinNotasInternas(reclamo: Reclamo): Reclamo {
-    reclamo.mensajes = (reclamo.mensajes ?? []).filter(
-      (mensaje) => mensaje.visible_para === VisibilidadMensajeReclamo.TODOS,
-    );
-    return this.prepararRespuesta(reclamo);
+  private verificarNoCerrado(reclamo: Reclamo): void {
+    if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'CERRADO'))
+      throw new ConflictException('El reclamo está cerrado');
+  }
+
+  private participante(reclamo: Reclamo, idUsuario: number): Usuario {
+    return [reclamo.inquilino, reclamo.anunciante].find((usuario) => usuario?.id === idUsuario) ?? referenciaUsuario(idUsuario);
+  }
+
+  /**
+   * Respuesta de un reclamo: sin notas internas para las partes y con los datos mínimos de cada autor.
+   * T49: cada imagen va en su mensaje o, si no tiene, en la descripción, con un enlace firmado de 15 minutos.
+   */
+  private async responder(reclamo: Reclamo, esAdmin: boolean): Promise<ReclamoRespuesta> {
+    const mensajes = (reclamo.mensajes ?? [])
+      .filter((mensaje) => esAdmin || mensaje.visible_para === VisibilidadMensajeReclamo.TODOS)
+      .sort((a, b) => a.id - b.id);
+    const imagenes = await this.imagenesRespuesta((reclamo.evidencias ?? []).filter((evidencia) => esAdmin || this.visibleParaLasPartes(evidencia)));
+    return Object.assign(this.prepararRespuesta(reclamo), {
+      evidencias: imagenes.filter((imagen) => imagen.id_mensaje === null),
+      mensajes: mensajes.map((mensaje) => this.mensajeRespuesta(mensaje, imagenes.filter((imagen) => imagen.id_mensaje === mensaje.id))),
+    });
+  }
+
+  private mensajeRespuesta(mensaje: ReclamoMensaje, evidencias: ImagenReclamo[]): MensajeReclamoRespuesta {
+    return { id: mensaje.id, texto: mensaje.texto, visible_para: mensaje.visible_para, creado_en: mensaje.creado_en, autor: autorRespuesta(mensaje.autor), evidencias };
+  }
+
+  private imagenesRespuesta(evidencias: ReclamoEvidencia[]): Promise<ImagenReclamo[]> {
+    return Promise.all([...evidencias].sort((a, b) => a.id - b.id).map(async (evidencia) => ({
+      id: evidencia.id,
+      id_mensaje: evidencia.mensaje?.id ?? null,
+      nombre_archivo: evidencia.nombre_archivo,
+      creado_en: evidencia.creado_en,
+      autor: autorRespuesta(evidencia.usuario),
+      url: await this.almacenamientoService.firmarArchivo('reclamos', evidencia.url),
+    })));
+  }
+
+  private visibleParaLasPartes(evidencia: ReclamoEvidencia): boolean {
+    return !evidencia.mensaje || evidencia.mensaje.visible_para === VisibilidadMensajeReclamo.TODOS;
+  }
+
+  /** T49: valida y reduce todas las imágenes antes de subir ninguna, así un archivo inválido no deja otros subidos. */
+  private async prepararImagenes(idReclamo: number, archivos: Express.Multer.File[]): Promise<ImagenPreparada[]> {
+    if (archivos.length > MAX_IMAGENES_POR_ENVIO)
+      throw new BadRequestException(`Podés adjuntar hasta ${MAX_IMAGENES_POR_ENVIO} imágenes por envío`);
+    await this.verificarCupo(this.reclamos, idReclamo, archivos.length);
+    const imagenes: ImagenPreparada[] = [];
+    for (const archivo of archivos) {
+      if (archivo.size > MAX_BYTES_IMAGEN)
+        throw new BadRequestException('Cada imagen puede pesar hasta 5 MB');
+      if (!['image/jpeg', 'image/png'].includes(archivo.mimetype))
+        throw new BadRequestException('Solo se admiten imágenes JPEG o PNG');
+      try {
+        const contenido = await sharp(archivo.buffer)
+          .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        imagenes.push({ nombre: archivo.originalname.slice(0, 255), contenido });
+      } catch {
+        throw new BadRequestException('El archivo no es una imagen válida');
+      }
+    }
+    return imagenes;
+  }
+
+  private async verificarCupo(reclamos: IReclamosRepository, idReclamo: number, nuevas: number): Promise<void> {
+    const existentes = await reclamos.contarEvidencias(idReclamo);
+    if (existentes + nuevas <= MAX_IMAGENES_POR_RECLAMO) return;
+    const disponibles = MAX_IMAGENES_POR_RECLAMO - existentes;
+    throw new BadRequestException(disponibles > 0
+      ? `Un reclamo admite hasta ${MAX_IMAGENES_POR_RECLAMO} imágenes: podés adjuntar ${disponibles} más`
+      : `El reclamo ya tiene las ${MAX_IMAGENES_POR_RECLAMO} imágenes permitidas`);
+  }
+
+  private async subirImagenes(reclamo: Reclamo, imagenes: ImagenPreparada[]): Promise<ImagenSubida[]> {
+    const subidas: ImagenSubida[] = [];
+    try {
+      for (const { nombre, contenido } of imagenes) {
+        const url = await this.almacenamientoService.subir('reclamos', `reservas/${reclamo.reserva.id}/reclamos/${reclamo.id}-${randomUUID()}.jpg`, contenido, 'image/jpeg');
+        subidas.push({ nombre, url });
+      }
+      return subidas;
+    } catch (error) {
+      await this.borrarImagenes(subidas);
+      throw error;
+    }
+  }
+
+  /** T49: guarda en una transacción lo que acompaña a las imágenes ya subidas; si algo falla, las borra. */
+  private async guardarConImagenes<T>(idReclamo: number, subidas: ImagenSubida[], guardar: (reclamos: IReclamosRepository) => Promise<T>): Promise<T> {
+    let guardado = false;
+    try {
+      const resultado = await this.reclamos.transaccion(async (reclamos) => {
+        if (subidas.length) {
+          // Otro envío pudo ocupar el cupo mientras se subían los archivos.
+          await reclamos.bloquear(idReclamo);
+          await this.verificarCupo(reclamos, idReclamo, subidas.length);
+        }
+        return guardar(reclamos);
+      });
+      guardado = true;
+      return resultado;
+    } finally {
+      if (!guardado) await this.borrarImagenes(subidas);
+    }
+  }
+
+  private async borrarImagenes(subidas: ImagenSubida[]): Promise<void> {
+    await Promise.all(subidas.map(({ url }) => this.almacenamientoService.eliminarArchivo('reclamos', url).catch((error: Error) =>
+      this.logger.warn(`No se pudo borrar una imagen de reclamo que no se guardó: ${error.message}`))));
+  }
+
+  private evidenciasDe(reclamo: Reclamo, subidas: ImagenSubida[], usuario: Usuario, mensaje: ReclamoMensaje | null): Partial<ReclamoEvidencia>[] {
+    return subidas.map(({ url, nombre }) => ({ reclamo, usuario, mensaje, url, nombre_archivo: nombre, tipo: 'image/jpeg' }));
   }
 
   private prepararRespuesta(reclamo: Reclamo): Reclamo {

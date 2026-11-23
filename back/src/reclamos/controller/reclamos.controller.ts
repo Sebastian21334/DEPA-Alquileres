@@ -16,13 +16,14 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
-import { ReclamosService } from '../service/reclamos.service';
+import { MAX_BYTES_IMAGEN, MAX_IMAGENES_POR_ENVIO, ReclamosService } from '../service/reclamos.service';
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
 
-const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', 5, {
-  limits: { fileSize: 5 * 1024 * 1024 },
+// T49: mismo límite al crear el reclamo y en cada mensaje del chat; el servicio controla el total del reclamo.
+const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', MAX_IMAGENES_POR_ENVIO, {
+  limits: { fileSize: MAX_BYTES_IMAGEN },
 });
 
 @Controller('reclamos')
@@ -92,14 +93,17 @@ export class ReclamosController {
     );
   }
 
+  /** JSON con solo texto, o multipart con texto opcional e imágenes en `evidencias` (T49). */
   @PermitirAccesoLimitado()
   @Post(':id/mensajes')
-  enviarMensaje(@Param('id', ParseIntPipe) id: number, @Body() dto: EnviarMensajeReclamoDto, @Req() req: AuthenticatedRequest) {
+  @UseInterceptors(EVIDENCIAS_INTERCEPTOR)
+  enviarMensaje(@Param('id', ParseIntPipe) id: number, @Body() dto: EnviarMensajeReclamoDto, @UploadedFiles() archivos: Express.Multer.File[] | undefined, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.enviarMensaje(
       id,
       dto,
       req.user.id,
       req.user.rol === 'Administrador',
+      archivos ?? [],
     );
   }
 
