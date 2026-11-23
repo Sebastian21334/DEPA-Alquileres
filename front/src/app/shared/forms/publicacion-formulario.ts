@@ -12,11 +12,16 @@ import {
 import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { NombresUbicacion } from '../components/selector-ubicacion/selector-ubicacion.component';
 import { UbicacionConfirmada } from '../components/location-picker/location-picker.component';
+import { decimalesValidator } from '../validators/decimales.validator';
+import { formatearEntero, formatearImporte } from '../utils/formato-numero';
+import { PUBLICACION_LIMITES } from './publicacion-limites.generated';
 
 type CampoPublicacion = keyof PublicacionFormulario['form']['controls'];
 
 const PATRON_TITULO_PUBLICACION =
   /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} ,:.]+(?<! )$/u;
+
+// Los límites se generan desde contratos/publicacion.json; no editar a mano.
 
 // Formulario de una publicación, único para el alta (CrearPublicacionComponent) y la
 // edición (PublicationFormComponent). Cada pantalla lo declara en sus `providers`, así
@@ -43,18 +48,23 @@ export class PublicacionFormulario {
     admiteReservasPorFecha(this.modalidades().find((item) => item.id === this.idModalidad())),
   );
 
+  readonly limites = PUBLICACION_LIMITES;
+  readonly precioMaximoTexto = formatearImporte(PUBLICACION_LIMITES.precioMaximo);
+  readonly superficieMaximaTexto = formatearEntero(PUBLICACION_LIMITES.superficieMaxima);
+  readonly ambientesMaximosTexto = String(PUBLICACION_LIMITES.ambientesMaximos);
+
   readonly form = inject(FormBuilder).nonNullable.group({
     titulo: ['', [Validators.required, Validators.minLength(15), Validators.maxLength(255), Validators.pattern(PATRON_TITULO_PUBLICACION)]],
     descripcion: ['', [Validators.required, Validators.maxLength(255)]],
     idTipoPropiedad: [null as number | null, Validators.required],
     idModalidad: [null as number | null, Validators.required],
     idTipoMoneda: [null as number | null, Validators.required],
-    precio: [null as number | null, [Validators.required, Validators.min(1)]],
+    precio: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PUBLICACION_LIMITES.precioMaximo), decimalesValidator(2)]],
     idProvincia: [null as number | null, Validators.required],
     idCiudad: [null as number | null, Validators.required],
     direccion: ['', [Validators.required, Validators.maxLength(255)]],
-    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1)]],
-    superficie: [null as number | null, [Validators.required, Validators.min(1)]],
+    cantidad_ambientes: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PUBLICACION_LIMITES.ambientesMaximos), decimalesValidator(0)]],
+    superficie: [null as number | null, [Validators.required, Validators.min(1), Validators.max(PUBLICACION_LIMITES.superficieMaxima), decimalesValidator(2)]],
   });
 
   constructor() {
@@ -131,6 +141,18 @@ export class PublicacionFormulario {
   invalido(campo: CampoPublicacion): boolean {
     const control = this.form.controls[campo];
     return control.invalid && control.touched;
+  }
+
+  /** Permite mostrar un mensaje específico cuando el valor supera el máximo. */
+  excedeMaximo(campo: CampoPublicacion): boolean {
+    const control = this.form.controls[campo];
+    return control.hasError('max') && control.touched;
+  }
+
+  /** Permite mostrar un mensaje específico cuando el valor supera los decimales permitidos. */
+  excedeDecimales(campo: CampoPublicacion): boolean {
+    const control = this.form.controls[campo];
+    return control.hasError('decimales') && control.touched;
   }
 
   /** Arma el cuerpo de POST/PATCH /publicaciones. Requiere un formulario válido y la ubicación confirmada. */

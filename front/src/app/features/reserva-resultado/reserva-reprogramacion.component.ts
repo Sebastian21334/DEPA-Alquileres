@@ -5,7 +5,14 @@ import { ApiError } from '../../core/interceptors/api-error';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import type { FechaDisponible } from '../../shared/services/availability.service';
 import { Reserva, ReservationService } from '../../shared/services/reservation.service';
-import { isRentalRangeAvailable, rentalDays, RentalDateRange } from '../../shared/utils/rental-dates';
+import {
+  DIAS_MINIMOS_REPROGRAMACION,
+  fechaHoyArgentina,
+  isRentalRangeAvailable,
+  rentalDays,
+  RentalDateRange,
+  sumarDias,
+} from '../../shared/utils/rental-dates';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 
 @Component({
@@ -70,6 +77,10 @@ export class ReservaReprogramacionComponent implements OnInit {
 
   protected fecha(valor: string | null): string {
     return valor ? this.formatoFecha.format(new Date(valor)) : '';
+  }
+
+  protected fechaMinima(): string {
+    return sumarDias(fechaHoyArgentina(), DIAS_MINIMOS_REPROGRAMACION);
   }
 
   protected elegir(rango: RentalDateRange): void {

@@ -10,6 +10,9 @@ import {
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { cuerpoMensajeReclamo } from '../../shared/utils/reclamo-imagenes';
 
+export const ESTADOS_PUBLICACION_ADMINISTRACION = ['todas', 'activas', 'inactivas', 'bajas'] as const;
+export type AdminPublicacionEstado = (typeof ESTADOS_PUBLICACION_ADMINISTRACION)[number];
+
 export interface AdminUser {
   id: number;
   nombre: string;
@@ -148,6 +151,12 @@ export interface AdminReembolso {
   } | null;
 }
 
+export interface AdminResumenReembolsos {
+  pendientes: number;
+  fallidos: number;
+  total: number;
+}
+
 export interface AdminCancellationRequest {
   id: number;
   motivo: string;
@@ -165,7 +174,6 @@ export interface AdminCancellationRequest {
   } | null;
 }
 export type CatalogKey =
-  | 'roles'
   | 'tipos-anunciante'
   | 'tipos-propiedad'
   | 'modalidades'
@@ -175,14 +183,17 @@ export type CatalogKey =
 export class AdminService {
   private readonly http = inject(HttpClient);
   private readonly api = environment.apiUrl;
-  listarPublicaciones(pagina = 1, q = '') {
-    const params = new HttpParams().set('pagina', pagina).set('limite', 10).set('q', q);
+  listarPublicaciones(pagina = 1, q = '', estado: AdminPublicacionEstado = 'todas') {
+    const params = new HttpParams().set('pagina', pagina).set('limite', 10).set('q', q).set('estado', estado);
     return this.http.get<AdminPage<Publicacion>>(`${this.api}/publicaciones/administracion`, { params });
   }
   darDeBajaPublicacion(id: number, motivo: string) {
     return this.http.patch<{ publicacion: Publicacion; correoEnviado: boolean }>(
       `${this.api}/publicaciones/administracion/${id}/baja`, { motivo },
     );
+  }
+  reactivarPublicacion(id: number) {
+    return this.http.patch<Publicacion>(`${this.api}/publicaciones/administracion/${id}/reactivar`, {});
   }
   obtenerPerfilUsuario(id: number) {
     return this.http.get<AdminUser & { foto_url: string | null }>(`${this.api}/usuarios/administracion/${id}`);
@@ -213,6 +224,9 @@ export class AdminService {
   }
   listarReembolsos() {
     return this.http.get<AdminReembolso[]>(`${this.api}/reembolsos/administracion`);
+  }
+  resumenReembolsos() {
+    return this.http.get<AdminResumenReembolsos>(`${this.api}/reembolsos/administracion/resumen`);
   }
   listarSolicitudesCancelacion() {
     return this.http.get<AdminCancellationRequest[]>(
@@ -295,9 +309,6 @@ export class AdminService {
     if (imagen) datos.append('imagen', imagen);
     return this.http.post<{ mensaje: string }>(`${this.api}/usuarios/${id}/bloqueo/mensajes`, datos);
   }
-  cambiarRol(id: number, nombreRol: string) {
-    return this.http.patch<AdminUser>(`${this.api}/usuarios/${id}/rol`, { nombreRol });
-  }
   aprobar(id: number, numero_revision: number, revisar_cbu: boolean, titular_cbu_confirmado: boolean) {
     return this.http.patch(`${this.api}/anunciantes/${id}/aprobar`, { numero_revision, revisar_cbu, titular_cbu_confirmado });
   }
@@ -313,40 +324,10 @@ export class AdminService {
   actualizarComisionDepa(porcentaje: number) {
     return this.http.put<{ porcentaje: number }>(`${this.api}/catalogos/comision-depa`, { porcentaje });
   }
-  crearCatalogo(key: CatalogKey, nombre: string) {
-    return this.http.post<AdminCatalogItem>(`${this.api}/catalogos/${key}`, { nombre });
-  }
-  actualizarCatalogo(key: CatalogKey, id: number, nombre: string) {
-    return this.http.put<AdminCatalogItem>(`${this.api}/catalogos/${key}/${id}`, { nombre });
-  }
-  eliminarCatalogo(key: CatalogKey, id: number) {
-    return this.http.delete(`${this.api}/catalogos/${key}/${id}`);
-  }
   listarProvincias() {
     return this.http.get<AdminProvince[]>(`${this.api}/ubicacion/provincias`);
   }
   listarCiudades(id: number) {
     return this.http.get<AdminCity[]>(`${this.api}/ubicacion/provincias/${id}/ciudades`);
-  }
-  crearProvincia(nombre: string) {
-    return this.http.post<AdminProvince>(`${this.api}/ubicacion/provincias`, { nombre });
-  }
-  actualizarProvincia(id: number, nombre: string) {
-    return this.http.put<AdminProvince>(`${this.api}/ubicacion/provincias/${id}`, { nombre });
-  }
-  eliminarProvincia(id: number) {
-    return this.http.delete(`${this.api}/ubicacion/provincias/${id}`);
-  }
-  crearCiudad(nombre: string, idProvincia: number) {
-    return this.http.post<AdminCity>(`${this.api}/ubicacion/ciudades`, { nombre, idProvincia });
-  }
-  actualizarCiudad(id: number, nombre: string, idProvincia: number) {
-    return this.http.put<AdminCity>(`${this.api}/ubicacion/ciudades/${id}`, {
-      nombre,
-      idProvincia,
-    });
-  }
-  eliminarCiudad(id: number) {
-    return this.http.delete(`${this.api}/ubicacion/ciudades/${id}`);
   }
 }

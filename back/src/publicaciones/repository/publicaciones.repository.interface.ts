@@ -1,5 +1,6 @@
 import { Publicacion } from '../entity/publicacion.entity';
-import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import { Pagina } from '../../common/persistence/paginacion';
 import type { EntityManager } from 'typeorm';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
@@ -52,12 +53,15 @@ export interface IPublicacionesRepository {
   buscarCondicionesDeReserva(id: number, transaccion: EntityManager): Promise<Publicacion | null>;
   desactivarPorAnunciante(idUsuario: number, transaccion: EntityManager): Promise<void>;
   darDeBaja(id: number, motivo: string): Promise<void>;
+  reactivar(id: number): Promise<boolean>;
   incrementarVisualizaciones(id: number): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
   existeReserva(consulta: ConsultaReservasAcceso): Promise<boolean>;
   buscarTodasActivas(): Promise<Publicacion[]>;
   buscarTodas(): Promise<Publicacion[]>;
-  buscarAdministracion(consulta: ListarAdministracionDto): Promise<Pagina<Publicacion>>;
+  buscarAdministracion(consulta: ListarPublicacionesAdministracionDto): Promise<Pagina<Publicacion>>;
+  buscarMiasPaginadas(idAnunciante: number, consulta: ListarMisPublicacionesDto): Promise<Pagina<Publicacion> & { activas: number }>;
+  buscarPapeleraPorAnunciante(idAnunciante: number): Promise<Publicacion[]>;
   buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones>;
   buscarPorAnunciante(idAnunciante: number, soloActivas: boolean, incluirEliminadas?: boolean): Promise<Publicacion[]>;
   restaurar(id: number): Promise<boolean>;

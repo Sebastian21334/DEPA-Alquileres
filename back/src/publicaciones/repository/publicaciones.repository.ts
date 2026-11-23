@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
-import { ListarAdministracionDto } from '../../common/dto/listar-administracion.dto';
+import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
+import type { EstadoPublicacionAdministracion } from '../dto/listar-publicaciones-administracion.dto';
+import { ListarMisPublicacionesDto } from '../dto/listar-mis-publicaciones.dto';
 import { paginar } from '../../common/persistence/paginacion';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, MoreThan, MoreThanOrEqual, Repository, SelectQueryBuilder } from 'typeorm';
+import { IsNull, MoreThan, MoreThanOrEqual, Not, Repository, SelectQueryBuilder } from 'typeorm';
 import { Publicacion } from '../entity/publicacion.entity';
 import {
   CategoriaInicio,
@@ -87,6 +89,13 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     await this.repo.update({ id }, { activa: false, motivo_baja_admin: motivo });
   }
 
+  async reactivar(id: number): Promise<boolean> {
+    // El filtro por motivo impide que dos pedidos simultáneos reactiven la misma publicación.
+    // La publicación queda inactiva: el anunciante decide cuándo volver a publicarla.
+    const resultado = await this.repo.update({ id, eliminada: false, motivo_baja_admin: Not(IsNull()) }, { activa: false, motivo_baja_admin: null });
+    return (resultado.affected ?? 0) > 0;
+  }
+
   async incrementarVisualizaciones(id: number): Promise<void> {
     await this.repo.increment({ id }, 'visualizaciones', 1);
   }
@@ -133,7 +142,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     });
   }
 
-  buscarAdministracion(consulta: ListarAdministracionDto) {
+  buscarAdministracion(consulta: ListarPublicacionesAdministracionDto) {
     const query = this.repo.createQueryBuilder('publicacion')
       .leftJoinAndSelect('publicacion.anunciante', 'anunciante')
       .leftJoinAndSelect('anunciante.usuario', 'usuario')
@@ -141,6 +150,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .leftJoinAndSelect('publicacion.provincia', 'provincia')
       .orderBy('publicacion.fecha_publicacion', 'DESC')
       .addOrderBy('publicacion.id', 'DESC');
+    this.aplicarEstadoAdministracion(query, consulta.estado);
     if (consulta.q?.trim()) {
       query.andWhere(
         "POSITION(:q IN LOWER(CONCAT_WS(' ', publicacion.id, publicacion.titulo, usuario.nombre, usuario.apellido, usuario.email))) > 0",
@@ -148,6 +158,71 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       );
     }
     return paginar(query, consulta);
+  }
+
+  private aplicarEstadoAdministracion(query: SelectQueryBuilder<Publicacion>, estado: EstadoPublicacionAdministracion = 'todas'): void {
+    switch (estado) {
+      case 'activas':
+        query.andWhere('publicacion.activa = true AND publicacion.motivo_baja_admin IS NULL');
+        break;
+      case 'inactivas':
+        query.andWhere('publicacion.activa = false AND publicacion.motivo_baja_admin IS NULL');
+        break;
+      case 'bajas':
+        query.andWhere('publicacion.motivo_baja_admin IS NOT NULL');
+        break;
+      case 'todas':
+        break;
+    }
+  }
+
+  async buscarMiasPaginadas(idAnunciante: number, consulta: ListarMisPublicacionesDto) {
+    const query = this.repo.createQueryBuilder('publicacion')
+      .leftJoinAndSelect('publicacion.tipoMoneda', 'tipoMoneda')
+      .leftJoinAndSelect('publicacion.modalidad', 'modalidad')
+      .leftJoinAndSelect('publicacion.tipoPropiedad', 'tipoPropiedad')
+      .leftJoinAndSelect('publicacion.provincia', 'provincia')
+      .leftJoinAndSelect('publicacion.ciudad', 'ciudad')
+      .where('publicacion.id_anunciante = :idAnunciante', { idAnunciante })
+      .andWhere('publicacion.eliminada = false')
+      .orderBy('publicacion.fecha_publicacion', 'DESC')
+      .addOrderBy('publicacion.id', 'DESC');
+    if (consulta.q?.trim()) {
+      query.andWhere(
+        "POSITION(:q IN LOWER(CONCAT_WS(' ', publicacion.id, publicacion.titulo, publicacion.descripcion, publicacion.direccion, ciudad.nombre, provincia.nombre))) > 0",
+        { q: consulta.q.trim().toLowerCase() },
+      );
+    }
+    // La cuenta de activas usa los mismos filtros de búsqueda.
+    const activas = await query.clone().andWhere('publicacion.activa = true').getCount();
+    const pagina = await paginar(query, consulta);
+    const ids = pagina.datos.map((publicacion) => publicacion.id);
+    if (ids.length) {
+      const conImagenes = await this.repo.find({
+        where: ids.map((id) => ({ id })),
+        relations: { imagenes: true },
+        order: { imagenes: { orden: 'ASC', id: 'ASC' } },
+      });
+      const porId = new Map(conImagenes.map((publicacion) => [publicacion.id, publicacion]));
+      for (const publicacion of pagina.datos)
+        publicacion.imagenes = porId.get(publicacion.id)?.imagenes ?? [];
+    }
+    return { ...pagina, activas };
+  }
+
+  buscarPapeleraPorAnunciante(idAnunciante: number): Promise<Publicacion[]> {
+    return this.repo.find({
+      where: { eliminada: true, anunciante: { idUsuario: idAnunciante } },
+      relations: {
+        tipoPropiedad: true,
+        ciudad: true,
+        provincia: true,
+        modalidad: true,
+        tipoMoneda: true,
+        imagenes: true,
+      },
+      order: { fecha_publicacion: 'DESC', id: 'DESC', imagenes: { orden: 'ASC', id: 'ASC' } },
+    });
   }
 
   buscarTodasActivas(): Promise<Publicacion[]> {

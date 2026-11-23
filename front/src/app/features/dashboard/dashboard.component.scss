@@ -49,6 +49,7 @@
 .bar i { display: block; width: 100%; min-height: 8%; border-radius: 999px; background: linear-gradient(180deg, var(--color-secondary), #3478db); transition: height .4s ease; }
 .bar small { color: var(--color-text-muted); font-size: .68rem; }
 
+.performance-search { margin-top: .75rem; }
 .performance-table { margin-top: .75rem; }
 .performance-table__head, .performance-row { display: grid; grid-template-columns: minmax(220px, 1.6fr) .55fr .55fr .8fr 30px; gap: .75rem; align-items: center; }
 .performance-table__head { padding: .55rem .65rem; color: var(--color-text-muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; }

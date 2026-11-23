@@ -11,7 +11,6 @@ import { CatalogosRepository } from './repository/catalogos.repository';
 import { CATALOGOS_REPOSITORY } from './repository/catalogos.repository.interface';
 import { CatalogosService } from './service/catalogos.service';
 import { CatalogosController } from './controller/catalogos.controller';
-import { SeguridadModule } from '../seguridad/seguridad.module';
 
 @Module({
   // Centraliza las tablas maestras que son referenciadas por otros módulos.
@@ -25,7 +24,6 @@ import { SeguridadModule } from '../seguridad/seguridad.module';
       Ambito,
       Estado,
     ]),
-    SeguridadModule,
   ],
   controllers: [CatalogosController],
   providers: [

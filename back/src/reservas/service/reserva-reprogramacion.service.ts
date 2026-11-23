@@ -8,7 +8,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { nombreInquilinoReserva } from './reservas.utils';
-import { fechaArgentina } from '../../common/utils/fechas';
+import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { MS_POR_DIA, diasDeAntelacion, esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { Reserva } from '../entity/reserva.entity';
 import {
@@ -18,6 +19,8 @@ import {
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
 import { ReservasService } from './reservas.service';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
+
+const DIAS_MINIMOS_REPROGRAMACION = 6;
 
 @Injectable()
 export class ReservaReprogramacionService {
@@ -109,7 +112,7 @@ export class ReservaReprogramacionService {
             'La reserva requiere revisar sus condiciones originales antes de reprogramar. Contactá a soporte.',
           );
         }
-        if (Math.abs(montoPago - importeContratado) > 0.009) {
+        if (Math.abs(montoPago - importeContratado) > TOLERANCIA_MONETARIA) {
           throw new ConflictException(
             'El importe registrado no coincide con el contratado. Contactá a soporte antes de reprogramar.',
           );
@@ -118,12 +121,8 @@ export class ReservaReprogramacionService {
         const fin = new Date(dto.fecha_fin);
         const hoyTexto = fechaArgentina();
         if (
-          !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_inicio) ||
-          !/^\d{4}-\d{2}-\d{2}$/.test(dto.fecha_fin) ||
-          !Number.isFinite(inicio.getTime()) ||
-          !Number.isFinite(fin.getTime()) ||
-          inicio.toISOString().slice(0, 10) !== dto.fecha_inicio ||
-          fin.toISOString().slice(0, 10) !== dto.fecha_fin ||
+          !esFechaCalendarioValida(dto.fecha_inicio) ||
+          !esFechaCalendarioValida(dto.fecha_fin) ||
           inicio > fin ||
           dto.fecha_inicio < hoyTexto
         ) {
@@ -131,14 +130,19 @@ export class ReservaReprogramacionService {
             'El nuevo rango de fechas no es válido',
           );
         }
+        if (diasDeAntelacion(dto.fecha_inicio, hoyTexto) < DIAS_MINIMOS_REPROGRAMACION) {
+          throw new BadRequestException(
+            `La reprogramación requiere al menos ${DIAS_MINIMOS_REPROGRAMACION} días de antelación`,
+          );
+        }
         const diasOriginales =
           Math.floor(
             (new Date(reserva.fecha_fin).getTime() -
               new Date(reserva.fecha_inicio).getTime()) /
-              86400000,
+              MS_POR_DIA,
           ) + 1;
         const diasNuevos =
-          Math.floor((fin.getTime() - inicio.getTime()) / 86400000) + 1;
+          Math.floor((fin.getTime() - inicio.getTime()) / MS_POR_DIA) + 1;
         if (
           !Number.isSafeInteger(diasOriginales) ||
           diasOriginales < 1 ||

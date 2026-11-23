@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, type EntityManager } from 'typeorm';
 import { Anunciante } from '../entity/anunciante.entity';
+import type { TipoAnunciante } from '../../catalogos/entity/tipo-anunciante.entity';
 import { IAnunciantesRepository } from './anunciantes.repository.interface';
 import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
 import { digitosCuit } from '../../common/utils/cuit';
@@ -58,6 +59,17 @@ export class AnunciantesRepository implements IAnunciantesRepository {
 
   async actualizarCbuValidado(idUsuario: number, cbu: string, transaccion: EntityManager): Promise<void> {
     await transaccion.getRepository(Anunciante).update({ idUsuario }, { cbu_validado: cbu });
+  }
+
+  async actualizarDatos(idUsuario: number, datos: { cuit_cuil: string; numero_contacto: string; tipoAnunciante: TipoAnunciante }, transaccion: EntityManager): Promise<boolean> {
+    const repo = transaccion.getRepository(Anunciante);
+    const anunciante = await repo.findOneBy({ idUsuario });
+    if (!anunciante) return false;
+    anunciante.cuit_cuil = datos.cuit_cuil;
+    anunciante.numero_contacto = datos.numero_contacto;
+    anunciante.tipoAnunciante = datos.tipoAnunciante;
+    await guardarSinDuplicados(() => repo.save(anunciante), [RESTRICCION_CUIT_UNICO]);
+    return true;
   }
 
   existeCuitVigente(cuit: string, transaccion?: EntityManager): Promise<boolean> {

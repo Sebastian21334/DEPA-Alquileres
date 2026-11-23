@@ -92,7 +92,7 @@
       </button>
       <button type="button" class="dashboard-metric metric-refund" (click)="openSection('reembolsos')">
         <svg lucideWallet [size]="29" aria-hidden="true"></svg>
-        <span>Reembolsos pendientes<strong>{{ otherLoading() ? '…' : pendingRefunds().length }}</strong></span>
+        <span>Reembolsos pendientes<strong>{{ otherLoading() ? '…' : conteoPendientes() }}</strong></span>
       </button>
       <button type="button" class="dashboard-metric" (click)="openSection('verificaciones')">
         <svg lucideShieldCheck [size]="29" aria-hidden="true"></svg>
@@ -134,70 +134,7 @@
 
   <app-cotizaciones-admin [hidden]="activeSection() !== 'cotizaciones'" />
 
-  <section class="panel admin-module" [hidden]="activeSection() !== 'publicaciones'">
-    <div class="panel__title panel__title--users">
-      <div>
-        <h2>Publicaciones</h2>
-        <p>Da de baja publicaciones de cualquier anunciante e informale el motivo por correo.</p>
-      </div>
-      <label class="search">
-        <svg lucideSearch [size]="18"></svg>
-        <input type="search" aria-label="Buscar publicaciones" placeholder="Buscar por título, ID o anunciante"
-          [ngModel]="publicationQuery()" (ngModelChange)="searchPublications($event)" maxlength="200" />
-      </label>
-    </div>
-    @if (publicationsLoading()) {
-      <p class="empty">Cargando publicaciones…</p>
-    } @else {
-      <div class="table-wrap">
-        <table class="responsive-table" role="table">
-          <thead><tr><th>Publicación</th><th>Anunciante</th><th>Estado</th><th class="right">Acciones</th></tr></thead>
-          <tbody>
-            @for (publication of publications(); track publication.id) {
-              <tr>
-                <td data-label="Publicación"><strong>{{ publication.titulo }}</strong><small>#{{ publication.id }} · {{ publication.direccion }}</small></td>
-                <td data-label="Anunciante">{{ publication.anunciante?.usuario?.nombre }} {{ publication.anunciante?.usuario?.apellido }}<small>{{ publication.anunciante?.usuario?.email }}</small></td>
-                <td data-label="Estado"><span class="status" [class.status--blocked]="!publication.activa">{{ publication.motivo_baja_admin ? 'Desactivada por un administrador' : publication.activa ? 'Activa' : 'Inactiva' }}</span>
-                  @if (publication.motivo_baja_admin) { <small>Motivo: {{ publication.motivo_baja_admin }}</small> }
-                </td>
-                <td data-label="Acciones" class="right"><button type="button" class="button button--danger-outline"
-                  [disabled]="busy() !== null" (click)="openBaja(publication)">
-                  {{ publication.motivo_baja_admin ? 'Actualizar baja / reenviar aviso' : 'Dar de baja' }}
-                </button></td>
-              </tr>
-              @if (bajaId() === publication.id) {
-                <tr><td colspan="4">
-                  <form class="reject-box" (ngSubmit)="confirmBaja(publication)">
-                    <label [for]="'baja-' + publication.id">Motivo de la baja de “{{ publication.titulo }}”</label>
-                    <textarea [id]="'baja-' + publication.id" name="motivoBaja" [(ngModel)]="bajaReason"
-                      required maxlength="500" [disabled]="busy() !== null" placeholder="Explicá por qué se desactiva esta publicación"></textarea>
-                    <p>El dueño verá este motivo en Mis publicaciones y recibirá un correo. La publicación se conservará desactivada.</p>
-                    <div>
-                      <button type="button" class="button button--ghost" [disabled]="busy() !== null" (click)="bajaId.set(null)">Cancelar</button>
-                      <button type="submit" class="button button--danger" [disabled]="busy() !== null || !bajaReason.trim()">
-                        {{ busy() === 'publication-' + publication.id ? 'Procesando…' : 'Confirmar baja y notificar' }}
-                      </button>
-                    </div>
-                  </form>
-                </td></tr>
-              }
-            } @empty {
-              <tr><td colspan="4" class="empty">No se encontraron publicaciones.</td></tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-    <nav class="pagination" aria-label="Paginación de publicaciones">
-      <span role="status">{{ publicationsTotal() }} publicaciones · Página {{ publicationsPage() }} de {{ publicationsPages() }}</span>
-      <div class="pagination__actions">
-        <button type="button" class="button button--ghost" (click)="loadPublications(publicationsPage() - 1)"
-          [disabled]="publicationsLoading() || busy() !== null || publicationsPage() <= 1">Anterior</button>
-        <button type="button" class="button button--ghost" (click)="loadPublications(publicationsPage() + 1)"
-          [disabled]="publicationsLoading() || busy() !== null || publicationsPage() >= publicationsPages()">Siguiente</button>
-      </div>
-    </nav>
-  </section>
+  <app-publicaciones-admin [hidden]="activeSection() !== 'publicaciones'" />
 
   <section class="panel admin-module" [hidden]="activeSection() !== 'liquidaciones'">
     <div class="panel__title">
@@ -319,8 +256,14 @@
         <h2>Reembolsos</h2>
         <p>Devoluciones creadas por cancelaciones, reclamos o contracargos.</p>
       </div>
-      <span class="counter">{{ refunds().length }}</span>
+      <span class="counter">{{ conteoPendientes() }} pendientes</span>
     </div>
+    @if (conteoFallidos() > 0) {
+      <p class="refund-action" role="alert">Hay {{ conteoFallidos() }} reembolso(s) fallido(s) que requieren acción manual.</p>
+    }
+    @if (totalReembolsos() > refunds().length) {
+      <p class="refund-note" role="status">Mostrando los últimos {{ refunds().length }} de {{ totalReembolsos() }}.</p>
+    }
     @if (!refunds().length) {
       <p class="empty">No hay reembolsos registrados.</p>
     } @else {
@@ -902,20 +845,7 @@
                   <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
                 }
               </td>
-              <td data-label="Rol">
-                <select
-                  (change)="changeRole(user, $any($event.target))"
-                  [disabled]="busy() === 'user-' + user.id || !roles().length"
-                  [attr.aria-label]="'Rol de ' + (user.email ?? user.email_historico)"
-                >
-                  @if (!user.rol) {
-                    <option value="" selected disabled>Sin rol</option>
-                  }
-                  @for (role of roles(); track role.id) {
-                    <option [value]="role.nombre" [selected]="role.id === user.rol?.id">{{ role.nombre }}</option>
-                  }
-                </select>
-              </td>
+              <td data-label="Rol">{{ user.rol?.nombre ?? 'Sin rol' }}</td>
               <td data-label="Estado">
                 @if (!user.activa) {
                   <span class="status status--deleted">Dada de baja</span>
@@ -1090,57 +1020,16 @@
     <div class="panel__title">
       <div>
         <h2>Catálogos</h2>
-        <p>Alta, baja, modificación y consulta de los catálogos del sistema.</p>
+        <p>Consulta de las opciones del sistema. Se cargan por seed o migración.</p>
       </div>
     </div>
     <div class="catalog-grid">
       @for (section of catalogs(); track section.key) {
         <article class="catalog-card">
           <h3>{{ section.label }}</h3>
-          <form class="inline-form" (ngSubmit)="addCatalog(section)">
-            <input
-              [(ngModel)]="newValues[section.key]"
-              [name]="'new-' + section.key"
-              maxlength="100"
-              placeholder="Nuevo elemento"
-            /><button class="button button--primary" type="submit">Agregar</button>
-          </form>
           <ul class="crud-list">
             @for (item of section.items; track item.id) {
-              <li>
-                @if (editing === section.key + '-' + item.id) {
-                  <input
-                    [(ngModel)]="draft"
-                    maxlength="100"
-                    (keyup.enter)="saveCatalog(section, item)"
-                  /><button
-                    class="link-button link-button--save"
-                    type="button"
-                    (click)="saveCatalog(section, item)"
-                  >
-                    Guardar</button
-                  ><button class="link-button" type="button" (click)="cancelEdit()">
-                    Cancelar
-                  </button>
-                } @else {
-                  <span>{{ item.nombre }}</span
-                  ><span class="crud-actions"
-                    ><button
-                      class="link-button link-button--edit"
-                      type="button"
-                      (click)="edit(section.key, item)"
-                    >
-                      Editar</button
-                    ><button
-                      class="link-button"
-                      type="button"
-                      (click)="deleteCatalog(section, item)"
-                    >
-                      Eliminar
-                    </button></span
-                  >
-                }
-              </li>
+              <li><span>{{ item.nombre }}</span></li>
             } @empty {
               <li class="empty-row">Sin elementos</li>
             }
@@ -1154,50 +1043,16 @@
     <div class="panel__title">
       <div>
         <h2>Ubicaciones</h2>
-        <p>Administrá provincias y sus ciudades.</p>
+        <p>Consulta de provincias y ciudades cargadas por seed o migración.</p>
       </div>
     </div>
     <div class="location-grid">
       <article class="catalog-card">
         <h3>Provincias</h3>
-        <form class="inline-form" (ngSubmit)="addProvince()">
-          <input
-            [(ngModel)]="newValues['province']"
-            name="new-province"
-            maxlength="100"
-            placeholder="Nueva provincia"
-          /><button class="button button--primary" type="submit">Agregar</button>
-        </form>
         <ul class="crud-list">
           @for (item of provinces(); track item.id) {
             <li [class.selected]="selectedProvince() === item.id">
-              @if (editing === 'province-' + item.id) {
-                <input
-                  [(ngModel)]="draft"
-                  maxlength="100"
-                  (keyup.enter)="saveProvince(item)"
-                /><button
-                  class="link-button link-button--save"
-                  type="button"
-                  (click)="saveProvince(item)"
-                >
-                  Guardar</button
-                ><button class="link-button" type="button" (click)="cancelEdit()">Cancelar</button>
-              } @else {
-                <button class="location-name" type="button" (click)="selectProvince(item.id)">
-                  {{ item.nombre }}</button
-                ><span class="crud-actions"
-                  ><button
-                    class="link-button link-button--edit"
-                    type="button"
-                    (click)="edit('province', item)"
-                  >
-                    Editar</button
-                  ><button class="link-button" type="button" (click)="deleteProvince(item)">
-                    Eliminar
-                  </button></span
-                >
-              }
+              <button class="location-name" type="button" (click)="selectProvince(item.id)">{{ item.nombre }}</button>
             </li>
           } @empty {
             <li class="empty-row">Sin provincias</li>
@@ -1206,58 +1061,11 @@
       </article>
       <article class="catalog-card">
         <h3>Ciudades</h3>
-        <form class="inline-form" (ngSubmit)="addCity()">
-          <select
-            [ngModel]="selectedProvince()"
-            name="city-province"
-            aria-label="Provincia de la nueva ciudad"
-            (ngModelChange)="selectProvince($event)"
-          >
-            <option [ngValue]="null" disabled>Seleccioná una provincia</option>
-            @for (province of provinces(); track province.id) {
-              <option [ngValue]="province.id">{{ province.nombre }}</option>
-            }
-          </select>
-          <input
-            [(ngModel)]="newValues['city']"
-            name="new-city"
-            maxlength="100"
-            placeholder="Nueva ciudad"
-            [disabled]="!selectedProvince()"
-          /><button class="button button--primary" type="submit" [disabled]="!selectedProvince()">
-            Agregar
-          </button>
-        </form>
         <ul class="crud-list">
           @for (item of cities(); track item.id) {
-            <li>
-              @if (editing === 'city-' + item.id) {
-                <input [(ngModel)]="draft" maxlength="100" (keyup.enter)="saveCity(item)" /><button
-                  class="link-button link-button--save"
-                  type="button"
-                  (click)="saveCity(item)"
-                >
-                  Guardar</button
-                ><button class="link-button" type="button" (click)="cancelEdit()">Cancelar</button>
-              } @else {
-                <span>{{ item.nombre }}</span
-                ><span class="crud-actions"
-                  ><button
-                    class="link-button link-button--edit"
-                    type="button"
-                    (click)="edit('city', item)"
-                  >
-                    Editar</button
-                  ><button class="link-button" type="button" (click)="deleteCity(item)">
-                    Eliminar
-                  </button></span
-                >
-              }
-            </li>
+            <li><span>{{ item.nombre }}</span></li>
           } @empty {
-            <li class="empty-row">
-              {{ selectedProvince() ? 'Sin ciudades' : 'Seleccioná una provincia' }}
-            </li>
+            <li class="empty-row">{{ selectedProvince() ? 'Sin ciudades' : 'Seleccioná una provincia' }}</li>
           }
         </ul>
       </article>

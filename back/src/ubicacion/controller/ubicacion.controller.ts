@@ -1,21 +1,13 @@
 import {
   Controller,
-  Delete,
   Get,
-  Post,
-  Put,
   Param,
-  Body,
   ParseIntPipe,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { UbicacionService } from '../service/ubicacion.service';
-import { CrearProvinciaDto } from '../dto/crear-provincia.dto';
-import { CrearCiudadDto } from '../dto/crear-ciudad.dto';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
-import { RolesGuard } from '../../seguridad/guards/roles.guard';
-import { Roles } from '../../seguridad/decorators/roles.decorator';
 
 @Controller('ubicacion')
 export class UbicacionController {
@@ -36,51 +28,5 @@ export class UbicacionController {
   @Get('provincias/:id/ciudades')
   async getCiudadesPorProvincia(@Param('id', ParseIntPipe) id: number) {
     return this.ubicacionService.getCiudadesPorProvincia(id);
-  }
-
-  @Post('provincias')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  async crearProvincia(@Body() dto: CrearProvinciaDto) {
-    return this.ubicacionService.crearProvincia(dto);
-  }
-
-  @Put('provincias/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  actualizarProvincia(@Param('id', ParseIntPipe) id: number, @Body() dto: CrearProvinciaDto) {
-    return this.ubicacionService.actualizarProvincia(id, dto);
-  }
-
-  @Delete('provincias/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  eliminarProvincia(@Param('id', ParseIntPipe) id: number) {
-    return this.ubicacionService.eliminarProvincia(id);
-  }
-
-  @Post('ciudades')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  async crearCiudad(@Body() dto: CrearCiudadDto) {
-    return this.ubicacionService.crearCiudad(dto);
-  }
-
-  @Put('ciudades/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  actualizarCiudad(@Param('id', ParseIntPipe) id: number, @Body() dto: CrearCiudadDto) {
-    return this.ubicacionService.actualizarCiudad(
-      id,
-      dto.nombre,
-      dto.idProvincia,
-    );
-  }
-
-  @Delete('ciudades/:id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
-  eliminarCiudad(@Param('id', ParseIntPipe) id: number) {
-    return this.ubicacionService.eliminarCiudad(id);
   }
 }

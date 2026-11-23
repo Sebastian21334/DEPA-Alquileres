@@ -26,7 +26,9 @@ import { ChatService } from '../../../core/services/chat.service';
 import { ActividadReembolsosService } from '../../../core/services/actividad-reembolsos.service';
 import { ConversacionResumen } from '../../models/mensaje.model';
 import { etiquetaRol } from '../../models/perfil.model';
+import { interlocutor, nombreInterlocutor } from '../../utils/conversaciones';
 import { AvatarComponent } from '../avatar/avatar.component';
+import { ConversationListComponent } from '../chat-dock/conversation-list.component';
 
 // Header del sitio: hamburguesa que abre el panel lateral de navegación, avatar
 // (lleva a Mi perfil) o "Ingresar" según haya sesión (RF2), logo y botón "Publicar".
@@ -37,6 +39,7 @@ import { AvatarComponent } from '../avatar/avatar.component';
     RouterLink,
     RouterLinkActive,
     AvatarComponent,
+    ConversationListComponent,
     LucideBadgeCheck,
     LucideBell,
     LucideCalendarDays,
@@ -147,23 +150,15 @@ export class NavbarComponent {
     });
   }
 
-  protected otro(conv: ConversacionResumen) {
-    const m = conv.ultimoMensaje;
-    return m.origenUsuario.id === conv.idOtroUsuario ? m.origenUsuario : m.destinoUsuario;
-  }
-
-  protected nombreOtro(conv: ConversacionResumen): string {
-    const otro = this.otro(conv);
-    return `${otro.nombre} ${otro.apellido}`.trim();
-  }
+  protected readonly nombreOtro = nombreInterlocutor;
 
   protected abrirChat(conv: ConversacionResumen): void {
     this.chat.abrir({
       idPublicacion: conv.idPublicacion,
       idOtroUsuario: conv.idOtroUsuario,
       titulo: conv.ultimoMensaje.publicacion.titulo,
-      nombreOtro: this.nombreOtro(conv),
-      fotoOtro: this.otro(conv).foto_url ?? null,
+      nombreOtro: nombreInterlocutor(conv),
+      fotoOtro: interlocutor(conv).foto_url ?? null,
     });
     this.cerrarMenu();
   }

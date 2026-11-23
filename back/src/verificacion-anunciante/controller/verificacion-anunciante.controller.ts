@@ -16,6 +16,7 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { VerificacionAnuncianteService } from '../service/verificacion-anunciante.service';
+import { PerfilAnunciantePublicoService } from '../service/perfil-anunciante-publico.service';
 import { SolicitarAnuncianteDto } from '../dto/solicitar-anunciante.dto';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
@@ -23,7 +24,7 @@ import { Roles } from '../../seguridad/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
 import { PruebaVidaService } from '../service/prueba-vida.service';
-import { DatosInmobiliariaDto } from '../dto/datos-inmobiliaria.dto';
+import { ActualizarDatosSolicitanteDto } from '../dto/actualizar-datos-solicitante.dto';
 import { RevisarVerificacionDto } from '../dto/revisar-verificacion.dto';
 import { CbuDto } from '../dto/cbu.dto';
 
@@ -87,7 +88,7 @@ const EVIDENCIAS_VITALIDAD_INTERCEPTOR = FileFieldsInterceptor(
 
 @Controller('anunciantes')
 export class VerificacionAnuncianteController {
-  constructor(private readonly verificacionService: VerificacionAnuncianteService, private readonly pruebaVidaService: PruebaVidaService) {}
+  constructor(private readonly verificacionService: VerificacionAnuncianteService, private readonly pruebaVidaService: PruebaVidaService, private readonly perfilPublicoService: PerfilAnunciantePublicoService) {}
 
   @Get('verificacion-facial/desafio')
   @UseGuards(JwtAuthGuard)
@@ -126,10 +127,10 @@ export class VerificacionAnuncianteController {
     return { mensaje: 'El CBU quedó pendiente de revisión' };
   }
 
-  @Patch('mi-solicitud/datos-inmobiliaria')
+  @Patch('mi-solicitud/datos')
   @UseGuards(JwtAuthGuard)
-  actualizarDatosInmobiliaria(@Req() req: AuthenticatedRequest, @Body() dto: DatosInmobiliariaDto) {
-    return this.verificacionService.actualizarDatosInmobiliaria(
+  actualizarDatosSolicitud(@Req() req: AuthenticatedRequest, @Body() dto: ActualizarDatosSolicitanteDto) {
+    return this.verificacionService.actualizarDatosSolicitud(
       req.user.id,
       dto,
     );
@@ -177,6 +178,12 @@ export class VerificacionAnuncianteController {
     // interfaz deba tratar como error. Responder 200 evita el 404 transitorio
     // que se veía al cargar navbar, guards y perfil en paralelo.
     return this.verificacionService.buscarSolicitudConHistorial(req.user.id);
+  }
+
+  @Get(':id/publico')
+  @Header('Cache-Control', 'no-store')
+  perfilPublico(@Param('id', ParseIntPipe) id: number) {
+    return this.perfilPublicoService.buscarPerfilPublico(id);
   }
 
   @Patch(':id/aprobar')

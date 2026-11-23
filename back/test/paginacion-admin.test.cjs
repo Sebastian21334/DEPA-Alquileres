@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { test, before } = require('node:test');
 const { ValidationPipe } = require('@nestjs/common');
 const { DataSource } = require('typeorm');
-const { ListarAdministracionDto } = require('../dist/common/dto/listar-administracion.dto');
+const { ListarPublicacionesAdministracionDto, ESTADOS_PUBLICACION_ADMINISTRACION } = require('../dist/publicaciones/dto/listar-publicaciones-administracion.dto');
 const { paginar } = require('../dist/common/persistence/paginacion');
 const { PublicacionesRepository } = require('../dist/publicaciones/repository/publicaciones.repository');
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
@@ -11,17 +11,23 @@ const { Publicacion } = require('../dist/publicaciones/entity/publicacion.entity
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
 
 const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
-const validar = (value) => pipe.transform(value, { type: 'query', metatype: ListarAdministracionDto });
+const validar = (value) => pipe.transform(value, { type: 'query', metatype: ListarPublicacionesAdministracionDto });
 
-test('valida y convierte página, tamaño y búsqueda', async () => {
-  assert.deepEqual(await validar({}), new ListarAdministracionDto());
-  const dto = await validar({ pagina: '2', limite: '25', q: 'Ana' });
+test('valida y convierte página, tamaño, búsqueda y estado administrativo', async () => {
+  assert.deepEqual(await validar({}), new ListarPublicacionesAdministracionDto());
+  assert.equal((await validar({})).estado, 'todas');
+  for (const estado of ESTADOS_PUBLICACION_ADMINISTRACION)
+    assert.equal((await validar({ estado })).estado, estado);
+  const dto = await validar({ pagina: '2', limite: '25', q: 'Ana', estado: 'bajas' });
   assert.equal(dto.pagina, 2);
   assert.equal(dto.limite, 25);
+  assert.equal(dto.estado, 'bajas');
   for (const value of [
     { pagina: '0' }, { pagina: '-1' }, { pagina: '1.5' }, { pagina: 'abc' },
     { pagina: 'Infinity' }, { pagina: '1000001' }, { limite: '0' },
     { limite: '101' }, { q: ['Ana'] }, { q: 'a'.repeat(201) }, { desconocido: 1 },
+    { estado: '' }, { estado: 'ACTIVAS' }, { estado: 'eliminadas' },
+    { estado: ['activas'] }, { estado: null },
   ]) await assert.rejects(validar(value));
 });
 
@@ -78,3 +84,28 @@ for (const [nombre, entidad, crear] of [
     if (nombre === 'publicaciones') assert.doesNotMatch(sql, /WHERE.*activa/);
   });
 }
+
+test('publicaciones: filtra los cuatro estados administrativos en SQL', async () => {
+  const repo = source.getRepository(Publicacion);
+  const consultar = async (estado) => {
+    let query;
+    const repository = new PublicacionesRepository({ createQueryBuilder(alias) {
+      query = repo.createQueryBuilder(alias);
+      query.clone = () => ({ getCount: async () => 0 });
+      return query;
+    } }, {});
+    await repository.buscarAdministracion({ pagina: 1, limite: 10, estado });
+    return query.getSql();
+  };
+  assert.doesNotMatch(await consultar('todas'), /WHERE/);
+  const activas = await consultar('activas');
+  assert.match(activas, /"publicacion"\."activa" = true/);
+  assert.match(activas, /"publicacion"\."motivo_baja_admin" IS NULL/);
+  const inactivas = await consultar('inactivas');
+  assert.match(inactivas, /"publicacion"\."activa" = false/);
+  assert.match(inactivas, /"publicacion"\."motivo_baja_admin" IS NULL/);
+  const bajas = await consultar('bajas');
+  assert.match(bajas, /"publicacion"\."motivo_baja_admin" IS NOT NULL/);
+  assert.doesNotMatch(bajas, /"publicacion"\."activa" =/);
+  assert.doesNotMatch(await consultar(undefined), /WHERE/);
+});

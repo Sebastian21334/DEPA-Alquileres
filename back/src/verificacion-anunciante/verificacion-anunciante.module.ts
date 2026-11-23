@@ -15,6 +15,7 @@ import { VERIFICACION_REPOSITORY } from './repository/verificacion.repository.in
 import { VerificacionRepository } from './repository/verificacion.repository';
 import { PruebaVidaService } from './service/prueba-vida.service';
 import { VerificacionAnuncianteService } from './service/verificacion-anunciante.service';
+import { PerfilAnunciantePublicoService } from './service/perfil-anunciante-publico.service';
 import { EliminacionDocumento } from './entity/eliminacion-documento.entity';
 import { EliminacionDocumentosService } from './service/eliminacion-documentos.service';
 
@@ -35,6 +36,7 @@ import { EliminacionDocumentosService } from './service/eliminacion-documentos.s
   controllers: [VerificacionAnuncianteController],
   providers: [
     VerificacionAnuncianteService,
+    PerfilAnunciantePublicoService,
     EliminacionDocumentosService,
     PruebaVidaService,
     VerificacionRepository,

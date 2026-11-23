@@ -1,0 +1,10 @@
+<nav class="pagination" [attr.aria-label]="ariaLabel()">
+  <span role="status">
+    @if (total() !== null) { {{ total() }} {{ etiqueta() }} · }
+    Página {{ paginaEfectiva() }} de {{ paginasEfectivas() }}
+  </span>
+  <div class="pagination__actions">
+    <button type="button" (click)="ir(paginaEfectiva() - 1)" [disabled]="deshabilitado() || paginaEfectiva() <= 1">Anterior</button>
+    <button type="button" (click)="ir(paginaEfectiva() + 1)" [disabled]="deshabilitado() || paginaEfectiva() >= paginasEfectivas()">Siguiente</button>
+  </div>
+</nav>

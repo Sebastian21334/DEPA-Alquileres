@@ -9,8 +9,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin, Subscription, timer } from 'rxjs';
 import { ADMIN_NAVIGATION, AdminSection, seccionAdmin } from './admin-secciones';
 import { ToastService } from '../../core/services/toast.service';
-import { Publicacion } from '../../shared/models/publicacion.model';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
+import { PublicacionesAdminComponent } from './publicaciones-admin.component';
 import {
   LucideUsers,
   LucideShieldCheck,
@@ -38,6 +38,7 @@ import {
   AdminCancellationRequest,
   AdminCatalogItem,
   AdminReembolso,
+  AdminResumenReembolsos,
   AdminPagoLiquidacion,
   AdminSettlement,
   AdminCity,
@@ -81,10 +82,10 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   'historial-liquidaciones': 'Consultá los pagos ya registrados a anunciantes, con su importe, fecha y referencia.',
   verificaciones: 'Revisá las solicitudes de verificación de identidad.',
   publicaciones: 'Consultá y moderá los alojamientos publicados.',
-  usuarios: 'Buscá cuentas y administrá sus roles y estado.',
+  usuarios: 'Buscá cuentas y consultá su rol y estado.',
   bloqueos: 'Consultá las cuentas bloqueadas, sus motivos y las apelaciones.',
-  catalogos: 'Administrá las opciones que usa el sistema en los formularios.',
-  ubicaciones: 'Administrá las provincias y ciudades disponibles para las publicaciones.',
+  catalogos: 'Consultá las opciones que usa el sistema. Se cargan por seed o migración.',
+  ubicaciones: 'Consultá las provincias y ciudades disponibles. Se cargan por seed o migración.',
   cotizaciones: 'Consultá y administrá las cotizaciones que usa el sistema para convertir importes.',
   comision: 'Configurá la comisión aplicable a nuevas reservas.',
 };
@@ -94,6 +95,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   standalone: true,
   imports: [
     CotizacionesAdminComponent,
+    PublicacionesAdminComponent,
     ClaimHistoryComponent,
     ConversationComposerComponent,
     ConversationPanelComponent,
@@ -157,7 +159,7 @@ export class AdminComponent {
   private readonly api = inject(AdminService);
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
-  private publicationsRequest?: Subscription;
+  private readonly publicacionesAdmin = viewChild(PublicacionesAdminComponent);
   private usersRequest?: Subscription;
   private bloqueadosRequest?: Subscription;
   private actualizandoBloqueados = false;
@@ -182,14 +184,6 @@ export class AdminComponent {
   protected respuestasApelacion: Record<string, string> = {};
   protected imagenesApelacion: Record<string, File | null> = {};
   protected vistasPreviasApelacion: Record<string, string | null> = {};
-  protected readonly publications = signal<Publicacion[]>([]);
-  protected readonly publicationQuery = signal('');
-  protected readonly bajaId = signal<number | null>(null);
-  protected bajaReason = '';
-  protected readonly publicationsPage = signal(1);
-  protected readonly publicationsTotal = signal(0);
-  protected readonly publicationsPages = signal(1);
-  protected readonly publicationsLoading = signal(true);
   protected readonly usersPage = signal(1);
   protected readonly usersTotal = signal(0);
   protected readonly usersPages = signal(1);
@@ -276,9 +270,22 @@ export class AdminComponent {
   protected readonly openClaims = computed(() =>
     this.claims().filter(({ estado }) => estado === 'ABIERTO' || estado === 'EN_REVISION'),
   );
+  protected readonly resumenReembolsos = signal<AdminResumenReembolsos | null>(null);
   protected readonly pendingRefunds = computed(() => this.orderedRefunds().filter(({ estado }) =>
-    ORDEN_ESTADO_REEMBOLSO[estado] === 0,
+    estado === 'PENDIENTE' || estado === 'EN_PROCESO',
   ));
+  protected readonly failedRefunds = computed(() => this.refunds().filter(({ estado }) =>
+    estado === 'FALLIDO',
+  ));
+  protected readonly conteoPendientes = computed(() =>
+    this.resumenReembolsos()?.pendientes ?? this.pendingRefunds().length,
+  );
+  protected readonly conteoFallidos = computed(() =>
+    this.resumenReembolsos()?.fallidos ?? this.failedRefunds().length,
+  );
+  protected readonly totalReembolsos = computed(() =>
+    this.resumenReembolsos()?.total ?? this.refunds().length,
+  );
   protected readonly pendingCases = computed(() => [
     ...this.cancellations().slice(0, 2).map((item) => ({
       section: 'cancelaciones' as const, id: item.id,
@@ -303,13 +310,12 @@ export class AdminComponent {
     })),
   ]);
   protected readonly loading = computed(() =>
-    this.otherLoading() || this.publicationsLoading() || this.usersLoading(),
+    this.otherLoading() || this.usersLoading() || (this.publicacionesAdmin()?.publicationsLoading() ?? true),
   );
   protected readonly query = signal('');
   protected readonly busy = signal<string | null>(null);
   protected readonly rejectId = signal<number | null>(null);
   protected readonly catalogs = signal<CatalogSection[]>([
-    { key: 'roles', label: 'Roles', items: [] },
     { key: 'tipos-anunciante', label: 'Tipos de anunciante', items: [] },
     { key: 'tipos-propiedad', label: 'Tipos de propiedad', items: [] },
     { key: 'modalidades', label: 'Modalidades', items: [] },
@@ -318,18 +324,10 @@ export class AdminComponent {
   protected readonly provinces = signal<AdminProvince[]>([]);
   protected readonly cities = signal<AdminCity[]>([]);
   protected readonly selectedProvince = signal<number | null>(null);
-  protected editing = '';
-  protected draft = '';
-  protected newValues: Record<string, string> = {};
   protected rejectReason = '';
   protected rechazarIdentidad = false;
   protected rechazarCbu = false;
   protected titularCbuConfirmado: number | null = null;
-  // Opciones del select de rol: salen del catálogo de roles de la BD, así que
-  // crear o renombrar un rol en la sección Catálogos se refleja al instante.
-  protected readonly roles = computed(
-    () => this.catalogs().find((s) => s.key === 'roles')?.items ?? [],
-  );
 
   constructor() {
     this.destroyRef.onDestroy(() => {
@@ -365,10 +363,10 @@ export class AdminComponent {
     if (this.activeSection() === 'comision') this.cargarComision();
     this.otherLoading.set(true);
     this.summaryError.set(false);
-    this.loadPublications(this.publicationsPage());
+    this.publicacionesAdmin()?.recargar();
     this.loadUsers(this.usersPage());
     this.cargarBloqueados();
-    let pending = 5;
+    let pending = 6;
     const done = () => {
       if (--pending === 0) this.otherLoading.set(false);
     };
@@ -427,6 +425,18 @@ export class AdminComponent {
         done();
       },
     });
+    this.api.resumenReembolsos().subscribe({
+      next: (v) => {
+        this.resumenReembolsos.set(v);
+        done();
+      },
+      error: (e: Error) => {
+        this.resumenReembolsos.set(null);
+        this.summaryError.set(true);
+        this.toast.mostrar(e.message, 'error');
+        done();
+      },
+    });
   }
 
   protected openSection(section: AdminSection, caseId?: number): void {
@@ -455,39 +465,9 @@ export class AdminComponent {
     }, { injector: this.injector });
   }
 
-  protected searchPublications(value: string): void {
-    this.publicationQuery.set(value);
-    this.loadPublications(1);
-  }
-
   protected searchUsers(value: string): void {
     this.query.set(value);
     this.loadUsers(1);
-  }
-
-  protected loadPublications(page: number): void {
-    if (page < 1 || page > this.publicationsPages()) return;
-    this.publicationsRequest?.unsubscribe();
-    this.publicationsLoading.set(true);
-    this.bajaId.set(null);
-    this.publicationsRequest = this.api.listarPublicaciones(page, this.publicationQuery().trim())
-      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-        next: (result) => {
-          this.publications.set(result.datos);
-          this.publicationsPage.set(result.pagina);
-          this.publicationsTotal.set(result.total);
-          this.publicationsPages.set(result.totalPaginas);
-          this.publicationsLoading.set(false);
-        },
-        error: (e: Error) => {
-          this.publications.set([]);
-          this.publicationsTotal.set(0);
-          this.publicationsPage.set(1);
-          this.publicationsPages.set(1);
-          this.toast.mostrar(e.message, 'error');
-          this.publicationsLoading.set(false);
-        },
-      });
   }
 
   protected loadUsers(page: number): void {
@@ -513,37 +493,6 @@ export class AdminComponent {
           this.usersLoading.set(false);
         },
       });
-  }
-
-  protected openBaja(publication: Publicacion): void {
-    this.bajaReason = publication.motivo_baja_admin ?? '';
-    this.bajaId.set(publication.id);
-  }
-
-  protected confirmBaja(publication: Publicacion): void {
-    if (this.busy()) return;
-    const motivo = this.bajaReason.trim();
-    if (!motivo || motivo.length > 500) return;
-    this.run(
-      `publication-${publication.id}`,
-      () => this.api.darDeBajaPublicacion(publication.id, motivo),
-      (value) => {
-        const result = value as { publicacion: Publicacion; correoEnviado: boolean };
-        this.publications.update((items) =>
-          items.map((item) => (item.id === publication.id ? result.publicacion : item)),
-        );
-        this.bajaId.set(null);
-        if (!result.correoEnviado) {
-          this.toast.mostrar(
-            'La publicación fue desactivada, pero no se pudo enviar el correo. Podés repetir la baja para reintentar el aviso.',
-            'advertencia',
-          );
-          return;
-        }
-        this.toast.mostrar('Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.', 'exito');
-      },
-      null,
-    );
   }
 
   protected abrirPagoAnunciante(settlement: AdminSettlement): void {
@@ -1110,19 +1059,7 @@ export class AdminComponent {
     this.vistasPreviasApelacion[id] = null;
     this.imagenesApelacion[id] = null;
   }
-  protected changeRole(user: AdminUser, select: HTMLSelectElement): void {
-    const role = select.value;
-    if (role === user.rol?.nombre) return;
-    this.run(
-      `user-${user.id}`,
-      () => this.api.cambiarRol(user.id, role),
-      (updated) =>
-        this.users.update((v) => v.map((u) => (u.id === user.id ? (updated as AdminUser) : u))),
-      'Rol actualizado.',
-      // Si el backend lo rechaza, el select vuelve a mostrar el rol que realmente tiene.
-      () => (select.value = user.rol?.nombre ?? ''),
-    );
-  }
+
   protected approve(request: VerificationRequest): void {
     if (!this.puedeResolverVerificacion(request, false, false)) return;
     const id = request.anunciante.idUsuario;
@@ -1200,59 +1137,6 @@ export class AdminComponent {
       error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
   }
-  protected addCatalog(s: CatalogSection): void {
-    const n = (this.newValues[s.key] || '').trim();
-    if (!n) return;
-    this.run(
-      `catalog-${s.key}`,
-      () => this.api.crearCatalogo(s.key, n),
-      (v) => {
-        this.setCatalog(s.key, [...s.items, v as AdminCatalogItem]);
-        this.newValues[s.key] = '';
-      },
-      `${s.label}: elemento creado.`,
-    );
-  }
-  protected edit(key: string, item: AdminCatalogItem): void {
-    this.editing = `${key}-${item.id}`;
-    this.draft = item.nombre;
-  }
-  protected cancelEdit(): void {
-    this.editing = '';
-    this.draft = '';
-  }
-  protected saveCatalog(s: CatalogSection, item: AdminCatalogItem): void {
-    const n = this.draft.trim();
-    if (!n) return;
-    this.run(
-      `catalog-${s.key}`,
-      () => this.api.actualizarCatalogo(s.key, item.id, n),
-      (v) => {
-        this.setCatalog(
-          s.key,
-          s.items.map((x) => (x.id === item.id ? (v as AdminCatalogItem) : x)),
-        );
-        this.cancelEdit();
-      },
-      `${s.label}: elemento actualizado.`,
-    );
-  }
-  protected deleteCatalog(s: CatalogSection, item: AdminCatalogItem): void {
-    if (!confirm(`¿Eliminar “${item.nombre}”?`)) return;
-    this.run(
-      `catalog-${s.key}`,
-      () => this.api.eliminarCatalogo(s.key, item.id),
-      () =>
-        this.setCatalog(
-          s.key,
-          s.items.filter((x) => x.id !== item.id),
-        ),
-      `${s.label}: elemento eliminado.`,
-    );
-  }
-  private setCatalog(key: CatalogKey, items: AdminCatalogItem[]): void {
-    this.catalogs.update((v) => v.map((s) => (s.key === key ? { ...s, items } : s)));
-  }
   protected loadProvinces(): void {
     this.api.listarProvincias().subscribe({
       next: (v) => {
@@ -1267,83 +1151,5 @@ export class AdminComponent {
       next: (v) => this.cities.set(v),
       error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
-  }
-  protected addProvince(): void {
-    const n = (this.newValues['province'] || '').trim();
-    if (!n) return;
-    this.run(
-      'province',
-      () => this.api.crearProvincia(n),
-      (v) => {
-        this.provinces.update((x) => [...x, v as AdminProvince]);
-        this.newValues['province'] = '';
-      },
-      'Provincia creada.',
-    );
-  }
-  protected saveProvince(item: AdminProvince): void {
-    const n = this.draft.trim();
-    if (!n) return;
-    this.run(
-      'province',
-      () => this.api.actualizarProvincia(item.id, n),
-      (v) => {
-        this.provinces.update((x) => x.map((p) => (p.id === item.id ? (v as AdminProvince) : p)));
-        this.cancelEdit();
-      },
-      'Provincia actualizada.',
-    );
-  }
-  protected deleteProvince(item: AdminProvince): void {
-    if (!confirm(`¿Eliminar “${item.nombre}”?`)) return;
-    this.run(
-      'province',
-      () => this.api.eliminarProvincia(item.id),
-      () => {
-        this.provinces.update((x) => x.filter((p) => p.id !== item.id));
-        if (this.selectedProvince() === item.id) {
-          this.selectedProvince.set(null);
-          this.cities.set([]);
-        }
-      },
-      'Provincia eliminada.',
-    );
-  }
-  protected addCity(): void {
-    const id = this.selectedProvince(),
-      n = (this.newValues['city'] || '').trim();
-    if (!id || !n) return;
-    this.run(
-      'city',
-      () => this.api.crearCiudad(n, id),
-      (v) => {
-        this.cities.update((x) => [...x, v as AdminCity]);
-        this.newValues['city'] = '';
-      },
-      'Ciudad creada.',
-    );
-  }
-  protected saveCity(item: AdminCity): void {
-    const id = this.selectedProvince(),
-      n = this.draft.trim();
-    if (!id || !n) return;
-    this.run(
-      'city',
-      () => this.api.actualizarCiudad(item.id, n, id),
-      (v) => {
-        this.cities.update((x) => x.map((c) => (c.id === item.id ? (v as AdminCity) : c)));
-        this.cancelEdit();
-      },
-      'Ciudad actualizada.',
-    );
-  }
-  protected deleteCity(item: AdminCity): void {
-    if (!confirm(`¿Eliminar “${item.nombre}”?`)) return;
-    this.run(
-      'city',
-      () => this.api.eliminarCiudad(item.id),
-      () => this.cities.update((x) => x.filter((c) => c.id !== item.id)),
-      'Ciudad eliminada.',
-    );
   }
 }

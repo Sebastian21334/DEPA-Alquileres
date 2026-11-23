@@ -1,5 +1,6 @@
 import type { EntityManager } from 'typeorm';
 import type { Anunciante } from '../entity/anunciante.entity';
+import type { TipoAnunciante } from '../../catalogos/entity/tipo-anunciante.entity';
 
 export const ANUNCIANTES_REPOSITORY = 'ANUNCIANTES_REPOSITORY';
 
@@ -12,6 +13,7 @@ export interface IAnunciantesRepository {
   actualizarVerificacion(idUsuario: number, verificado: boolean, transaccion: EntityManager): Promise<void>;
   buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null>;
   actualizarCbuValidado(idUsuario: number, cbu: string, transaccion: EntityManager): Promise<void>;
+  actualizarDatos(idUsuario: number, datos: { cuit_cuil: string; numero_contacto: string; tipoAnunciante: TipoAnunciante }, transaccion: EntityManager): Promise<boolean>;
   buscarPorUsuario(idUsuario: number, transaccion?: EntityManager): Promise<Anunciante | null>;
   buscarPendientes(): Promise<Anunciante[]>;
   eliminar(anunciante: Anunciante): Promise<Anunciante>;

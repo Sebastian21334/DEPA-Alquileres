@@ -1,6 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Observable, of, switchMap } from 'rxjs';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -46,13 +45,20 @@ export class SolicitudAnuncianteComponent {
   protected readonly capturaAbierta = signal(false);
   protected readonly documentosPendientes = signal<IdentidadCapturada | null>(null);
 
-  /** Paso actual del flujo según el estado persistido en el backend. */
-  protected readonly paso = computed<'datos' | 'documentos' | 'revision' | 'aprobada'>(() => {
+  /** Paso derivado del estado persistido en el backend. */
+  private readonly pasoBase = computed<'datos' | 'documentos' | 'revision' | 'aprobada'>(() => {
     const s = this.solicitud();
     if (!s) return 'datos';
     if (s.estado === 'aprobada') return 'aprobada';
     if (s.estado === 'rechazada' || !s.dni_frente_url || !s.dni_dorso_url || !s.rostro_url) return 'documentos';
     return 'revision';
+  });
+  /** Permite volver a Datos mientras la solicitud todavía se puede corregir. */
+  protected readonly pasoManual = signal<'datos' | 'documentos' | null>(null);
+  protected readonly paso = computed(() => this.pasoManual() ?? this.pasoBase());
+  protected readonly puedeEditarDatos = computed(() => {
+    const s = this.solicitud();
+    return !s || s.estado === 'borrador' || s.estado === 'rechazada';
   });
 
   protected readonly form = this.fb.nonNullable.group({
@@ -71,11 +77,12 @@ export class SolicitudAnuncianteComponent {
     domicilio_comercial: ['', [Validators.required, Validators.maxLength(255)]],
     dni_corredor: ['', [Validators.required, Validators.maxLength(15), Validators.pattern(/^\d{7,8}$/)]],
   });
-  private readonly tipoSeleccionado = toSignal(this.form.controls.idTipoAnunciante.valueChanges, { initialValue: 0 });
+  private readonly tipoFormulario = toSignal(this.form.controls.idTipoAnunciante.valueChanges, { initialValue: 0 });
+  private readonly tipoSolicitud = computed(() => this.solicitud()?.anunciante.tipoAnunciante?.id ?? 0);
+  private readonly tipoSeleccionado = computed(() => this.tipoFormulario() || this.tipoSolicitud());
   protected readonly esInmobiliaria = computed(() => {
-    const nombre = this.solicitud()?.anunciante.tipoAnunciante?.nombre ??
-      this.tipos().find((tipo) => tipo.id === this.tipoSeleccionado())?.nombre ?? '';
-    return /inmobiliaria|institucional/i.test(nombre);
+    const tipo = this.tipos().find((item) => item.id === this.tipoSeleccionado());
+    return /inmobiliaria|institucional/i.test(tipo?.nombre ?? '');
   });
   /** T05: las elige `app-carga-comprobante`, que valida PDF, JPG o PNG de hasta 5 MB y muestra el error junto al campo. */
   protected readonly matricula = signal<File | null>(null);
@@ -84,13 +91,21 @@ export class SolicitudAnuncianteComponent {
   constructor() {
     effect(() => {
       const solicitud = this.solicitud();
-      if (solicitud) this.empresaForm.patchValue({
-        razon_social: solicitud.razon_social ?? '',
-        matricula_profesional: solicitud.matricula_profesional ?? '',
-        colegio_profesional: solicitud.colegio_profesional ?? '',
-        domicilio_comercial: solicitud.domicilio_comercial ?? '',
-        dni_corredor: solicitud.dni_corredor ?? '',
-      }, { emitEvent: false });
+      if (solicitud) {
+        this.form.patchValue({
+          idTipoAnunciante: solicitud.anunciante.tipoAnunciante?.id ?? 0,
+          cuit: solicitud.anunciante.cuit_cuil ?? '',
+          numero_contacto: solicitud.anunciante.numero_contacto ?? '',
+        }, { emitEvent: false });
+        this.empresaForm.patchValue({
+          razon_social: solicitud.razon_social ?? '',
+          matricula_profesional: solicitud.matricula_profesional ?? '',
+          colegio_profesional: solicitud.colegio_profesional ?? '',
+          domicilio_comercial: solicitud.domicilio_comercial ?? '',
+          dni_corredor: solicitud.dni_corredor ?? '',
+        }, { emitEvent: false });
+      }
+      if (!solicitud || !this.puedeEditarDatos()) this.pasoManual.set(null);
     });
     this.catalogos.getTiposAnunciante().subscribe({ next: (t) => this.tipos.set(t) });
     this.recargar();
@@ -100,35 +115,68 @@ export class SolicitudAnuncianteComponent {
     this.perfilService.cargarSolicitud(true).subscribe(() => this.cargando.set(false));
   }
 
+  protected irAPaso(paso: 'datos' | 'documentos'): void {
+    if (paso === 'datos' && !this.puedeEditarDatos()) return;
+    if (paso === 'documentos' && !this.solicitud()) return;
+    this.pasoManual.set(paso);
+  }
+
   protected enviarDatos(): void {
-    if (this.form.invalid || this.enviando() || (this.esInmobiliaria() && this.empresaForm.invalid)) {
+    const existente = !!this.solicitud();
+    const datosValidos = existente
+      ? this.form.controls.idTipoAnunciante.valid &&
+        this.form.controls.cuit.valid &&
+        this.form.controls.numero_contacto.valid
+      : this.form.valid;
+    if (!datosValidos || this.enviando() || (this.esInmobiliaria() && this.empresaForm.invalid)) {
       this.empresaForm.markAllAsTouched();
-      this.form.markAllAsTouched();
+      if (existente) {
+        this.form.controls.idTipoAnunciante.markAsTouched();
+        this.form.controls.cuit.markAsTouched();
+        this.form.controls.numero_contacto.markAsTouched();
+      } else {
+        this.form.markAllAsTouched();
+      }
       return;
     }
     this.enviando.set(true);
     this.error.set('');
     this.errorCuit.set('');
     const valor = this.form.getRawValue();
-    this.perfilService
-      .solicitarAnunciante({ ...valor, ...(this.esInmobiliaria() ? this.empresaForm.getRawValue() : {}), cuit: valor.cuit.trim(), numero_contacto: valor.numero_contacto.trim() })
-      .subscribe({
-        next: () => {
+    const datos = {
+      idTipoAnunciante: valor.idTipoAnunciante,
+      cuit: valor.cuit.trim(),
+      numero_contacto: valor.numero_contacto.trim(),
+      ...(this.esInmobiliaria() ? this.empresaForm.getRawValue() : {}),
+    };
+    const peticion = existente
+      ? this.perfilService.actualizarDatosSolicitud(datos)
+      : this.perfilService.solicitarAnunciante({
+          ...datos,
+          cbu: valor.cbu,
+          titularidad_declarada: valor.titularidad_declarada,
+          aceptaTerminos: valor.aceptaTerminos,
+        });
+    peticion.subscribe({
+      next: () => {
+        if (!existente) {
           this.form.controls.cbu.reset();
           this.form.controls.titularidad_declarada.reset();
-          this.enviando.set(false);
-          this.recargar();
-        },
-        error: (err: Error) => {
-          this.enviando.set(false);
-          if (err instanceof ApiError && err.status === 409 && /CUIT\/CUIL/.test(err.message)) {
-            this.errorCuit.set(err.message);
-            this.toast.mostrar('El CUIT/CUIL ingresado ya está registrado en otra cuenta.');
-            return;
-          }
-          this.error.set(err.message);
-        },
-      });
+        }
+        this.enviando.set(false);
+        this.pasoManual.set(null);
+        this.recargar();
+      },
+      error: (err: Error) => {
+        this.enviando.set(false);
+        if (err instanceof ApiError && err.status === 409 && /CUIT\/CUIL/.test(err.message)) {
+          this.errorCuit.set(err.message);
+          this.toast.mostrar('El CUIT/CUIL ingresado ya está registrado en otra cuenta.');
+          return;
+        }
+        this.error.set(err.message);
+      },
+    });
   }
 
   protected enviarDocumentos(documentos: IdentidadCapturada): void {
@@ -138,22 +186,19 @@ export class SolicitudAnuncianteComponent {
     this.enviando.set(true);
     this.error.set('');
     const reenvio = this.solicitud()?.estado === 'rechazada';
-    if (this.esInmobiliaria() && (this.empresaForm.invalid || !this.matricula() || !this.constanciaCuit())) {
+    if (this.esInmobiliaria() && (!this.matricula() || !this.constanciaCuit())) {
       this.enviando.set(false);
-      this.empresaForm.markAllAsTouched();
-      this.error.set('Completá los datos y adjuntá matrícula y constancia de CUIT.');
+      this.error.set('Adjuntá matrícula y constancia de CUIT para continuar.');
       return;
     }
-    const preparar: Observable<unknown> = this.esInmobiliaria()
-      ? this.perfilService.actualizarDatosInmobiliaria(this.empresaForm.getRawValue())
-      : of(null);
-    preparar.pipe(switchMap(() => this.perfilService.subirDocumentos({
+    this.perfilService.subirDocumentos({
       ...documentos,
       ...(this.esInmobiliaria() ? { matricula: this.matricula()!, constancia_cuit: this.constanciaCuit()! } : {}),
-    }, reenvio))).subscribe({
+    }, reenvio).subscribe({
       next: () => {
         this.documentosPendientes.set(null);
         this.enviando.set(false);
+        this.pasoManual.set(null);
         this.exito.set('Prueba de vida completada y documentación enviada. Un administrador revisará tu solicitud.');
         this.recargar();
       },

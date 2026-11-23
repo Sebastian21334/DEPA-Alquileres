@@ -689,27 +689,4 @@ export class UsuariosService {
     return token;
   }
 
-  /** Cambia el rol de un usuario, evitando escrituras innecesarias. */
-  async cambiarRol(idUsuario: number, nombreRolNuevo: string) {
-    const usuario = await this.usuariosRepo.buscarPorId(idUsuario);
-    if (!usuario) {
-      throw new NotFoundException('Usuario no encontrado');
-    }
-
-    const rolNuevo =
-      await this.catalogosService.getRolPorNombre(nombreRolNuevo);
-    if (!rolNuevo) {
-      throw new NotFoundException(`El rol '${nombreRolNuevo}' no existe`);
-    }
-
-    if (usuario.rol?.id === rolNuevo.id) {
-      throw new ConflictException(
-        `El usuario ya tiene el rol '${nombreRolNuevo}'`,
-      );
-    }
-
-    usuario.rol = rolNuevo;
-    const usuarioActualizado = await this.usuariosRepo.guardar(usuario);
-    return this.usuarioSinSecretos(usuarioActualizado);
-  }
 }

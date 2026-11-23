@@ -120,11 +120,18 @@
                 id="ambientes"
                 type="number"
                 min="1"
+                [attr.max]="formulario.limites.ambientesMaximos"
                 step="1"
+                inputmode="numeric"
+                appSoloNumeros="0"
                 formControlName="cantidad_ambientes"
                 placeholder="Ej.: 2"
               />
-              @if (formulario.invalido('cantidad_ambientes')) {
+              @if (formulario.excedeMaximo('cantidad_ambientes')) {
+                <span class="acct-hint acct-hint--error">El máximo es {{ formulario.ambientesMaximosTexto }} ambientes.</span>
+              } @else if (formulario.excedeDecimales('cantidad_ambientes')) {
+                <span class="acct-hint acct-hint--error">Ingresá una cantidad entera de ambientes.</span>
+              } @else if (formulario.invalido('cantidad_ambientes')) {
                 <span class="acct-hint acct-hint--error">Mínimo 1 ambiente.</span>
               }
             </div>
@@ -134,11 +141,18 @@
                 id="superficie"
                 type="number"
                 min="1"
+                [attr.max]="formulario.limites.superficieMaxima"
                 step="0.01"
+                inputmode="decimal"
+                appSoloNumeros="2"
                 formControlName="superficie"
                 placeholder="Ej.: 45"
               />
-              @if (formulario.invalido('superficie')) {
+              @if (formulario.excedeMaximo('superficie')) {
+                <span class="acct-hint acct-hint--error">La superficie máxima es {{ formulario.superficieMaximaTexto }} m².</span>
+              } @else if (formulario.excedeDecimales('superficie')) {
+                <span class="acct-hint acct-hint--error">Ingresá como máximo 2 decimales.</span>
+              } @else if (formulario.invalido('superficie')) {
                 <span class="acct-hint acct-hint--error">Ingresá la superficie.</span>
               }
             </div>
@@ -209,11 +223,18 @@
                 id="precio"
                 type="number"
                 min="1"
+                [attr.max]="formulario.limites.precioMaximo"
                 step="0.01"
+                inputmode="decimal"
+                appSoloNumeros="2"
                 formControlName="precio"
                 placeholder="Ej.: 350000"
               />
-              @if (formulario.invalido('precio')) {
+              @if (formulario.excedeMaximo('precio')) {
+                <span class="acct-hint acct-hint--error">El precio máximo es {{ formulario.precioMaximoTexto }}.</span>
+              } @else if (formulario.excedeDecimales('precio')) {
+                <span class="acct-hint acct-hint--error">Ingresá como máximo 2 decimales.</span>
+              } @else if (formulario.invalido('precio')) {
                 <span class="acct-hint acct-hint--error">Ingresá un precio mayor a 0.</span>
               }
             </div>

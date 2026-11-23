@@ -16,6 +16,12 @@ export class ReembolsosController {
     return this.reembolsosService.listarAdministracion();
   }
 
+  @Get('administracion/resumen')
+  @Roles('Administrador')
+  resumen() {
+    return this.reembolsosService.resumenAdministracion();
+  }
+
   @PermitirAccesoLimitado()
   @Get('actividad')
   actividad(@Req() req: AuthenticatedRequest) {

@@ -10,6 +10,8 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { formatearEntero, formatearImporte } from '../../common/utils/formato';
+import { PUBLICACION_LIMITES } from './publicacion-limites.generated';
 
 export const PATRON_TITULO_PUBLICACION =
   /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} ,:.]+(?<! )$/u;
@@ -18,6 +20,11 @@ export const MENSAJE_FORMATO_TITULO =
 export const LARGO_MINIMO_TITULO = 15;
 export const LARGO_MAXIMO_TITULO = 255;
 export const MENSAJE_LARGO_TITULO = `El título debe tener entre ${LARGO_MINIMO_TITULO} y ${LARGO_MAXIMO_TITULO} caracteres.`;
+
+// Los topes vienen de contratos/publicacion.json; los textos se formatean en cada capa.
+export const MENSAJE_PRECIO_RANGO = `El precio debe ser un número entre 1 y ${formatearImporte(PUBLICACION_LIMITES.precioMaximo)}.`;
+export const MENSAJE_SUPERFICIE_RANGO = `La superficie debe ser un número entre 1 y ${formatearEntero(PUBLICACION_LIMITES.superficieMaxima)} m².`;
+export const MENSAJE_AMBIENTES_RANGO = `La cantidad de ambientes debe ser un entero entre 1 y ${PUBLICACION_LIMITES.ambientesMaximos}.`;
 
 export class CrearPublicacionDto {
   @IsString()
@@ -30,8 +37,9 @@ export class CrearPublicacionDto {
   @MaxLength(255)
   descripcion: string;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
+  @Max(PUBLICACION_LIMITES.precioMaximo, { message: MENSAJE_PRECIO_RANGO })
   precio: number;
 
   @IsString()
@@ -51,10 +59,12 @@ export class CrearPublicacionDto {
 
   @IsInt()
   @IsPositive()
+  @Max(PUBLICACION_LIMITES.ambientesMaximos, { message: MENSAJE_AMBIENTES_RANGO })
   cantidad_ambientes: number;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @IsPositive()
+  @Max(PUBLICACION_LIMITES.superficieMaxima, { message: MENSAJE_SUPERFICIE_RANGO })
   superficie: number;
 
   @IsInt()

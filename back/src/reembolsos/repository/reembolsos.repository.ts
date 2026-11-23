@@ -153,6 +153,14 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
+  contarPorEstado(): Promise<Array<{ estado: string; cantidad: string }>> {
+    return this.repository.createQueryBuilder('reembolso')
+      .select('reembolso.estado', 'estado')
+      .addSelect('COUNT(*)', 'cantidad')
+      .groupBy('reembolso.estado')
+      .getRawMany();
+  }
+
   listarAdministracion(): Promise<Reembolso[]> {
     return this.repository.find({
       relations: {

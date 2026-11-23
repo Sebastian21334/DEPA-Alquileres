@@ -37,7 +37,14 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     INSERT INTO imagen (id_imagen,id_publicacion,url) VALUES (50,10,'https://example.invalid/foto.jpg');
   `);
   const repository = new PublicacionesRepository(source.getRepository(Publicacion), source.getRepository(Reserva));
-  const servicio = new PublicacionesService(repository, catalogosDePrueba());
+  const correos = [];
+  const servicio = new PublicacionesService(
+    repository,
+    catalogosDePrueba(),
+    undefined,
+    { enviarBajaPublicacion: async (destinatario, titulo, motivo) => { correos.push({ destinatario, titulo, motivo }); } },
+    { datosContacto: anunciante => ({ email: anunciante?.usuario?.email }) },
+  );
   const bloqueados = new Set();
   class AplicacionPrueba {}
   Module({
@@ -47,7 +54,7 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
       { provide: PublicacionesService, useValue: servicio },
       { provide: ConfigService, useValue: { getOrThrow: () => 'papelera-solo-pruebas' } },
       { provide: UsuariosService, useValue: {
-        buscarParaSesion: async id => ({ id, activa: true, bloqueado: bloqueados.has(id) }),
+        buscarParaSesion: async id => ({ id, activa: true, bloqueado: bloqueados.has(id), rol: { nombre: id === 9 ? 'Administrador' : 'Anunciante' } }),
       } },
       { provide: AnunciantesService, useValue: {
         buscarPorUsuario: async id => id === 1 ? null : ({ idUsuario: id, verificado: id !== 4 }),
@@ -65,6 +72,7 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const estado = async () => (await db.query('SELECT activa, eliminada, motivo_baja_admin FROM publicacion WHERE id_publicacion=10')).rows[0];
+  const estadoDe = async id => (await db.query('SELECT activa, eliminada, motivo_baja_admin FROM publicacion WHERE id_publicacion=$1', [id])).rows[0];
   const feed = async () => (await (await request('')).json()).datos.map(p => p.id);
 
   await t.test('autentica y limita la papelera al anunciante verificado y propietario', async () => {
@@ -158,6 +166,160 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     assert.equal((await estado()).eliminada, false);
     assert.equal((await estado()).activa, false);
     assert.equal((await db.query('SELECT id_publicacion FROM imagen WHERE id_imagen=50')).rows[0].id_publicacion, 10);
+  });
+
+  await t.test('administración: reactiva bajas, filtra por estado y rechaza carreras', async () => {
+    // La prueba anterior deja una baja administrativa en la publicación 10; se limpia para aislar el escenario.
+    await db.exec('UPDATE publicacion SET motivo_baja_admin=NULL WHERE id_publicacion=10');
+    await db.exec(`
+      INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante,activa,eliminada)
+        VALUES (40,'Reactivar con foto','Prueba',CURRENT_DATE,100,'Calle 4',1,30,2,true,false),
+          (50,'Pausada con foto','Prueba',CURRENT_DATE,100,'Calle 7',1,30,2,false,false),
+          (60,'Reactivar sin foto','Prueba',CURRENT_DATE,100,'Calle 5',1,30,2,false,false),
+          (70,'Baja de eliminada','Prueba',CURRENT_DATE,100,'Calle 6',1,30,2,false,true);
+      INSERT INTO imagen (id_imagen,id_publicacion,url) VALUES
+        (80,40,'https://example.invalid/foto2.jpg'),
+        (90,50,'https://example.invalid/foto3.jpg');
+    `);
+    const ids = publicaciones => publicaciones.map(p => p.id).sort((a, b) => a - b);
+    const administracion = async consulta => {
+      const respuesta = await request(`/administracion${consulta}`, 9);
+      assert.equal(respuesta.status, 200);
+      return (await respuesta.json()).datos;
+    };
+
+    for (const id of [40, 50, 60, 70]) {
+      const respuesta = await request(`/administracion/${id}/baja`, 9, 'PATCH', { motivo: 'Moderación' });
+      assert.equal(respuesta.status, 200);
+      assert.equal((await respuesta.json()).correoEnviado, true);
+    }
+    assert.equal(correos.length, 4);
+    assert.ok(!(await feed()).includes(40));
+    assert.ok(!(await feed()).includes(50));
+
+    assert.deepEqual(ids(await administracion('?estado=bajas&limite=100')), [40, 50, 60, 70]);
+    const inactivas = await administracion('?estado=inactivas&limite=100');
+    assert.ok(inactivas.every(p => p.activa === false && p.motivo_baja_admin === null));
+    assert.deepEqual(ids(inactivas), [10, 20, 30]);
+    assert.deepEqual(ids(await administracion('?estado=activas&limite=100')), []);
+    const todas = await administracion('?estado=todas&limite=100');
+    for (const id of [10, 20, 30, 40, 50, 60, 70]) assert.ok(ids(todas).includes(id));
+    assert.deepEqual(ids(await administracion('?limite=100')), ids(todas));
+    assert.equal((await request('/administracion?estado=eliminadas', 9)).status, 400);
+
+    assert.equal((await request('/administracion/40/reactivar', undefined, 'PATCH')).status, 401);
+    for (const id of [1, 2]) assert.equal((await request('/administracion/40/reactivar', id, 'PATCH')).status, 403);
+    assert.equal((await request('/40', 2, 'PATCH', { activa: true })).status, 403);
+
+    const reactivada = await request('/administracion/40/reactivar', 9, 'PATCH');
+    assert.equal(reactivada.status, 200);
+    const cuerpo = await reactivada.json();
+    assert.equal(cuerpo.motivo_baja_admin, null);
+    assert.equal(cuerpo.activa, false);
+    assert.deepEqual(await estadoDe(40), { activa: false, eliminada: false, motivo_baja_admin: null });
+    assert.ok(!(await feed()).includes(40));
+    assert.ok(ids(await administracion('?estado=inactivas&limite=100')).includes(40));
+    assert.ok(!ids(await administracion('?estado=activas&limite=100')).includes(40));
+    assert.ok(!ids(await administracion('?estado=bajas&limite=100')).includes(40));
+
+    const reactivadaPausada = await request('/administracion/50/reactivar', 9, 'PATCH');
+    assert.equal(reactivadaPausada.status, 200);
+    assert.equal((await reactivadaPausada.json()).activa, false);
+    assert.deepEqual(await estadoDe(50), { activa: false, eliminada: false, motivo_baja_admin: null });
+    assert.ok(!(await feed()).includes(50));
+    assert.ok(ids(await administracion('?estado=inactivas&limite=100')).includes(50));
+
+    const sinImagenes = await request('/administracion/60/reactivar', 9, 'PATCH');
+    assert.equal(sinImagenes.status, 200);
+    assert.equal((await sinImagenes.json()).activa, false);
+    assert.deepEqual(await estadoDe(60), { activa: false, eliminada: false, motivo_baja_admin: null });
+    assert.ok(!(await feed()).includes(60));
+    assert.ok(!ids(await administracion('?estado=bajas&limite=100')).includes(60));
+    assert.equal((await request('/60', 2, 'PATCH', { activa: true })).status, 400);
+
+    const eliminada = await request('/administracion/70/reactivar', 9, 'PATCH');
+    assert.equal(eliminada.status, 409);
+    assert.equal((await eliminada.json()).message, 'La publicación fue eliminada por su anunciante y no se puede reactivar');
+    assert.equal((await estadoDe(70)).motivo_baja_admin, 'Moderación');
+
+    const repetida = await request('/administracion/40/reactivar', 9, 'PATCH');
+    assert.equal(repetida.status, 409);
+    assert.equal((await repetida.json()).message, 'La publicación no está dada de baja');
+
+    assert.equal((await request('/administracion/999/reactivar', 9, 'PATCH')).status, 404);
+    assert.equal((await request('/administracion/invalido/reactivar', 9, 'PATCH')).status, 400);
+
+    const activadaPorDueno = await request('/40', 2, 'PATCH', { activa: true });
+    assert.equal(activadaPorDueno.status, 200);
+    assert.deepEqual(await estadoDe(40), { activa: true, eliminada: false, motivo_baja_admin: null });
+    assert.ok((await feed()).includes(40));
+    assert.ok(ids(await administracion('?estado=activas&limite=100')).includes(40));
+    assert.ok(!ids(await administracion('?estado=inactivas&limite=100')).includes(40));
+
+    assert.equal((await request('/administracion/60/baja', 9, 'PATCH', { motivo: 'Segunda moderación' })).status, 200);
+    const simultaneas = await Promise.all([
+      request('/administracion/60/reactivar', 9, 'PATCH'),
+      request('/administracion/60/reactivar', 9, 'PATCH'),
+    ]);
+    assert.deepEqual(simultaneas.map(r => r.status).sort(), [200, 409]);
+    assert.deepEqual(await estadoDe(60), { activa: false, eliminada: false, motivo_baja_admin: null });
+    assert.equal(correos.length, 5);
+  });
+
+  await t.test('mis publicaciones: pagina y busca las vigentes y sirve la papelera simple', async () => {
+    const mias = async (consulta, id = 2) => {
+      const respuesta = await request(`/mias/paginadas${consulta}`, id);
+      assert.equal(respuesta.status, 200);
+      return respuesta.json();
+    };
+    const papeleraDe = async (id = 2) => {
+      const respuesta = await request('/mias/papelera', id);
+      assert.equal(respuesta.status, 200);
+      return respuesta.json();
+    };
+    const ids = (pagina) => pagina.datos.map((publicacion) => publicacion.id);
+    const idsPapelera = (lista) => lista.map((publicacion) => publicacion.id);
+
+    const defecto = await mias('');
+    assert.equal(defecto.pagina, 1);
+    assert.equal(defecto.limite, 6);
+    assert.equal(defecto.total, 5);
+    assert.equal(defecto.totalPaginas, 1);
+    assert.equal(defecto.activas, 1);
+    assert.deepEqual(ids(defecto), [60, 50, 40, 30, 10]);
+
+    const primera = await mias('?limite=2&pagina=1');
+    assert.deepEqual(ids(primera), [60, 50]);
+    assert.equal(primera.total, 5);
+    assert.equal(primera.totalPaginas, 3);
+    assert.equal(primera.activas, 1);
+    assert.deepEqual(ids(await mias('?limite=2&pagina=2')), [40, 30]);
+    assert.deepEqual(ids(await mias('?limite=2&pagina=3')), [10]);
+    const fuera = await mias('?limite=2&pagina=99');
+    assert.equal(fuera.pagina, 3);
+    assert.deepEqual(ids(fuera), [10]);
+
+    const busqueda = await mias('?q=foto&limite=10');
+    assert.deepEqual(ids(busqueda), [60, 50, 40, 30]);
+    assert.equal(busqueda.total, 4);
+    assert.equal(busqueda.activas, 1);
+    assert.deepEqual(ids(await mias('?q=Calle%207&limite=10')), [50]);
+
+    assert.deepEqual(idsPapelera(await papeleraDe(2)), [70]);
+    assert.deepEqual(idsPapelera(await papeleraDe(3)), [20]);
+    const otro = await mias('?limite=10', 3);
+    assert.deepEqual(ids(otro), []);
+    assert.equal(otro.total, 0);
+    assert.equal(otro.activas, 0);
+
+    assert.equal((await request('/mias/paginadas', undefined)).status, 401);
+    assert.equal((await request('/mias/paginadas', 1)).status, 403);
+    assert.equal((await request('/mias/paginadas?estado=vigentes', 2)).status, 400);
+    assert.equal((await request('/mias/paginadas?pagina=0', 2)).status, 400);
+    assert.equal((await request('/mias/paginadas?limite=101', 2)).status, 400);
+    assert.equal((await request(`/mias/paginadas?q=${'a'.repeat(201)}`, 2)).status, 400);
+    assert.equal((await request('/mias/papelera', undefined)).status, 401);
+    assert.equal((await request('/mias/papelera', 1)).status, 403);
   });
 });
 
