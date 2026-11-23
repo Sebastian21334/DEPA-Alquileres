@@ -46,7 +46,6 @@
   border-top: 4px solid var(--color-primary, #f47818);
   color: #172b45;
 }
-.advertiser-payment-dialog .block-form { gap: 12px; }
 .advertiser-payment__header { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; }
 .advertiser-payment__header > div:last-child { min-width: 0; padding-left: 16px; border-left: 1px solid #dce3e8; }
 .advertiser-payment__header .cancellation-approval-icon { flex: none; }
@@ -435,9 +434,7 @@ dd {
   overflow-x: auto;
 }
 .settlement-history-caption {
-  padding: 16px 24px;
   text-align: left;
-  font-weight: 700;
 }
 .settlement-history td {
   vertical-align: top;
