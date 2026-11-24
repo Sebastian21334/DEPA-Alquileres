@@ -128,14 +128,14 @@ export class SolicitudVerificacion {
 
   @Column({
     name: 'creada_en',
-    type: 'timestamp',
+    type: 'timestamptz',
     default: () => 'CURRENT_TIMESTAMP',
   })
   creada_en: Date;
 
   @Column({
     name: 'actualizada_en',
-    type: 'timestamp',
+    type: 'timestamptz',
     default: () => 'CURRENT_TIMESTAMP',
   })
   actualizada_en: Date;

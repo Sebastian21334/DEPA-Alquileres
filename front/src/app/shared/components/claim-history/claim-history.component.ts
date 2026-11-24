@@ -8,6 +8,7 @@ import { ReservationService } from '../../services/reservation.service';
 import type { AutorReclamo, ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
 import { puedeValidarCodigo } from '../../utils/reservation-state';
 import { rolEnReclamo } from '../../utils/reclamo-rol';
+import { CATEGORIAS_RECLAMO, etiquetaCategoriaReclamo } from '../../utils/reclamo-categorias';
 
 /** Mismo ritmo que los chats de mensajes y de reembolsos. */
 const INTERVALO_CHAT_MS = 5000;
@@ -38,7 +39,7 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
         }
       </div>
     </header>
-    <p class="meta">{{ (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Reembolso faltante de cancelación' : categorias[item.categoria] }} · {{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
+    <p class="meta">{{ etiquetaCategoria(item) }} ·{{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</p>
     @if (item.devolucion_cancelacion; as saldo) {
       <div class="resolution">
         <p>Correspondía devolver: <strong>{{ saldo.esperado | currency:saldo.moneda:'code' }}</strong> ({{ saldo.porcentaje }} %)</p>
@@ -294,11 +295,8 @@ export class ClaimHistoryComponent {
       propio: mensaje.autor?.id === Number(this.auth.currentUser()?.sub),
       imagenes: (mensaje.evidencias ?? []).map((imagen) => ({ url: this.urlImagen(imagen), nombre: imagen.nombre_archivo })),
     })));
-  protected readonly categorias = {
-    LIMPIEZA: 'Limpieza', MANTENIMIENTO: 'Mantenimiento', INGRESO: 'Problemas de ingreso',
-    DESCRIPCION: 'La propiedad no coincide', OTRO: 'Otro motivo', DEMORA_ADMINISTRATIVA: 'Demora administrativa',
-    CODIGO_BLOQUEADO: 'Pedido de reinicio del código de alojamiento',
-  };
+  protected readonly categorias = CATEGORIAS_RECLAMO;
+  protected readonly etiquetaCategoria = etiquetaCategoriaReclamo;
   protected readonly estados = {
     ABIERTO: 'Recibido', EN_REVISION: 'En revisión', RESUELTO_INQUILINO: 'Resuelto',
     RESUELTO_ANUNCIANTE: 'Resuelto', CERRADO: 'Cerrado',

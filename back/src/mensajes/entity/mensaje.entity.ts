@@ -18,14 +18,14 @@ export class Mensaje {
   @Column({ name: 'texto', type: 'varchar', length: 250 })
   texto: string;
 
-  @Column({ name: 'fecha', type: 'timestamp' })
+  @Column({ name: 'fecha', type: 'timestamptz' })
   fecha: Date;
 
   // Permite mostrar el doble tilde al remitente y los pendientes al destinatario.
   @Column({ name: 'leido', type: 'boolean', default: false })
   leido: boolean;
 
-  @Column({ name: 'fecha_lectura', type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_lectura', type: 'timestamptz', nullable: true })
   fecha_lectura: Date | null;
 
   // Se separan origen y destino para reconstruir ambos sentidos de una conversación.

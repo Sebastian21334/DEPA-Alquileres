@@ -1,0 +1,36 @@
+:host { display: block; }
+
+.filtros-lista {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 14px;
+}
+.filtros-lista__busqueda { flex: 1 1 280px; }
+
+// Los filtros propios y los que se proyectan (por ejemplo, las fechas del historial) comparten estilo.
+.filtros-lista ::ng-deep {
+  .filtros-lista__filtro {
+    display: grid;
+    gap: 4px;
+    color: #60727c;
+    font-size: .82rem;
+    font-weight: 650;
+  }
+  .filtros-lista__filtro :is(select, input) {
+    min-width: 160px;
+    min-height: 42px;
+    padding: 8px 10px;
+    border: 1px solid #ccd6db;
+    border-radius: 9px;
+    background: #fff;
+    color: var(--color-text);
+    font: inherit;
+    font-size: .92rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .filtros-lista ::ng-deep .filtros-lista__filtro { flex: 1 1 100%; }
+  .filtros-lista ::ng-deep .filtros-lista__filtro :is(select, input) { width: 100%; }
+}

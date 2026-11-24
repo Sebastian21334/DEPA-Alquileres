@@ -82,21 +82,29 @@
       <p class="alert alert--error" role="alert">No se pudieron actualizar todos los datos del resumen. Podés volver a intentar con Actualizar.</p>
     }
     <div class="dashboard-metrics" [attr.aria-busy]="otherLoading()">
-      <button type="button" class="dashboard-metric metric-cancellation" (click)="openSection('cancelaciones')">
+      <button type="button" class="dashboard-metric metric-cancellation" (click)="abrirDesdeContador('cancelaciones')">
         <svg lucideCalendarX [size]="29" aria-hidden="true"></svg>
         <span>Cancelaciones pendientes<strong>{{ otherLoading() ? '…' : cancellations().length }}</strong></span>
       </button>
-      <button type="button" class="dashboard-metric" (click)="openSection('reclamos')">
+      <button type="button" class="dashboard-metric" (click)="abrirDesdeContador('reclamos')">
         <svg lucideMessageCircle [size]="29" aria-hidden="true"></svg>
         <span>Reclamos abiertos<strong>{{ otherLoading() ? '…' : openClaims().length }}</strong></span>
       </button>
-      <button type="button" class="dashboard-metric metric-refund" (click)="openSection('reembolsos')">
+      <button type="button" class="dashboard-metric metric-refund" (click)="abrirDesdeContador('reembolsos')">
         <svg lucideWallet [size]="29" aria-hidden="true"></svg>
         <span>Reembolsos pendientes<strong>{{ otherLoading() ? '…' : conteoPendientes() }}</strong></span>
       </button>
-      <button type="button" class="dashboard-metric" (click)="openSection('verificaciones')">
+      <button type="button" class="dashboard-metric" (click)="abrirDesdeContador('verificaciones')">
         <svg lucideShieldCheck [size]="29" aria-hidden="true"></svg>
         <span>Verificaciones pendientes<strong>{{ otherLoading() ? '…' : requests().length }}</strong></span>
+      </button>
+      <button type="button" class="dashboard-metric metric-settlement" (click)="abrirDesdeContador('liquidaciones')">
+        <svg lucideCircleDollarSign [size]="29" aria-hidden="true"></svg>
+        <span>Liquidaciones a pagar<strong>{{ otherLoading() ? '…' : liquidacionesAPagar().length }}</strong></span>
+      </button>
+      <button type="button" class="dashboard-metric metric-appeal" (click)="abrirDesdeContador('bloqueos')">
+        <svg lucideGavel [size]="29" aria-hidden="true"></svg>
+        <span>Apelaciones a responder<strong>{{ bloqueadosCargando() ? '…' : apelacionesAResponder().length }}</strong></span>
       </button>
     </div>
     <div class="dashboard-columns">
@@ -109,7 +117,7 @@
             <table>
               <thead><tr><th scope="col">Caso</th><th scope="col">Estado</th><th scope="col">Acción</th></tr></thead>
               <tbody>
-                @for (item of pendingCases(); track item.section + '-' + item.id) {
+                @for (item of pendientesMostrados(); track item.section + '-' + item.id) {
                   <tr>
                     <td>{{ item.label }}</td>
                     <td><span class="dashboard-status" [attr.data-tone]="item.tone">{{ item.status }}</span></td>
@@ -119,6 +127,17 @@
               </tbody>
             </table>
           </div>
+          @if (pendingCases().length > pendientesIniciales) {
+            <div class="dashboard-more">
+              <span role="status">Mostrando {{ pendientesMostrados().length }} de {{ pendingCases().length }}</span>
+              @if (pendingCases().length > pendientesVisibles()) {
+                <button type="button" class="button dashboard-button" (click)="verMasPendientes()">Ver más</button>
+              }
+              @if (pendientesVisibles() > pendientesIniciales) {
+                <button type="button" class="button dashboard-button" (click)="verMenosPendientes()">Ver menos</button>
+              }
+            </div>
+          }
         } @else {
           <p>{{ summaryError() ? 'No hay casos disponibles para mostrar.' : 'No hay pendientes de atención.' }}</p>
         }
@@ -149,9 +168,11 @@
     } @else if (!settlements().length) {
       <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
     } @else {
+      <app-filtros-lista class="admin-filtros" [lista]="listaLiquidaciones" etiqueta="Buscar liquidaciones"
+        placeholder="Buscar por reserva, publicación, inquilino o anunciante" />
       <div class="settlement-list">
-        @for (settlement of liquidacionesOrdenadas(); track settlement.id) {
-          <article class="settlement-card">
+        @for (settlement of listaLiquidaciones.visibles(); track settlement.id) {
+          <article class="settlement-card" [id]="'admin-liquidaciones-' + settlement.id" tabindex="-1">
             <div>
               <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
                 {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : settlement.codigo_validado_en ? 'Código validado' : 'Ingreso no verificado: plazo vencido' }}
@@ -203,8 +224,15 @@
               }
             </div>
           </article>
+        } @empty {
+          <p class="empty">No hay liquidaciones que coincidan. <button type="button" class="link-button" (click)="listaLiquidaciones.limpiar()">Limpiar filtros</button></p>
         }
       </div>
+      @if (listaLiquidaciones.filtrados().length) {
+        <app-paginador class="admin-paginador" [pagina]="listaLiquidaciones.pagina()" [paginas]="listaLiquidaciones.paginas()"
+          [total]="listaLiquidaciones.filtrados().length" etiqueta="liquidaciones" ariaLabel="Paginación de liquidaciones"
+          (paginaCambia)="listaLiquidaciones.irAPagina($event)" />
+      }
     }
   </section>
 
@@ -219,8 +247,10 @@
     @if (!cancellations().length) {
       <p class="empty">No hay solicitudes pendientes.</p>
     } @else {
+      <app-filtros-lista class="admin-filtros" [lista]="listaCancelaciones" etiqueta="Buscar solicitudes de cancelación"
+        placeholder="Buscar por solicitud, reserva, inquilino, publicación o motivo" />
       <div class="settlement-list">
-        @for (solicitud of cancellations(); track solicitud.id) {
+        @for (solicitud of listaCancelaciones.visibles(); track solicitud.id) {
           <article class="settlement-card" [id]="'admin-cancelaciones-' + solicitud.id" tabindex="-1">
             <div>
               <span class="status status--blocked">Pendiente</span>
@@ -245,8 +275,15 @@
               <button type="button" class="button button--danger-outline" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="rechazarCancelacion(solicitud)">Rechazar</button>
             </div>
           </article>
+        } @empty {
+          <p class="empty">No hay solicitudes que coincidan. <button type="button" class="link-button" (click)="listaCancelaciones.limpiar()">Limpiar filtros</button></p>
         }
       </div>
+      @if (listaCancelaciones.filtrados().length) {
+        <app-paginador class="admin-paginador" [pagina]="listaCancelaciones.pagina()" [paginas]="listaCancelaciones.paginas()"
+          [total]="listaCancelaciones.filtrados().length" etiqueta="solicitudes" ariaLabel="Paginación de solicitudes de cancelación"
+          (paginaCambia)="listaCancelaciones.irAPagina($event)" />
+      }
     }
   </section>
 
@@ -254,7 +291,7 @@
     <div class="panel__title">
       <div>
         <h2>Reembolsos</h2>
-        <p>Devoluciones creadas por cancelaciones, reclamos o contracargos.</p>
+        <p>Devoluciones creadas por cancelaciones o reclamos.</p>
       </div>
       <span class="counter">{{ conteoPendientes() }} pendientes</span>
     </div>
@@ -267,8 +304,10 @@
     @if (!refunds().length) {
       <p class="empty">No hay reembolsos registrados.</p>
     } @else {
+      <app-filtros-lista class="admin-filtros" [lista]="listaReembolsos" etiqueta="Buscar reembolsos"
+        placeholder="Buscar por reembolso, reserva, publicación, inquilino, motivo u operación" />
       <div class="settlement-list">
-        @for (reembolso of refundsPageItems(); track reembolso.id) {
+        @for (reembolso of listaReembolsos.visibles(); track reembolso.id) {
           <article class="settlement-card" [id]="'admin-reembolsos-' + reembolso.id" tabindex="-1">
             <div>
               <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ estadosReembolso[reembolso.estado] }}</span>
@@ -291,18 +330,14 @@
               </button>
             </div>
           </article>
+        } @empty {
+          <p class="empty">No hay reembolsos que coincidan. <button type="button" class="link-button" (click)="listaReembolsos.limpiar()">Limpiar filtros</button></p>
         }
       </div>
-      @if (refundsPages() > 1) {
-        <nav class="pagination" aria-label="Paginación de reembolsos">
-          <span role="status">Página {{ refundsPage() }} de {{ refundsPages() }}</span>
-          <div class="pagination__actions">
-            <button type="button" class="button button--ghost" (click)="refundsPage.set(refundsPage() - 1)"
-              [disabled]="refundsPage() <= 1">Anterior</button>
-            <button type="button" class="button button--ghost" (click)="refundsPage.set(refundsPage() + 1)"
-              [disabled]="refundsPage() >= refundsPages()">Siguiente</button>
-          </div>
-        </nav>
+      @if (listaReembolsos.filtrados().length) {
+        <app-paginador class="admin-paginador" [pagina]="listaReembolsos.pagina()" [paginas]="listaReembolsos.paginas()"
+          [total]="listaReembolsos.filtrados().length" etiqueta="reembolsos" ariaLabel="Paginación de reembolsos"
+          (paginaCambia)="listaReembolsos.irAPagina($event)" />
       }
     }
   </section>
@@ -316,6 +351,20 @@
     } @else if (!historialLiquidaciones().length) {
       <p class="empty">Todavía no hay pagos a anunciantes registrados.</p>
     } @else {
+      <app-filtros-lista class="admin-filtros" [lista]="listaHistorialLiquidaciones" etiqueta="Buscar pagos registrados"
+        placeholder="Buscar por reserva, publicación, anunciante, operación o administrador">
+        <label class="filtros-lista__filtro">Desde
+          <input type="date" [value]="historialDesde()" [max]="historialHasta() || null"
+            (change)="filtrarHistorialLiquidaciones('desde', $any($event.target).value)" />
+        </label>
+        <label class="filtros-lista__filtro">Hasta
+          <input type="date" [value]="historialHasta()" [min]="historialDesde() || null"
+            (change)="filtrarHistorialLiquidaciones('hasta', $any($event.target).value)" />
+        </label>
+      </app-filtros-lista>
+      @if (!listaHistorialLiquidaciones.filtrados().length) {
+        <p class="empty">No hay pagos que coincidan. <button type="button" class="link-button" (click)="limpiarHistorialLiquidaciones()">Limpiar filtros</button></p>
+      } @else {
       <div class="table-wrap settlement-history">
         <table class="settlement-history__table">
           <caption class="settlement-history-caption">Pagos registrados a anunciantes</caption>
@@ -323,7 +372,7 @@
             <tr><th scope="col">Fecha de registro</th><th scope="col">Reserva</th><th scope="col">Anunciante</th><th scope="col">Importe</th><th scope="col">Comprobante y observación</th><th scope="col">Registrado por</th></tr>
           </thead>
           <tbody>
-            @for (pago of historialLiquidaciones(); track pago.id) {
+            @for (pago of listaHistorialLiquidaciones.visibles(); track pago.id) {
               <tr>
                 <td data-label="Fecha de registro">
                   @if (pago.fecha) {
@@ -347,6 +396,10 @@
           </tbody>
         </table>
       </div>
+      <app-paginador class="admin-paginador" [pagina]="listaHistorialLiquidaciones.pagina()" [paginas]="listaHistorialLiquidaciones.paginas()"
+        [total]="listaHistorialLiquidaciones.filtrados().length" etiqueta="pagos" ariaLabel="Paginación del historial de liquidaciones"
+        (paginaCambia)="listaHistorialLiquidaciones.irAPagina($event)" />
+      }
     }
   </section>
 
@@ -583,9 +636,15 @@
     }
     @if (!claims().length && !errorReclamos()) {
       <p class="empty">{{ loading() ? 'Cargando reclamos…' : 'No hay reclamos registrados.' }}</p>
+    } @else if (claims().length) {
+      @if (claims().length >= maxReclamosAdmin) {
+        <p class="refund-note" role="status">Se muestran los {{ maxReclamosAdmin }} reclamos más recientes.</p>
+      }
+      <app-filtros-lista class="admin-filtros" [lista]="listaReclamos" etiqueta="Buscar reclamos"
+        placeholder="Buscar por reclamo, reserva, publicación, inquilino, anunciante o descripción" />
     }
     <div class="settlement-list">
-      @for (claim of claims(); track claim.id) {
+      @for (claim of listaReclamos.visibles(); track claim.id) {
         <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
           <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
             [actualizar]="activeSection() === 'reclamos'"
@@ -647,8 +706,17 @@
             }
           }
         </article>
+      } @empty {
+        @if (claims().length) {
+          <p class="empty">No hay reclamos que coincidan. <button type="button" class="link-button" (click)="listaReclamos.limpiar()">Limpiar filtros</button></p>
+        }
       }
     </div>
+    @if (listaReclamos.filtrados().length) {
+      <app-paginador class="admin-paginador" [pagina]="listaReclamos.pagina()" [paginas]="listaReclamos.paginas()"
+        [total]="listaReclamos.filtrados().length" etiqueta="reclamos" ariaLabel="Paginación de reclamos"
+        (paginaCambia)="listaReclamos.irAPagina($event)" />
+    }
   </section>
 
   <section class="panel admin-module" [hidden]="activeSection() !== 'verificaciones'">
@@ -664,8 +732,13 @@
     } @else if (!requests().length) {
       <p class="empty">No hay solicitudes pendientes.</p>
     } @else {
+      <app-filtros-lista class="admin-filtros" [lista]="listaVerificaciones" etiqueta="Buscar solicitudes de verificación"
+        placeholder="Buscar por nombre, email, CUIT/CUIL, razón social o solicitud" />
+      @if (!listaVerificaciones.filtrados().length) {
+        <p class="empty">No hay solicitudes que coincidan. <button type="button" class="link-button" (click)="listaVerificaciones.limpiar()">Limpiar filtros</button></p>
+      }
       <div class="requests">
-        @for (request of requests(); track request.id) {
+        @for (request of listaVerificaciones.visibles(); track request.id) {
           <article class="request" [id]="'admin-verificaciones-' + request.id" tabindex="-1">
             <div class="request__identity">
               <span class="avatar">{{
@@ -794,6 +867,11 @@
           </article>
         }
       </div>
+      @if (listaVerificaciones.filtrados().length) {
+        <app-paginador class="admin-paginador" [pagina]="listaVerificaciones.pagina()" [paginas]="listaVerificaciones.paginas()"
+          [total]="listaVerificaciones.filtrados().length" etiqueta="solicitudes" ariaLabel="Paginación de solicitudes de verificación"
+          (paginaCambia)="listaVerificaciones.irAPagina($event)" />
+      }
     }
   </section>
 
@@ -909,9 +987,13 @@
     @if (bloqueadosCargando()) {
       <p class="empty" role="status">Cargando usuarios bloqueados…</p>
     } @else {
+      @if (bloqueados().length) {
+        <app-filtros-lista class="admin-filtros" [lista]="listaBloqueos" etiqueta="Buscar bloqueos actuales"
+          placeholder="Buscar por nombre, email, motivo o administrador" />
+      }
       <div class="blocked-users">
-        @for (bloqueo of bloqueosOrdenados(); track bloqueo.detalle.id) {
-          <article class="blocked-user">
+        @for (bloqueo of listaBloqueos.visibles(); track bloqueo.detalle.id) {
+          <article class="blocked-user" [id]="'admin-bloqueos-' + bloqueo.usuario.id" tabindex="-1">
             <header class="blocked-user__header">
               <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
               <div class="blocked-user__identity">
@@ -919,8 +1001,8 @@
                 <p>{{ bloqueo.usuario.email }}</p>
               </div>
               <span class="blocked-user__status">
-                @if (bloqueo.detalle.apelacion) {
-                  <svg lucideMessageCircle [size]="15" aria-hidden="true"></svg> {{ bloqueo.detalle.respuesta ? 'Respondida' : 'Apelación en curso' }}
+                @if (tieneApelacion(bloqueo.detalle)) {
+                  <svg lucideMessageCircle [size]="15" aria-hidden="true"></svg> {{ apelacionSinResponder(bloqueo.detalle) ? 'Apelación en curso' : 'Respondida' }}
                 } @else {
                   <svg lucideClock3 [size]="15" aria-hidden="true"></svg> Sin apelación
                 }
@@ -958,17 +1040,30 @@
             }
           </article>
         } @empty {
-          @if (!bloqueadosError()) { <p class="empty">No hay usuarios bloqueados.</p> }
+          @if (bloqueados().length) {
+            <p class="empty">No hay bloqueos que coincidan. <button type="button" class="link-button" (click)="listaBloqueos.limpiar()">Limpiar filtros</button></p>
+          } @else if (!bloqueadosError()) {
+            <p class="empty">No hay usuarios bloqueados.</p>
+          }
         }
       </div>
+      @if (listaBloqueos.filtrados().length) {
+        <app-paginador class="admin-paginador" [pagina]="listaBloqueos.pagina()" [paginas]="listaBloqueos.paginas()"
+          [total]="listaBloqueos.filtrados().length" etiqueta="bloqueos" ariaLabel="Paginación de bloqueos actuales"
+          (paginaCambia)="listaBloqueos.irAPagina($event)" />
+      }
     }
     } @else {
       @if (historialBloqueosError()) { <p class="alert alert--error" role="alert">{{ historialBloqueosError() }}</p> }
       @if (historialBloqueosCargando()) {
         <p class="empty" role="status">Cargando historial de bloqueos...</p>
       } @else {
+        @if (historialBloqueos().length) {
+          <app-filtros-lista class="admin-filtros" [lista]="listaHistorialBloqueos" etiqueta="Buscar en el historial de bloqueos"
+            placeholder="Buscar por nombre, email, motivo o administrador" />
+        }
         <div class="blocked-users">
-          @for (bloqueo of historialBloqueos(); track bloqueo.usuario.id + '-' + bloqueo.detalle.id) {
+          @for (bloqueo of listaHistorialBloqueos.visibles(); track bloqueo.usuario.id + '-' + bloqueo.detalle.id) {
             <article class="blocked-user">
               <header class="blocked-user__header">
                 <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
@@ -986,9 +1081,18 @@
               }
             </article>
           } @empty {
-            @if (!historialBloqueosError()) { <p class="empty">No hay bloqueos anteriores registrados.</p> }
+            @if (historialBloqueos().length) {
+              <p class="empty">No hay bloqueos que coincidan. <button type="button" class="link-button" (click)="listaHistorialBloqueos.limpiar()">Limpiar filtros</button></p>
+            } @else if (!historialBloqueosError()) {
+              <p class="empty">No hay bloqueos anteriores registrados.</p>
+            }
           }
         </div>
+        @if (listaHistorialBloqueos.filtrados().length) {
+          <app-paginador class="admin-paginador" [pagina]="listaHistorialBloqueos.pagina()" [paginas]="listaHistorialBloqueos.paginas()"
+            [total]="listaHistorialBloqueos.filtrados().length" etiqueta="bloqueos" ariaLabel="Paginación del historial de bloqueos"
+            (paginaCambia)="listaHistorialBloqueos.irAPagina($event)" />
+        }
       }
     }
   </section>

@@ -14,6 +14,9 @@ import {
   type IUsuariosCredencialesRepository,
 } from '../repository/usuarios.repository.interface';
 
+// D10: el enlace de verificación del correo vence a las 24 horas.
+const VIGENCIA_VERIFICACION_MS = 24 * 60 * 60 * 1000;
+
 @Injectable()
 export class UsuariosCredencialesService {
   constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosCredencialesRepository, @Inject(HASH_CONTRASENIAS) private readonly hash: IHashContrasenias) {}
@@ -38,16 +41,21 @@ export class UsuariosCredencialesService {
     return user;
   }
 
-  /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. */
-  async generarTokenVerificacion(id: number, email: string): Promise<string | null> {
-    const token = crypto.randomBytes(32).toString('hex');
-    return await this.usuariosRepo.guardarTokenVerificacion(id, email, token) ? token : null;
+  /** Crea un token de verificación con su vencimiento, sin persistirlo. */
+  nuevoTokenVerificacion(): { token: string; expira: Date } {
+    return { token: crypto.randomBytes(32).toString('hex'), expira: new Date(Date.now() + VIGENCIA_VERIFICACION_MS) };
   }
 
-  /** Marca la cuenta como verificada y consume el token (uso único). */
+  /** Genera un token de verificación, lo persiste en el usuario y lo devuelve. El anterior deja de servir. */
+  async generarTokenVerificacion(id: number, email: string): Promise<string | null> {
+    const { token, expira } = this.nuevoTokenVerificacion();
+    return await this.usuariosRepo.guardarTokenVerificacion(id, email, token, expira) ? token : null;
+  }
+
+  /** Marca la cuenta como verificada y consume el token vigente (uso único). */
   async verificarCuenta(token: string): Promise<void> {
     if (!(await this.usuariosRepo.verificarCuenta(token))) {
-      throw new BadRequestException('Token de verificación inválido');
+      throw new BadRequestException('El enlace de verificación no es válido o venció. Iniciá sesión para pedir uno nuevo.');
     }
   }
 

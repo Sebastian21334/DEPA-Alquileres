@@ -101,10 +101,10 @@ export class Liquidacion {
   })
   admin_resolucion: Relation<Usuario | null>;
 
-  @Column({ name: 'fecha_resolucion', type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_resolucion', type: 'timestamptz', nullable: true })
   fecha_resolucion: Date | null;
 
-  @Column({ name: 'fecha_pago_propietario', type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_pago_propietario', type: 'timestamptz', nullable: true })
   fecha_pago_propietario: Date | null;
 
   /** Solo lo leen las consultas de liquidaciones: las relaciones de reclamos o reembolsos no lo exponen. */
@@ -117,9 +117,9 @@ export class Liquidacion {
   @Column({ name: 'aviso_pago_anunciante_en', type: 'timestamptz', nullable: true })
   aviso_pago_anunciante_en: Date | null;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 
-  @UpdateDateColumn({ name: 'actualizado_en', type: 'timestamp' })
+  @UpdateDateColumn({ name: 'actualizado_en', type: 'timestamptz' })
   actualizado_en: Date;
 }

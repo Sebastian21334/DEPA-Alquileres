@@ -38,10 +38,10 @@ export class ReprogramacionReserva {
   @Column({ name: 'fecha_fin_nueva', type: 'date' })
   fecha_fin_nueva: string;
 
-  @CreateDateColumn({ name: 'creada_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creada_en', type: 'timestamptz' })
   creada_en: Date;
 
-  @Column({ name: 'notificada_en', type: 'timestamp', nullable: true })
+  @Column({ name: 'notificada_en', type: 'timestamptz', nullable: true })
   notificada_en: Date | null;
 
   @Column({

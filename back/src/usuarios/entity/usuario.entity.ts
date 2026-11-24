@@ -105,6 +105,14 @@ export class Usuario {
   token_verificacion: string | null;
 
   @Column({
+    name: 'token_verificacion_expira',
+    type: 'timestamptz',
+    nullable: true,
+    select: false,
+  })
+  token_verificacion_expira: Date | null;
+
+  @Column({
     name: 'token_recuperacion',
     type: 'varchar',
     nullable: true,
@@ -114,7 +122,7 @@ export class Usuario {
 
   @Column({
     name: 'token_recuperacion_expira',
-    type: 'timestamp',
+    type: 'timestamptz',
     nullable: true,
     select: false,
   })

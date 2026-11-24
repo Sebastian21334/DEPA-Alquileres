@@ -36,7 +36,8 @@ export class MailService implements IMailService {
       'Verificá tu cuenta de DEPA',
       `<p style="margin:0 0 16px">Gracias por registrarte en DEPA. Para proteger tu cuenta necesitamos confirmar que este correo te pertenece.</p>
        ${this.plantillas.boton('Verificar mi cuenta', link)}
-       <p style="margin:20px 0 0;color:#667085;font-size:13px">Si no creaste una cuenta en DEPA, podés ignorar este mensaje con tranquilidad.</p>`,
+       <p style="margin:20px 0 12px">El enlace vence en 24 horas y solo puede usarse una vez. Si pedís uno nuevo, el anterior deja de funcionar.</p>
+       <p style="margin:0;color:#667085;font-size:13px">Si no creaste una cuenta en DEPA, podés ignorar este mensaje con tranquilidad.</p>`,
       'Confirmá tu correo para comenzar a usar DEPA.',
     );
   }

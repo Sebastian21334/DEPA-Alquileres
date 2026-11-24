@@ -45,7 +45,7 @@ export class ReclamoMensaje {
   })
   visible_para: VisibilidadMensajeReclamo;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 
   // T49: imágenes enviadas con este mensaje.

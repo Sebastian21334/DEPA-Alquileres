@@ -8,13 +8,18 @@ export interface RentalDateRange {
 /** La regla autoritativa vive en ReservaReprogramacionService. */
 export const DIAS_MINIMOS_REPROGRAMACION = 6;
 
-export function fechaHoyArgentina(): string {
+/** Día en Argentina (AAAA-MM-DD) de un instante. */
+export function fechaArgentina(instante: Date | string): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Argentina/Buenos_Aires',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(new Date(instante));
+}
+
+export function fechaHoyArgentina(): string {
+  return fechaArgentina(new Date());
 }
 
 export function sumarDias(fecha: string, dias: number): string {
