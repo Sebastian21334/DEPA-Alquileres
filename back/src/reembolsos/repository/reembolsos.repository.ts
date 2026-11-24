@@ -45,7 +45,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  /** T44: la URL privada del comprobante y el inquilino que puede verlo. */
+  /** La URL privada del comprobante y el inquilino que puede verlo. */
   async buscarComprobante(id: number): Promise<{ url: string | null; idInquilino: number | null } | null> {
     const fila = await this.repository.createQueryBuilder('reembolso')
       .leftJoin('reembolso.reserva', 'reserva')

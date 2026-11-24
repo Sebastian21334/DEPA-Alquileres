@@ -533,7 +533,7 @@ export class ReservasService
     return this.prepararRespuesta(reserva);
   }
 
-  /** T53: detalle de cualquier reserva para el panel admin, sin el control de participante. */
+  /** Detalle de cualquier reserva para el panel admin, sin el control de participante. */
   async buscarParaAdministracion(id: number): Promise<Reserva> {
     return this.prepararRespuesta(await this.obtenerReserva(id));
   }
@@ -609,8 +609,8 @@ export class ReservasService
   }
 
   /**
-   * T34: Administración da por bueno el ingreso sin el código. La liquidación queda
-   * pendiente de pago y el pago se habilita en la fecha habitual (T35).
+   * Administración da por bueno el ingreso sin el código. La liquidación queda
+   * pendiente de pago y el pago se habilita en la fecha habitual.
    * El ingreso queda validado desde ahora, como con el código, para que la estadía se vea
    * «En curso» y después «Finalizada»; quién lo decidió y por qué queda en el reclamo.
    */
@@ -827,7 +827,7 @@ export class ReservasService
             `El ingreso ya se validó el ${fechaParaMostrar(fechaArgentina(reserva.codigo_validado_en!))}. No hace falta volver a cargar el código.`,
           );
         }
-        // T34: el bloqueo se informa antes que las fechas, porque es lo que el anunciante tiene que resolver.
+        // El bloqueo se informa antes que las fechas, porque es lo que el anunciante tiene que resolver.
         if (this.codigoBloqueado(reserva)) throw new ConflictException(this.mensajeCodigoBloqueado());
         const estadoEstadia = this.calcularEstadoEstadia(reserva);
         const vencimiento = this.liquidaciones.fechaDisponiblePagoManual(reserva);
@@ -964,7 +964,7 @@ export class ReservasService
     return `El código se bloqueó tras ${MAX_INTENTOS_CODIGO} intentos incorrectos. Pedí el reinicio a Administración desde la reserva.`;
   }
 
-  /** T34: dice desde o hasta cuándo se puede cargar el código. */
+  /** Dice desde o hasta cuándo se puede cargar el código. */
   private mensajeCodigoFueraDeFecha(reserva: Reserva, estadoEstadia: string): string {
     if (estadoEstadia === 'CONFIRMADA' && reserva.fecha_inicio)
       return `Vas a poder validar el código desde el ${fechaParaMostrar(reserva.fecha_inicio)}, cuando empieza la estadía.`;

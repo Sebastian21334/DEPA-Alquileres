@@ -22,7 +22,7 @@ import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
 import { ReclamarFaltanteCancelacionDto } from '../dto/reclamo-faltante-cancelacion.dto';
 
-// T49: mismo límite al crear el reclamo y en cada mensaje del chat; el servicio controla el total del reclamo.
+// Mismo límite al crear el reclamo y en cada mensaje del chat; el servicio controla el total del reclamo.
 const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', MAX_IMAGENES_POR_ENVIO, {
   limits: { fileSize: MAX_BYTES_IMAGEN },
 });
@@ -101,7 +101,7 @@ export class ReclamosController {
     );
   }
 
-  /** JSON con solo texto, o multipart con texto opcional e imágenes en `evidencias` (T49). */
+  /** JSON con solo texto, o multipart con texto opcional e imágenes en `evidencias`. */
   @PermitirAccesoLimitado()
   @Post(':id/mensajes')
   @UseInterceptors(EVIDENCIAS_INTERCEPTOR)

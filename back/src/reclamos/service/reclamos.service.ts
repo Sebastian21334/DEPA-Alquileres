@@ -46,7 +46,7 @@ import { RECLAMOS_REPOSITORY } from '../repository/reclamos.repository.interface
 import type { IReclamosRepository } from '../repository/reclamos.repository.interface';
 import type { Usuario } from '../../usuarios/entity/usuario.entity';
 
-/** T49: imágenes por envío (al crear el reclamo o en un mensaje) y por reclamo, sumando las de todas las partes. */
+/** Imágenes por envío (al crear el reclamo o en un mensaje) y por reclamo, sumando las de todas las partes. */
 export const MAX_IMAGENES_POR_ENVIO = 10;
 export const MAX_IMAGENES_POR_RECLAMO = 30;
 export const MAX_BYTES_IMAGEN = 5 * 1024 * 1024;
@@ -220,7 +220,7 @@ export class ReclamosService {
     return this.imagenesRespuesta(guardadas);
   }
 
-  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
+  /** El mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[] = []): Promise<MensajeReclamoRespuesta> {
     const reclamo = await this.buscarComoParticipante(id, idUsuario, esAdmin);
     this.verificarNoCerrado(reclamo);
@@ -357,7 +357,7 @@ export class ReclamosService {
   }
 
   /**
-   * T34: el pedido de reinicio del código se resuelve habilitando intentos, confirmando
+   * El pedido de reinicio del código se resuelve habilitando intentos, confirmando
    * el ingreso o devolviendo el total con motivo. Los demás reclamos conservan sus opciones.
    */
   private async resolverFaltanteCancelacion(reclamo: Reclamo, reserva: Reserva, dto: ResolverReclamoDto, idAdmin: number, previo: Reembolso | null, transaccion: EntityManager): Promise<Reembolso | undefined> {
@@ -468,7 +468,7 @@ export class ReclamosService {
 
   /**
    * Respuesta de un reclamo: sin notas internas para las partes y con los datos mínimos de cada autor.
-   * T49: cada imagen va en su mensaje o, si no tiene, en la descripción, con un enlace firmado de 15 minutos.
+   * Cada imagen va en su mensaje o, si no tiene, en la descripción, con un enlace firmado de 15 minutos.
    */
   private async responder(reclamo: Reclamo, esAdmin: boolean): Promise<ReclamoRespuestaDto> {
     const mensajes = (reclamo.mensajes ?? [])
@@ -503,7 +503,7 @@ export class ReclamosService {
     return !evidencia.mensaje || evidencia.mensaje.visible_para === VisibilidadMensajeReclamo.TODOS;
   }
 
-  /** T49: valida y reduce todas las imágenes antes de subir ninguna, así un archivo inválido no deja otros subidos. */
+  /** Valida y reduce todas las imágenes antes de subir ninguna, así un archivo inválido no deja otros subidos. */
   private async prepararImagenes(idReclamo: number, archivos: Express.Multer.File[]): Promise<ImagenPreparada[]> {
     if (archivos.length > MAX_IMAGENES_POR_ENVIO)
       throw new BadRequestException(`Podés adjuntar hasta ${MAX_IMAGENES_POR_ENVIO} imágenes por envío`);
@@ -547,7 +547,7 @@ export class ReclamosService {
     }
   }
 
-  /** T49: guarda en una transacción lo que acompaña a las imágenes ya subidas; si algo falla, las borra. */
+  /** Guarda en una transacción lo que acompaña a las imágenes ya subidas; si algo falla, las borra. */
   private async guardarConImagenes<T>(idReclamo: number, subidas: ImagenSubida[], guardar: (reclamos: IReclamosRepository, vigente: Reclamo) => Promise<T>): Promise<T> {
     let guardado = false;
     try {

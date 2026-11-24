@@ -104,18 +104,18 @@ export interface AdminPagoLiquidacion {
   moneda: string | null;
   referencia: string | null;
   observacion: string | null;
-  /** Posición del pago dentro de la liquidación, para pedir su comprobante (T56). */
+  /** Posición del pago dentro de la liquidación, para pedir su comprobante. */
   indice: number;
   comprobante: string | null;
 }
 
-/** T56: datos para transferir al anunciante. */
+/** Datos para transferir al anunciante. */
 export interface DatosTransferenciaAnunciante {
   cbu: string | null;
   cuit_cuil: string | null;
 }
 
-/** T44/T56: campos opcionales que acompañan al comprobante de una transferencia manual. */
+/** Campos opcionales que acompañan al comprobante de una transferencia manual. */
 export interface DatosTransferencia {
   referencia?: string;
   observacion?: string;
@@ -136,7 +136,7 @@ export interface AdminReembolso {
   /** Origen interno del reembolso; en los reclamos es `rec:<id del reclamo>`. */
   referencia_interna?: string | null;
   referencia_externa?: string | null;
-  /** T44: nombre del comprobante de la transferencia; null en los registros anteriores. */
+  /** Nombre del comprobante de la transferencia; null en los registros anteriores. */
   comprobante_nombre?: string | null;
   observacion_transferencia?: string | null;
   resuelto_en?: string | null;
@@ -249,12 +249,12 @@ export class AdminService {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
   }
 
-  /** T44: multipart con el comprobante obligatorio y la referencia opcional. */
+  /** Multipart con el comprobante obligatorio y la referencia opcional. */
   registrarTransferenciaReembolso(id: number, comprobante: File, datos: DatosTransferencia = {}) {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, this.formularioTransferencia(comprobante, datos));
   }
 
-  /** T56: el pago al anunciante se registra con el comprobante de la transferencia. */
+  /** El pago al anunciante se registra con el comprobante de la transferencia. */
   registrarPagoAnunciante(idReserva: number, comprobante: File, datos: DatosTransferencia = {}) {
     return this.http.patch<AdminSettlement>(`${this.api}/reservas/${idReserva}/liquidacion/pago`, this.formularioTransferencia(comprobante, datos));
   }

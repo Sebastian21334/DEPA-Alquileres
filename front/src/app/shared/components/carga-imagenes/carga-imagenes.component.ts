@@ -6,9 +6,9 @@ const FORMATOS: Record<string, string> = { 'image/jpeg': 'JPEG', 'image/png': 'P
 let siguienteId = 0;
 
 /**
- * T05: elige imágenes para un formulario (reclamo del inquilino y pedido de reinicio del código).
+ * Elige imágenes para un formulario (reclamo del inquilino y pedido de reinicio del código).
  * Descarta solo las que no cumplen y avisa cuáles; las elegidas se ven con la galería de publicaciones, sin portada ni orden.
- * El máximo, los tipos y el tamaño son parámetros: el back vuelve a validar y T49 puede ampliar el límite.
+ * El máximo, los tipos y el tamaño son parámetros: el back vuelve a validar y cada uso puede ampliar el límite.
  */
 @Component({
   selector: 'app-carga-imagenes',

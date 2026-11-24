@@ -23,7 +23,7 @@ export class ReembolsosReservaController {
     return this.operaciones.recuperarConfirmacion(id, dto.referencia ?? '', req.user.id);
   }
 
-  /** T44: multipart con el comprobante obligatorio (`comprobante`), la referencia y la observación opcionales. */
+  /** Multipart con el comprobante obligatorio (`comprobante`), la referencia y la observación opcionales. */
   @Patch(':id/transferencia')
   @UseInterceptors(ComprobanteInterceptor())
   registrarTransferencia(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarTransferenciaDto, @UploadedFile() comprobante: Express.Multer.File | undefined, @Req() req: AuthenticatedRequest) {

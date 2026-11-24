@@ -34,11 +34,11 @@
               </button>
             </header>
             @if (reembolso.comprobante_nombre) {
-              <!-- T44: el inquilino ve el comprobante de la transferencia que recibió. -->
+              <!-- El inquilino ve el comprobante de la transferencia que recibió. -->
               <p class="refund-threads__receipt">Comprobante de la transferencia:
                 <app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(reembolso.id)" [etiqueta]="'Ver ' + reembolso.comprobante_nombre" />
               </p>
-              <!-- T56: el número de operación y la observación que cargó el admin con el comprobante. -->
+              <!-- El número de operación y la observación que cargó el admin con el comprobante. -->
               @if (reembolso.referencia_externa) {
                 <p class="refund-threads__detail">Número de operación: {{ reembolso.referencia_externa }}</p>
               }
@@ -249,7 +249,7 @@
       </div>
 
       @if (administracion) {
-        <!-- T53: el admin ve a las dos partes de la reserva, con enlace a su perfil. -->
+        <!-- El admin ve a las dos partes de la reserva, con enlace a su perfil. -->
         <section class="receipt-card admin-parties" aria-label="Partes de la reserva">
           @for (parte of partes(); track parte.rol) {
             <div>

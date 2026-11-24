@@ -1,4 +1,4 @@
--- T34: pedido de reinicio del código de alojamiento.
+-- Pedido de reinicio del código de alojamiento.
 -- Agrega la categoría con la que el anunciante pide el reinicio y las dos
 -- resoluciones a su favor. Solo inserta valores nuevos y se puede repetir.
 INSERT INTO public.estado (codigo_ambito, codigo, nombre) VALUES

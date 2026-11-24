@@ -14,7 +14,7 @@ export interface MensajeConversacion {
   interno?: boolean;
   leido?: boolean;
   imagen?: string;
-  /** T49: imágenes adjuntas al mensaje (reclamos). */
+  /** Imágenes adjuntas al mensaje (reclamos). */
   imagenes?: { url: string; nombre: string }[];
 }
 

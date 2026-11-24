@@ -1,6 +1,6 @@
 <section class="admin" aria-label="Panel administrativo">
   <aside class="admin-sidebar">
-    <!-- T58: el logo lleva al inicio del sitio. -->
+    <!-- El logo lleva al inicio del sitio. -->
     <a class="admin-brand" routerLink="/" title="Ir al inicio"><img src="/images/Logo.png" alt="DEPA" /><span>Alquileres</span></a>
     <nav class="admin-nav" aria-label="Secciones del panel">
       <button type="button" [attr.aria-current]="activeSection() === 'resumen' ? 'page' : null" (click)="openSection('resumen')">
@@ -669,7 +669,7 @@
                 <label>Resultado de la revisión
                   <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
                     @if (claim.categoria === 'CODIGO_BLOQUEADO') {
-                      <!-- T34: el pedido de reinicio del código tiene sus propias salidas. -->
+                      <!-- El pedido de reinicio del código tiene sus propias salidas. -->
                       <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
                       <option value="CONFIRMAR_INGRESO">Confirmar el ingreso sin código (a favor del anunciante)</option>
                       <option value="DEVOLUCION_TOTAL">Devolver el 100 % al inquilino</option>

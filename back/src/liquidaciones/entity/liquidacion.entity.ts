@@ -22,7 +22,7 @@ export interface PagoAnuncianteRegistrado {
   referencia: string | null;
   observacion: string | null;
   administradorId: number | null;
-  /** T56: URL privada del comprobante; nunca viaja en las respuestas, se pide un enlace firmado. */
+  /** URL privada del comprobante; nunca viaja en las respuestas, se pide un enlace firmado. */
   comprobanteUrl?: string | null;
   comprobanteNombre?: string | null;
 }
