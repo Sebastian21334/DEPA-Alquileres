@@ -38,11 +38,13 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
   `);
   const repository = new PublicacionesRepository(source.getRepository(Publicacion), source.getRepository(Reserva));
   const correos = [];
+  const reactivaciones = [];
   const servicio = new PublicacionesService(
     repository,
     catalogosDePrueba(),
     undefined,
-    { enviarBajaPublicacion: async (destinatario, titulo, motivo) => { correos.push({ destinatario, titulo, motivo }); } },
+    { enviarBajaPublicacion: async (destinatario, titulo, motivo) => { correos.push({ destinatario, titulo, motivo }); },
+      enviarReactivacionPublicacion: async (destinatario, titulo) => { reactivaciones.push({ destinatario, titulo }); } },
     { datosContacto: anunciante => ({ email: anunciante?.usuario?.email }) },
   );
   const bloqueados = new Set();
@@ -221,6 +223,7 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     assert.ok(ids(await administracion('?estado=inactivas&limite=100')).includes(40));
     assert.ok(!ids(await administracion('?estado=activas&limite=100')).includes(40));
     assert.ok(!ids(await administracion('?estado=bajas&limite=100')).includes(40));
+    assert.deepEqual(reactivaciones, [{ destinatario: 'dueno@example.invalid', titulo: 'Reactivar con foto' }]);
 
     const reactivadaPausada = await request('/administracion/50/reactivar', 9, 'PATCH');
     assert.equal(reactivadaPausada.status, 200);

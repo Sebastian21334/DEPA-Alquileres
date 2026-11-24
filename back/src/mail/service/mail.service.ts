@@ -227,6 +227,17 @@ export class MailService implements IMailService {
     );
   }
 
+  async enviarReactivacionPublicacion(destinatario: string, titulo: string): Promise<void> {
+    await this.enviar(
+      destinatario,
+      'La baja de tu publicación fue levantada',
+      `<p>Un administrador levantó la baja de tu publicación <strong>${this.plantillas.escapar(titulo)}</strong>.</p>
+       <p>La publicación vuelve a estar disponible en tu cuenta y podés activarla cuando quieras para que aparezca en el catálogo.</p>
+       ${this.plantillas.boton('Ver mis publicaciones', `${this.frontendUrl}/mis-publicaciones`)}`,
+      'Ya podés activar tu publicación.',
+    );
+  }
+
   enviarConfirmacionBaja(destinatario: string, token: string, origen?: string): Promise<void> {
     const enlace = `${this.frontendDeSolicitud(origen)}/confirmar-baja#${encodeURIComponent(token)}`;
     return this.enviar(

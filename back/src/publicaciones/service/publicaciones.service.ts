@@ -362,6 +362,13 @@ export class PublicacionesService {
     if (!await this.publicacionesRepo.reactivar(id)) throw new ConflictException('La publicación cambió. Recargá e intentá nuevamente');
     publicacion.motivo_baja_admin = null;
     publicacion.activa = false;
+    try {
+      const { email } = this.anunciantesService.datosContacto(publicacion.anunciante);
+      if (!email) throw new Error('El anunciante no tiene un correo registrado');
+      await this.mailService.enviarReactivacionPublicacion(email, publicacion.titulo);
+    } catch (error) {
+      this.logger.error(`No se pudo notificar la reactivación de la publicación ${id}`, error as Error);
+    }
     return this.prepararRespuesta(publicacion);
   }
 
