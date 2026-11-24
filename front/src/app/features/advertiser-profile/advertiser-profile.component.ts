@@ -13,7 +13,7 @@ import { SpinnerComponent } from '../../shared/components/spinner/spinner.compon
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 
-/** T28: ciudades que se ven antes de «Ver más». */
+/** Ciudades que se ven antes de «Ver más». */
 const CIUDADES_VISIBLES = 5;
 
 function normalizeSearchText(value: string): string {
@@ -63,7 +63,7 @@ export class AdvertiserProfileComponent {
   protected readonly verifiedLabel = computed(() =>
     esInmobiliaria(this.perfil()?.tipoAnunciante) ? 'Inmobiliaria verificada' : 'Dueño Verificado',
   );
-  /** T28: ciudades donde publica, sin repetir; primero las que tienen más publicaciones y, si empatan, alfabético. */
+  /** Ciudades donde publica, sin repetir; primero las que tienen más publicaciones y, si empatan, alfabético. */
   protected readonly ciudades = computed(() => {
     const cantidades = new Map<string, number>();
     for (const item of this.publications()) {

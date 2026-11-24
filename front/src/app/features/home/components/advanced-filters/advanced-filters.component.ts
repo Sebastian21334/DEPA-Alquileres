@@ -11,7 +11,7 @@ import {
   LucideSlidersHorizontal,
 } from '@lucide/angular';
 import { NombresUbicacion, SelectorUbicacionComponent } from '../../../../shared/components/selector-ubicacion/selector-ubicacion.component';
-import { TipoPropiedad } from '../../../../shared/models/catalogo.model';
+import { MonedaPrecio, TipoPropiedad } from '../../../../shared/models/catalogo.model';
 
 @Component({
   selector: 'app-advanced-filters',
@@ -35,10 +35,19 @@ export class AdvancedFiltersComponent {
   private readonly elemento = inject(ElementRef<HTMLElement>);
   readonly form = input.required<FormGroup>();
   readonly tiposPropiedad = input<TipoPropiedad[]>([]);
+  readonly monedas = input<MonedaPrecio[]>([]);
   readonly categoria = input<string | null>(null);
   readonly compacto = input(false);
   readonly busquedaActiva = input('');
   protected readonly nombres = signal<NombresUbicacion>({ localidad: '', provincia: '' });
+  // Temporal cobra por día y largo plazo por mes; sin modalidad elegida se mezclan ambos.
+  protected readonly etiquetaPrecio = computed(() => {
+    switch (this.categoria()) {
+      case 'temporales': return 'Precio por día';
+      case 'largo-plazo': return 'Precio mensual';
+      default: return 'Precio';
+    }
+  });
   protected readonly ubicacionTexto = computed(() => [this.nombres().localidad, this.nombres().provincia]
     .filter(Boolean).join(', ') || this.busquedaActiva() || 'Buscar ubicación');
   protected readonly ambientes = ['1', '2', '3', '4+'] as const;
@@ -76,5 +85,14 @@ export class AdvancedFiltersComponent {
 
   protected seleccionarAmbientes(valor: string): void {
     this.form().controls['ambientesSeleccionados'].setValue(valor ? [valor] : []);
+  }
+
+  protected seleccionarMoneda(id: number): void {
+    this.form().controls['idTipoMoneda'].setValue(id);
+  }
+
+  protected simboloMoneda(): string {
+    const id = this.form().controls['idTipoMoneda']?.value;
+    return this.monedas().find((moneda) => moneda.id === id)?.codigo === 'USD' ? 'US$' : '$';
   }
 }

@@ -90,7 +90,7 @@ export function puedeValidarCodigo(reserva: EstadoCodigo): boolean {
     reserva.estado_liquidacion !== 'EN_REVISION' && !liquidacionDecidida(reserva) && reserva.intentos_codigo_restantes !== 0;
 }
 
-/** T34: con el código bloqueado, el anunciante pide el reinicio solo si el pago todavía no se decidió. */
+/** Con el código bloqueado, el anunciante pide el reinicio solo si el pago todavía no se decidió. */
 export function puedePedirReinicioCodigo(reserva: Reserva): boolean {
   return !reserva.cancelada && !reserva.codigo_validado_en && reserva.intentos_codigo_restantes === 0 &&
     !liquidacionDecidida(reserva) && !devolucionRegistrada(reserva);

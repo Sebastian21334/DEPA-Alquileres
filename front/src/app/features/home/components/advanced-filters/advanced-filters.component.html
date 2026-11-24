@@ -90,7 +90,20 @@
   <fieldset class="advanced__field advanced__price" [formGroup]="form()">
     <legend class="advanced__label">
       <svg lucideCoins [size]="25" aria-hidden="true"></svg>
-      {{ compacto() ? 'Precio' : 'Precio mensual' }}
+      {{ etiquetaPrecio() }}
+      @if (monedas().length > 1) {
+        <span class="advanced__currency" role="group" aria-label="Moneda del precio">
+          @for (moneda of monedas(); track moneda.id) {
+            <button
+              type="button"
+              class="advanced__currency-option"
+              [class.advanced__currency-option--active]="form().controls['idTipoMoneda'].value === moneda.id"
+              [attr.aria-pressed]="form().controls['idTipoMoneda'].value === moneda.id"
+              (click)="seleccionarMoneda(moneda.id)"
+            >{{ moneda.codigo }}</button>
+          }
+        </span>
+      }
     </legend>
     <div class="advanced__price-inputs">
       <div class="advanced__input">
@@ -98,10 +111,10 @@
           type="number"
           min="0"
           placeholder="Desde"
-          [attr.aria-label]="compacto() ? 'Precio desde' : 'Precio mensual desde'"
+          [attr.aria-label]="etiquetaPrecio() + ' desde'"
           formControlName="precioMin"
         />
-        <span aria-hidden="true">$</span>
+        <span aria-hidden="true">{{ simboloMoneda() }}</span>
       </div>
       <span class="advanced__separator" aria-hidden="true">–</span>
       <div class="advanced__input">
@@ -109,10 +122,10 @@
           type="number"
           min="0"
           placeholder="Hasta"
-          [attr.aria-label]="compacto() ? 'Precio hasta' : 'Precio mensual hasta'"
+          [attr.aria-label]="etiquetaPrecio() + ' hasta'"
           formControlName="precioMax"
         />
-        <span aria-hidden="true">$</span>
+        <span aria-hidden="true">{{ simboloMoneda() }}</span>
       </div>
     </div>
   </fieldset>

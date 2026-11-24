@@ -6,7 +6,7 @@ import {
   type IArchivoRepository,
 } from '../repository/archivo.repository.interface';
 
-/** Tamaño máximo de un comprobante de transferencia (T04). */
+/** Tamaño máximo de un comprobante de transferencia. */
 export const MAX_BYTES_COMPROBANTE = 5 * 1024 * 1024;
 
 /**
@@ -57,7 +57,7 @@ export class AlmacenamientoService {
   }
 
   /**
-   * T04: valida y guarda un comprobante (PDF, JPG o PNG de hasta 5 MB) en el almacenamiento privado.
+   * Valida y guarda un comprobante (PDF, JPG o PNG de hasta 5 MB) en el almacenamiento privado.
    * `carpeta` la define el módulo que lo usa, por ejemplo `reembolsos/12`; nunca viene del usuario.
    */
   async subirComprobante(carpeta: string, archivo: Express.Multer.File | undefined): Promise<ComprobanteSubido> {

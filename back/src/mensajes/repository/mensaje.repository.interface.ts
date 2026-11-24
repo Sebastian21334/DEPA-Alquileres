@@ -8,8 +8,8 @@ export interface IMensajeRepository {
   existeConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<boolean>;
   // Todos los mensajes de UNA conversación puntual (misma publicación + mismo par de usuarios)
   buscarConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<Mensaje[]>;
-  // Todos los mensajes donde el usuario participa (como origen o destino), sin importar publicación ni interlocutor
-  buscarPorUsuario(idUsuario: number): Promise<Mensaje[]>;
+  // El último mensaje de cada conversación del usuario y cuántos recibió sin leer, del más reciente al más viejo
+  buscarUltimosPorConversacion(idUsuario: number): Promise<{ mensaje: Mensaje; noLeidos: number }[]>;
   marcarConversacionComoLeida(idPublicacion: number, idRemitente: number, idDestinatario: number): Promise<void>;
 }
 

@@ -68,7 +68,7 @@ export interface Reserva {
   intentos_codigo: number;
   /** Último día (AAAA-MM-DD) para reclamar; hasta entonces se retiene el pago al anunciante. */
   fin_plazo_reclamo?: string | null;
-  /** Intentos que le quedan al anunciante antes de que se bloquee el código (T34). */
+  /** Intentos que le quedan al anunciante antes de que se bloquee el código. */
   intentos_codigo_restantes?: number;
   fecha_resolucion_liquidacion: string | null;
   referencia_liquidacion: string | null;
@@ -227,12 +227,14 @@ export interface Reclamo {
   } | null;
   anunciante?: ParticipanteReclamo | null;
   inquilino?: ParticipanteReclamo | null;
-  /** CODIGO_BLOQUEADO: pedido de reinicio del código que abre el anunciante (T34). */
+  /** CODIGO_BLOQUEADO: pedido de reinicio del código que abre el anunciante. */
   categoria: 'LIMPIEZA' | 'MANTENIMIENTO' | 'INGRESO' | 'DESCRIPCION' | 'OTRO' | 'DEMORA_ADMINISTRATIVA' | 'CODIGO_BLOQUEADO';
   descripcion: string;
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
   resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | 'REINICIAR_CODIGO' | 'CONFIRMAR_INGRESO' | null;
   importe_reembolso: number | null;
+  /** Lo escribe el admin al resolver; null en los reclamos abiertos y en los resueltos antes de guardarse. */
+  motivo_resolucion?: string | null;
   creado_en: string;
   resuelto_en: string | null;
   evidencias?: ReclamoEvidencia[];
@@ -241,7 +243,7 @@ export interface Reclamo {
 
 export type AutorReclamo = ParticipanteReclamo & { rol?: { nombre: string } | null };
 
-/** T49: imagen de un reclamo con su autor; `url` es un enlace firmado que vence a los 15 minutos. */
+/** Imagen de un reclamo con su autor; `url` es un enlace firmado que vence a los 15 minutos. */
 export interface ReclamoEvidencia {
   id: number;
   /** null: es de la descripción del reclamo. */
@@ -258,7 +260,7 @@ export interface ReclamoMensaje {
   visible_para: 'TODOS' | 'ADMIN';
   creado_en: string;
   autor?: AutorReclamo | null;
-  /** T49: imágenes enviadas con este mensaje. */
+  /** Imágenes enviadas con este mensaje. */
   evidencias?: ReclamoEvidencia[];
 }
 

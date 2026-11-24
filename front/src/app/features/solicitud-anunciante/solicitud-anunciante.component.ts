@@ -84,7 +84,7 @@ export class SolicitudAnuncianteComponent {
     const tipo = this.tipos().find((item) => item.id === this.tipoSeleccionado());
     return /inmobiliaria|institucional/i.test(tipo?.nombre ?? '');
   });
-  /** T05: las elige `app-carga-comprobante`, que valida PDF, JPG o PNG de hasta 5 MB y muestra el error junto al campo. */
+  /** Las elige `app-carga-comprobante`, que valida PDF, JPG o PNG de hasta 5 MB y muestra el error junto al campo. */
   protected readonly matricula = signal<File | null>(null);
   protected readonly constanciaCuit = signal<File | null>(null);
 

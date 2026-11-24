@@ -40,7 +40,7 @@ export class ReservaResultadoComponent {
   private readonly http = inject(HttpClient);
   private readonly actividadReembolsos = inject(ActividadReembolsosService);
   protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string; comprobante_nombre?: string | null; referencia_externa?: string | null; observacion_transferencia?: string | null }[]>([]);
-  /** T44: enlace firmado del comprobante de la transferencia del reembolso. */
+  /** Enlace firmado del comprobante de la transferencia del reembolso. */
   protected readonly urlComprobanteReembolso = (id: number) => () =>
     this.http.get<{ url: string }>(`${environment.apiUrl}/reembolsos/${id}/comprobante`);
   protected readonly conversacionAbierta = signal<number | null>(null);
@@ -63,7 +63,7 @@ export class ReservaResultadoComponent {
   protected readonly avisoReprogramacion = signal('');
 
   /**
-   * T53: el admin entra desde su panel (`/admin/reservas/:id`) y ve la reserva en solo lectura: sin código
+   * El admin entra desde su panel (`/admin/reservas/:id`) y ve la reserva en solo lectura: sin código
    * de ingreso, contacto, cambio de fechas ni reintento de pago, y con las dos partes enlazadas a su perfil.
    */
   protected readonly administracion = this.route.snapshot.data['administracion'] === true;
@@ -293,7 +293,7 @@ export class ReservaResultadoComponent {
     return this.reserva() ? this.parte(this.ladoContacto()).telefono : 'No informado';
   }
 
-  /** T53: el admin ve a las dos partes, cada una con enlace a su perfil. */
+  /** El admin ve a las dos partes, cada una con enlace a su perfil. */
   protected readonly partes = computed(() => this.reserva()
     ? [{ rol: 'Inquilino', ...this.parte('inquilino') }, { rol: 'Anunciante', ...this.parte('anunciante') }]
     : []);

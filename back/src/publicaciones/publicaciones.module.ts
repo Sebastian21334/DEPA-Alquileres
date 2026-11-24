@@ -11,6 +11,7 @@ import { UbicacionModule } from '../ubicacion/ubicacion.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
 import { MailModule } from '../mail/mail.module';
+import { CotizacionesLecturaModule } from '../cotizaciones/cotizaciones-lectura.module';
 
 @Module({
   // La publicación coordina catálogos, ubicación y anunciante propietario.
@@ -33,6 +34,8 @@ import { MailModule } from '../mail/mail.module';
     SeguridadModule,
     MailModule,
     AnunciantesModule,
+    // Ordenar por precio compara los importes en USD convertidos a pesos.
+    CotizacionesLecturaModule,
   ],
   exports: [PublicacionesService],
 })

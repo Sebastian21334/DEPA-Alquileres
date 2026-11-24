@@ -47,7 +47,7 @@ export class DashboardComponent {
   protected readonly reservas = signal<Reserva[]>([]);
   protected readonly cargando = signal(true);
   protected readonly error = signal('');
-  /** Historial de pagos de todas las publicaciones (T55); null mientras carga. */
+  /** Historial de pagos de todas las publicaciones; null mientras carga. */
   protected readonly pagos = signal<PagoPublicacion[] | null>(null);
   protected readonly errorPagos = signal(false);
 

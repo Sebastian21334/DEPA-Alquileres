@@ -91,6 +91,10 @@ export class Reclamo {
   })
   importe_reembolso: number | null;
 
+  // Lo escribe el admin al resolver y lo ven las dos partes del reclamo.
+  @Column({ name: 'motivo_resolucion', type: 'varchar', length: 500, nullable: true })
+  motivo_resolucion: string | null;
+
   @ManyToOne(() => Usuario, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_administrador_resolucion' })
   administrador_resolucion: Relation<Usuario | null>;

@@ -3,7 +3,7 @@ import { GestionPublicacionesService, type PagoPublicacion } from '../../service
 import { VerComprobanteComponent } from '../ver-comprobante/ver-comprobante.component';
 
 /**
- * Lista de pagos registrados al anunciante (T55). La usan Mis publicaciones,
+ * Lista de pagos registrados al anunciante. La usan Mis publicaciones,
  * por publicación, y el panel del anunciante, con todas sus publicaciones.
  */
 @Component({

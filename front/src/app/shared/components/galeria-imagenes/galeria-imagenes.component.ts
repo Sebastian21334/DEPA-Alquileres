@@ -14,7 +14,7 @@ export class GaleriaImagenesComponent {
   readonly disabled = input(false);
   readonly minimo = input(0);
   readonly quitarDeshabilitado = input(false);
-  /** T05: en false (adjuntos de un formulario) no hay portada ni orden; solo la miniatura, el nombre y «Quitar». */
+  /** En false (adjuntos de un formulario) no hay portada ni orden; solo la miniatura, el nombre y «Quitar». */
   readonly ordenable = input(true);
   readonly reordenar = output<{ desde: number; hasta: number }>();
   readonly quitar = output<number>();

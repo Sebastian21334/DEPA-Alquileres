@@ -15,7 +15,7 @@
           <ul class="owner-card__meta">
             <li><svg lucideBuilding2 [size]="16"></svg> {{ owner.tipoAnunciante?.nombre ?? 'Anunciante' }}</li>
           </ul>
-          <!-- T28: ciudades como chips, con límite y «Ver más». -->
+          <!-- Ciudades como chips, con límite y «Ver más». -->
           @if (ciudades().length) {
             <div class="owner-cities">
               <h2 id="owner-cities-title"><svg lucideMapPin [size]="16" aria-hidden="true"></svg> Ciudades donde publica</h2>

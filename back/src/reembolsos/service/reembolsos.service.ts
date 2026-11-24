@@ -159,7 +159,7 @@ export class ReembolsosService {
   }
 
   /**
-   * T44: el admin registra la transferencia con el comprobante obligatorio; la referencia y la observación son opcionales.
+   * El admin registra la transferencia con el comprobante obligatorio; la referencia y la observación son opcionales.
    * El archivo se sube antes de confirmar y se borra si el registro no lo termina guardando.
    */
   async registrarTransferencia(id: number, datos: { referencia?: string; observacion?: string }, archivo: Express.Multer.File | undefined, idActor: number): Promise<Reembolso> {
@@ -190,7 +190,7 @@ export class ReembolsosService {
     }
   }
 
-  /** T44: enlace firmado del comprobante, solo para el admin y el inquilino de la reserva. */
+  /** Enlace firmado del comprobante, solo para el admin y el inquilino de la reserva. */
   async urlComprobante(id: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
     const comprobante = await this.reembolsos.buscarComprobante(id);
     const autorizado = actor.rol === 'Administrador' || comprobante?.idInquilino === actor.id;

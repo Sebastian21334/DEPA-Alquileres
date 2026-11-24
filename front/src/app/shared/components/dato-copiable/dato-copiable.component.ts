@@ -2,7 +2,7 @@ import { Component, DestroyRef, inject, input, signal } from '@angular/core';
 import { LucideCheck, LucideCopy } from '@lucide/angular';
 
 /**
- * T56: un dato que el admin tiene que pasar a su banco (CBU, importe) con un botón para copiarlo.
+ * Un dato que el admin tiene que pasar a su banco (CBU, importe) con un botón para copiarlo.
  * Se muestra `valor`, formateado para leerlo; se copia `copia` (por ejemplo, sin espacios).
  */
 @Component({

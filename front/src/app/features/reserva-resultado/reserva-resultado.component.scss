@@ -290,7 +290,7 @@
   align-items: center;
   gap: 1.2rem;
 }
-/* T53: partes de la reserva en la vista del admin. */
+/* Partes de la reserva en la vista del admin. */
 .admin-parties {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));

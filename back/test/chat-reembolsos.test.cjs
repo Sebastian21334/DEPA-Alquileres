@@ -51,9 +51,9 @@ test('una tarjeta ya asignada a transferencia exige comprobante y solo se regist
   const { servicio, reembolso, pago, archivos, intentos } = escenario();
   await assert.rejects(servicio.ejecutar(1, 10), { status: 409 });
   assert.equal(intentos(), 0);
-  // T44: sin comprobante no se registra; la referencia es opcional.
+  // Sin comprobante no se registra; la referencia es opcional.
   await assert.rejects(servicio.registrarTransferencia(1, { referencia: 'op-1' }, undefined, 10), /Adjuntá el comprobante/);
-  // T56: la observación también es opcional y queda guardada sin espacios sobrantes.
+  // La observación también es opcional y queda guardada sin espacios sobrantes.
   await assert.rejects(servicio.registrarTransferencia(1, { observacion: 'x'.repeat(501) }, pdf(), 10), { status: 400 });
   assert.equal(archivos.subidos.length, 0);
   await servicio.registrarTransferencia(1, { observacion: ' Transferencia desde el Banco Nación ' }, pdf(), 10);
@@ -69,7 +69,7 @@ test('una tarjeta ya asignada a transferencia exige comprobante y solo se regist
   await assert.rejects(servicio.conversar(1, { id: 2 }, 0, 'Tarde'), { status: 409 });
 });
 
-test('T44: si el registro falla, el comprobante subido se borra', async () => {
+test('si el registro falla, el comprobante subido se borra', async () => {
   const { servicio, reembolso, pagos, archivos } = escenario();
   pagos.aplicarReembolso = async () => { throw new Error('falla al aplicar'); };
   await assert.rejects(servicio.registrarTransferencia(1, { referencia: 'op-1' }, pdf(), 10), /falla al aplicar/);
@@ -78,7 +78,7 @@ test('T44: si el registro falla, el comprobante subido se borra', async () => {
   assert.equal(reembolso.comprobante_url, undefined);
 });
 
-test('T44: el comprobante lo ven el admin y el inquilino; el anunciante no', async () => {
+test('el comprobante lo ven el admin y el inquilino; el anunciante no', async () => {
   const { servicio, reembolso } = escenario();
   await assert.rejects(servicio.urlComprobante(1, { id: 10, rol: 'Administrador' }), { status: 404 });
   await servicio.registrarTransferencia(1, { referencia: 'op-1' }, pdf(), 10);
@@ -100,7 +100,7 @@ test('solo una negativa definitiva de Mercado Pago abre la vía manual', async (
   assert.equal(incierto.archivos.subidos.length, 0);
 });
 
-test('T44: la API de transferencia recibe el comprobante por multipart y lo exige', async () => {
+test('la API de transferencia recibe el comprobante por multipart y lo exige', async () => {
   const { Test } = require('@nestjs/testing');
   const { ValidationPipe } = require('@nestjs/common');
   const request = require('supertest');
@@ -195,7 +195,7 @@ test('la API valida mensajes y permite el acceso al inquilino y a administració
     assert.equal((await api('GET', ruta, 2)).estado, 200);
     assert.equal((await api('GET', ruta, 7)).estado, 404);
     assert.equal((await api('GET', '/reembolsos/administracion', 2)).estado, 403);
-    // T44: el enlace del comprobante, por la API, para el inquilino y no para un tercero.
+    // El enlace del comprobante, por la API, para el inquilino y no para un tercero.
     await servicio.registrarTransferencia(1, { referencia: 'op-api' }, pdf(), 10);
     const comprobante = await api('GET', '/reembolsos/1/comprobante', 2);
     assert.equal(comprobante.estado, 200);

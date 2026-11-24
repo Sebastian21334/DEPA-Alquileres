@@ -227,8 +227,12 @@ export class PublicacionesRepository implements IPublicacionesRepository {
    * Así una petición nunca materializa el catálogo completo en memoria.
    */
   async buscarPaginadas(consulta: ConsultaPublicaciones): Promise<PaginaPublicaciones> {
-    const { pagina, limite, categoria, orden } = consulta;
+    const { pagina, limite, categoria, orden, conversionUsd } = consulta;
     const base = this.consultaCatalogoPublico(consulta);
+    // Sin cotización, el precio se ordena por su número aunque las monedas sean distintas.
+    const precioOrden = conversionUsd
+      ? 'CASE WHEN tipoMoneda.id IN (:...idsMonedaUsd) THEN publicacion.precio * CAST(:ventaUsd AS numeric) ELSE publicacion.precio END'
+      : 'publicacion.precio';
     const total = await base.clone().getCount();
 
     const reservas = this.repo.createQueryBuilder('anuncio')
@@ -244,8 +248,8 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         direccion: 'DESC',
       },
       antiguas: { columna: 'publicacion.fecha_publicacion', direccion: 'ASC' },
-      'precio-menor': { columna: 'publicacion.precio', direccion: 'ASC' },
-      'precio-mayor': { columna: 'publicacion.precio', direccion: 'DESC' },
+      'precio-menor': { columna: '"precioOrden"', direccion: 'ASC' },
+      'precio-mayor': { columna: '"precioOrden"', direccion: 'DESC' },
       titulo: { columna: 'LOWER(publicacion.titulo)', direccion: 'ASC' },
     } as const;
     const ordenSeleccionado = orden
@@ -261,7 +265,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       .select('publicacion.id', 'id')
       .addSelect('COALESCE(reservas.cantidad, 0)', 'cantidadReservas')
       .addSelect('publicacion.fecha_publicacion', 'fechaPublicacion')
-      .addSelect('publicacion.precio', 'precioOrden')
+      .addSelect(precioOrden, 'precioOrden')
       .addSelect('LOWER(publicacion.titulo)', 'tituloOrden')
       .leftJoin(
         `(${reservas.getQuery()})`,
@@ -269,6 +273,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
         'reservas."idPublicacion" = publicacion.id_publicacion',
       )
       .setParameters(reservas.getParameters())
+      .setParameters(conversionUsd ? { idsMonedaUsd: conversionUsd.idsMoneda, ventaUsd: conversionUsd.venta } : {})
       .orderBy(ordenSeleccionado.columna, ordenSeleccionado.direccion)
       .addOrderBy('publicacion.id', 'DESC')
       .offset((pagina - 1) * limite)

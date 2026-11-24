@@ -27,7 +27,7 @@ type SeccionNavegacion = { readonly id: Exclude<AdminSection, 'resumen'>; readon
 
 const SECCIONES = ADMIN_NAVIGATION.flatMap<SeccionNavegacion>((grupo) => grupo.items);
 
-/** T53: la sección va en la URL (`/admin#reclamos`); un valor desconocido se ignora. */
+/** La sección va en la URL (`/admin#reclamos`); un valor desconocido se ignora. */
 export function seccionAdmin(valor: string | null | undefined): AdminSection | null {
   return SECCIONES.find((seccion) => seccion.id === valor)?.id ?? null;
 }

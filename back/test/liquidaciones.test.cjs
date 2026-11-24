@@ -84,7 +84,7 @@ function liquidacionesService() {
 test('el pago manual exige liquidación pendiente aunque el código esté validado', async () => {
   const reserva = crearReserva({ codigo_validado_en: new Date(), estado_liquidacion: 'RETENIDO' });
   const servicio = new OperacionesLiquidacionService({}, reservasService(reserva, repositorio(reserva)), liquidacionesService(), catalogosDePrueba(), {}, sinReclamos);
-  // T56: se rechaza antes de subir el comprobante.
+  // Se rechaza antes de subir el comprobante.
   await assert.rejects(servicio.registrarPagoAnunciante(1, {}, undefined, 3), /todavía no está pendiente/i);
   assert.equal(reserva.estado_liquidacion, 'RETENIDO');
 });
