@@ -276,7 +276,7 @@ export class ReclamosService {
       const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
       if (expediente.solicitud_cancelacion_id != null && expediente.categoria !== CategoriaReclamo.DEMORA_ADMINISTRATIVA) {
         resultado.reembolso = await this.resolverFaltanteCancelacion(expediente, actual, dto, idAdmin, previo, transaccion);
-        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, resultado.reembolso ? Number(resultado.reembolso.importe) : null, idAdmin));
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, resultado.reembolso ? Number(resultado.reembolso.importe) : null, idAdmin, dto.observacion));
         return;
       }
       if (this.esAFavorDelAnunciante(dto.resolucion)) {
@@ -287,7 +287,7 @@ export class ReclamosService {
           : await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion ?? (
             dto.resolucion === ResolucionReclamo.REINICIAR_CODIGO
               ? `Administración habilitó ${MAX_INTENTOS_CODIGO} intentos más del código` : undefined), transaccion);
-        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, null, idAdmin));
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, null, idAdmin, dto.observacion));
         return;
       }
       const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
@@ -321,7 +321,7 @@ export class ReclamosService {
         referenciaInterna: referencia,
       }, transaccion);
       // La decisión se registra junto con la devolución; la plata se mueve después.
-      resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, Number(resultado.reembolso.importe), idAdmin));
+      resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, Number(resultado.reembolso.importe), idAdmin, dto.observacion));
     });
     if (!resultado.reembolso) {
       const [asunto, mensaje] = this.avisoSinDevolucion(dto.resolucion);
@@ -410,12 +410,13 @@ export class ReclamosService {
   }
 
   /** Registra la decisión del administrador sobre el reclamo; las asignaciones viven en el servicio. */
-  private registrarDecision(reclamo: Reclamo, resolucion: ResolucionReclamo, importe: number | null, idAdmin: number | null): Reclamo {
+  private registrarDecision(reclamo: Reclamo, resolucion: ResolucionReclamo, importe: number | null, idAdmin: number | null, motivo: string | undefined): Reclamo {
     reclamo.estado = this.esAFavorDelAnunciante(resolucion)
       ? this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE')
       : this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
     reclamo.resolucion = resolucion;
     reclamo.importe_reembolso = importe;
+    reclamo.motivo_resolucion = motivo?.trim() || null;
     reclamo.administrador_resolucion = idAdmin != null ? referenciaUsuario(idAdmin) : null;
     reclamo.resuelto_en = new Date();
     return reclamo;
@@ -429,15 +430,15 @@ export class ReclamosService {
       throw new ConflictException('El reembolso requiere identificar el reclamo de origen');
     if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE'))
       throw new ConflictException('El reclamo tiene una resolución incompatible con el reembolso');
-    reclamo.reserva = await this.reservas.aplicarEfectoReembolso(reembolso, transaccion,
-      reembolso.motivo.replace(/^Reclamo #\d+: /, ''));
+    const motivo = reembolso.motivo.replace(/^Reclamo #\d+: /, '');
+    reclamo.reserva = await this.reservas.aplicarEfectoReembolso(reembolso, transaccion, motivo);
     // La decisión ya quedó registrada al resolver; los reclamos anteriores a ese
     // cambio la completan recién cuando se confirma la devolución.
     if (!reclamo.resuelto_en) {
       const resolucion = reembolso.tipo === TipoReembolso.TOTAL
         ? ResolucionReclamo.DEVOLUCION_TOTAL : ResolucionReclamo.DEVOLUCION_PARCIAL;
       this.registrarDecision(reclamo, resolucion, Number(reembolso.importe),
-        reembolso.resuelto_por?.id ?? reembolso.solicitado_por?.id ?? null);
+        reembolso.resuelto_por?.id ?? reembolso.solicitado_por?.id ?? null, motivo);
     }
     return reclamos.guardar(reclamo);
   }
