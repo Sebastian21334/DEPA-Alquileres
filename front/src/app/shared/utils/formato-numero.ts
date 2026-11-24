@@ -13,3 +13,8 @@ export function formatearEntero(valor: number): string {
 export function formatearImporte(valor: number): string {
   return FORMATO_IMPORTE.format(valor);
 }
+
+/** Importe precedido por el código de moneda, por ejemplo «ARS 1.824,00». */
+export function formatearImporteConMoneda(valor: number, moneda: string | null): string {
+  return [moneda, formatearImporte(valor)].filter(Boolean).join(' ');
+}

@@ -51,8 +51,8 @@ test('al registrar el pago total se guarda el neto con la comisión de la reserv
   let datosGuardados;
   const reserva = { id: 1, monto_pago: 100000, porcentaje_comision_depa: 10, estado_pago: 'APROBADO', estado_liquidacion: 'PENDIENTE_PAGO_PROPIETARIO', fecha_inicio: '2020-01-01', fecha_fin: '2020-01-02', publicacion: { anunciante: { idUsuario: 2 } } };
   const reservas = { obtenerReserva: async () => reserva, conReservaBloqueada: async (_, fn) => { await fn(reserva, {}); return reserva; }, pagoAprobado: () => true, liquidacionResuelta: () => false, liquidacionEnRevision: () => false };
-  const liquidaciones = { fechaDisponiblePagoManual: () => '2020-01-07', registrarResolucion: async (_, __, datos) => { datosGuardados = datos; } };
-  const reembolsos = { listarPorReserva: async () => [], buscarPagoPorReserva: async () => ({ amount: 100000, amount_refunded: 0, currency: 'ARS' }), saldoReembolsable: () => 100000 };
+  const liquidaciones = { fechaDisponiblePagoManual: () => '2020-01-07', admitePagoAlAnunciante: (estado) => estado === 'PENDIENTE_PAGO_PROPIETARIO', registrarResolucion: async (_, __, datos) => { datosGuardados = datos; } };
+  const reembolsos = { listarPorReserva: async () => [], tieneDevolucionEnCurso: async () => false, buscarPagoPorReserva: async () => ({ amount: 100000, amount_refunded: 0, currency: 'ARS' }), saldoReembolsable: () => 100000 };
   const { almacenamiento } = almacenamientoDePrueba();
   const servicio = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => '123' }, { tieneReclamoAbierto: async () => false }, undefined, almacenamiento);
   await servicio.registrarPagoAnunciante(1, {}, comprobantePdf(), 3);

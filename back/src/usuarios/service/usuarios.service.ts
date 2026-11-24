@@ -400,10 +400,10 @@ export class UsuariosService {
       {
         pagoPendiente: this.catalogosService.codigoEstado('PAGO_RESERVA', 'PENDIENTE'),
         pagoAprobado: this.catalogosService.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+        // Con una devolución parcial al anunciante todavía le queda cobrar el resto.
         liquidacionesResueltas: [
           this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
           this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
-          this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
         ],
         enRevision: this.catalogosService.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION'),
       },

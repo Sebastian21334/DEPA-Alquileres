@@ -161,7 +161,7 @@
     <div class="panel__title">
       <div>
         <h2>Reservas por liquidar</h2>
-        <p>Registrá pagos a anunciantes cuando la liquidación esté habilitada. Derivá a Reembolsos los casos que deben devolverse al inquilino.</p>
+        <p>Registrá el pago al anunciante de lo que no se le devolvió al inquilino, cuando la liquidación esté habilitada. Las devoluciones en curso se resuelven antes en Reembolsos.</p>
       </div>
       <span class="counter">{{ settlements().length }}</span>
     </div>
@@ -177,7 +177,7 @@
           <article class="settlement-card" [id]="'admin-liquidaciones-' + settlement.id" tabindex="-1">
             <div>
               <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
-                {{ settlement.estado_liquidacion === 'EN_REVISION' ? 'En revisión' : settlement.codigo_validado_en ? 'Código validado' : 'Ingreso no verificado: plazo vencido' }}
+                {{ etiquetaLiquidacion(settlement) }}
               </span>
               @if (settlement.estado_liquidacion !== 'EN_REVISION') {
                 @let dias = diasEsperaLiquidacion(settlement);
@@ -190,7 +190,10 @@
               <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
-              <p><strong>Importe:</strong> {{ montoLiquidacion(settlement) }}</p>
+              @if (tieneDevolucion(settlement)) {
+                <p><strong>Pagó el inquilino:</strong> {{ montoPagado(settlement) }}</p>
+              }
+              <p><strong>A liquidar al anunciante:</strong> {{ montoLiquidacion(settlement) }}</p>
               <p><strong>Comisión DEPA:</strong> @if (settlement.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ settlement.porcentaje_comision_depa }} % · {{ settlement.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
               <p><strong>Neto al anunciante:</strong> {{ settlement.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</p>
               @if (settlement.cotizacion_dolar; as dolar) {
@@ -203,13 +206,13 @@
             </div>
             <div class="actions">
               <a class="button button--ghost" [routerLink]="['/admin/reservas', settlement.id]" [queryParams]="{ desde: 'liquidaciones' }">Ver reserva</a>
-              @if (settlement.estado_liquidacion === 'EN_REVISION' && !settlement.cancelada) {
+              @if (settlement.estado_liquidacion === 'EN_REVISION') {
                 <button type="button" class="button button--ghost" (click)="abrirResolucionLiquidacion(settlement, false)">Cerrar revisión del pago</button>
               }
               <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
-              @if (settlement.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO') {
+              @if (pendienteParaAnunciante(settlement)) {
                 @let diasPago = diasEsperaLiquidacion(settlement);
-                @if (diasPago === 0) {
+                @if (settlement.habilitada_para_pago) {
                   <button type="button" class="button button--success" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
                 } @else {
                   <span class="settlement-payment-unavailable" tabindex="0" [attr.aria-describedby]="'payment-wait-' + settlement.id">
@@ -386,7 +389,10 @@
                 </td>
                 <td data-label="Reserva"><a class="settlement-history__reservation" [routerLink]="['/admin/reservas', pago.reservaId]" [queryParams]="{ desde: 'historial-liquidaciones' }" [attr.aria-label]="'Ver reserva #' + pago.reservaId">#{{ pago.reservaId }}</a><span class="settlement-history__publication">{{ pago.publicacion || 'Publicación no disponible' }}</span></td>
                 <td data-label="Anunciante">{{ pago.anunciante || 'Sin datos' }}</td>
-                <td data-label="Importe" class="settlement-history__amount">{{ pago.importe !== null && pago.moneda ? (pago.importe | currency:pago.moneda:'code') : (pago.importe ?? 'Sin importe') }}</td>
+                <td data-label="Importe" class="settlement-history__amount">
+                  {{ pago.importe === null ? 'Sin importe' : importeConMoneda(pago.importe, pago.moneda) }}
+                  @if (pago.desglose; as desglose) { <app-desglose-pago [desglose]="desglose" [moneda]="pago.moneda" /> }
+                </td>
                 <td data-label="Comprobante y observación">
                   @if (pago.comprobante) {
                     <app-ver-comprobante [obtenerUrl]="urlComprobantePago(pago)" [etiqueta]="'Ver ' + pago.comprobante" />
@@ -415,21 +421,22 @@
         <p class="refund-meta">Reserva #{{ decision.reserva.id }} · {{ decision.reserva.publicacion?.titulo ?? 'Publicación no disponible' }}</p>
         <p class="refund-help">
           @if (decision.devolver) {
-            El saldo se derivará a Reembolsos para devolverlo al inquilino según el medio de pago.
-          } @else if (decision.reserva.codigo_validado_en) {
-            La reserva quedará pendiente de pago al anunciante.
+            Lo que queda del pago ({{ montoLiquidacion(decision.reserva) }}) se derivará a Reembolsos para devolvérselo
+            al inquilino según el medio de pago. El anunciante no recibirá ese importe.
+          } @else if (estadoAlCerrarRevision(decision.reserva) === 'PENDIENTE_PAGO_PROPIETARIO') {
+            La reserva quedará pendiente de pago al anunciante por {{ montoLiquidacion(decision.reserva) }}.
           } @else {
             El pago seguirá retenido hasta que se valide el código de alojamiento.
           }
         </p>
-        <label for="settlement-decision-note">{{ decision.devolver ? 'Motivo (opcional)' : 'Conclusión de la revisión' }}</label>
+        <label for="settlement-decision-note">{{ decision.devolver ? 'Motivo de la devolución' : 'Conclusión de la revisión' }}</label>
         <textarea id="settlement-decision-note" name="motivoResolucion" [(ngModel)]="motivoResolucion"
-          rows="4" maxlength="500" [required]="!decision.devolver" [disabled]="resolucionCargando()" autofocus></textarea>
+          rows="4" maxlength="500" required [disabled]="resolucionCargando()" autofocus></textarea>
         @if (resolucionError()) { <p class="refund-error" role="alert">{{ resolucionError() }}</p> }
         <div class="block-actions">
           <button type="button" class="button button--ghost" [disabled]="resolucionCargando()" (click)="cerrarResolucionLiquidacion()">Volver</button>
           <button type="submit" class="button" [class.button--danger-outline]="decision.devolver" [class.button--success]="!decision.devolver"
-            [disabled]="resolucionCargando() || (!decision.devolver && !motivoResolucion.trim())">
+            [disabled]="resolucionCargando() || !motivoResolucion.trim()">
             {{ resolucionCargando() ? 'Guardando…' : decision.devolver ? 'Pasar a Reembolsos' : 'Guardar conclusión' }}
           </button>
         </div>
@@ -451,7 +458,10 @@
       </div>
       @if (pagoAnuncianteSeleccionado(); as item) {
         <div class="advertiser-payment__summary">
-          <p class="advertiser-payment__row"><strong>Importe total</strong><span>{{ montoLiquidacion(item) }}</span></p>
+          <p class="advertiser-payment__row"><strong>Importe a liquidar</strong><span>{{ montoLiquidacion(item) }}</span></p>
+          @if (tieneDevolucion(item)) {
+            <p class="refund-help">El inquilino pagó {{ montoPagado(item) }}; ya se le devolvió la diferencia.</p>
+          }
           <p class="advertiser-payment__commission"><strong>Comisión DEPA:</strong> @if (item.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ item.porcentaje_comision_depa }} % · {{ item.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
           <div class="advertiser-payment__row advertiser-payment__net">
             <strong>Importe a transferir</strong>

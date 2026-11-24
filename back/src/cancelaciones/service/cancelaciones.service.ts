@@ -472,12 +472,14 @@ export class CancelacionesService implements OnApplicationBootstrap, OnModuleDes
     return (inicio - ahora) / 86_400_000;
   }
 
+  /** De quien pidió o decidió la solicitud solo viaja su identidad; las relaciones que no se cargaron no se agregan. */
   private prepararRespuesta(solicitud: SolicitudCancelacion): SolicitudCancelacion {
+    const { solicitante, decidida_por, reserva } = solicitud;
     return {
       ...solicitud,
-      solicitante: solicitud.solicitante ? this.identidadSolicitud(solicitud.solicitante) : solicitud.solicitante,
-      decidida_por: solicitud.decidida_por ? this.identidadSolicitud(solicitud.decidida_por) : null,
-      reserva: solicitud.reserva?.estado_pago ? this.reservas.prepararRespuesta(solicitud.reserva) : solicitud.reserva,
+      ...(solicitante ? { solicitante: this.identidadSolicitud(solicitante) } : {}),
+      ...(decidida_por !== undefined ? { decidida_por: decidida_por ? this.identidadSolicitud(decidida_por) : null } : {}),
+      ...(reserva?.estado_pago ? { reserva: this.reservas.prepararRespuesta(reserva) } : {}),
     };
   }
 

@@ -38,10 +38,9 @@ export class LiquidacionesService {
   constructor(@Inject(LIQUIDACION_REPOSITORY) private readonly liquidaciones: ILiquidacionRepository, private readonly catalogos: CatalogosService) {}
 
   async listarParaAdministracion(): Promise<Reserva[]> {
-    const pendiente = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
     const revision = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
     const filas = await this.liquidaciones.listarPorEstados([
-      pendiente, revision,
+      ...this.estadosPendientesParaAnunciante(), revision,
     ]);
     return filas.map(liquidacion => {
       this.sincronizarReserva(liquidacion.reserva, liquidacion);
@@ -57,7 +56,7 @@ export class LiquidacionesService {
 
   listarReservasPendientesDeAviso(ahora: Date): Promise<number[]> {
     return this.liquidaciones.listarReservasPendientesDeAviso(
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
+      this.estadosPendientesParaAnunciante(),
       this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
       this.desplazarFecha(fechaArgentina(ahora), -DIAS_ESPERA_PAGO_MANUAL),
     );
@@ -331,12 +330,35 @@ export class LiquidacionesService {
     );
   }
 
+  /**
+   * Resuelta para los flujos del inquilino (reprogramar, cancelar, reclamar…): la devolución
+   * parcial también lo es, aunque al anunciante todavía le quede cobrar el resto.
+   */
   esLiquidacionResuelta(estado: string): boolean {
+    return [
+      ...this.estadosCerradosParaAnunciante(),
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
+    ].some((codigo) => codigo === estado);
+  }
+
+  /** Lo que no se le devuelve al inquilino es del anunciante: después de una devolución parcial le queda cobrar el resto. */
+  estadosPendientesParaAnunciante(): string[] {
+    return [
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO'),
+      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
+    ];
+  }
+
+  /** Sin importe pendiente para el anunciante: se le pagó o se le devolvió todo al inquilino. */
+  estadosCerradosParaAnunciante(): string[] {
     return [
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO'),
-      this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO'),
-    ].some((codigo) => codigo === estado);
+    ];
+  }
+
+  admitePagoAlAnunciante(estado: string): boolean {
+    return this.estadosPendientesParaAnunciante().includes(estado);
   }
 
   private importeInicial(reserva: Reserva): number | null {

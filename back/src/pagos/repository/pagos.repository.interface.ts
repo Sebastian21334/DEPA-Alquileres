@@ -13,5 +13,6 @@ export interface IPagosRepository {
   buscarPorId(id: number): Promise<Pago | null>;
   buscarPorReferencia(referencia: string): Promise<Pago | null>;
   buscarPorReserva(idReserva: number, incluirReserva?: boolean, transaccion?: EntityManager): Promise<Pago | null>;
+  buscarPorReservas(idsReserva: number[]): Promise<Pago[]>;
   buscarBloqueado(id: number, transaccion: EntityManager): Promise<Pago | null>;
 }

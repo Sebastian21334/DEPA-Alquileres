@@ -669,17 +669,18 @@ export class ReservasService
   }
 
   /**
-   * Cancela una estadía pagada sin devolución: conserva el pago, deja la
-   * liquidación en revisión y libera el calendario. Participa de la transacción
-   * de quien coordina la decisión, para que un fallo revierta todo el conjunto.
+   * Cancela una estadía pagada sin devolución: conserva el pago, deja el importe
+   * pendiente de pago al anunciante y libera el calendario. Participa de la
+   * transacción de quien coordina la decisión, para que un fallo revierta todo el conjunto.
    */
   async cancelarConRetencionTotal(idReserva: number, actor: ActorCancelacion, motivo: string, transaccion: EntityManager): Promise<Reserva> {
     const reservas = this.reservaRepository.enTransaccion(transaccion);
     const reserva = await this.obtenerReserva(idReserva, transaccion);
     this.marcarCancelada(reserva, actor, motivo);
-    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION');
+    // Sin devolución, lo retenido es del anunciante y se le paga en la fecha habitual.
+    reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
     reserva.observacion_liquidacion =
-      'Cancelación con retención total; liquidación pendiente de revisión';
+      'Cancelación sin devolución: el importe corresponde al anunciante';
     const guardada = await reservas.guardar(reserva);
     await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
     await this.disponibilidadService.liberarReserva(idReserva, transaccion);

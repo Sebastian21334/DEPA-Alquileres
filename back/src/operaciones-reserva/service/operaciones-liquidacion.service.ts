@@ -26,8 +26,13 @@ import { AnunciantesService } from '../../anunciantes/service/anunciantes.servic
 import { ReclamosService } from '../../reclamos/service/reclamos.service';
 import { AlmacenamientoService, type ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
 import { RegistrarTransferenciaDto } from '../dto/registrar-transferencia.dto';
+import type { LiquidacionPendienteDto } from '../dto/liquidacion-pendiente.dto';
+import type { ConDesglose, DesglosePagoRegistradoDto } from '../dto/pago-registrado.dto';
+import type { Pago } from '../../pagos/entity/pago.entity';
 
 import type { EntityManager } from 'typeorm';
+
+const centavos = (importe: number): number => Math.round(importe * 100);
 
 @Injectable()
 export class OperacionesLiquidacionService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -63,7 +68,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
             if (!fecha || fecha > fechaArgentina(ahora) || reserva.cancelada ||
                 !this.reservasService.pagoAprobado(reserva) || this.reservasService.codigoValidado(reserva) ||
                 !this.vencePorIngresoNoVerificado(reserva) ||
-                await this.tieneDevolucionActiva(id, transaccion) ||
+                await this.reembolsosService.tieneDevolucionEnCurso(id, transaccion) ||
                 await this.reclamos.tieneReclamoAbierto(id, transaccion)) return;
             await this.liquidaciones.registrarVencimientoIngreso(reserva, transaccion);
           });
@@ -98,14 +103,15 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
   private async avisarSiDisponible(reserva: Reserva, hoy: string, ahora: Date, transaccion: EntityManager): Promise<void> {
     if (!this.notificaciones) return;
     const fecha = this.liquidaciones.fechaDisponiblePagoManual(reserva);
-    if (!fecha || fecha > hoy || reserva.cancelada || !this.reservasService.pagoAprobado(reserva) ||
-        reserva.estado_liquidacion !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO')) return;
+    // Avisa cuando hay algo para pagarle: también el resto de una devolución parcial o lo retenido de una cancelación.
+    if (!fecha || fecha > hoy || !this.reservasService.pagoAprobado(reserva) ||
+        !this.liquidaciones.admitePagoAlAnunciante(reserva.estado_liquidacion)) return;
 
     const liquidacion = await this.liquidaciones.asegurarParaReserva(reserva, transaccion);
     if (liquidacion.aviso_pago_admin_en && liquidacion.aviso_pago_anunciante_en) return;
     const idAnunciante = reserva.publicacion?.anunciante?.idUsuario;
     if (!idAnunciante || !await this.anunciantes.buscarCbuValidado(idAnunciante, transaccion) ||
-        await this.tieneDevolucionActiva(reserva.id, transaccion)) return;
+        await this.reembolsosService.tieneDevolucionEnCurso(reserva.id, transaccion)) return;
 
     const asunto = 'Liquidación disponible para pago manual';
     const [admin, anunciante] = await Promise.all([
@@ -117,16 +123,37 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     await this.liquidaciones.registrarAvisosPagoManual(liquidacion, { admin, anunciante }, ahora, transaccion);
   }
 
-  async listarLiquidacionesAdministracion(): Promise<(Reserva & { fecha_disponible_pago: string | null })[]> {
+  async listarLiquidacionesAdministracion(): Promise<LiquidacionPendienteDto[]> {
     const reservas = await this.liquidaciones.listarParaAdministracion();
-    const reembolsos = await this.reembolsosService.listarActivosPorReservas(reservas.map(reserva => reserva.id));
-    const transferidas = new Set(reembolsos.map(reembolso => reembolso.reserva.id));
-    return reservas.filter(reserva => !transferidas.has(reserva.id))
-      .map(reserva => ({
-        ...this.reservasService.prepararRespuesta(reserva),
-        fecha_disponible_pago: this.liquidaciones.fechaDisponiblePagoManual(reserva),
-        ...this.calcularComision(reserva, Number(reserva.monto_pago), false),
-      }));
+    const ids = reservas.map(reserva => reserva.id);
+    // Primero se le paga al inquilino en Reembolsos; recién después aparece el resto para el anunciante.
+    const [enCurso, pagos] = await Promise.all([
+      this.reembolsosService.listarEnCursoPorReservas(ids),
+      this.reembolsosService.listarPagosPorReservas(ids),
+    ]);
+    const conDevolucionEnCurso = new Set(enCurso.map(reembolso => reembolso.reserva.id));
+    const pagoPorReserva = new Map(pagos.map(pago => [pago.reserva.id, pago]));
+    return reservas.filter(reserva => !conDevolucionEnCurso.has(reserva.id))
+      .map(reserva => this.conDatosDeLiquidacion(reserva, pagoPorReserva.get(reserva.id) ?? null));
+  }
+
+  private conDatosDeLiquidacion(reserva: Reserva, pago: Pago | null): LiquidacionPendienteDto {
+    const importe = this.importeParaAnunciante(reserva, pago);
+    const fecha = this.liquidaciones.fechaDisponiblePagoManual(reserva);
+    return {
+      ...this.reservasService.prepararRespuesta(reserva),
+      fecha_disponible_pago: fecha,
+      importe_a_liquidar: importe,
+      moneda_liquidacion: pago?.currency ?? reserva.moneda_contratada ?? 'ARS',
+      ...this.calcularComision(reserva, importe, Number(pago?.amount_refunded ?? 0) > 0),
+      habilitada_para_pago: this.reservasService.pagoAprobado(reserva) && importe > TOLERANCIA_MONETARIA &&
+        this.liquidaciones.admitePagoAlAnunciante(reserva.estado_liquidacion) && !!fecha && fecha <= fechaArgentina(),
+    };
+  }
+
+  /** Lo que pagó el inquilino menos lo que ya se le devolvió le corresponde al anunciante. */
+  private importeParaAnunciante(reserva: Reserva, pago: Pago | null): number {
+    return pago ? this.reembolsosService.saldoReembolsable(pago) : Number(reserva.monto_pago);
   }
 
   private calcularComision(reserva: Reserva, importe: number, huboDevolucion: boolean): { importe_comision_depa: number; importe_neto_anunciante: number } {
@@ -137,12 +164,39 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     return { importe_comision_depa: Number(comision) / 100, importe_neto_anunciante: Number(centavos - comision) / 100 };
   }
 
-  listarPagosRegistrados() {
-    return this.liquidaciones.listarPagosRegistrados();
+  async listarPagosRegistrados() {
+    return this.conDesglose(await this.liquidaciones.listarPagosRegistrados());
   }
 
-  listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
-    return this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion);
+  async listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
+    return this.conDesglose(await this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion));
+  }
+
+  /** Suma a cada pago registrado cómo se repartió el cobro de su reserva, con los pagos de Mercado Pago en una sola consulta. */
+  private async conDesglose<T extends { reservaId: number; importe: number | null }>(registros: T[]): Promise<ConDesglose<T>[]> {
+    const cobros = await this.reembolsosService.listarPagosPorReservas([...new Set(registros.map(registro => registro.reservaId))]);
+    const cobroPorReserva = new Map(cobros.map(cobro => [cobro.reserva.id, cobro]));
+    const pagadoPorReserva = new Map<number, number>();
+    for (const { reservaId, importe } of registros)
+      pagadoPorReserva.set(reservaId, (pagadoPorReserva.get(reservaId) ?? 0) + centavos(importe ?? 0));
+    return registros.map(registro => ({
+      ...registro,
+      desglose: this.desglosar(cobroPorReserva.get(registro.reservaId), pagadoPorReserva.get(registro.reservaId) ?? 0),
+    }));
+  }
+
+  /** La comisión es lo que quedó entre lo cobrado y lo transferido, no un recálculo del porcentaje. */
+  private desglosar(cobro: Pago | undefined, pagadoEnCentavos: number): DesglosePagoRegistradoDto | null {
+    if (!cobro) return null;
+    const pagado = centavos(Number(cobro.amount));
+    const devuelto = centavos(Number(cobro.amount_refunded ?? 0));
+    const comision = (pagado - devuelto - pagadoEnCentavos) / 100;
+    return {
+      pagoInquilino: pagado / 100,
+      devueltoInquilino: devuelto / 100,
+      comisionDepa: comision > TOLERANCIA_MONETARIA ? comision : 0,
+      pagadoAnunciante: pagadoEnCentavos / 100,
+    };
   }
 
   /** Datos para transferir: el CBU validado y el CUIT/CUIL para confirmar el destinatario. */
@@ -204,6 +258,8 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
         'El estado solicitado no es una resolución administrativa válida',
       );
     }
+    if (this.esDevolucion(dto.estado) && !dto.observacion?.trim())
+      throw new BadRequestException('Indicá el motivo de la devolución al inquilino');
 
     const reserva = await this.reservasService.conReservaBloqueada(id, async (actual, transaccion) => {
       this.validarResolucion(actual, dto);
@@ -215,18 +271,18 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
       if (registraPago && (!idAnunciante || !await this.anunciantes.buscarCbuValidado(idAnunciante, transaccion))) {
         throw new ConflictException('El anunciante necesita un CBU validado para registrar el pago');
       }
-      const esDevolucion =
-        dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO') ||
-        dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO');
-      if (esDevolucion) {
+      if (this.esDevolucion(dto.estado)) {
         await this.derivarReembolso(actual, dto, idAdmin, transaccion);
         return;
       }
-      if (actual.cancelada && !registraPago)
+      // Una cancelada no vuelve a esperar el ingreso: lo retenido solo se revisa o se le paga al anunciante.
+      if (actual.cancelada && dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'))
         throw new ConflictException('Una reserva cancelada no puede volver al circuito de ingreso');
       await this.asegurarSinDevoluciones(id, transaccion);
       const cobro = registraPago ? await this.reembolsosService.buscarPagoPorReserva(id, transaccion) : null;
-      const bruto = cobro ? this.reembolsosService.saldoReembolsable(cobro) : Number(actual.monto_pago);
+      const bruto = this.importeParaAnunciante(actual, cobro);
+      if (registraPago && bruto <= TOLERANCIA_MONETARIA)
+        throw new ConflictException('No queda importe para liquidar al anunciante');
       await this.liquidaciones.registrarResolucion(actual, dto.estado, {
         importe: registraPago ? this.calcularComision(actual, bruto, Number(cobro?.amount_refunded ?? 0) > 0).importe_neto_anunciante : null,
         moneda: cobro?.currency ?? actual.moneda_contratada ?? 'ARS',
@@ -254,9 +310,11 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
       throw new BadRequestException('Indicá un importe válido para la devolución');
     const referencia = `liq:${reserva.id}`;
     const existentes = await this.reembolsosService.listarPorReserva(reserva.id, transaccion);
+    // Un reintento coincide con la devolución en curso; una ya aprobada está descontada del saldo y no impide devolver el resto.
     const previo = existentes.find(item => item.referencia_interna === referencia &&
       item.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'RECHAZADO') &&
-      item.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'CANCELADO'));
+      item.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'CANCELADO') &&
+      item.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'));
     if (previo) {
       if (Math.abs(Number(previo.importe) - importe) > TOLERANCIA_MONETARIA)
         throw new ConflictException('Ya existe una devolución por otro importe');
@@ -276,38 +334,30 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     await this.liquidaciones.registrarRevision(reserva, 'Devolución derivada a Reembolsos', transaccion);
   }
 
+  /** Una devolución aprobada ya está descontada del saldo; solo frena la que todavía puede mover dinero. */
   private async asegurarSinDevoluciones(id: number, transaccion?: EntityManager): Promise<void> {
-    if (await this.tieneDevolucionActiva(id, transaccion))
+    if (await this.reembolsosService.tieneDevolucionEnCurso(id, transaccion))
       throw new ConflictException(
-        'La reserva tiene una devolución registrada; no se puede pagar al propietario',
+        'La reserva tiene una devolución en curso; resolvela en Reembolsos antes de liquidar',
       );
   }
 
-  private async tieneDevolucionActiva(id: number, transaccion?: EntityManager): Promise<boolean> {
-    const existentes = await this.reembolsosService.listarPorReserva(id, transaccion);
-    return existentes.some(
-      (reembolso) =>
-        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE') ||
-        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') ||
-        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO') ||
-        reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
-    );
+  private esDevolucion(estado: string): boolean {
+    return estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO') ||
+      estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO');
   }
 
   private validarResolucion(reserva: Reserva, dto: ResolverLiquidacionDto): void {
-    if (
-      reserva.cancelada &&
-      reserva.estado_liquidacion !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'EN_REVISION')
-    ) {
+    const pendienteParaAnunciante = this.liquidaciones.admitePagoAlAnunciante(reserva.estado_liquidacion);
+    if (reserva.cancelada && !this.reservasService.liquidacionEnRevision(reserva) && !pendienteParaAnunciante) {
       throw new ConflictException('La reserva está cancelada');
     }
     const observacion = reserva.observacion_liquidacion ?? '';
     const devolucionEnEjecucion =
       observacion.includes('Devolución de') &&
       observacion.includes('en ejecución');
-    const esDevolucion =
-      dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_INQUILINO') ||
-      dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'DEVUELTO_PARCIAL_INQUILINO');
+    const esDevolucion = this.esDevolucion(dto.estado);
+    const registraPago = dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO');
     if (
       devolucionEnEjecucion &&
       (observacion.includes('reclamo') || !esDevolucion)
@@ -321,28 +371,23 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
         'La reserva no posee un pago aprobado para liquidar',
       );
     }
-    if (this.reservasService.liquidacionResuelta(reserva)) {
+    // Después de una devolución parcial solo queda pagarle el resto al anunciante o devolvérselo al inquilino.
+    if (this.reservasService.liquidacionResuelta(reserva) && !(pendienteParaAnunciante && (registraPago || esDevolucion))) {
       throw new ConflictException(
         'La liquidación de la reserva ya fue resuelta',
       );
     }
-    if (
-      dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') &&
-      reserva.estado_liquidacion !== this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO')
-    ) {
+    if (registraPago && !pendienteParaAnunciante) {
       throw new ConflictException(
         'La liquidación todavía no está pendiente de pago al propietario',
       );
     }
-    if (
-      dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO') &&
-      this.reservasService.liquidacionEnRevision(reserva)
-    ) {
+    if (registraPago && this.reservasService.liquidacionEnRevision(reserva)) {
       throw new ConflictException(
         'No se puede pagar al propietario con una liquidación en revisión',
       );
     }
-    if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO')) {
+    if (registraPago) {
       this.validarFechaPagoManual(reserva);
     }
   }

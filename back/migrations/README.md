@@ -322,3 +322,12 @@ base nueva). La migración `20261124-motivo-resolucion-reclamo.sql` agrega
 `reclamo_reserva.motivo_resolucion`, el motivo que escribe el admin al resolver y que ven las dos
 partes. Los reclamos ya resueltos con devolución lo toman del motivo de su reembolso; los resueltos
 sin devolución quedan sin motivo, porque no se guardaba en un lugar confiable. Es reejecutable.
+
+# Nombres de archivos con acentos y símbolos
+
+Desde esta versión, la subida lee en UTF-8 el nombre original de los comprobantes y de las imágenes
+de reclamos. Antes se leía como latin1 y una «—» se guardaba como «â€”». Para reparar los nombres
+ya guardados, ejecutar `node scripts/nombres-archivos-utf8.cjs` (solo informa cuántos hay) y después
+`npm run db:nombres-archivos-utf8` desde `back`. La migración `20261124-nombres-archivos-utf8.sql`
+corrige `reembolso.comprobante_nombre`, `reclamo_evidencia.nombre_archivo` y el `comprobanteNombre` de
+cada pago en `liquidacion.pagos_anunciante`. Es reejecutable: un nombre bien guardado queda igual.
