@@ -129,6 +129,8 @@
 .dashboard-metric strong { display: block; margin-top: 7px; font-size: 2rem; color: var(--color-secondary); }
 .metric-cancellation, .metric-cancellation strong { color: var(--color-primary-dark); }
 .metric-refund, .metric-refund strong { color: #9a5300; }
+.metric-settlement, .metric-settlement strong { color: #146c43; }
+.metric-appeal, .metric-appeal strong { color: #6b3fa0; }
 .dashboard-columns {
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
@@ -159,6 +161,10 @@
 }
 .dashboard-status[data-tone='review'] { background: var(--color-secondary-light); color: var(--color-secondary-dark); }
 .dashboard-status[data-tone='refund'] { background: #fff2da; color: #784200; }
+.dashboard-status[data-tone='payment'] { background: #e6f6ee; color: #146c43; }
+.dashboard-status[data-tone='appeal'] { background: #f1eafa; color: #5b3289; }
+.dashboard-more { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; color: var(--color-text-muted); font-size: .88rem; }
+.dashboard-more span { margin-right: auto; }
 .dashboard-shortcuts { display: grid; gap: 9px; }
 .dashboard-shortcuts h2 { margin-bottom: 5px; }
 .dashboard-shortcuts button {
