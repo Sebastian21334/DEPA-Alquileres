@@ -1052,20 +1052,11 @@
             @if (bloqueo.detalle.apelacion) {
               <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true"
                 [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">
-                  <div class="blocked-user__composer">
-                    <textarea [(ngModel)]="respuestasApelacion[bloqueo.detalle.id]" [ngModelOptions]="{ standalone: true }" rows="1" maxlength="2000" [disabled]="!!busy()" aria-label="Respuesta de Administración" placeholder="Escribí un mensaje..." (keydown.enter)="enviarApelacionConEnter($event, bloqueo)"></textarea>
-                    <label class="blocked-user__attach" title="Adjuntar imagen">
-                      <svg lucidePaperclip [size]="19" aria-hidden="true"></svg><span class="blocked-user__sr-only">Adjuntar imagen JPEG o PNG de hasta 5 MB</span>
-                      <input type="file" accept="image/jpeg,image/png" [disabled]="!!busy()" (change)="seleccionarImagenApelacion($event, bloqueo)" />
-                    </label>
-                    <button type="button" class="blocked-user__send" [disabled]="!!busy() || !(respuestasApelacion[bloqueo.detalle.id] || '').trim()" (click)="responderApelacion(bloqueo)"><svg lucideSend [size]="17" aria-hidden="true"></svg> Enviar</button>
-                    <button type="button" class="blocked-user__cancel" [disabled]="!!busy()" (click)="cancelarRespuesta(bloqueo)">Cancelar</button>
-                  </div>
-                  @if (imagenesApelacion[bloqueo.detalle.id]; as imagen) {
-                    @if (vistasPreviasApelacion[bloqueo.detalle.id]; as vista) {
-                      <app-attachment-preview class="blocked-user__attachment" [url]="vista" [nombre]="imagen.name" [deshabilitado]="!!busy()" (quitar)="quitarImagenApelacion(bloqueo)" />
-                    }
-                  }
+                  <app-conversation-composer [texto]="respuestasApelacion[bloqueo.detalle.id] ?? ''" (textoChange)="respuestasApelacion[bloqueo.detalle.id] = $event"
+                    [imagenes]="imagenesApelacion[bloqueo.detalle.id] ?? sinImagenes" (imagenesChange)="imagenesApelacion[bloqueo.detalle.id] = $event"
+                    [adjuntos]="1" [textoObligatorio]="true" [limite]="2000" etiqueta="Respuesta de Administración"
+                    [deshabilitado]="!!busy()" (enviar)="responderApelacion(bloqueo)" />
+                  <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="cancelarRespuesta(bloqueo)">Cancelar</button>
               </app-conversation-panel>
             }
           </article>
