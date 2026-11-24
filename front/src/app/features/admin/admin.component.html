@@ -691,8 +691,10 @@
                 <label>Resultado de la revisión
                   <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
                     @if (claim.categoria === 'CODIGO_BLOQUEADO') {
-                      <!-- El pedido de reinicio del código tiene sus propias salidas. -->
-                      <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
+                      <!-- El pedido de reinicio del código tiene sus propias salidas; terminada la estadía ya no se carga el código. -->
+                      @if (claim.reserva?.estado_estadia === 'PENDIENTE_INGRESO') {
+                        <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
+                      }
                       <option value="CONFIRMAR_INGRESO">Confirmar el ingreso sin código (a favor del anunciante)</option>
                       <option value="DEVOLUCION_TOTAL">Devolver el 100 % al inquilino</option>
                     } @else {

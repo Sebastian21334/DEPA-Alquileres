@@ -786,12 +786,8 @@ export class ReservasService
             'El código estará disponible cuando el pago se encuentre aprobado',
           );
         }
-        if (
-          !['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(this.calcularEstadoEstadia(reserva)) &&
-          !(this.calcularEstadoEstadia(reserva) === 'INGRESO_NO_VERIFICADO' &&
-            !!this.liquidaciones.fechaDisponiblePagoManual(reserva) &&
-            fechaArgentina() < this.liquidaciones.fechaDisponiblePagoManual(reserva)!)
-        ) {
+        // Terminada la estadía el código ya no prueba que el huésped estuvo: deja de mostrarse.
+        if (!['CONFIRMADA', 'PENDIENTE_INGRESO', 'EN_CURSO'].includes(this.calcularEstadoEstadia(reserva))) {
           throw new ConflictException(
             'El código no está disponible para una estadía cerrada o sin fechas verificables',
           );
@@ -840,12 +836,8 @@ export class ReservasService
         // El bloqueo se informa antes que las fechas, porque es lo que el anunciante tiene que resolver.
         if (this.codigoBloqueado(reserva)) throw new ConflictException(this.mensajeCodigoBloqueado());
         const estadoEstadia = this.calcularEstadoEstadia(reserva);
-        const vencimiento = this.liquidaciones.fechaDisponiblePagoManual(reserva);
-        if (estadoEstadia !== 'PENDIENTE_INGRESO' &&
-            !(estadoEstadia === 'INGRESO_NO_VERIFICADO' && vencimiento && fechaArgentina() < vencimiento &&
-              reserva.estado_liquidacion === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO'))) {
+        if (estadoEstadia !== 'PENDIENTE_INGRESO')
           throw new ConflictException(this.mensajeCodigoFueraDeFecha(reserva, estadoEstadia));
-        }
         if (this.liquidacionEnRevision(reserva))
           throw new ConflictException('La liquidación de esta reserva está en revisión de Administración. Vas a poder validar el código cuando se resuelva.');
         if (await this.reembolsosService.tieneDevolucionDeCancelacionActiva(id, transaccion))
@@ -978,10 +970,10 @@ export class ReservasService
   private mensajeCodigoFueraDeFecha(reserva: Reserva, estadoEstadia: string): string {
     if (estadoEstadia === 'CONFIRMADA' && reserva.fecha_inicio)
       return `Vas a poder validar el código desde el ${fechaParaMostrar(reserva.fecha_inicio)}, cuando empieza la estadía.`;
-    const ultimoDia = this.finPlazoReclamo(reserva);
-    if (estadoEstadia === 'INGRESO_NO_VERIFICADO' && ultimoDia && fechaArgentina() > ultimoDia)
-      return `El plazo para validar el código terminó el ${fechaParaMostrar(ultimoDia)}.`;
-    return 'El código solo puede validarse durante la estadía o hasta el día anterior a que se habilite el pago.';
+    // Sin ingreso validado, el pago se libera al vencer el plazo y cualquier problema se resuelve por reclamo.
+    if (estadoEstadia === 'INGRESO_NO_VERIFICADO' && reserva.fecha_fin)
+      return `La estadía terminó el ${fechaParaMostrar(reserva.fecha_fin)}: el código ya no se puede validar. Si hubo un problema con el ingreso, abrí un reclamo.`;
+    return 'El código solo puede validarse durante la estadía.';
   }
 
   codigoBloqueado(reserva: Reserva): boolean {

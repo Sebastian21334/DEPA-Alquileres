@@ -357,7 +357,7 @@
           @if (reserva.estado_estadia === 'INGRESO_NO_VERIFICADO' && reserva.estado_liquidacion === 'RETENIDO') {
             @let dias = diasHastaVencimiento(reserva);
             @if (dias !== null && dias > 0) {
-              <p class="booking-card__settlement">Si no se valida el código, en {{ dias }} {{ dias === 1 ? 'día' : 'días' }} la liquidación quedará pendiente de pago a tu favor.</p>
+              <p class="booking-card__settlement">En {{ dias }} {{ dias === 1 ? 'día' : 'días' }} la liquidación quedará pendiente de pago a tu favor.</p>
             } @else if (dias === 0) {
               <p class="booking-card__settlement">El plazo venció. La liquidación está pendiente de procesamiento a tu favor.</p>
             }
@@ -429,7 +429,11 @@
       @if (reserva.estado_estadia === 'PENDIENTE_INGRESO' && (!recibida || puedeValidarCodigo(reserva))) {
         <p class="muted">{{ recibida ? 'Validá el código que te entregue el huésped al ingresar.' : 'El propietario todavía no validó el código de alojamiento.' }}</p>
       }
-      @if (reserva.estado_estadia === 'INGRESO_NO_VERIFICADO') { <p class="muted">El período terminó sin un código de ingreso validado.</p> }
+      @if (reserva.estado_estadia === 'INGRESO_NO_VERIFICADO') {
+        <p class="muted">La estadía terminó sin un código de ingreso validado.
+          @if (!recibida && reserva.fin_plazo_reclamo && hoy() <= reserva.fin_plazo_reclamo) { Si tuviste un problema con el ingreso, podés reportarlo hasta el {{ fecha(reserva.fin_plazo_reclamo) }} desde «Reportar un problema». }
+        </p>
+      }
       @if (ultimoCambio(reserva); as cambio) {
         <div class="reschedule-history">
           <strong>Último cambio de fechas</strong>
