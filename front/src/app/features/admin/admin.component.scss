@@ -84,7 +84,7 @@
 .advertiser-payment-dialog .refund-help { padding-left: 12px; border-left: 3px solid var(--color-primary, #f47818); font-size: .88rem; line-height: 1.45; }
 .advertiser-payment__alert { padding: 10px 12px; border-radius: 8px; background: #ffeded; font-size: .9rem; font-weight: 650; }
 .advertiser-payment__net app-dato-copiable { justify-content: flex-end; font-weight: 700; }
-/* T56: datos para transferir al anunciante, con el CBU en bloques y botón de copiar. */
+/* Datos para transferir al anunciante, con el CBU en bloques y botón de copiar. */
 .transfer-data { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid #b7dcc5; border-radius: 8px; background: #f3faf6; }
 .transfer-data h3 { margin: 0; color: #146c43; font-size: .95rem; }
 .transfer-data p { margin: 0; }
@@ -482,7 +482,7 @@ dd {
 .refund-amount { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .85rem; border-radius: 10px; background: #edf5f1; }
 .refund-amount__value { font-size: 1.25rem; font-weight: 700; }
 .refund-amount .status { margin-left: auto; }
-/* T56: el detalle del reembolso sigue la estructura del pago al anunciante. */
+/* El detalle del reembolso sigue la estructura del pago al anunciante. */
 .refund-dialog .block-form { gap: 12px; }
 .refund-heading .advertiser-payment__header { margin-bottom: 0; }
 .refund-help--accent { margin: 0; padding-left: 12px; border-left: 3px solid var(--color-primary, #f47818); font-size: .88rem; line-height: 1.45; }

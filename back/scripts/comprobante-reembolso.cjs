@@ -3,7 +3,7 @@ const path = require('node:path');
 const { Client } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
-// T44/T56: agrega las columnas del comprobante y la observación de la transferencia al reembolso. Es reejecutable.
+// Agrega las columnas del comprobante y la observación de la transferencia al reembolso. Es reejecutable.
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error('Falta DATABASE_URL');
   if (!process.argv.includes('--aplicar')) {

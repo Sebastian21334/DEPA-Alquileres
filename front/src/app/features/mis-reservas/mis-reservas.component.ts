@@ -141,7 +141,7 @@ export class MisReservasComponent {
   protected readonly ocupada = signal<number | null>(null);
   protected readonly vista = signal<'realizadas' | 'recibidas' | 'reclamos'>('realizadas');
   protected readonly reclamos = signal<Reclamo[]>([]);
-  /** T53: subpestaña de Reclamos según el rol en cada uno. */
+  /** Subpestaña de Reclamos según el rol en cada uno. */
   protected readonly vistaReclamos = signal<RolEnReclamo>('inquilino');
   protected readonly reclamosComoInquilino = computed(() => this.reclamosConRol('inquilino'));
   protected readonly reclamosComoAnunciante = computed(() => this.reclamosConRol('anunciante'));
@@ -157,7 +157,7 @@ export class MisReservasComponent {
   protected readonly respuestaReclamo = signal<number | null>(null);
   protected readonly enviandoRespuesta = signal(false);
   protected textoRespuesta = '';
-  /** T49: imágenes del próximo mensaje del reclamo. */
+  /** Imágenes del próximo mensaje del reclamo. */
   protected readonly imagenesRespuesta = signal<File[]>([]);
   protected readonly imagenesDisponibles = imagenesDisponibles;
   protected readonly maxImagenesPorEnvio = MAX_IMAGENES_POR_ENVIO;
@@ -498,7 +498,7 @@ export class MisReservasComponent {
     });
   }
 
-  /** T34: el mensaje del código se muestra en la tarjeta de esa reserva, junto al campo. */
+  /** El mensaje del código se muestra en la tarjeta de esa reserva, junto al campo. */
   protected readonly avisoCodigo = signal<{ id: number; tipo: 'error' | 'exito'; texto: string } | null>(null);
 
   protected validarCodigo(reserva: Reserva): void {
@@ -555,7 +555,7 @@ export class MisReservasComponent {
     this.errorReclamo.set('');
   }
 
-  /** T34: por qué el anunciante no puede pedir el reinicio del código; vacío si puede. */
+  /** Por qué el anunciante no puede pedir el reinicio del código; vacío si puede. */
   protected motivoPedidoReinicioNoDisponible(reserva: Reserva): string {
     if (this.tieneReclamoAbierto(reserva))
       return 'Ya hay un pedido o un reclamo abierto para esta reserva. Seguilo desde la pestaña Reclamos.';
@@ -626,7 +626,7 @@ export class MisReservasComponent {
     this.respuestaReclamo.set(id);
   }
 
-  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
+  /** El mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   protected responderReclamo(reclamo: Reclamo): void {
     const texto = this.textoRespuesta.trim();
     const imagenes = this.imagenesRespuesta();
@@ -681,7 +681,7 @@ export class MisReservasComponent {
     const etiquetas: Partial<Record<Reserva['estado_liquidacion'], string>> = {
       NO_APLICA: 'Sin liquidación',
       RETENIDO: 'Dinero retenido hasta el ingreso',
-      // Sin ingreso validado (venció el plazo de T36) no se habla de «ingreso confirmado», igual que la etiqueta de la estadía.
+      // Sin ingreso validado (venció el plazo de pago) no se habla de «ingreso confirmado», igual que la etiqueta de la estadía.
       PENDIENTE_PAGO_PROPIETARIO: reserva.codigo_validado_en
         ? 'Ingreso confirmado · pago administrativo pendiente'
         : 'Ingreso no verificado · pago administrativo pendiente',

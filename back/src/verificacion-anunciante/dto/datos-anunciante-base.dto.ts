@@ -7,7 +7,7 @@ import {
   MaxLength,
 } from 'class-validator';
 
-// Base de la corrección de datos. El alta conserva CbuDto para no interferir con T14.
+// Base de la corrección de datos. El alta conserva CbuDto para no alterar la validación del CBU.
 export class DatosAnuncianteBaseDto {
   @IsNumber()
   idTipoAnunciante: number;

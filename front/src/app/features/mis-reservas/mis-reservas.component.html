@@ -275,7 +275,7 @@
           </div>
           @if (errorHistorial()) { <p class="claim-error" role="alert">{{ errorHistorial() }}</p> }
           @if (errorAccionReclamo()) { <p class="claim-error" role="alert">{{ errorAccionReclamo() }}</p> }
-          <!-- T53: los reclamos como inquilino y como anunciante van separados; sin subpestañas si no es anunciante. -->
+          <!-- Los reclamos como inquilino y como anunciante van separados; sin subpestañas si no es anunciante. -->
           @if (separarReclamos()) {
             <div class="reservation-tabs reservation-tabs--sub" role="tablist" aria-label="Rol en los reclamos">
               <button type="button" role="tab" [attr.aria-selected]="vistaReclamos() === 'inquilino'" [class.is-active]="vistaReclamos() === 'inquilino'" (click)="vistaReclamos.set('inquilino')">
@@ -477,7 +477,7 @@
         <p class="code-entry__aviso" [class.code-entry__aviso--error]="aviso.tipo === 'error'" [attr.role]="aviso.tipo === 'error' ? 'alert' : 'status'">{{ aviso.texto }}</p>
       }
       @if (recibida && puedePedirReinicioCodigo(reserva)) {
-        <!-- T34: con el código bloqueado, el anunciante le pide el reinicio a Administración. -->
+        <!-- Con el código bloqueado, el anunciante le pide el reinicio a Administración. -->
         @if (motivoPedidoReinicioNoDisponible(reserva); as motivo) {
           <p class="code-entry__hint">{{ motivo }}</p>
         } @else {

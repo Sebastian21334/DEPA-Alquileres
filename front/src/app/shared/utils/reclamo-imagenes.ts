@@ -1,6 +1,6 @@
 import type { Reclamo } from '../services/reservation.service';
 
-/** T49: mismos límites que el back (reclamos.service): por envío y por reclamo, sumando las de todas las partes. */
+/** Mismos límites que el back (reclamos.service): por envío y por reclamo, sumando las de todas las partes. */
 export const MAX_IMAGENES_POR_ENVIO = 10;
 export const MAX_IMAGENES_POR_RECLAMO = 30;
 

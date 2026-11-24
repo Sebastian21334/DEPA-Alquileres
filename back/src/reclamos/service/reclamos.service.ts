@@ -46,7 +46,7 @@ import { RECLAMOS_REPOSITORY } from '../repository/reclamos.repository.interface
 import type { IReclamosRepository } from '../repository/reclamos.repository.interface';
 import type { Usuario } from '../../usuarios/entity/usuario.entity';
 
-/** T49: imágenes por envío (al crear el reclamo o en un mensaje) y por reclamo, sumando las de todas las partes. */
+/** Imágenes por envío (al crear el reclamo o en un mensaje) y por reclamo, sumando las de todas las partes. */
 export const MAX_IMAGENES_POR_ENVIO = 10;
 export const MAX_IMAGENES_POR_RECLAMO = 30;
 export const MAX_BYTES_IMAGEN = 5 * 1024 * 1024;
@@ -220,7 +220,7 @@ export class ReclamosService {
     return this.imagenesRespuesta(guardadas);
   }
 
-  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
+  /** El mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[] = []): Promise<MensajeReclamoRespuesta> {
     const reclamo = await this.buscarComoParticipante(id, idUsuario, esAdmin);
     this.verificarNoCerrado(reclamo);
@@ -276,7 +276,7 @@ export class ReclamosService {
       const previo = await this.reembolsos.buscarPorOrigen(OrigenReembolso.RECLAMO, referencia, transaccion);
       if (expediente.solicitud_cancelacion_id != null && expediente.categoria !== CategoriaReclamo.DEMORA_ADMINISTRATIVA) {
         resultado.reembolso = await this.resolverFaltanteCancelacion(expediente, actual, dto, idAdmin, previo, transaccion);
-        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, resultado.reembolso ? Number(resultado.reembolso.importe) : null, idAdmin));
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, resultado.reembolso ? Number(resultado.reembolso.importe) : null, idAdmin, dto.observacion));
         return;
       }
       if (this.esAFavorDelAnunciante(dto.resolucion)) {
@@ -287,7 +287,7 @@ export class ReclamosService {
           : await this.reservas.resolverReclamoSinDevolucion(actual, dto.observacion ?? (
             dto.resolucion === ResolucionReclamo.REINICIAR_CODIGO
               ? `Administración habilitó ${MAX_INTENTOS_CODIGO} intentos más del código` : undefined), transaccion);
-        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, null, idAdmin));
+        resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, null, idAdmin, dto.observacion));
         return;
       }
       const pago = await this.reembolsos.buscarPagoPorReserva(reserva.id, transaccion);
@@ -321,7 +321,7 @@ export class ReclamosService {
         referenciaInterna: referencia,
       }, transaccion);
       // La decisión se registra junto con la devolución; la plata se mueve después.
-      resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, Number(resultado.reembolso.importe), idAdmin));
+      resultado.reclamo = await repositorio.guardar(this.registrarDecision(expediente, dto.resolucion, Number(resultado.reembolso.importe), idAdmin, dto.observacion));
     });
     if (!resultado.reembolso) {
       const [asunto, mensaje] = this.avisoSinDevolucion(dto.resolucion);
@@ -357,7 +357,7 @@ export class ReclamosService {
   }
 
   /**
-   * T34: el pedido de reinicio del código se resuelve habilitando intentos, confirmando
+   * El pedido de reinicio del código se resuelve habilitando intentos, confirmando
    * el ingreso o devolviendo el total con motivo. Los demás reclamos conservan sus opciones.
    */
   private async resolverFaltanteCancelacion(reclamo: Reclamo, reserva: Reserva, dto: ResolverReclamoDto, idAdmin: number, previo: Reembolso | null, transaccion: EntityManager): Promise<Reembolso | undefined> {
@@ -410,12 +410,13 @@ export class ReclamosService {
   }
 
   /** Registra la decisión del administrador sobre el reclamo; las asignaciones viven en el servicio. */
-  private registrarDecision(reclamo: Reclamo, resolucion: ResolucionReclamo, importe: number | null, idAdmin: number | null): Reclamo {
+  private registrarDecision(reclamo: Reclamo, resolucion: ResolucionReclamo, importe: number | null, idAdmin: number | null, motivo: string | undefined): Reclamo {
     reclamo.estado = this.esAFavorDelAnunciante(resolucion)
       ? this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE')
       : this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_INQUILINO');
     reclamo.resolucion = resolucion;
     reclamo.importe_reembolso = importe;
+    reclamo.motivo_resolucion = motivo?.trim() || null;
     reclamo.administrador_resolucion = idAdmin != null ? referenciaUsuario(idAdmin) : null;
     reclamo.resuelto_en = new Date();
     return reclamo;
@@ -429,15 +430,15 @@ export class ReclamosService {
       throw new ConflictException('El reembolso requiere identificar el reclamo de origen');
     if (reclamo.estado === this.catalogos.codigoEstado('RECLAMO', 'RESUELTO_ANUNCIANTE'))
       throw new ConflictException('El reclamo tiene una resolución incompatible con el reembolso');
-    reclamo.reserva = await this.reservas.aplicarEfectoReembolso(reembolso, transaccion,
-      reembolso.motivo.replace(/^Reclamo #\d+: /, ''));
+    const motivo = reembolso.motivo.replace(/^Reclamo #\d+: /, '');
+    reclamo.reserva = await this.reservas.aplicarEfectoReembolso(reembolso, transaccion, motivo);
     // La decisión ya quedó registrada al resolver; los reclamos anteriores a ese
     // cambio la completan recién cuando se confirma la devolución.
     if (!reclamo.resuelto_en) {
       const resolucion = reembolso.tipo === TipoReembolso.TOTAL
         ? ResolucionReclamo.DEVOLUCION_TOTAL : ResolucionReclamo.DEVOLUCION_PARCIAL;
       this.registrarDecision(reclamo, resolucion, Number(reembolso.importe),
-        reembolso.resuelto_por?.id ?? reembolso.solicitado_por?.id ?? null);
+        reembolso.resuelto_por?.id ?? reembolso.solicitado_por?.id ?? null, motivo);
     }
     return reclamos.guardar(reclamo);
   }
@@ -468,7 +469,7 @@ export class ReclamosService {
 
   /**
    * Respuesta de un reclamo: sin notas internas para las partes y con los datos mínimos de cada autor.
-   * T49: cada imagen va en su mensaje o, si no tiene, en la descripción, con un enlace firmado de 15 minutos.
+   * Cada imagen va en su mensaje o, si no tiene, en la descripción, con un enlace firmado de 15 minutos.
    */
   private async responder(reclamo: Reclamo, esAdmin: boolean): Promise<ReclamoRespuestaDto> {
     const mensajes = (reclamo.mensajes ?? [])
@@ -503,7 +504,7 @@ export class ReclamosService {
     return !evidencia.mensaje || evidencia.mensaje.visible_para === VisibilidadMensajeReclamo.TODOS;
   }
 
-  /** T49: valida y reduce todas las imágenes antes de subir ninguna, así un archivo inválido no deja otros subidos. */
+  /** Valida y reduce todas las imágenes antes de subir ninguna, así un archivo inválido no deja otros subidos. */
   private async prepararImagenes(idReclamo: number, archivos: Express.Multer.File[]): Promise<ImagenPreparada[]> {
     if (archivos.length > MAX_IMAGENES_POR_ENVIO)
       throw new BadRequestException(`Podés adjuntar hasta ${MAX_IMAGENES_POR_ENVIO} imágenes por envío`);
@@ -547,7 +548,7 @@ export class ReclamosService {
     }
   }
 
-  /** T49: guarda en una transacción lo que acompaña a las imágenes ya subidas; si algo falla, las borra. */
+  /** Guarda en una transacción lo que acompaña a las imágenes ya subidas; si algo falla, las borra. */
   private async guardarConImagenes<T>(idReclamo: number, subidas: ImagenSubida[], guardar: (reclamos: IReclamosRepository, vigente: Reclamo) => Promise<T>): Promise<T> {
     let guardado = false;
     try {

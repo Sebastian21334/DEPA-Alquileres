@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, MoreThan, Not, Repository, type EntityManager } from 'typeorm';
 import { OrigenReembolso, Reembolso } from '../entity/reembolso.entity';
 import type { IReembolsosRepository, MensajeReembolso } from './reembolsos.repository.interface';
+import type { ActividadReembolso } from '../dto/actividad-reembolso.dto';
 
 @Injectable()
 export class ReembolsosRepository implements IReembolsosRepository {
@@ -44,7 +45,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  /** T44: la URL privada del comprobante y el inquilino que puede verlo. */
+  /** La URL privada del comprobante y el inquilino que puede verlo. */
   async buscarComprobante(id: number): Promise<{ url: string | null; idInquilino: number | null } | null> {
     const fila = await this.repository.createQueryBuilder('reembolso')
       .leftJoin('reembolso.reserva', 'reserva')
@@ -175,7 +176,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
     });
   }
 
-  actividadInquilino(idUsuario: number, estados: string[]): ReturnType<IReembolsosRepository['actividadInquilino']> {
+  actividadInquilino(idUsuario: number, estados: string[]): Promise<ActividadReembolso[]> {
     return this.repository.query(
       `SELECT r.id_reembolso AS "reembolsoId", r.id_reserva AS "reservaId",
               r.estado = ANY($2) AS pendiente, m.id AS "mensajeId", left(m.texto, 120) AS texto, m.creado_en AS fecha

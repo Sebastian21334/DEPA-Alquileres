@@ -3,7 +3,7 @@ const path = require('node:path');
 const { Client } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
-// D10: agrega el vencimiento del enlace de verificación del correo. Es reejecutable.
+// Agrega el vencimiento del enlace de verificación del correo. Es reejecutable.
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error('Falta DATABASE_URL');
   if (!process.argv.includes('--aplicar')) {

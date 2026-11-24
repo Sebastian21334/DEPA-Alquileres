@@ -1,17 +1,17 @@
 import { Component, input, model, signal } from '@angular/core';
 import { LucideFileText, LucideUpload } from '@lucide/angular';
 
-/** Mismo límite que el back (T04). */
+/** Mismo límite que el back. */
 export const MAX_BYTES_COMPROBANTE = 5 * 1024 * 1024;
 const TIPOS = ['application/pdf', 'image/jpeg', 'image/png'];
 const EXTENSIONES = /\.(pdf|jpe?g|png)$/i;
 let siguienteId = 0;
 
 /**
- * T04: elige el comprobante de una transferencia (PDF, JPG o PNG de hasta 5 MB).
+ * Elige el comprobante de una transferencia (PDF, JPG o PNG de hasta 5 MB).
  * Valida antes de subir; el back vuelve a validar el contenido real del archivo.
- * T56: es la misma zona, con el mismo texto, en el reembolso y en el pago al anunciante.
- * T05: también la usan las constancias de la solicitud de inmobiliaria (mismos tipos y tamaño).
+ * Es la misma zona, con el mismo texto, en el reembolso y en el pago al anunciante.
+ * También la usan las constancias de la solicitud de inmobiliaria (mismos tipos y tamaño).
  */
 @Component({
   selector: 'app-carga-comprobante',
@@ -43,7 +43,7 @@ let siguienteId = 0;
 export class CargaComprobanteComponent {
   readonly archivo = model<File | null>(null);
   readonly etiqueta = input('Comprobante de la transferencia');
-  /** T05: la solicitud de inmobiliaria usa la misma zona para sus constancias. */
+  /** La solicitud de inmobiliaria usa la misma zona para sus constancias. */
   readonly accion = input('Elegí o arrastrá el comprobante');
   readonly requerido = input(true);
   readonly deshabilitado = input(false);

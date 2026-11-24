@@ -48,7 +48,7 @@ export class ReclamoMensaje {
   @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 
-  // T49: imágenes enviadas con este mensaje.
+  // Imágenes enviadas con este mensaje.
   @OneToMany(() => ReclamoEvidencia, (evidencia) => evidencia.mensaje)
   evidencias?: Relation<ReclamoEvidencia[]>;
 }

@@ -16,10 +16,12 @@ import type {
   CategoriaInicio,
   AreaMapaPublicaciones,
   ConsultaPublicaciones,
+  ConversionUsd,
   FiltrosPublicaciones,
   IPublicacionesRepository,
   OrdenPublicaciones,
 } from '../repository/publicaciones.repository.interface';
+import { CotizacionesLecturaService } from '../../cotizaciones/service/cotizaciones-lectura.service';
 import { CrearPublicacionDto } from '../dto/crear-publicacion.dto';
 import { ActualizarPublicacionDto } from '../dto/actualizar-publicacion.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
@@ -38,7 +40,7 @@ type EtapaReserva = 'cotizacion' | 'reserva';
 @Injectable()
 export class PublicacionesService {
   private readonly logger = new Logger(PublicacionesService.name);
-  constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly reservasLectura: ReservasLecturaService) {}
+  constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly reservasLectura: ReservasLecturaService, private readonly cotizacionesLectura: CotizacionesLecturaService) {}
 
   /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
   async crear(anunciante: Anunciante, dto: CrearPublicacionDto) {
@@ -275,6 +277,7 @@ export class PublicacionesService {
       'precio-mayor',
       'titulo',
     ];
+    const orden = filtros.orden && ordenesValidos.includes(filtros.orden) ? filtros.orden : undefined;
     const consulta: ConsultaPublicaciones = {
       pagina: Number.isFinite(pagina) ? Math.max(1, Math.trunc(pagina)) : 1,
       limite: Number.isFinite(limite)
@@ -282,10 +285,8 @@ export class PublicacionesService {
         : 12,
       categoria,
       ...this.normalizarFiltrosPublicos(filtros),
-      orden:
-        filtros.orden && ordenesValidos.includes(filtros.orden)
-          ? filtros.orden
-          : undefined,
+      orden,
+      conversionUsd: orden === 'precio-menor' || orden === 'precio-mayor' ? await this.conversionUsd() : undefined,
     };
     const resultado = await this.publicacionesRepo.buscarPaginadas(consulta);
     return { ...resultado, datos: resultado.datos.map((publicacion) => this.prepararRespuestaPublica(publicacion)) };
@@ -310,6 +311,21 @@ export class PublicacionesService {
       recortado,
       siguienteId: recortado ? puntos[limite - 1].id : null,
     };
+  }
+
+  /** Al ordenar por precio, los importes en USD se comparan en pesos con el dólar blue registrado. */
+  private async conversionUsd(): Promise<ConversionUsd | undefined> {
+    const [venta, monedas] = await Promise.all([this.cotizacionesLectura.ventaRegistrada(), this.catalogosService.getTiposMoneda()]);
+    const idsMoneda = monedas.filter(({ nombre }) => this.esDolar(nombre)).map(({ id }) => id);
+    return venta && idsMoneda.length ? { idsMoneda, venta } : undefined;
+  }
+
+  private esDolar(nombre: string): boolean {
+    try {
+      return monedaPublicacion(nombre) === 'USD';
+    } catch {
+      return false;
+    }
   }
 
   private normalizarFiltrosPublicos(filtros: FiltrosPublicaciones): FiltrosPublicaciones {

@@ -314,3 +314,11 @@ base nueva). La migración `20261123-vencimiento-verificacion.sql` agrega
 `usuario.token_verificacion_expira`: el enlace de verificación vence a las 24 horas, se usa una sola
 vez y reenviarlo invalida el anterior. Los enlaces enviados antes de la migración quedan vencidos;
 la cuenta pide uno nuevo desde el inicio de sesión. Es reejecutable.
+
+# Motivo de la resolución de un reclamo
+
+Ejecutar `npm run db:motivo-resolucion-reclamo` desde `back` (también después de inicializar una
+base nueva). La migración `20261124-motivo-resolucion-reclamo.sql` agrega
+`reclamo_reserva.motivo_resolucion`, el motivo que escribe el admin al resolver y que ven las dos
+partes. Los reclamos ya resueltos con devolución lo toman del motivo de su reembolso; los resueltos
+sin devolución quedan sin motivo, porque no se guardaba en un lugar confiable. Es reejecutable.

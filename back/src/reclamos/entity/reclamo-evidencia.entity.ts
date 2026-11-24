@@ -30,7 +30,7 @@ export class ReclamoEvidencia {
   @JoinColumn({ name: 'id_usuario' })
   usuario: Relation<Usuario | null>;
 
-  // T49: mensaje del chat con el que se envió; null si es de la descripción del reclamo.
+  // Mensaje del chat con el que se envió; null si es de la descripción del reclamo.
   @ManyToOne(() => ReclamoMensaje, (mensaje) => mensaje.evidencias, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'id_mensaje', foreignKeyConstraintName: 'FK_reclamo_evidencia_mensaje' })
   mensaje: Relation<ReclamoMensaje | null>;

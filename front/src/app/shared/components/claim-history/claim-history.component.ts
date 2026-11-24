@@ -12,7 +12,7 @@ import { CATEGORIAS_RECLAMO, etiquetaCategoriaReclamo } from '../../utils/reclam
 
 /** Mismo ritmo que los chats de mensajes y de reembolsos. */
 const INTERVALO_CHAT_MS = 5000;
-/** T49: los enlaces de las imágenes vencen a los 15 minutos; se renuevan antes. */
+/** Los enlaces de las imágenes vencen a los 15 minutos; se renuevan antes. */
 const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
 
 @Component({
@@ -32,7 +32,7 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
         <span class="status" [class.status--resolved]="item.resuelto_en || item.estado === 'CERRADO'">
           {{ estados[item.estado] }}
         </span>
-        <!-- T53: el admin va al detalle de su panel; las partes, al resumen de la reserva. -->
+        <!-- El admin va al detalle de su panel; las partes, al resumen de la reserva. -->
         @if (item.reserva?.id; as idReserva) {
           <a class="ver-reserva" [routerLink]="administracion() ? ['/admin/reservas', idReserva] : ['/reserva/resultado']"
             [queryParams]="administracion() ? { desde: 'reclamos' } : { reserva_id: idReserva }">Ver reserva</a>
@@ -59,10 +59,6 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
             : (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA')
               ? 'No se aprobó una devolución adicional.'
               : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
-          <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
-          @if (item.reserva && puedeValidarCodigo(item.reserva)) {
-            <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
-          }
         } @else if (item.resolucion === 'CONFIRMAR_INGRESO') {
           <p>A favor del anunciante: la administración confirmó el ingreso sin el código. El pago sigue los plazos habituales.</p>
         } @else {
@@ -71,6 +67,13 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
             @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.devolucion_cancelacion?.moneda || item.reserva?.moneda_contratada || 'ARS') }}</span>}.
             {{ administracion() ? 'La devolución se gestiona en Reembolsos.' : 'La devolución se sigue desde el detalle de la reserva.' }}
           </p>
+        }
+        @if (item.motivo_resolucion) {
+          <p class="resolution__motivo"><strong>Motivo de la resolución:</strong> {{ item.motivo_resolucion }}</p>
+        }
+        <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
+        @if ((item.resolucion === 'SIN_DEVOLUCION' || item.resolucion === 'REINICIAR_CODIGO') && item.reserva && puedeValidarCodigo(item.reserva)) {
+          <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
         }
         @if (item.resuelto_en) { <p class="meta">Resuelto el {{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</p> }
         @if (mostrarVerReembolso() && (item.resolucion === 'DEVOLUCION_TOTAL' || item.resolucion === 'DEVOLUCION_PARCIAL')) {
@@ -110,15 +113,13 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
           </div>
         </div>
       </div>
-      <div class="claim-description">
-        <h4>Detalle del reclamo</h4>
-        <p class="body">{{ item.descripcion }}</p>
-      </div>
-    } @else {
-      <p class="body">{{ item.descripcion }}</p>
     }
+    <div class="claim-description">
+      <h4>Motivo del reclamo</h4>
+      <p class="body">{{ item.descripcion }}</p>
+    </div>
     @if (item.evidencias?.length) {
-      <!-- T49: imágenes de la descripción (las que se subieron al crear el reclamo), cada una con su autor. -->
+      <!-- Imágenes de la descripción (las que se subieron al crear el reclamo), cada una con su autor. -->
       <ul class="imagenes-reclamo" aria-label="Imágenes del reclamo">
         @for (imagen of item.evidencias; track imagen.id) {
           <li>
@@ -155,6 +156,7 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
     .imagenes-reclamo img { display: block; width: 100%; aspect-ratio: 1; border-radius: .5rem; object-fit: cover; background: #e3eaff; }
     .resolution { display: grid; gap: .3rem; justify-items: start; padding: .75rem .9rem; border-radius: .6rem; border: 1px solid #b9dccb; }
     .resolution__title { font-weight: 800; }
+    .resolution__motivo { white-space: pre-wrap; overflow-wrap: anywhere; }
     .resolution__action {
       margin-top: .25rem; padding: .45rem .8rem; border: 1px solid #205c46; border-radius: .45rem;
       background: #fff; color: #205c46; font-weight: 700; cursor: pointer;
@@ -211,7 +213,7 @@ export class ClaimHistoryComponent {
   /** El admin la apaga mientras la sección Reclamos está oculta, para no consultar en segundo plano. */
   readonly actualizar = input(true);
   protected readonly puedeValidarCodigo = puedeValidarCodigo;
-  /** T53: en Mis reservas, el rol de quien mira el reclamo; el admin no lo necesita. */
+  /** En Mis reservas, el rol de quien mira el reclamo; el admin no lo necesita. */
   protected readonly rolPropio = computed(() => {
     if (this.administracion()) return '';
     return rolEnReclamo(this.reclamo(), Number(this.auth.currentUser()?.sub)) ?? '';
@@ -237,14 +239,14 @@ export class ClaimHistoryComponent {
     return '';
   }
 
-  /** T49: cada imagen dice quién la subió. */
+  /** Cada imagen dice quién la subió. */
   protected autorImagen(imagen: ReclamoEvidencia): string {
     const rol = this.rolDe(imagen.autor);
     return [this.nombreCompleto(imagen.autor) || 'un usuario', rol].filter(Boolean).join(' · ');
   }
 
   /**
-   * T49: el chat se consulta cada 5 segundos y cada respuesta trae un enlace firmado nuevo. Se conserva el primero
+   * El chat se consulta cada 5 segundos y cada respuesta trae un enlace firmado nuevo. Se conserva el primero
    * para no volver a descargar las miniaturas y se cambia por el más reciente antes de que venza (15 minutos).
    */
   protected urlImagen(imagen: ReclamoEvidencia): string {
@@ -268,7 +270,7 @@ export class ClaimHistoryComponent {
   private idConsultado?: number;
 
   constructor() {
-    // T48: el hilo de un reclamo abierto se actualiza solo, como los chats de mensajes y reembolsos.
+    // El hilo de un reclamo abierto se actualiza solo, como los chats de mensajes y reembolsos.
     effect(onCleanup => {
       const id = this.idReclamo();
       if (id !== this.idConsultado) {

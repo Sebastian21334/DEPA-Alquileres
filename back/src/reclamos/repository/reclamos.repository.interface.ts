@@ -9,7 +9,7 @@ export const RECLAMOS_REPOSITORY = 'RECLAMOS_REPOSITORY';
 export interface IReclamosRepository {
   tienePendientesDeCuenta(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: string[]): Promise<boolean>;
   enTransaccion(transaccion: EntityManager): IReclamosRepository;
-  /** Abre una transacción propia del reclamo (T49: mensaje e imágenes se guardan juntos). */
+  /** Abre una transacción propia del reclamo (mensaje e imágenes se guardan juntos). */
   transaccion<T>(trabajo: (reclamos: IReclamosRepository) => Promise<T>): Promise<T>;
   buscarBloqueado(idReclamo: number): Promise<Reclamo | null>;
   existeAbierto(idReserva: number, estados: string[], excluirCategoria?: Reclamo['categoria']): Promise<boolean>;

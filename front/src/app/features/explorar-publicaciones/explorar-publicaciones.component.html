@@ -8,11 +8,21 @@
           <h1>{{ titulo() }}</h1>
           <span>{{ descripcion() }}</span>
         </div>
-        <div class="modalidades" aria-label="Tipo de alquiler">
+        <div class="modalidades" role="group" aria-label="Tipo de alquiler">
+          <button
+            type="button"
+            class="modalidad-btn modalidad-btn--todos"
+            [class.modalidad-btn--active]="!categoria()"
+            [attr.aria-pressed]="!categoria()"
+            (click)="seleccionarCategoria(null)"
+          >
+            Todos
+          </button>
           <button
             type="button"
             class="modalidad-btn modalidad-btn--primary"
             [class.modalidad-btn--active]="categoria() === 'largo-plazo'"
+            [attr.aria-pressed]="categoria() === 'largo-plazo'"
             (click)="seleccionarCategoria('largo-plazo')"
           >
             Largo plazo
@@ -21,6 +31,7 @@
             type="button"
             class="modalidad-btn modalidad-btn--secondary"
             [class.modalidad-btn--active]="categoria() === 'temporales'"
+            [attr.aria-pressed]="categoria() === 'temporales'"
             (click)="seleccionarCategoria('temporales')"
           >
             Temporales
@@ -38,6 +49,7 @@
   <app-advanced-filters
     [form]="form"
     [tiposPropiedad]="tiposPropiedad()"
+    [monedas]="monedasPrecio()"
     [categoria]="categoria()"
     [compacto]="vistaMapa()"
     [busquedaActiva]="filtrosMapa().busqueda ?? ''"
@@ -47,9 +59,9 @@
     }
     @if (vistaMapa()) {
       <div modalidades-mapa class="modalidades modalidades--map" role="group" aria-label="Modalidad de alquiler">
-        <button type="button" class="modalidad-btn"
-          [class.modalidad-btn--all]="!categoria()"
-          [attr.aria-pressed]="!categoria()" (click)="seleccionarCategoria(null)">Todos</button>
+        <button type="button" class="modalidad-btn modalidad-btn--todos"
+          [class.modalidad-btn--active]="!categoria()"
+          [attr.aria-pressed]="!categoria()" (click)="seleccionarCategoria(null)"><span class="modalidad-btn__dot" aria-hidden="true"></span>Todos</button>
         <button type="button" class="modalidad-btn modalidad-btn--secondary"
           [class.modalidad-btn--active]="categoria() === 'temporales'"
           [attr.aria-pressed]="categoria() === 'temporales'" (click)="seleccionarCategoria('temporales')"><span class="modalidad-btn__dot" aria-hidden="true"></span>Temporal</button>

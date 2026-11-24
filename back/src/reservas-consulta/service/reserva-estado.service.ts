@@ -38,7 +38,7 @@ export class ReservaEstadoService {
   }
 
   /**
-   * Último día para reclamar: el anterior a que se habilite el pago al anunciante (T35).
+   * Último día para reclamar: el anterior a que se habilite el pago al anunciante.
    * Las reservas canceladas no admiten reclamos.
    */
   finPlazoReclamo(reserva: Reserva): string | null {

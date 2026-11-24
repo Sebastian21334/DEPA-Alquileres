@@ -1,7 +1,7 @@
 import { Component, HostListener, PLATFORM_ID, computed, effect, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
-import { EMPTY, Subject, catchError, exhaustMap, filter, merge, timer } from 'rxjs';
+import { filter } from 'rxjs';
 import {
   LucideBadgeCheck,
   LucideBell,
@@ -69,8 +69,8 @@ export class NavbarComponent {
   private readonly chat = inject(ChatService);
   protected readonly actividadReembolsos = inject(ActividadReembolsosService);
   protected readonly notificacionesAbiertas = signal(false);
-  private readonly refrescoNotificaciones = new Subject<void>();
-  protected readonly chatsNoLeidos = signal<ConversacionResumen[]>([]);
+  // Reutiliza la bandeja que ChatService ya consulta para la burbuja del chat.
+  protected readonly chatsNoLeidos = computed(() => this.chat.conversaciones().filter(conv => conv.cantidadNoLeidos > 0));
   protected readonly totalNotificaciones = computed(() =>
     this.chatsNoLeidos().length + this.actividadReembolsos.notificaciones().length + Number(this.perfil.cbuEnRevision()));
   private readonly router = inject(Router);
@@ -107,16 +107,6 @@ export class NavbarComponent {
       const consulta = this.perfil.getPerfil().subscribe({ error: () => undefined });
       onCleanup(() => consulta.unsubscribe());
     });
-    effect(onCleanup => {
-      const usuario = this.auth.currentUser()?.sub;
-      this.chatsNoLeidos.set([]);
-      if (!isBrowser || usuario == null) return;
-      const consulta = merge(timer(0, 15000), this.refrescoNotificaciones).pipe(exhaustMap(() =>
-        this.chat.listarConversaciones().pipe(catchError(() => EMPTY)),
-      )).subscribe(lista => this.chatsNoLeidos.set(lista.filter(conv => conv.cantidadNoLeidos > 0)));
-      onCleanup(() => consulta.unsubscribe());
-    });
-
     this.router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe(() => this.cerrarMenu());
   }
 
@@ -131,7 +121,7 @@ export class NavbarComponent {
     this.notificacionesAbiertas.update(abiertas => !abiertas);
     if (this.notificacionesAbiertas()) {
       this.actividadReembolsos.actualizar();
-      this.refrescoNotificaciones.next();
+      this.chat.actualizar();
     }
   }
 

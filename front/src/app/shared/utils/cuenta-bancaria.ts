@@ -1,5 +1,5 @@
 /**
- * T56: muestra un CBU o CVU legible. Respeta sus dos bloques (8 dígitos de entidad y
+ * Muestra un CBU o CVU legible. Respeta sus dos bloques (8 dígitos de entidad y
  * sucursal, 14 de cuenta) y los agrupa de a cuatro. Para copiar se usan los 22 dígitos.
  */
 export function formatearCbu(cbu: string): string {

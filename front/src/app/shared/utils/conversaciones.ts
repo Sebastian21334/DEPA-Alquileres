@@ -1,8 +1,7 @@
-import { ConversacionResumen } from '../models/mensaje.model';
-import { Usuario } from '../models/usuario.model';
+import { ConversacionResumen, ParticipanteMensaje } from '../models/mensaje.model';
 
 /** Devuelve el participante que no es el usuario autenticado. */
-export function interlocutor(conversacion: ConversacionResumen): Usuario {
+export function interlocutor(conversacion: ConversacionResumen): ParticipanteMensaje {
   const mensaje = conversacion.ultimoMensaje;
   return mensaje.origenUsuario.id === conversacion.idOtroUsuario
     ? mensaje.origenUsuario
