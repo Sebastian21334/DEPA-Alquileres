@@ -46,15 +46,9 @@ export class ChatWindowComponent implements OnInit {
   protected readonly publicacionEliminada = computed(
     () => this.mensajes()[0]?.publicacion.eliminada === true,
   );
-  protected readonly contactoSuspendido = computed(() => {
-    if (this.publicacionEliminada()) return true;
-    const mensaje = this.mensajes()[0];
-    if (!mensaje) return false;
-    if (mensaje.contactoSuspendido !== undefined) return mensaje.contactoSuspendido;
-    const otro = mensaje.origenUsuario.id === this.miId()
-      ? mensaje.destinoUsuario : mensaje.origenUsuario;
-    return otro.activa === false;
-  });
+  // El back informa la suspensión al listar la conversación; un mensaje recién enviado implica que el contacto sigue activo.
+  protected readonly contactoSuspendido = computed(() =>
+    this.publicacionEliminada() || this.mensajes()[0]?.contactoSuspendido === true);
 
   constructor() {
     if (isPlatformBrowser(inject(PLATFORM_ID))) {
@@ -79,7 +73,11 @@ export class ChatWindowComponent implements OnInit {
           if (!this.enviando()) this.error.set('');
           if (mensajes.some((m) => m.destinoUsuario.id === this.miId() && !m.leido)) {
             this.chatService.marcarComoLeidos(this.chat().idPublicacion, this.chat().idOtroUsuario).subscribe({
-              next: () => this.refrescar$.next(),
+              next: () => {
+                this.refrescar$.next();
+                // La burbuja y la campana dejan de contar estos mensajes sin esperar el próximo sondeo.
+                this.chatService.actualizar();
+              },
             });
           }
         });

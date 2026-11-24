@@ -18,14 +18,7 @@ import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import type { IMailService } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 import { ReservasService } from '../../reservas/service/reservas.service';
-
-// Forma que le devolvemos al front para la lista de conversaciones (bandeja de entrada)
-export interface ConversacionResumen {
-  idPublicacion: number;
-  idOtroUsuario: number;
-  ultimoMensaje: Mensaje;
-  cantidadNoLeidos: number;
-}
+import type { ConversacionResumen, MensajeRespuesta, ParticipanteMensaje } from '../dto/mensaje-respuesta.dto';
 
 @Injectable()
 export class MensajesService {
@@ -38,7 +31,7 @@ export class MensajesService {
    * queda implícitamente definida por (publicacion, origen, destino) apenas
    * se guarda el primer mensaje.
    */
-  async enviar(dto: EnviarMensajeDto, idUsuarioOrigen: number): Promise<Mensaje> {
+  async enviar(dto: EnviarMensajeDto, idUsuarioOrigen: number): Promise<MensajeRespuesta> {
     if (idUsuarioOrigen === dto.id_destino_usuario) {
       throw new BadRequestException('No podés enviarte un mensaje a vos mismo');
     }
@@ -133,14 +126,14 @@ export class MensajesService {
         );
       }
     }
-    return guardado;
+    return this.prepararRespuesta({ ...guardado, origenUsuario: remitente, destinoUsuario: destinatario });
   }
 
   /**
    * Devuelve todos los mensajes de una conversación puntual, validando
    * que quien pide sea uno de los dos participantes.
    */
-  async listarConversacion(idPublicacion: number, idOtroUsuario: number, idUsuarioActual: number): Promise<Mensaje[]> {
+  async listarConversacion(idPublicacion: number, idOtroUsuario: number, idUsuarioActual: number): Promise<MensajeRespuesta[]> {
     // El repositorio busca ambos sentidos del intercambio (A->B y B->A).
     const mensajes = await this.mensajeRepository.buscarConversacion(
       idPublicacion,
@@ -148,7 +141,7 @@ export class MensajesService {
       idOtroUsuario,
     );
 
-    if (mensajes.length === 0) return mensajes;
+    if (mensajes.length === 0) return [];
 
     const esParticipante = mensajes.some(
       (m) =>
@@ -168,47 +161,31 @@ export class MensajesService {
 
   /**
    * Arma la "bandeja de entrada" del usuario: una fila por cada conversación
-   * distinta (publicación + interlocutor), mostrando el último mensaje.
-   * Se resuelve en memoria aprovechando que buscarPorUsuario ya viene
-   * ordenado DESC por fecha.
+   * distinta (publicación + interlocutor), con su último mensaje, de la más
+   * reciente a la más vieja.
    */
   async listarConversaciones(idUsuario: number): Promise<ConversacionResumen[]> {
-    const mensajes = await this.mensajeRepository.buscarPorUsuario(idUsuario);
-
-    // La consulta llega ordenada del mensaje mas nuevo al mas viejo. El Map
-    // conserva solamente el primero de cada par publicacion-interlocutor.
-    const conversaciones = new Map<string, ConversacionResumen>();
-
-    // Como la consulta está ordenada DESC, el primer mensaje de cada clave es el último real.
-    for (const mensaje of mensajes) {
-      const idOtroUsuario =
-        mensaje.origenUsuario.id === idUsuario
-          ? mensaje.destinoUsuario.id
-          : mensaje.origenUsuario.id;
-
-      const clave = `${mensaje.publicacion.id}-${idOtroUsuario}`;
-
-      // La clave combina publicación e interlocutor para separar chats del mismo usuario.
-      if (!conversaciones.has(clave)) {
-        conversaciones.set(clave, {
-          idPublicacion: mensaje.publicacion.id,
-          idOtroUsuario,
-          ultimoMensaje: this.prepararRespuesta(mensaje),
-          cantidadNoLeidos: 0,
-        });
-      }
-      if (mensaje.destinoUsuario.id === idUsuario && !mensaje.leido) {
-        conversaciones.get(clave)!.cantidadNoLeidos += 1;
-      }
-    }
-
-    return Array.from(conversaciones.values());
+    const ultimos = await this.mensajeRepository.buscarUltimosPorConversacion(idUsuario);
+    return ultimos.map(({ mensaje, noLeidos }) => ({
+      idPublicacion: mensaje.publicacion.id,
+      idOtroUsuario: mensaje.origenUsuario.id === idUsuario ? mensaje.destinoUsuario.id : mensaje.origenUsuario.id,
+      ultimoMensaje: this.prepararRespuesta(mensaje),
+      cantidadNoLeidos: noLeidos,
+    }));
   }
 
-  private prepararRespuesta(mensaje: Mensaje): Mensaje {
-    return Object.assign(new Mensaje(), mensaje, {
-      publicacion: this.publicacionesService.prepararRespuesta(mensaje.publicacion),
-    });
+  private prepararRespuesta(mensaje: Mensaje): MensajeRespuesta {
+    const { id, texto, fecha, leido, fecha_lectura, publicacion } = mensaje;
+    return {
+      id, texto, fecha, leido, fecha_lectura,
+      origenUsuario: this.participante(mensaje.origenUsuario),
+      destinoUsuario: this.participante(mensaje.destinoUsuario),
+      publicacion: { id: publicacion.id, titulo: publicacion.titulo, eliminada: publicacion.eliminada },
+    };
+  }
+
+  private participante({ id, nombre, apellido, foto_url }: Usuario): ParticipanteMensaje {
+    return { id, nombre, apellido, foto_url: foto_url ?? null };
   }
 
   /** Marca como leídos solamente los mensajes que el usuario recibió en este chat. */

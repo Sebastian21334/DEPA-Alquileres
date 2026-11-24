@@ -41,11 +41,7 @@ export class MensajeRepository implements IMensajeRepository {
 
   buscarConversacion(idPublicacion: number, idUsuarioA: number, idUsuarioB: number): Promise<Mensaje[]> {
     // El par puede estar en cualquier sentido (A->B o B->A), por eso el OR.
-    return this.repository
-      .createQueryBuilder('mensaje')
-      .leftJoinAndSelect('mensaje.origenUsuario', 'origenUsuario')
-      .leftJoinAndSelect('mensaje.destinoUsuario', 'destinoUsuario')
-      .leftJoinAndSelect('mensaje.publicacion', 'publicacion')
+    return this.consultaConParticipantes()
       .where('mensaje.id_publicacion = :idPublicacion', { idPublicacion })
       .andWhere(
         // Los dos términos representan ambos sentidos de la misma conversación.
@@ -57,18 +53,41 @@ export class MensajeRepository implements IMensajeRepository {
       .getMany();
   }
 
-  buscarPorUsuario(idUsuario: number): Promise<Mensaje[]> {
+  async buscarUltimosPorConversacion(idUsuario: number): Promise<{ mensaje: Mensaje; noLeidos: number }[]> {
+    // La base resuelve una fila por publicación e interlocutor: su último mensaje y los no leídos que recibió el usuario.
+    const filas: { id: number; noLeidos: number }[] = await this.repository.query(
+      `SELECT DISTINCT ON (c.id_publicacion, c.otro) c.id_mensaje AS id, c.no_leidos::int AS "noLeidos"
+       FROM (
+         SELECT m.id_mensaje, m.id_publicacion, m.fecha, par.otro,
+           count(*) FILTER (WHERE m.id_destino_usuario = $1 AND NOT m.leido)
+             OVER (PARTITION BY m.id_publicacion, par.otro) AS no_leidos
+         FROM public.mensaje m
+         CROSS JOIN LATERAL (SELECT CASE WHEN m.id_origen_usuario = $1 THEN m.id_destino_usuario ELSE m.id_origen_usuario END AS otro) par
+         WHERE m.id_origen_usuario = $1 OR m.id_destino_usuario = $1
+       ) c
+       ORDER BY c.id_publicacion, c.otro, c.fecha DESC, c.id_mensaje DESC`,
+      [idUsuario],
+    );
+    if (!filas.length) return [];
+    const noLeidos = new Map(filas.map((fila) => [Number(fila.id), Number(fila.noLeidos)]));
+    const mensajes = await this.consultaConParticipantes()
+      .where('mensaje.id IN (:...ids)', { ids: [...noLeidos.keys()] })
+      .orderBy('mensaje.fecha', 'DESC')
+      .addOrderBy('mensaje.id', 'DESC')
+      .getMany();
+    return mensajes.map((mensaje) => ({ mensaje, noLeidos: noLeidos.get(mensaje.id) ?? 0 }));
+  }
+
+  private consultaConParticipantes() {
+    // De cada participante se lee lo que muestra el chat y si la cuenta sigue activa para suspender el contacto.
     return this.repository
       .createQueryBuilder('mensaje')
-      .leftJoinAndSelect('mensaje.origenUsuario', 'origenUsuario')
-      .leftJoinAndSelect('mensaje.destinoUsuario', 'destinoUsuario')
-      .leftJoinAndSelect('mensaje.publicacion', 'publicacion')
-      .where(
-        'mensaje.id_origen_usuario = :idUsuario OR mensaje.id_destino_usuario = :idUsuario',
-        { idUsuario },
-      )
-      .orderBy('mensaje.fecha', 'DESC') // el más nuevo primero, importante para armar la lista de conversaciones
-      .getMany();
+      .leftJoin('mensaje.origenUsuario', 'origenUsuario')
+      .leftJoin('mensaje.destinoUsuario', 'destinoUsuario')
+      .leftJoin('mensaje.publicacion', 'publicacion')
+      .addSelect(['origenUsuario.id', 'origenUsuario.nombre', 'origenUsuario.apellido', 'origenUsuario.foto_url', 'origenUsuario.activa'])
+      .addSelect(['destinoUsuario.id', 'destinoUsuario.nombre', 'destinoUsuario.apellido', 'destinoUsuario.foto_url', 'destinoUsuario.activa'])
+      .addSelect(['publicacion.id', 'publicacion.titulo', 'publicacion.eliminada']);
   }
 
   async marcarConversacionComoLeida(idPublicacion: number, idRemitente: number, idDestinatario: number): Promise<void> {

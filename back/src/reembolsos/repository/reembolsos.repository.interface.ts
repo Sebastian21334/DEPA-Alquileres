@@ -1,5 +1,6 @@
 import type { Reembolso } from '../entity/reembolso.entity';
 import type { EntityManager } from 'typeorm';
+import type { ActividadReembolso } from '../dto/actividad-reembolso.dto';
 
 export interface MensajeReembolso {
   id: number;
@@ -35,10 +36,7 @@ export interface IReembolsosRepository {
   contarPorEstado(): Promise<Array<{ estado: string; cantidad: string }>>;
   listarAdministracion(): Promise<Reembolso[]>;
   listarMensajes(id: number, despuesDe: number): Promise<MensajeReembolso[]>;
-  actividadInquilino(idUsuario: number, estados: string[]): Promise<{
-    reembolsoId: number; reservaId: number; pendiente: boolean;
-    mensajeId: number | null; texto: string | null; fecha: Date | null;
-  }[]>;
+  actividadInquilino(idUsuario: number, estados: string[]): Promise<ActividadReembolso[]>;
   listarConversaciones(idReserva: number, idInquilino: number): Promise<Pick<Reembolso, 'id' | 'importe' | 'moneda' | 'estado' | 'comprobante_nombre' | 'referencia_externa' | 'observacion_transferencia'>[]>;
   guardarMensaje(id: number, idAutor: number, administracion: boolean, texto: string): Promise<MensajeReembolso>;
 }

@@ -1,16 +1,13 @@
-import { isPlatformBrowser } from '@angular/common';
 import {
   Component,
   DestroyRef,
   ElementRef,
   HostListener,
-  PLATFORM_ID,
   inject,
   signal,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { EMPTY, catchError, switchMap, timer } from 'rxjs';
 import { LucideMessageCircle, LucideX } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
@@ -175,15 +172,6 @@ export class ChatDockComponent {
   protected readonly errorLista = signal('');
   private readonly listaPanel = viewChild<ElementRef<HTMLElement>>('listaPanel');
   private readonly burbuja = viewChild<ElementRef<HTMLButtonElement>>('burbuja');
-
-  constructor() {
-    if (!isPlatformBrowser(inject(PLATFORM_ID))) return;
-    timer(0, 5000).pipe(
-      switchMap(() => this.auth.isAuthenticated ? this.chatService.listarConversaciones() : EMPTY),
-      catchError(() => EMPTY),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe((conversaciones) => this.chatService.actualizarNoLeidos(conversaciones));
-  }
 
   protected alternarLista(): void {
     const abrir = !this.listaAbierta();

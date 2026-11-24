@@ -1,6 +1,12 @@
-import { Usuario } from './usuario.model';
+// Refleja MensajeRespuesta (back/src/mensajes/dto/mensaje-respuesta.dto.ts):
+// de cada participante solo llega lo que muestra el chat.
+export interface ParticipanteMensaje {
+  id: number;
+  nombre: string;
+  apellido: string;
+  foto_url: string | null;
+}
 
-// Refleja la entidad Mensaje (back/src/mensajes/entity/mensaje.entity.ts).
 export interface Mensaje {
   id: number;
   texto: string;
@@ -8,8 +14,8 @@ export interface Mensaje {
   leido: boolean;
   fecha_lectura: string | null;
   contactoSuspendido?: boolean;
-  origenUsuario: Usuario;
-  destinoUsuario: Usuario;
+  origenUsuario: ParticipanteMensaje;
+  destinoUsuario: ParticipanteMensaje;
   publicacion: { id: number; titulo: string; eliminada?: boolean };
 }
 
