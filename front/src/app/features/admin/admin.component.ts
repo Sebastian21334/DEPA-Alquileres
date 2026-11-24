@@ -867,8 +867,10 @@ export class AdminComponent {
     if (this.busy()) return;
     this.textoReclamo = '';
     this.imagenesReclamo.set([]);
-    const pedidoDeCodigo = this.claims().find(reclamo => reclamo.id === id)?.categoria === 'CODIGO_BLOQUEADO';
-    this.resolucionReclamo = pedidoDeCodigo ? 'REINICIAR_CODIGO' : 'SIN_DEVOLUCION';
+    const reclamo = this.claims().find(item => item.id === id);
+    const pedidoDeCodigo = reclamo?.categoria === 'CODIGO_BLOQUEADO';
+    this.resolucionReclamo = !pedidoDeCodigo ? 'SIN_DEVOLUCION'
+      : reclamo?.reserva?.estado_estadia === 'PENDIENTE_INGRESO' ? 'REINICIAR_CODIGO' : 'CONFIRMAR_INGRESO';
     this.importeReclamo = null;
     this.observacionReclamo = '';
     this.gestionReclamo.set({ id, accion });

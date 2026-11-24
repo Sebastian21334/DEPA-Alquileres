@@ -281,6 +281,9 @@ export class ReclamosService {
       }
       if (this.esAFavorDelAnunciante(dto.resolucion)) {
         if (previo) throw new ConflictException('El reclamo tiene una devolución registrada');
+        // El código solo se carga durante la estadía: después, más intentos no sirven.
+        if (dto.resolucion === ResolucionReclamo.REINICIAR_CODIGO && this.reservas.calcularEstadoEstadia(actual) !== 'PENDIENTE_INGRESO')
+          throw new ConflictException('La estadía ya terminó y el código no se puede volver a cargar. Confirmá el ingreso o resolvé con una devolución.');
         // Sin devolución y reinicio del código vuelven a RETENIDO con los intentos en 0 si falta el código.
         expediente.reserva = expediente.categoria === CategoriaReclamo.DEMORA_ADMINISTRATIVA ? actual : dto.resolucion === ResolucionReclamo.CONFIRMAR_INGRESO
           ? await this.reservas.confirmarIngresoSinCodigo(actual, dto.observacion, transaccion)
