@@ -340,7 +340,8 @@
         </dl>
         @if (devolucionPendiente) {
           <p class="booking-card__settlement">Tu devolución está en gestión. Podés seguirla desde el detalle.</p>
-        } @else if (devolucionRegistrada(reserva); as devolucion) {
+        } @else if ((!recibida || reserva.estado_liquidacion !== 'PAGADO_PROPIETARIO') && devolucionRegistrada(reserva); as devolucion) {
+          <!-- Ya pagado el resto, al anunciante le sirve más ver su pago que la devolución. -->
           <p class="booking-card__settlement">{{ devolucion.mensaje }}</p>
         } @else if (recibida && reserva.estado_pago === 'APROBADO') {
           <p class="booking-card__settlement">

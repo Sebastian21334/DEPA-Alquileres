@@ -622,6 +622,33 @@ test('rechazar el pedido devuelve el total al inquilino y exige el motivo', asyn
   assert.deepEqual([rechazado.estado, rechazado.resolucion, Number(rechazado.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_TOTAL', 100]);
 });
 
+test('el pedido de reinicio se resuelve con una devolución parcial y el resto se le paga al anunciante sin el código', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-15T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'EN_REVISION', moneda: 'ARS' });
+  await source.getRepository(Reserva).update(reserva.id, { intentos_codigo: 5 });
+  const { servicio } = reclamosConAvisos();
+  const pedido = await pedirReinicio(servicio, reserva);
+  await assert.rejects(servicio.resolver(pedido.id, { resolucion: 'DEVOLUCION_PARCIAL', importe: 40 }, 3), /Indicá el motivo/);
+  const resuelto = await servicio.resolver(pedido.id, { resolucion: 'DEVOLUCION_PARCIAL', importe: 40, observacion: 'Entró un día tarde' }, 3);
+  assert.deepEqual([resuelto.estado, resuelto.resolucion, Number(resuelto.importe_reembolso)], ['RESUELTO_INQUILINO', 'DEVOLUCION_PARCIAL', 40]);
+  // La devolución no confirma el ingreso: queda sin verificar y el resto espera la fecha habitual.
+  const actual = await reservas.obtenerReserva(reserva.id);
+  assert.deepEqual([actual.estado_liquidacion, actual.codigo_validado_en], ['DEVUELTO_PARCIAL_INQUILINO', null]);
+
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  const operaciones = operacionesLiquidacion();
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.deepEqual([fila.importe_a_liquidar, fila.habilitada_para_pago], [60, true]);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
+  assert.equal((await liquidacionDe(reserva)).estado, 'PAGADO_PROPIETARIO');
+  // Ya pagado el resto, las dos partes siguen viendo lo que se le devolvió al inquilino.
+  for (const listado of [reservas.listarPorUsuario(1), reservas.listarRecibidasPorAnunciante(2)]) {
+    const fila = (await listado).find(item => item.id === reserva.id);
+    assert.deepEqual(fila.devolucion_inquilino, { devuelto: 40, pagado: 100, moneda: 'ARS' });
+  }
+});
+
 test('al vencer el plazo, el código bloqueado sin pedido ni reclamo queda a favor del anunciante', async () => {
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
   const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
