@@ -62,8 +62,10 @@ import { FiltrosListaComponent } from '../../shared/components/filtros-lista/fil
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
 import { fechaArgentina } from '../../shared/utils/rental-dates';
+import { DesglosePagoComponent } from '../../shared/components/desglose-pago/desglose-pago.component';
+import { formatearImporteConMoneda } from '../../shared/utils/formato-numero';
 import {
-  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
+  admitePasarATransferencia, apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
   FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
   textosBloqueo, textosCancelacion, textosLiquidacion, textosPagoLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
   tieneDevolucion,
@@ -117,6 +119,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     ReembolsoChatComponent,
     CargaComprobanteComponent,
     VerComprobanteComponent,
+    DesglosePagoComponent,
     DatoCopiableComponent,
     FiltrosListaComponent,
     PaginadorComponent,
@@ -757,6 +760,28 @@ export class AdminComponent {
 
   protected puedeRegistrarTransferencia(reembolso: AdminReembolso): boolean {
     return !!reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE';
+  }
+
+  protected readonly admitePasarATransferencia = admitePasarATransferencia;
+  /** Mismo formato que el desglose que va debajo, para que no se mezclen «ARS4.00» y «ARS 4,00». */
+  protected readonly importeConMoneda = formatearImporteConMoneda;
+
+  /** Habilita el chat y el comprobante; la devolución se registra después, como cualquier transferencia. */
+  protected pasarATransferencia(reembolso: AdminReembolso): void {
+    if (this.guardandoReembolso() || !admitePasarATransferencia(reembolso)) return;
+    this.errorReembolso.set('');
+    this.guardandoReembolso.set(true);
+    this.api.pasarATransferenciaReembolso(reembolso.id)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
+      .subscribe({
+        next: ({ reembolso: actualizado }) => {
+          this.reembolsoSeleccionado.set(actualizado);
+          this.referenciaReembolso = '';
+          this.toast.mostrar('La devolución sigue por transferencia. Pedile el CBU al inquilino por el chat.', 'exito');
+          this.reload();
+        },
+        error: (e: Error) => this.errorReembolso.set(e.message),
+      });
   }
 
   protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {

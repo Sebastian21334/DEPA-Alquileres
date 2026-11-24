@@ -614,6 +614,41 @@ test('la migración del motivo lo toma del reembolso, ignora los textos por defe
   }
 });
 
+test('la migración repara los nombres de archivo leídos como latin1, conserva los bien guardados y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261124-nombres-archivos-utf8.sql'), 'utf8');
+  // Así quedaban: los bytes UTF-8 del nombre leídos uno por uno como latin1.
+  const roto = nombre => Buffer.from(nombre, 'utf8').toString('latin1');
+  const anterior = new PGlite();
+  try {
+    await anterior.exec(`CREATE TABLE reembolso (id_reembolso integer PRIMARY KEY, comprobante_nombre varchar(255));
+      CREATE TABLE reclamo_evidencia (id_evidencia integer PRIMARY KEY, nombre_archivo varchar(255) NOT NULL);
+      CREATE TABLE liquidacion (id_liquidacion integer PRIMARY KEY, pagos_anunciante jsonb);`);
+    await anterior.query('INSERT INTO reembolso VALUES (1, $1), (2, $2), (3, NULL)', [roto('DEPA — Reparto de tareas.pdf'), 'Seña ya bien guardada.pdf']);
+    await anterior.query('INSERT INTO reclamo_evidencia VALUES (1, $1), (2, $2)', [roto('Baño sin agua.png'), 'Recibo — correcto.png']);
+    await anterior.query('INSERT INTO liquidacion VALUES (1, $1), (2, NULL), (3, $2)', [
+      JSON.stringify([{ importe: 10, comprobanteNombre: roto('Señal — banco.pdf') }, { importe: 5, comprobanteNombre: null }, { importe: 1 }]),
+      JSON.stringify([]),
+    ]);
+    const nombres = async () => [
+      ...(await anterior.query('SELECT comprobante_nombre AS n FROM reembolso ORDER BY id_reembolso')).rows.map(fila => fila.n),
+      ...(await anterior.query('SELECT nombre_archivo AS n FROM reclamo_evidencia ORDER BY id_evidencia')).rows.map(fila => fila.n),
+      ...(await anterior.query('SELECT pagos_anunciante AS n FROM liquidacion ORDER BY id_liquidacion')).rows.map(fila => fila.n),
+    ];
+    const esperado = [
+      'DEPA — Reparto de tareas.pdf', 'Seña ya bien guardada.pdf', null,
+      'Baño sin agua.png', 'Recibo — correcto.png',
+      [{ importe: 10, comprobanteNombre: 'Señal — banco.pdf' }, { importe: 5, comprobanteNombre: null }, { importe: 1 }], null, [],
+    ];
+    await anterior.exec(migracion);
+    assert.deepEqual(await nombres(), esperado);
+    await anterior.exec(migracion);
+    assert.deepEqual(await nombres(), esperado);
+  } finally {
+    await anterior.close();
+  }
+});
+
 function operacionesLiquidacion() {
   const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
   const { almacenamiento } = almacenamientoDePrueba();
@@ -651,6 +686,35 @@ test('después de devolverle una parte al inquilino por reclamo, el resto se liq
   assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 60]);
   assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
   await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /ya fue resuelta/);
+});
+
+const desglosePorReserva = async listado => Object.fromEntries((await listado).map(pago => [pago.reservaId, pago.desglose]));
+
+test('el historial desglosa lo que pagó el inquilino, lo devuelto y lo pagado al anunciante', async (t) => {
+  const reserva = await devolucionParcialPorReclamo(t);
+  const operaciones = operacionesLiquidacion();
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
+  // Con devolución no hay comisión: lo devuelto y lo pagado suman lo que pagó el inquilino.
+  const esperado = { [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 40, comisionDepa: 0, pagadoAnunciante: 60 } };
+  assert.deepEqual(await desglosePorReserva(operaciones.listarPagosRegistrados()), esperado);
+  assert.deepEqual(await desglosePorReserva(operaciones.listarPagosDelAnunciante(2)), esperado);
+});
+
+test('la comisión del desglose es lo que quedó entre lo cobrado y lo transferido; sin cobro no hay desglose', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-26T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date('2099-01-10T15:00:00Z'), porcentaje_comision_depa: 10 });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+  // Una liquidación anterior al registro de cobros no tiene de dónde sacar el desglose.
+  const historica = await source.getRepository(Reserva).save({ monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: 1 } });
+  await source.getRepository(Liquidacion).save({ reserva: historica, estado: 'PAGADO_PROPIETARIO', importe: 100, moneda: 'ARS', fecha_pago_propietario: new Date() });
+  const operaciones = operacionesLiquidacion();
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-comision' }, comprobantePdf(), 3);
+  assert.deepEqual(await desglosePorReserva(operaciones.listarPagosRegistrados()), {
+    [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 0, comisionDepa: 10, pagadoAnunciante: 90 },
+    [historica.id]: null,
+  });
 });
 
 test('devolverle al inquilino lo que quedaba exige motivo y deriva el resto a Reembolsos', async (t) => {
@@ -1420,6 +1484,51 @@ test('un timeout con tarjeta conserva la vía automática y reintenta con la mis
   await source.getRepository(Reembolso).update(reembolso.id, { conciliar_en: new Date(Date.now() - 1000) });
   await operacionesReembolso.ejecutar(reembolso.id, 3);
   assert.deepEqual(claves, [reembolso.idempotency_key, reembolso.idempotency_key]);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
+});
+
+test('una devolución pendiente de Mercado Pago puede seguir por transferencia con comprobante', async () => {
+  const { pago, crearReembolso } = await escenario();
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
+  const reembolso = await crearReembolso();
+  let intentos = 0;
+  pasarela.reembolsar = async () => { intentos += 1; return { status: 'approved' }; };
+  const { reembolso: pasado } = await operacionesReembolso.pasarATransferencia(reembolso.id);
+  assert.deepEqual([pasado.transferencia_manual, pasado.estado], [true, 'PENDIENTE']);
+  assert.equal((await reembolsos.conversar(reembolso.id, { id: 1 }, 0)).abierta, true);
+  await assert.rejects(operacionesReembolso.ejecutar(reembolso.id, 3), /transferencia bancaria/);
+  const { reembolso: registrado } = await operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'trf-tarjeta' }, comprobantePdf(), 3);
+  assert.deepEqual([registrado.estado, registrado.comprobante_nombre], ['APROBADO', 'transferencia.pdf']);
+  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
+  assert.equal(intentos, 0);
+  // Una vez aprobada ya no cambia de vía.
+  assert.equal((await operacionesReembolso.pasarATransferencia(reembolso.id)).reembolso.estado, 'APROBADO');
+});
+
+test('una devolución fallida sin identificador pasa a transferencia; con identificador, en proceso o aprobada por Mercado Pago, no', async () => {
+  const { crearReembolso, pago } = await escenario();
+  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'master' });
+  const reembolso = await crearReembolso();
+  pasarela.reembolsar = async () => { throw new Error('timeout simulado'); };
+  await assert.rejects(operacionesReembolso.ejecutar(reembolso.id, 3), /timeout simulado/);
+  const filas = source.getRepository(Reembolso);
+  assert.equal((await filas.findOneByOrFail({ id: reembolso.id })).estado, 'FALLIDO');
+
+  await filas.update(reembolso.id, { id_externo: 'mp-informado' });
+  await assert.rejects(operacionesReembolso.pasarATransferencia(reembolso.id), /conciliala con su identificador/);
+  await filas.update(reembolso.id, { id_externo: null, estado: 'EN_PROCESO' });
+  await assert.rejects(operacionesReembolso.pasarATransferencia(reembolso.id), /está procesando/);
+  await filas.update(reembolso.id, { estado: 'APROBADO' });
+  await assert.rejects(operacionesReembolso.pasarATransferencia(reembolso.id), /ya no se puede pasar a transferencia/);
+  await filas.update(reembolso.id, { estado: 'FALLIDO', conciliar_en: new Date() });
+
+  await operacionesReembolso.pasarATransferencia(reembolso.id);
+  const pasado = await filas.findOneOrFail({
+    where: { id: reembolso.id }, select: { id: true, transferencia_manual: true, estado: true, error_detalle: true, conciliar_en: true },
+  });
+  // Deja de conciliarse en Mercado Pago: la devolución se registra con el comprobante.
+  assert.deepEqual([pasado.transferencia_manual, pasado.estado, pasado.error_detalle, pasado.conciliar_en], [true, 'PENDIENTE', null, null]);
+  await operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'trf-fallida' }, comprobantePdf(), 3);
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
 });
 
@@ -2434,7 +2543,8 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }).expect(400);
     await pagar({ referencia: 'pago-prueba' }, null).expect(400);
     await pagar({}, 'banco.pdf', tenant).expect(403);
-    await pagar({ referencia: 'pago-prueba', observacion: 'Transferencia acreditada' }).expect(200);
+    // El nombre llega en UTF-8, como lo manda el navegador, y se guarda sin romper la «ñ» ni la «—».
+    await pagar({ referencia: 'pago-prueba', observacion: 'Transferencia acreditada' }, 'Señal — banco.pdf').expect(200);
     await request(http).get(historialAnunciante).expect(401);
     await request(http).get(historialAnunciante).set('Authorization', tenant).expect(200, []);
     await request(http).get(historialAnunciante).set('Authorization', ajeno).expect(200, []);
@@ -2448,7 +2558,9 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.ok(historialAdministracion.body.some(item => item.reservaId === ingreso.id));
     assert.deepEqual(historialPropio, [{
       id: idPago, reservaId: ingreso.id, publicacion: 'Publicación de prueba', fecha: fechaPago, importe: 100, moneda: 'ARS',
-      referencia: 'pago-prueba', observacion: 'Transferencia acreditada', indice: 0, comprobante: 'banco.pdf',
+      referencia: 'pago-prueba', observacion: 'Transferencia acreditada', indice: 0, comprobante: 'Señal — banco.pdf',
+      // Esta reserva no tiene un cobro de Mercado Pago registrado.
+      desglose: null,
     }]);
     // El enlace firmado del comprobante, solo para el admin y el anunciante; la URL privada no viaja.
     const rutaComprobante = `/reservas/${ingreso.id}/liquidacion/pagos/0/comprobante`;

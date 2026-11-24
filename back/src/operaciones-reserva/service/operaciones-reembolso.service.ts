@@ -30,6 +30,10 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
     return this.aplicarReembolsoConfirmado(id);
   }
 
+  async pasarATransferencia(id: number) {
+    return { reembolso: await this.reembolsos.pasarATransferencia(id) };
+  }
+
   async aplicarReembolsoConfirmado(id: number) {
     const aplicada = await this.reembolsos.aplicarConfirmado(id, async (reembolso, transaccion) => {
       if (reembolso.origen === OrigenReembolso.RECLAMO)

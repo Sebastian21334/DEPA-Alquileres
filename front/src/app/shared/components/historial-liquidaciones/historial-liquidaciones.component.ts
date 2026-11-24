@@ -1,6 +1,8 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { GestionPublicacionesService, type PagoPublicacion } from '../../services/gestion-publicaciones.service';
 import { VerComprobanteComponent } from '../ver-comprobante/ver-comprobante.component';
+import { DesglosePagoComponent } from '../desglose-pago/desglose-pago.component';
+import { formatearImporteConMoneda } from '../../utils/formato-numero';
 
 /**
  * Lista de pagos registrados al anunciante. La usan Mis publicaciones,
@@ -8,7 +10,7 @@ import { VerComprobanteComponent } from '../ver-comprobante/ver-comprobante.comp
  */
 @Component({
   selector: 'app-historial-liquidaciones',
-  imports: [VerComprobanteComponent],
+  imports: [VerComprobanteComponent, DesglosePagoComponent],
   template: `
     @if (pagos().length) {
       <ul class="liquidaciones-lista">
@@ -22,6 +24,9 @@ import { VerComprobanteComponent } from '../ver-comprobante/ver-comprobante.comp
               <p class="liquidacion-publicacion">{{ pago.publicacion }}</p>
             }
             <p>Reserva #{{ pago.reservaId }} @if (pago.fecha) { · {{ fecha(pago.fecha) }} }</p>
+            @if (pago.desglose; as desglose) {
+              <app-desglose-pago class="liquidacion-desglose" [desglose]="desglose" [moneda]="pago.moneda" />
+            }
             @if (pago.comprobante) {
               <p class="liquidacion-comprobante"><strong>Comprobante:</strong> <app-ver-comprobante [obtenerUrl]="urlComprobante(pago)" [etiqueta]="'Ver ' + pago.comprobante" /></p>
             }
@@ -58,6 +63,7 @@ import { VerComprobanteComponent } from '../ver-comprobante/ver-comprobante.comp
     .liquidacion-publicacion { font-weight: 700; }
     .liquidacion-observacion { white-space: pre-wrap; }
     .liquidacion-comprobante { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+    .liquidacion-desglose { max-width: 22rem; }
   `,
 })
 export class HistorialLiquidacionesComponent {
@@ -78,9 +84,7 @@ export class HistorialLiquidacionesComponent {
   protected readonly urlComprobante = (pago: PagoPublicacion) => () => this.publicaciones.urlComprobantePago(pago);
 
   protected importe(pago: PagoPublicacion): string {
-    if (pago.importe === null) return 'Importe sin registrar';
-    const importe = pago.importe.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return [pago.moneda, importe].filter(Boolean).join(' ');
+    return pago.importe === null ? 'Importe sin registrar' : formatearImporteConMoneda(pago.importe, pago.moneda);
   }
 
   protected fecha(valor: string): string {

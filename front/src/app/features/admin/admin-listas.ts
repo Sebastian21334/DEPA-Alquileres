@@ -14,6 +14,11 @@ export const ORIGENES_REEMBOLSO: Record<string, string> = {
 export const reclamoAbierto = (reclamo: Pick<Reclamo, 'estado'>): boolean => reclamo.estado === 'ABIERTO' || reclamo.estado === 'EN_REVISION';
 export const reembolsoPendiente = (reembolso: Pick<AdminReembolso, 'estado'>): boolean => reembolso.estado === 'PENDIENTE' || reembolso.estado === 'EN_PROCESO';
 
+/** Una devolución que Mercado Pago no hizo (pendiente, o fallida sin identificador) puede seguir por transferencia. */
+export const admitePasarATransferencia = (reembolso: Pick<AdminReembolso, 'estado' | 'transferencia_manual' | 'referencia_externa' | 'origen'>): boolean =>
+  !reembolso.transferencia_manual && reembolso.origen !== 'CONTRACARGO' &&
+  (reembolso.estado === 'PENDIENTE' || (reembolso.estado === 'FALLIDO' && !reembolso.referencia_externa));
+
 /** Días que faltan para poder pagar al anunciante; null si la fecha de habilitación no es válida. */
 export function diasEsperaLiquidacion(settlement: AdminSettlement): number | null {
   const fecha = settlement.fecha_disponible_pago;

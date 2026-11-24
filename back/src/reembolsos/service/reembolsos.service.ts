@@ -194,6 +194,33 @@ export class ReembolsosService {
     }
   }
 
+  /**
+   * Pasa a transferencia una devolución que Mercado Pago no llegó a hacer: pendiente, o fallida sin identificador de devolución.
+   * Si Mercado Pago informó un identificador, primero se concilia para no devolver dos veces.
+   */
+  async pasarATransferencia(id: number): Promise<Reembolso> {
+    await this.reembolsos.conTransaccion(async repo => {
+      const actual = await repo.buscarRegistro(id, { bloquear: true });
+      if (!actual) throw new NotFoundException('Reembolso no encontrado');
+      this.verificarOrigenOperable(actual.origen);
+      if (actual.transferencia_manual) return;
+      const fallido = actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO');
+      if (actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'))
+        throw new ConflictException('Mercado Pago está procesando la devolución; esperá su resultado');
+      if (fallido && actual.id_externo)
+        throw new ConflictException('Mercado Pago informó una devolución; conciliala con su identificador');
+      if (!fallido && actual.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
+        throw new ConflictException('La devolución ya no se puede pasar a transferencia');
+      await repo.actualizar(actual.id, {
+        estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
+        transferencia_manual: true,
+        conciliar_en: null,
+        error_detalle: null,
+      });
+    });
+    return this.buscar(id);
+  }
+
   /** Enlace firmado del comprobante, solo para el admin y el inquilino de la reserva. */
   async urlComprobante(id: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
     const comprobante = await this.reembolsos.buscarComprobante(id);

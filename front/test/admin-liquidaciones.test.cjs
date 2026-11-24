@@ -14,7 +14,7 @@ const dependencias = {
   '../../shared/utils/rental-dates': { fechaHoyArgentina: () => '2099-01-26' },
 };
 vm.runInNewContext(outputText, { module: modulo, exports: modulo.exports, require: (id) => dependencias[id] ?? assert.fail(`Dependencia no prevista: ${id}`) });
-const { etiquetaLiquidacion, tieneDevolucion, pagoHabilitado, pendienteParaAnunciante } = modulo.exports;
+const { etiquetaLiquidacion, tieneDevolucion, pagoHabilitado, pendienteParaAnunciante, admitePasarATransferencia } = modulo.exports;
 
 const liquidacion = (datos) => ({
   estado_liquidacion: 'PENDIENTE_PAGO_PROPIETARIO', cancelada: false, codigo_validado_en: '2099-01-10',
@@ -35,4 +35,15 @@ test('el pago habilitado y la devolución salen de los datos que calcula el back
   assert.equal(pagoHabilitado(liquidacion({ habilitada_para_pago: false })), false);
   assert.equal(pendienteParaAnunciante(liquidacion({ estado_liquidacion: 'DEVUELTO_PARCIAL_INQUILINO' })), true);
   assert.equal(pendienteParaAnunciante(liquidacion({ estado_liquidacion: 'EN_REVISION' })), false);
+});
+
+test('pasa a transferencia la devolución que Mercado Pago no hizo: pendiente o fallida sin identificador', () => {
+  const reembolso = (datos) => ({ estado: 'PENDIENTE', transferencia_manual: false, referencia_externa: null, origen: 'CANCELACION', ...datos });
+  assert.equal(admitePasarATransferencia(reembolso({})), true);
+  assert.equal(admitePasarATransferencia(reembolso({ estado: 'FALLIDO' })), true);
+  assert.equal(admitePasarATransferencia(reembolso({ estado: 'FALLIDO', referencia_externa: 'mp-123' })), false);
+  assert.equal(admitePasarATransferencia(reembolso({ estado: 'EN_PROCESO' })), false);
+  assert.equal(admitePasarATransferencia(reembolso({ estado: 'APROBADO' })), false);
+  assert.equal(admitePasarATransferencia(reembolso({ transferencia_manual: true })), false);
+  assert.equal(admitePasarATransferencia(reembolso({ origen: 'CONTRACARGO' })), false);
 });

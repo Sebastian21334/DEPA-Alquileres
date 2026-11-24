@@ -9,6 +9,7 @@ import {
 } from '../../shared/services/reservation.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { cuerpoMensajeReclamo } from '../../shared/utils/reclamo-imagenes';
+import type { DesglosePago } from '../../shared/utils/desglose-pago';
 
 export const ESTADOS_PUBLICACION_ADMINISTRACION = ['todas', 'activas', 'inactivas', 'bajas'] as const;
 export type AdminPublicacionEstado = (typeof ESTADOS_PUBLICACION_ADMINISTRACION)[number];
@@ -117,6 +118,8 @@ export interface AdminPagoLiquidacion {
   /** Posición del pago dentro de la liquidación, para pedir su comprobante. */
   indice: number;
   comprobante: string | null;
+  /** Null en reservas sin un cobro registrado. */
+  desglose: DesglosePago | null;
 }
 
 /** Datos para transferir al anunciante. */
@@ -257,6 +260,10 @@ export class AdminService {
   }
   conciliarReembolso(id: number, referencia: string) {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
+  }
+  /** Una devolución que Mercado Pago no hizo sigue por transferencia, con chat y comprobante. */
+  pasarATransferenciaReembolso(id: number) {
+    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/pasar-a-transferencia`, {});
   }
 
   /** Multipart con el comprobante obligatorio y la referencia opcional. */
