@@ -2,7 +2,7 @@ import type { FiltroLista } from '../../shared/utils/lista-filtrable';
 import type { Reclamo } from '../../shared/services/reservation.service';
 import { ETIQUETAS_CATEGORIA_RECLAMO, etiquetaCategoriaReclamo } from '../../shared/utils/reclamo-categorias';
 import { fechaHoyArgentina } from '../../shared/utils/rental-dates';
-import type { AdminBloqueo, AdminCancellationRequest, AdminPagoLiquidacion, AdminReembolso, AdminSettlement, VerificationRequest } from './admin.service';
+import type { AdminBloqueo, AdminPagoLiquidacion, AdminReembolso, AdminSettlement, VerificationRequest } from './admin.service';
 
 // Qué datos busca y qué filtros tiene cada lista del panel admin. Todo se aplica en el navegador.
 
@@ -53,17 +53,6 @@ export function apelacionSinResponder(detalle: AdminBloqueo['detalle']): boolean
 export const tieneApelacion = (detalle: AdminBloqueo['detalle']): boolean => !!detalle.apelacion || !!detalle.mensajes?.length;
 
 const esInmobiliaria = (solicitud: VerificationRequest): boolean => !!(solicitud.razon_social || solicitud.matricula_profesional);
-
-export const textosCancelacion = (solicitud: AdminCancellationRequest) => [solicitud.id, solicitud.reserva?.id, solicitud.reserva?.usuario?.nombre, solicitud.reserva?.usuario?.apellido, solicitud.reserva?.publicacion?.titulo, solicitud.motivo];
-
-export const FILTROS_CANCELACION: FiltroLista<AdminCancellationRequest>[] = [{
-  nombre: 'devolucion', etiqueta: 'Devolución', opciones: [
-    { valor: 'todas', etiqueta: 'Todas' },
-    { valor: 'con', etiqueta: 'Con devolución', aplica: (solicitud) => !!solicitud.devolucion && solicitud.devolucion.porcentaje > 0 },
-    { valor: 'sin', etiqueta: 'Sin devolución (0 %)', aplica: (solicitud) => solicitud.devolucion?.porcentaje === 0 },
-    { valor: 'sin-calculo', etiqueta: 'Sin cálculo', aplica: (solicitud) => !solicitud.devolucion },
-  ],
-}];
 
 export const textosReclamo = (reclamo: Reclamo) => [reclamo.id, reclamo.reserva?.id, reclamo.reserva?.publicacion?.titulo, reclamo.inquilino?.nombre, reclamo.inquilino?.apellido, reclamo.anunciante?.nombre, reclamo.anunciante?.apellido, reclamo.descripcion];
 

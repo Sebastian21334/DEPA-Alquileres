@@ -9,10 +9,6 @@ export interface DevolucionCancelacionDto {
   moneda: string;
 }
 
-export interface SolicitudCancelacionAdministracionDto extends SolicitudCancelacion {
-  devolucion: DevolucionCancelacionDto | null;
-}
-
 export interface SaldoDevolucionCancelacionDto {
   solicitudId: number;
   porcentaje: number;

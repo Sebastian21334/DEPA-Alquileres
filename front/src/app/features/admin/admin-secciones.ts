@@ -1,7 +1,6 @@
 /** Secciones del panel admin, agrupadas como en el menú lateral. */
 export const ADMIN_NAVIGATION = [
   { label: 'Operaciones', items: [
-    { id: 'cancelaciones', label: 'Cancelaciones' },
     { id: 'reclamos', label: 'Reclamos' },
     { id: 'reembolsos', label: 'Reembolsos' },
     { id: 'liquidaciones', label: 'Liquidaciones pendientes' },

@@ -6,7 +6,7 @@
       <button type="button" [attr.aria-current]="activeSection() === 'resumen' ? 'page' : null" (click)="openSection('resumen')">
         <svg lucideHouse [size]="19" aria-hidden="true"></svg> Resumen
       </button>
-      @for (group of navigation(); track group.label) {
+      @for (group of navigation; track group.label) {
         <div class="admin-nav-group">
           <h2>{{ group.label }}</h2>
           @for (item of group.items; track item.id) {
@@ -21,7 +21,7 @@
       Sección
       <select [ngModel]="activeSection()" (ngModelChange)="openSection($event)">
         <option value="resumen">Resumen</option>
-        @for (group of navigation(); track group.label) {
+        @for (group of navigation; track group.label) {
           <optgroup [label]="group.label">
             @for (item of group.items; track item.id) {
               <option [value]="item.id">{{ item.label }}</option>
@@ -82,12 +82,6 @@
       <p class="alert alert--error" role="alert">No se pudieron actualizar todos los datos del resumen. Podés volver a intentar con Actualizar.</p>
     }
     <div class="dashboard-metrics" [attr.aria-busy]="otherLoading()">
-      @if (cancellations().length) {
-      <button type="button" class="dashboard-metric metric-cancellation" (click)="abrirDesdeContador('cancelaciones')">
-        <svg lucideCalendarX [size]="29" aria-hidden="true"></svg>
-        <span>Cancelaciones pendientes<strong>{{ otherLoading() ? '…' : cancellations().length }}</strong></span>
-      </button>
-      }
       <button type="button" class="dashboard-metric" (click)="abrirDesdeContador('reclamos')">
         <svg lucideMessageCircle [size]="29" aria-hidden="true"></svg>
         <span>Reclamos abiertos<strong>{{ otherLoading() ? '…' : openClaims().length }}</strong></span>
@@ -237,57 +231,6 @@
         <app-paginador class="admin-paginador" [pagina]="listaLiquidaciones.pagina()" [paginas]="listaLiquidaciones.paginas()"
           [total]="listaLiquidaciones.filtrados().length" etiqueta="liquidaciones" ariaLabel="Paginación de liquidaciones"
           (paginaCambia)="listaLiquidaciones.irAPagina($event)" />
-      }
-    }
-  </section>
-
-  <section class="panel admin-module" [hidden]="activeSection() !== 'cancelaciones'">
-    <div class="panel__title">
-      <div>
-        <h2>Solicitudes de cancelación</h2>
-        <p>Reservas pagadas antes del inicio que esperan decisión administrativa.</p>
-      </div>
-      <span class="counter">{{ cancellations().length }}</span>
-    </div>
-    @if (!cancellations().length) {
-      <p class="empty">No hay solicitudes pendientes.</p>
-    } @else {
-      <app-filtros-lista class="admin-filtros" [lista]="listaCancelaciones" etiqueta="Buscar solicitudes de cancelación"
-        placeholder="Buscar por solicitud, reserva, inquilino, publicación o motivo" />
-      <div class="settlement-list">
-        @for (solicitud of listaCancelaciones.visibles(); track solicitud.id) {
-          <article class="settlement-card" [id]="'admin-cancelaciones-' + solicitud.id" tabindex="-1">
-            <div>
-              <span class="status status--blocked">Pendiente</span>
-              <h3>Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '—' }}</h3>
-              <p><strong>Inquilino:</strong> {{ solicitud.reserva?.usuario?.nombre }} {{ solicitud.reserva?.usuario?.apellido }}</p>
-              <p><strong>Publicación:</strong> {{ solicitud.reserva?.publicacion?.titulo ?? '—' }}</p>
-              <p><strong>Fechas:</strong> {{ solicitud.reserva?.fecha_inicio }} — {{ solicitud.reserva?.fecha_fin }}</p>
-              <p><strong>Total de la reserva:</strong> {{ solicitud.reserva?.monto_pago | currency: (solicitud.reserva?.moneda_contratada ?? 'ARS') }}</p>
-              @if (solicitud.devolucion; as devolucion) {
-                <p class="cancellation-refund"><strong>Monto a devolver al inquilino:</strong> {{ devolucion.importe | currency: devolucion.moneda : 'code' : '1.2-2' }} ({{ devolucion.porcentaje }} %)</p>
-                @if (devolucion.porcentaje === 0) { <p class="settlement-note">La cancelación se aprobará sin devolución.</p> }
-              } @else {
-                <p class="refund-error">No se puede calcular la devolución: falta el pago registrado.</p>
-              }
-              <p class="settlement-note">{{ solicitud.motivo }}</p>
-            </div>
-            <div class="actions">
-              @if (solicitud.reserva?.id; as idReserva) {
-                <a class="button button--ghost" [routerLink]="['/admin/reservas', idReserva]" [queryParams]="{ desde: 'cancelaciones' }">Ver reserva</a>
-              }
-              <button type="button" class="button button--success" [disabled]="!solicitud.devolucion || busy() === 'cancellation-' + solicitud.id" (click)="abrirAprobacionCancelacion(solicitud)">Aprobar</button>
-              <button type="button" class="button button--danger-outline" [disabled]="busy() === 'cancellation-' + solicitud.id" (click)="rechazarCancelacion(solicitud)">Rechazar</button>
-            </div>
-          </article>
-        } @empty {
-          <p class="empty">No hay solicitudes que coincidan. <button type="button" class="link-button" (click)="listaCancelaciones.limpiar()">Limpiar filtros</button></p>
-        }
-      </div>
-      @if (listaCancelaciones.filtrados().length) {
-        <app-paginador class="admin-paginador" [pagina]="listaCancelaciones.pagina()" [paginas]="listaCancelaciones.paginas()"
-          [total]="listaCancelaciones.filtrados().length" etiqueta="solicitudes" ariaLabel="Paginación de solicitudes de cancelación"
-          (paginaCambia)="listaCancelaciones.irAPagina($event)" />
       }
     }
   </section>
@@ -495,41 +438,6 @@
         <button type="button" class="button button--ghost" [disabled]="registrandoPagoAnunciante()" (click)="cerrarPagoAnunciante()">Volver</button>
         <button type="submit" class="button button--success" [disabled]="registrandoPagoAnunciante() || !cbuParaPago() || !comprobantePago()">
           {{ registrandoPagoAnunciante() ? 'Registrando…' : 'Registrar pago' }}
-        </button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog #dialogoAprobacion class="block-dialog cancellation-approval-dialog" aria-labelledby="cancellation-approval-title"
-    (cancel)="cerrarAprobacionCancelacion($event)">
-    <form class="block-form" (ngSubmit)="confirmarAprobacionCancelacion()" [attr.aria-busy]="aprobandoCancelacion()">
-      <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideCheck [size]="26"></svg></div>
-      <h2 id="cancellation-approval-title">Aprobar cancelación</h2>
-      @if (solicitudPorAprobar(); as solicitud) {
-        <p class="refund-meta">Solicitud #{{ solicitud.id }} · Reserva #{{ solicitud.reserva?.id ?? '-' }}</p>
-        @if (solicitud.devolucion; as devolucion) {
-          <div class="cancellation-refund cancellation-refund--summary">
-            <p>Monto a devolver al inquilino</p>
-            <strong>{{ devolucion.importe | currency: devolucion.moneda : 'code' : '1.2-2' }} ({{ devolucion.porcentaje }} %)</strong>
-            <p>Calculado a la fecha de solicitud: {{ devolucion.fechaSolicitud | date: 'dd/MM/yyyy' : 'UTC' }}.</p>
-          </div>
-          @if (devolucion.porcentaje === 0) {
-            <p>La reserva se cancelará sin devolución al inquilino.</p>
-          } @else {
-            <p>Al confirmar se generará una devolución pendiente de gestión en Reembolsos.</p>
-          }
-        }
-      }
-      <label for="cancellation-approval-note">Observación de la aprobación <span class="muted">(opcional)</span></label>
-      <textarea id="cancellation-approval-note" name="observacionAprobacion" [(ngModel)]="observacionAprobacion"
-        rows="4" maxlength="500" placeholder="Agregá una observación si corresponde"
-        aria-describedby="cancellation-approval-note-help" [disabled]="aprobandoCancelacion()" autofocus></textarea>
-      <small id="cancellation-approval-note-help" class="muted">Hasta 500 caracteres.</small>
-      @if (errorAprobacion()) { <p class="refund-error" role="alert">{{ errorAprobacion() }}</p> }
-      <div class="block-actions">
-        <button type="button" class="button button--ghost" [disabled]="aprobandoCancelacion()" (click)="cerrarAprobacionCancelacion()">Volver</button>
-        <button type="submit" class="button button--success" [disabled]="aprobandoCancelacion() || !solicitudPorAprobar()?.devolucion">
-          {{ aprobandoCancelacion() ? 'Aprobando…' : 'Confirmar aprobación' }}
         </button>
       </div>
     </form>

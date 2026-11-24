@@ -125,7 +125,7 @@ export class ReservasService
             actual.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE') ||
             !actual.pago_vencimiento || new Date(actual.pago_vencimiento).getTime() > Date.now()) return false;
 
-          this.cerrarSinPago(actual, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), undefined, 'Venció el plazo de pago');
+          this.cerrarSinPago(actual, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), 'SISTEMA', 'Venció el plazo de pago');
           const guardada = await repositorio.guardar(actual);
           await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
           await this.disponibilidadService.liberarReserva(actual.id, transaccion);
@@ -351,7 +351,7 @@ export class ReservasService
           !(anunciante?.usuario?.activa && anunciante.usuario.bloqueado &&
             await this.usuariosService.consultarAccesoPendiente(anunciante.idUsuario, transaccion))
         ) {
-          this.cerrarSinPago(reserva, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'));
+          this.cerrarSinPago(reserva, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), 'SISTEMA', 'El pago llegó cuando la cuenta del anunciante ya no estaba habilitada; corresponde devolverlo');
           this.registrarPagoParaRevision(
             reserva,
             fechaPago,
@@ -1044,6 +1044,7 @@ export class ReservasService
     reserva.fecha_cancelacion = null;
     reserva.motivo_cancelacion = null;
     reserva.causa_cancelacion = null;
+    reserva.cancelada_por = null;
     this.registrarConfirmacionPago(reserva, fechaPago, codigoAlojamiento);
   }
 
