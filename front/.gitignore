@@ -5,6 +5,8 @@
 /tmp
 /out-tsc
 /bazel-out
+# JavaScript generado al compilar los .ts de src (el código fuente es TypeScript)
+/src/**/*.js
 
 # Node
 /node_modules
