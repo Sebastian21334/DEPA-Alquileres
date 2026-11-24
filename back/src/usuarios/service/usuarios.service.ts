@@ -198,14 +198,6 @@ export class UsuariosService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    const email = dto.email ? dto.email.trim().toLowerCase() : undefined;
-    if (email) {
-      const usuarioConEmail = await this.usuariosRepo.buscarPorEmail(email);
-      if (usuarioConEmail && usuarioConEmail.id !== idUsuario) {
-        throw new ConflictException('El email ya está registrado');
-      }
-    }
-    if (email !== undefined) usuario.email = email;
     if (dto.nombre !== undefined) usuario.nombre = dto.nombre.trim();
     if (dto.apellido !== undefined) usuario.apellido = dto.apellido.trim();
     if (dto.telefono !== undefined) usuario.telefono = dto.telefono.trim();
@@ -296,6 +288,7 @@ export class UsuariosService {
         usuario.email = null;
       }
       usuario.token_verificacion = null;
+      usuario.token_verificacion_expira = null;
       usuario.token_recuperacion = null;
       usuario.token_recuperacion_expira = null;
       await this.usuariosRepo.guardar(usuario, transaccion);
@@ -676,7 +669,7 @@ export class UsuariosService {
       throw new InternalServerErrorException(`Falta el rol inicial ${nombreRol}. Ejecutá npm run db:seed.`);
     }
 
-    const token = randomBytes(32).toString('hex');
+    const { token, expira } = this.credencialesService.nuevoTokenVerificacion();
     const nuevoUsuario = this.usuariosRepo.crear({
       nombre: datos.nombre,
       apellido: datos.apellido,
@@ -684,6 +677,7 @@ export class UsuariosService {
       telefono: datos.telefono,
       contrasenia: contraseniaHash,
       token_verificacion: token,
+      token_verificacion_expira: expira,
       rol,
     });
     try {

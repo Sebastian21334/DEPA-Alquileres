@@ -1,5 +1,6 @@
-import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
+// D10: el correo no se modifica por acá, porque quedaría verificado sin confirmar el nuevo.
 export class ActualizarUsuarioDto {
   @IsOptional()
   @IsString()
@@ -12,11 +13,6 @@ export class ActualizarUsuarioDto {
   @MinLength(2)
   @MaxLength(100)
   apellido?: string;
-
-  @IsOptional()
-  @IsEmail()
-  @MaxLength(150)
-  email?: string;
 
   @IsOptional()
   @IsString()

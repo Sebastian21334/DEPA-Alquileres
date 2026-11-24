@@ -141,18 +141,22 @@ export class UsuariosEnMemoria {
     return usuario ? copiar(usuario) : null;
   }
 
-  async guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean> {
+  async guardarTokenVerificacion(id: number, email: string, token: string, expira: Date): Promise<boolean> {
     const usuario = this.filas.get(id);
     if (!usuario?.activa || usuario.bloqueado || usuario.email !== email || usuario.email_verificado) return false;
     usuario.token_verificacion = token;
+    usuario.token_verificacion_expira = expira;
     return true;
   }
 
   async verificarCuenta(token: string): Promise<boolean> {
-    const usuario = this.buscar((u) => u.token_verificacion === token && u.activa && !u.email_verificado);
+    const ahora = new Date();
+    const usuario = this.buscar((u) => u.token_verificacion === token && !!u.token_verificacion_expira &&
+      u.token_verificacion_expira > ahora && u.activa && !u.email_verificado);
     if (!usuario) return false;
     usuario.email_verificado = true;
     usuario.token_verificacion = null;
+    usuario.token_verificacion_expira = null;
     return true;
   }
 
