@@ -543,7 +543,7 @@ test('administración y el vencimiento no liberan una reserva con reclamo abiert
   const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
   await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /reclamo abierto/i);
   await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PENDIENTE_PAGO_PROPIETARIO' }, 3), /reclamo abierto/i);
-  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /reclamo abierto/i);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: 'Motivo de prueba' }, 3), /reclamo abierto/i);
   await source.getRepository(Liquidacion).update({ reserva: { id: reserva.id } }, { estado: 'RETENIDO' });
   t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
   await operaciones.avisarLiquidacionesDisponibles(new Date());
@@ -612,6 +612,116 @@ test('la migración del motivo lo toma del reembolso, ignora los textos por defe
   } finally {
     await anterior.close();
   }
+});
+
+function operacionesLiquidacion() {
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const { almacenamiento } = almacenamientoDePrueba();
+  return new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos, undefined, almacenamiento);
+}
+
+const filaLiquidacion = async (operaciones, idReserva) =>
+  (await operaciones.listarLiquidacionesAdministracion()).find(fila => fila.id === idReserva);
+
+/** Reserva con el ingreso validado y una devolución parcial de 40 sobre 100 por reclamo, ya aprobada. */
+async function devolucionParcialPorReclamo(t) {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-22T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date('2099-01-10T15:00:00Z'), porcentaje_comision_depa: 10 });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'LIMPIEZA', descripcion: 'La casa estaba sucia' }, 1);
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 40, observacion: 'Faltó la limpieza' }, 3);
+  return reserva;
+}
+
+test('después de devolverle una parte al inquilino por reclamo, el resto se liquida al anunciante', async (t) => {
+  const reserva = await devolucionParcialPorReclamo(t);
+  const operaciones = operacionesLiquidacion();
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  // Con devolución no se cobra comisión (regla vigente); el pago espera la fecha habitual.
+  assert.deepEqual(
+    [fila.estado_liquidacion, fila.importe_a_liquidar, fila.moneda_liquidacion, fila.importe_comision_depa, fila.importe_neto_anunciante, fila.habilitada_para_pago],
+    ['DEVUELTO_PARCIAL_INQUILINO', 60, 'ARS', 0, 60, false]);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /se habilita el 25\/01\/2099/);
+
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, true);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-anunciante' }, comprobantePdf(), 3);
+  const liquidacion = await liquidacionDe(reserva);
+  assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 60]);
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /ya fue resuelta/);
+});
+
+test('devolverle al inquilino lo que quedaba exige motivo y deriva el resto a Reembolsos', async (t) => {
+  const reserva = await devolucionParcialPorReclamo(t);
+  const operaciones = operacionesLiquidacion();
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /motivo/);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: '   ' }, 3), /motivo/);
+
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: 'El anunciante no respondió' }, 3);
+  const ajuste = (await reembolsos.listarPorReserva(reserva.id)).find(item => item.origen === OrigenReembolso.AJUSTE_ADMIN);
+  assert.deepEqual([Number(ajuste.importe), ajuste.estado, ajuste.motivo], [60, 'PENDIENTE', 'El anunciante no respondió']);
+  // Mientras esa devolución está en curso, la reserva sale de Liquidaciones pendientes.
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+});
+
+test('en una cancelación sin devolución, lo retenido se le liquida al anunciante en la fecha habitual', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  const { reserva } = await escenario('2099-01-10');
+  const operaciones = operacionesLiquidacion();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  assert.equal((await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3)).reembolso, null);
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.deepEqual([fila.cancelada, fila.estado_liquidacion, fila.importe_a_liquidar, fila.habilitada_para_pago],
+    [true, 'PENDIENTE_PAGO_PROPIETARIO', 100, false]);
+  // Una cancelada no vuelve a esperar el ingreso.
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /circuito de ingreso/);
+
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, true);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-retenido' }, comprobantePdf(), 3);
+  const liquidacion = await liquidacionDe(reserva);
+  assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 100]);
+});
+
+test('una cancelada que quedó en revisión se puede cerrar para pagarle al anunciante', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  const { reserva } = await escenario('2099-01-10');
+  const operaciones = operacionesLiquidacion();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  // Así quedaban las cancelaciones sin devolución antes de este cambio.
+  await source.query("UPDATE liquidacion SET estado = 'EN_REVISION' WHERE id_reserva = $1", [reserva.id]);
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, false);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /todavía no está pendiente/);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /circuito de ingreso/);
+
+  const reabierta = await operaciones.resolverLiquidacion(reserva.id, { estado: 'PENDIENTE_PAGO_PROPIETARIO', observacion: 'Revisión cerrada' }, 3);
+  assert.equal(reabierta.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, true);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-revisada' }, comprobantePdf(), 3);
+  assert.equal((await liquidacionDe(reserva)).estado, 'PAGADO_PROPIETARIO');
+});
+
+test('en una cancelación con devolución parcial, lo que no se devolvió se le liquida al anunciante', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-05T15:00:00Z') });
+  const { reserva } = await escenario('2099-01-07');
+  const operaciones = operacionesLiquidacion();
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  const devuelto = Number(reembolso.importe);
+  assert.ok(devuelto > 0 && devuelto < 100, `devolución parcial: ${devuelto}`);
+  if (reembolso.estado !== 'APROBADO') await operacionesReembolso.ejecutar(reembolso.id, 3);
+
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.deepEqual([fila.cancelada, fila.estado_liquidacion, fila.importe_a_liquidar, fila.habilitada_para_pago],
+    [true, 'DEVUELTO_PARCIAL_INQUILINO', 100 - devuelto, true]);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
+  const liquidacion = await liquidacionDe(reserva);
+  assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 100 - devuelto]);
 });
 
 test('el reporte anterior respeta el plazo y la identidad del inquilino', async (t) => {
@@ -1114,7 +1224,8 @@ test('el inquilino puede solicitar el día anterior con advertencia y sin devolu
   const actual = await reservas.obtenerReserva(reserva.id);
   assert.equal(actual.cancelada, true);
   assert.equal(actual.estado_pago, 'APROBADO');
-  assert.equal(actual.estado_liquidacion, 'EN_REVISION');
+  // Sin devolución, lo retenido es del anunciante.
+  assert.equal(actual.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
 test('desde la medianoche argentina del ingreso se bloquea al inquilino aunque no validó el código', async (t) => {
@@ -1464,7 +1575,7 @@ test('si falla la liberación de fechas se revierte la aprobación y se puede re
   assert.equal(cancelada.cancelada, true);
   assert.equal(cancelada.cancelada_por, 'INQUILINO');
   const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
-  assert.equal(liquidacion.estado, 'EN_REVISION');
+  assert.equal(liquidacion.estado, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
 test('si falla la aprobación no queda una devolución sin decisión', async () => {

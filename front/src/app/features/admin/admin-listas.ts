@@ -23,7 +23,23 @@ export function diasEsperaLiquidacion(settlement: AdminSettlement): number | nul
   return Math.max(0, Math.round((fechaPago - Date.parse(`${fechaHoyArgentina()}T00:00:00Z`)) / 86_400_000));
 }
 
-export const pagoHabilitado = (settlement: AdminSettlement): boolean => settlement.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO' && diasEsperaLiquidacion(settlement) === 0;
+// Lo decide el back: estado pendiente para el anunciante, resto mayor a cero y fecha de pago cumplida.
+export const pagoHabilitado = (settlement: AdminSettlement): boolean => settlement.habilitada_para_pago;
+
+/** El pago queda para el anunciante: pendiente o el resto de una devolución parcial. */
+export const pendienteParaAnunciante = (settlement: AdminSettlement): boolean =>
+  settlement.estado_liquidacion === 'PENDIENTE_PAGO_PROPIETARIO' || settlement.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO';
+
+/** Hubo una devolución al inquilino: lo que se le liquida al anunciante es menos que lo pagado. */
+export const tieneDevolucion = (settlement: AdminSettlement): boolean =>
+  Number(settlement.importe_a_liquidar) < Number(settlement.monto_pago) - 0.009;
+
+export function etiquetaLiquidacion(settlement: AdminSettlement): string {
+  if (settlement.estado_liquidacion === 'EN_REVISION') return 'En revisión';
+  if (settlement.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO') return 'Devolución parcial · resto al anunciante';
+  if (settlement.cancelada) return 'Cancelada · retención para el anunciante';
+  return settlement.codigo_validado_en ? 'Código validado' : 'Ingreso no verificado: plazo vencido';
+}
 
 export function nombreInquilino(settlement: AdminSettlement): string {
   return [settlement.usuario_nombre ?? settlement.usuario?.nombre, settlement.usuario_apellido ?? settlement.usuario?.apellido].filter(Boolean).join(' ') || 'Inquilino eliminado';

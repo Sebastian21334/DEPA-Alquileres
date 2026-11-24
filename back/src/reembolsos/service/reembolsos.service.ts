@@ -45,11 +45,15 @@ export type CrearReembolsoDatos = {
 @Injectable()
 export class ReembolsosService {
   private get estadosActivos(): string[] {
+    return [...this.estadosEnCurso, this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')];
+  }
+
+  /** Devoluciones que todavía pueden mover dinero; una aprobada ya está descontada del pago. */
+  private get estadosEnCurso(): string[] {
     return [
       this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
       this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'),
       this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
-      this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
     ];
   }
 
@@ -108,7 +112,7 @@ export class ReembolsosService {
       const activa = deLaReserva.find(
         (actual) =>
           actual.origen === OrigenReembolso.AJUSTE_ADMIN &&
-          this.estadosActivos.includes(actual.estado),
+          this.estadosEnCurso.includes(actual.estado),
       );
       if (activa)
         throw new ConflictException(
@@ -116,7 +120,7 @@ export class ReembolsosService {
         );
     }
 
-    const reservado = await reembolsos.sumarImportesReservados(pago.id, [this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'), this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'), this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO')]);
+    const reservado = await reembolsos.sumarImportesReservados(pago.id, this.estadosEnCurso);
     const saldo = this.pagos.saldoReembolsable(pago) - reservado;
     if (importe > saldo + TOLERANCIA_MONETARIA)
       throw new ConflictException(
@@ -220,9 +224,7 @@ export class ReembolsosService {
   }
 
   actividadInquilino(idUsuario: number) {
-    return this.reembolsos.actividadInquilino(idUsuario, this.estadosActivos.filter(estado =>
-      estado !== this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO'),
-    ));
+    return this.reembolsos.actividadInquilino(idUsuario, this.estadosEnCurso);
   }
 
   listarConversaciones(idReserva: number, idInquilino: number) {
@@ -767,6 +769,10 @@ export class ReembolsosService {
     return this.pagos.saldoReembolsable(pago);
   }
 
+  listarPagosPorReservas(idsReserva: number[]): Promise<Pago[]> {
+    return this.pagos.listarPorReservas(idsReserva);
+  }
+
   async listarAdministracion(): Promise<Reembolso[]> {
     const reembolsos = await this.reembolsos.listarAdministracion();
     return reembolsos.map((reembolso) => this.prepararRespuesta(reembolso));
@@ -796,8 +802,14 @@ export class ReembolsosService {
     return repositorio.buscarPorOrigen(origen, referencia);
   }
 
-  async listarActivosPorReservas(idsReserva: number[]): Promise<Reembolso[]> {
-    return this.reembolsos.buscarPorReservasConEstados(idsReserva, this.estadosActivos);
+  async listarEnCursoPorReservas(idsReserva: number[]): Promise<Reembolso[]> {
+    return this.reembolsos.buscarPorReservasConEstados(idsReserva, this.estadosEnCurso);
+  }
+
+  /** Una devolución en curso frena el pago al anunciante; una aprobada ya está descontada del saldo. */
+  async tieneDevolucionEnCurso(idReserva: number, transaccion?: EntityManager): Promise<boolean> {
+    const repositorio = transaccion ? this.reembolsos.enTransaccion(transaccion) : this.reembolsos;
+    return (await repositorio.buscarPorReservasConEstados([idReserva], this.estadosEnCurso)).length > 0;
   }
 
   private prepararRespuesta(reembolso: Reembolso): Reembolso {

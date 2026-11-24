@@ -21,14 +21,13 @@ export class LiquidacionRepository implements ILiquidacionRepository {
     });
   }
 
-  async listarReservasPendientesDeAviso(estadoLiquidacion: string, estadoPago: string, fechaFinLimite: string): Promise<number[]> {
+  async listarReservasPendientesDeAviso(estadosLiquidacion: string[], estadoPago: string, fechaFinLimite: string): Promise<number[]> {
     const filas = await this.repository.createQueryBuilder('liquidacion')
       .innerJoin('liquidacion.reserva', 'reserva')
       .select('reserva.id', 'id')
-      .where('liquidacion.estado = :estadoLiquidacion', { estadoLiquidacion })
+      .where('liquidacion.estado IN (:...estadosLiquidacion)', { estadosLiquidacion })
       .andWhere('(liquidacion.aviso_pago_admin_en IS NULL OR liquidacion.aviso_pago_anunciante_en IS NULL)')
       .andWhere('reserva.estado_pago = :estadoPago', { estadoPago })
-      .andWhere('reserva.cancelada = false')
       .andWhere('reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite', { fechaFinLimite })
       .orderBy('reserva.id', 'ASC')
       .getRawMany<{ id: number }>();
