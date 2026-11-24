@@ -573,6 +573,47 @@ test('un segundo reclamo vuelve a poner en revisión la liquidación que esperab
   assert.equal(await estado(), 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
+test('el motivo de la resolución queda en el reclamo y lo ven el inquilino y el anunciante', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-22T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date('2099-01-10T15:00:00Z') });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+
+  const primero = await reclamos.crear({ id_reserva: reserva.id, categoria: 'LIMPIEZA', descripcion: 'La casa estaba sucia' }, 1);
+  const sinDevolucion = await reclamos.resolver(primero.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION, observacion: '  Las fotos muestran la casa limpia  ' }, 3);
+  assert.equal(sinDevolucion.motivo_resolucion, 'Las fotos muestran la casa limpia');
+
+  const segundo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'MANTENIMIENTO', descripcion: 'No había agua caliente' }, 1);
+  const conDevolucion = await reclamos.resolver(segundo.id, { resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 10, observacion: 'El calefón no funcionó dos días' }, 3);
+  assert.equal(conDevolucion.motivo_resolucion, 'El calefón no funcionó dos días');
+  for (const idParte of [1, 2]) {
+    assert.equal((await reclamos.obtener(segundo.id, idParte, false)).motivo_resolucion, 'El calefón no funcionó dos días');
+  }
+});
+
+test('la migración del motivo lo toma del reembolso, ignora los textos por defecto y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261124-motivo-resolucion-reclamo.sql'), 'utf8');
+  const anterior = new PGlite();
+  try {
+    await anterior.exec(`CREATE TABLE reclamo_reserva (id_reclamo integer PRIMARY KEY, resolucion varchar(40));
+      CREATE TABLE reembolso (id_reembolso integer PRIMARY KEY, referencia_interna varchar(80), motivo varchar(500) NOT NULL);
+      INSERT INTO reclamo_reserva VALUES (1, 'DEVOLUCION_TOTAL'), (2, 'DEVOLUCION_PARCIAL'), (3, 'SIN_DEVOLUCION'), (4, NULL);
+      INSERT INTO reembolso VALUES (1, 'rec:1', 'Reclamo #1: Faltaba el agua caliente'),
+        (2, 'rec:2', 'Reclamo #2: resolución favorable al inquilino'), (3, 'rec:4', 'Reclamo #4: Todavía abierto');`);
+    await anterior.exec(migracion);
+    const motivos = async () => (await anterior.query('SELECT id_reclamo, motivo_resolucion FROM reclamo_reserva ORDER BY 1')).rows
+      .map(({ id_reclamo, motivo_resolucion }) => [id_reclamo, motivo_resolucion]);
+    assert.deepEqual(await motivos(), [[1, 'Faltaba el agua caliente'], [2, null], [3, null], [4, null]]);
+    // Repetirla no pisa un motivo ya guardado.
+    await anterior.exec("UPDATE reclamo_reserva SET motivo_resolucion = 'Motivo cargado al resolver' WHERE id_reclamo = 1");
+    await anterior.exec(migracion);
+    assert.deepEqual(await motivos(), [[1, 'Motivo cargado al resolver'], [2, null], [3, null], [4, null]]);
+  } finally {
+    await anterior.close();
+  }
+});
+
 test('el reporte anterior respeta el plazo y la identidad del inquilino', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
   const { reserva } = await escenario();

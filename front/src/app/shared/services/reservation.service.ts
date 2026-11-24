@@ -233,6 +233,8 @@ export interface Reclamo {
   estado: 'ABIERTO' | 'EN_REVISION' | 'RESUELTO_INQUILINO' | 'RESUELTO_ANUNCIANTE' | 'CERRADO';
   resolucion: 'SIN_DEVOLUCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL' | 'REINICIAR_CODIGO' | 'CONFIRMAR_INGRESO' | null;
   importe_reembolso: number | null;
+  /** Lo escribe el admin al resolver; null en los reclamos abiertos y en los resueltos antes de guardarse. */
+  motivo_resolucion?: string | null;
   creado_en: string;
   resuelto_en: string | null;
   evidencias?: ReclamoEvidencia[];

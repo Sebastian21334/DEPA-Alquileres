@@ -695,9 +695,11 @@
                     <p class="refund-error" role="alert">Para devolver todo elegí «{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}».</p>
                   }
                 }
-                <label>Conclusión de la revisión
-                  <textarea name="observacionReclamo" [(ngModel)]="observacionReclamo" rows="3" maxlength="500" required [disabled]="!!busy()"></textarea>
+                <label>Motivo de la resolución
+                  <textarea name="observacionReclamo" [(ngModel)]="observacionReclamo" rows="3" maxlength="500" required
+                    aria-describedby="motivo-resolucion-ayuda" [disabled]="!!busy()"></textarea>
                 </label>
+                <p id="motivo-resolucion-ayuda" class="refund-help">Lo ven el inquilino y el anunciante.</p>
                 <div class="actions">
                   <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
                   <button type="submit" class="button button--light" [disabled]="!!busy() || !observacionReclamo.trim() || (resolucionReclamo === 'DEVOLUCION_PARCIAL' && (!(importeReclamo && importeReclamo > 0) || parcialCubreElTotal(claim)))">Confirmar resolución</button>

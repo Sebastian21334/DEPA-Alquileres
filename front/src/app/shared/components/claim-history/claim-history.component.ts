@@ -59,10 +59,6 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
             : (item.solicitud_cancelacion_id && item.categoria !== 'DEMORA_ADMINISTRATIVA')
               ? 'No se aprobó una devolución adicional.'
               : 'A favor del anunciante: sin devolución al inquilino.' }}</p>
-          <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
-          @if (item.reserva && puedeValidarCodigo(item.reserva)) {
-            <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
-          }
         } @else if (item.resolucion === 'CONFIRMAR_INGRESO') {
           <p>A favor del anunciante: la administración confirmó el ingreso sin el código. El pago sigue los plazos habituales.</p>
         } @else {
@@ -71,6 +67,13 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
             @if (item.importe_reembolso) {<span> de {{ item.importe_reembolso | currency:(item.devolucion_cancelacion?.moneda || item.reserva?.moneda_contratada || 'ARS') }}</span>}.
             {{ administracion() ? 'La devolución se gestiona en Reembolsos.' : 'La devolución se sigue desde el detalle de la reserva.' }}
           </p>
+        }
+        @if (item.motivo_resolucion) {
+          <p class="resolution__motivo"><strong>Motivo de la resolución:</strong> {{ item.motivo_resolucion }}</p>
+        }
+        <!-- Misma regla que el campo del código: solo mientras el anunciante puede cargarlo. -->
+        @if ((item.resolucion === 'SIN_DEVOLUCION' || item.resolucion === 'REINICIAR_CODIGO') && item.reserva && puedeValidarCodigo(item.reserva)) {
+          <p>El anunciante ya puede volver a ingresar el código de alojamiento.</p>
         }
         @if (item.resuelto_en) { <p class="meta">Resuelto el {{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</p> }
         @if (mostrarVerReembolso() && (item.resolucion === 'DEVOLUCION_TOTAL' || item.resolucion === 'DEVOLUCION_PARCIAL')) {
@@ -110,13 +113,11 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
           </div>
         </div>
       </div>
-      <div class="claim-description">
-        <h4>Detalle del reclamo</h4>
-        <p class="body">{{ item.descripcion }}</p>
-      </div>
-    } @else {
-      <p class="body">{{ item.descripcion }}</p>
     }
+    <div class="claim-description">
+      <h4>Motivo del reclamo</h4>
+      <p class="body">{{ item.descripcion }}</p>
+    </div>
     @if (item.evidencias?.length) {
       <!-- Imágenes de la descripción (las que se subieron al crear el reclamo), cada una con su autor. -->
       <ul class="imagenes-reclamo" aria-label="Imágenes del reclamo">
@@ -155,6 +156,7 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
     .imagenes-reclamo img { display: block; width: 100%; aspect-ratio: 1; border-radius: .5rem; object-fit: cover; background: #e3eaff; }
     .resolution { display: grid; gap: .3rem; justify-items: start; padding: .75rem .9rem; border-radius: .6rem; border: 1px solid #b9dccb; }
     .resolution__title { font-weight: 800; }
+    .resolution__motivo { white-space: pre-wrap; overflow-wrap: anywhere; }
     .resolution__action {
       margin-top: .25rem; padding: .45rem .8rem; border: 1px solid #205c46; border-radius: .45rem;
       background: #fff; color: #205c46; font-weight: 700; cursor: pointer;
