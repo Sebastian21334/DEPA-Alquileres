@@ -15,6 +15,7 @@ import type { EntityManager } from 'typeorm';
 import type { Pago } from '../../pagos/entity/pago.entity';
 import { PagosService } from '../../pagos/service/pagos.service';
 import { ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
+import type { DevolucionInquilinoDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
 import type { Reserva } from '../../reservas/entity/reserva.entity';
 import { referenciaUsuario } from '../../usuarios/usuario-referencia';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
@@ -875,6 +876,12 @@ export class ReembolsosService {
 
   listarPagosPorReservas(idsReserva: number[]): Promise<Pago[]> {
     return this.pagos.listarPorReservas(idsReserva);
+  }
+
+  /** Lo devuelto sale del pago: sigue visible aunque después se le pague el resto al anunciante. */
+  devolucionInquilino(pago: Pago | null | undefined): DevolucionInquilinoDto | null {
+    const devuelto = Number(pago?.amount_refunded ?? 0);
+    return pago && devuelto > TOLERANCIA_MONETARIA ? { devuelto, pagado: Number(pago.amount), moneda: pago.currency } : null;
   }
 
   async listarAdministracion(): Promise<Reembolso[]> {

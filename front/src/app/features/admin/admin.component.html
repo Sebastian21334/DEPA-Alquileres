@@ -696,6 +696,7 @@
                         <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
                       }
                       <option value="CONFIRMAR_INGRESO">Confirmar el ingreso sin código (a favor del anunciante)</option>
+                      <option value="DEVOLUCION_PARCIAL">Devolver una parte al inquilino</option>
                       <option value="DEVOLUCION_TOTAL">Devolver el 100 % al inquilino</option>
                     } @else {
                       <option value="SIN_DEVOLUCION">Sin devolución</option>
@@ -714,6 +715,9 @@
                   </label>
                   @if (totalPagadoReclamo(claim); as total) {
                     <p class="refund-help">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Faltante disponible:' : 'Pagó el inquilino' }} {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
+                  }
+                  @if (claim.categoria === 'CODIGO_BLOQUEADO') {
+                    <p class="refund-help">El ingreso sigue sin verificar. El resto se le paga al anunciante en la fecha habitual, a los 5 días del fin de la estadía.</p>
                   }
                   @if (parcialCubreElTotal(claim)) {
                     <p class="refund-error" role="alert">Para devolver todo elegí «{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}».</p>

@@ -361,7 +361,7 @@ export class ReclamosService {
 
   /**
    * El pedido de reinicio del código se resuelve habilitando intentos, confirmando
-   * el ingreso o devolviendo el total con motivo. Los demás reclamos conservan sus opciones.
+   * el ingreso o devolviendo al inquilino (todo o una parte) con motivo. Los demás reclamos conservan sus opciones.
    */
   private async resolverFaltanteCancelacion(reclamo: Reclamo, reserva: Reserva, dto: ResolverReclamoDto, idAdmin: number, previo: Reembolso | null, transaccion: EntityManager): Promise<Reembolso | undefined> {
     if (previo) throw new ConflictException('El reclamo ya tiene una devolución registrada');
@@ -386,14 +386,15 @@ export class ReclamosService {
 
   private validarResolucionSegunCategoria(reclamo: Reclamo, dto: ResolverReclamoDto): void {
     const pedidoDeCodigo = reclamo.categoria === CategoriaReclamo.CODIGO_BLOQUEADO;
+    const devoluciones: ResolucionReclamo[] = [ResolucionReclamo.DEVOLUCION_TOTAL, ResolucionReclamo.DEVOLUCION_PARCIAL];
     const permitidas: ResolucionReclamo[] = pedidoDeCodigo
-      ? [ResolucionReclamo.REINICIAR_CODIGO, ResolucionReclamo.CONFIRMAR_INGRESO, ResolucionReclamo.DEVOLUCION_TOTAL]
-      : [ResolucionReclamo.SIN_DEVOLUCION, ResolucionReclamo.DEVOLUCION_TOTAL, ResolucionReclamo.DEVOLUCION_PARCIAL];
+      ? [ResolucionReclamo.REINICIAR_CODIGO, ResolucionReclamo.CONFIRMAR_INGRESO, ...devoluciones]
+      : [ResolucionReclamo.SIN_DEVOLUCION, ...devoluciones];
     if (!permitidas.includes(dto.resolucion))
       throw new BadRequestException(pedidoDeCodigo
-        ? 'Un pedido de reinicio del código se resuelve habilitando más intentos, confirmando el ingreso o devolviendo el total'
+        ? 'Un pedido de reinicio del código se resuelve habilitando más intentos, confirmando el ingreso o devolviendo al inquilino'
         : 'Esa resolución solo corresponde a un pedido de reinicio del código');
-    if (pedidoDeCodigo && dto.resolucion === ResolucionReclamo.DEVOLUCION_TOTAL && !dto.observacion?.trim())
+    if (pedidoDeCodigo && devoluciones.includes(dto.resolucion) && !dto.observacion?.trim())
       throw new BadRequestException('Indicá el motivo de la devolución al inquilino');
   }
 

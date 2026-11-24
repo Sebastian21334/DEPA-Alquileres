@@ -68,6 +68,8 @@ export interface Reserva {
   intentos_codigo: number;
   /** Último día (AAAA-MM-DD) para reclamar; hasta entonces se retiene el pago al anunciante. */
   fin_plazo_reclamo?: string | null;
+  /** Lo devuelto al inquilino según el pago, en su moneda; null si no hubo devolución. */
+  devolucion_inquilino?: { devuelto: number; pagado: number; moneda: string } | null;
   /** Intentos que le quedan al anunciante antes de que se bloquee el código. */
   intentos_codigo_restantes?: number;
   fecha_resolucion_liquidacion: string | null;
