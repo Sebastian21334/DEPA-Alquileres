@@ -1,0 +1,15 @@
+<div class="filtros-lista" role="search">
+  <app-search-field class="filtros-lista__busqueda" [value]="lista().busqueda()" [placeholder]="placeholder()"
+    [ariaLabel]="etiqueta()" (valueChange)="lista().buscar($event)" />
+  @for (filtro of lista().filtros; track filtro.nombre) {
+    <label class="filtros-lista__filtro">
+      <span>{{ filtro.etiqueta }}</span>
+      <select (change)="cambiar(filtro.nombre, $event)">
+        @for (opcion of filtro.opciones; track opcion.valor) {
+          <option [value]="opcion.valor" [selected]="opcion.valor === lista().valor(filtro.nombre)">{{ opcion.etiqueta }}</option>
+        }
+      </select>
+    </label>
+  }
+  <ng-content />
+</div>
