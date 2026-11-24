@@ -35,7 +35,7 @@ export class ActualizarPublicacionDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MaxLength(255)
+  @MaxLength(5000)
   descripcion?: string;
 
   @ValidateIf((_dto, precio: unknown) => precio !== undefined)

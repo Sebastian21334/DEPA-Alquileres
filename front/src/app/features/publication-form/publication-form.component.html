@@ -39,9 +39,10 @@
             id="description"
             rows="5"
             formControlName="descripcion"
-            maxlength="255"
+            maxlength="5000"
             placeholder="Contá qué hace especial a la propiedad"
           ></textarea>
+          <small>{{ form.controls.descripcion.value.length }}/5000 caracteres</small>
         </div>
         <div class="field">
           <label for="modality">Modalidad *</label

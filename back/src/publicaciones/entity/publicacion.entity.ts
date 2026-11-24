@@ -25,7 +25,7 @@ export class Publicacion {
   @Column({ name: 'titulo', type: 'varchar', length: 255 })
   titulo: string;
 
-  @Column({ name: 'descripcion', type: 'varchar', length: 255 })
+  @Column({ name: 'descripcion', type: 'varchar', length: 5000 })
   descripcion: string;
 
   @Column({ name: 'fecha_publicacion', type: 'date' })
