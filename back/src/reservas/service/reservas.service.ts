@@ -248,7 +248,7 @@ export class ReservasService
         return reservaGuardada;
       },
     );
-    return this.prepararRespuesta(guardada);
+    return this.prepararRespuesta(guardada, true);
   }
 
   /** Vuelve a comprobar el precio, la moneda, la publicación y el vencimiento mientras la publicación está bloqueada. */
@@ -488,7 +488,7 @@ export class ReservasService
    */
   async listarPorUsuario(idUsuario: number): Promise<Reserva[]> {
     const reservas = await this.reservaRepository.buscarPorUsuario(idUsuario);
-    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva));
+    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva, true));
   }
 
   /**
@@ -530,12 +530,12 @@ export class ReservasService
   async buscarPorId(id: number, idUsuarioQueOpera: number, transaccion?: EntityManager): Promise<Reserva> {
     const reserva = await this.obtenerReserva(id, transaccion);
     this.verificarParticipanteOPropietario(reserva, idUsuarioQueOpera);
-    return this.prepararRespuesta(reserva);
+    return this.prepararRespuesta(reserva, this.esDelInquilino(reserva, idUsuarioQueOpera));
   }
 
   /** Detalle de cualquier reserva para el panel admin, sin el control de participante. */
   async buscarParaAdministracion(id: number): Promise<Reserva> {
-    return this.prepararRespuesta(await this.obtenerReserva(id));
+    return this.prepararRespuesta(await this.obtenerReserva(id), true);
   }
 
   async obtenerReserva(id: number, transaccion?: EntityManager): Promise<Reserva> {
@@ -565,8 +565,8 @@ export class ReservasService
     });
   }
 
-  prepararRespuesta(reserva: Reserva): ReservaRespuestaDto {
-    return this.estadoService.prepararRespuesta(reserva);
+  prepararRespuesta(reserva: Reserva, incluirContactoInquilino = false): ReservaRespuestaDto {
+    return this.estadoService.prepararRespuesta(reserva, incluirContactoInquilino);
   }
 
   calcularEstadoEstadia(reserva: Reserva, ahora = new Date()) {
@@ -713,7 +713,16 @@ export class ReservasService
 
     if (esTotal) this.aplicarReembolsoTotal(reserva);
     else this.aplicarReembolsoParcial(reserva);
-    if (cancelaReserva) this.marcarCancelada(reserva, 'ADMINISTRADOR', reembolso.motivo);
+    if (this.reembolsosService.esSimulado(reembolso)) {
+      reserva.referencia_liquidacion = reembolso.referencia_externa;
+      reserva.observacion_liquidacion = 'Devolución simulada con tarjeta. No se transfirió dinero.';
+    }
+    if (cancelaReserva) {
+      const solicitante = reembolso.referencia_interna?.startsWith('auto-can:') ? reembolso.solicitado_por?.id : undefined;
+      const actor = solicitante && this.esDelInquilino(reserva, solicitante) ? 'INQUILINO'
+        : solicitante && this.esDelAnunciante(reserva, solicitante) ? 'ANUNCIANTE' : 'ADMINISTRADOR';
+      this.marcarCancelada(reserva, actor, reembolso.motivo);
+    }
     if (esReclamo) reserva.observacion_liquidacion = observacion?.trim() || 'Reclamo resuelto a favor del Inquilino';
     const datos = {
       importe: importeDevuelto,

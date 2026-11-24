@@ -29,7 +29,11 @@ export class ReservaNotificacionesService {
     const participantes = { inquilino: reserva.usuario, anunciante: reserva.publicacion?.anunciante?.usuario };
     const enviados = await Promise.all(destinos.map(async (destino) => {
       try {
-        const usuario = destino === 'admin' ? null : participantes[destino];
+        let usuario = destino === 'admin' ? null : participantes[destino];
+        // Las vistas de reservas ocultan el contacto del huésped. Su correo se
+        // consulta internamente para enviarle avisos, sin volver a exponerlo en la API.
+        if (destino === 'inquilino' && !usuario?.email)
+          usuario = (await this.reservaRepository.buscarPorId(reserva.id))?.usuario;
         const correos = destino === 'admin' ? await this.usuariosService.emailsAdministradores()
           : usuario?.email && !usuario.fecha_baja && usuario.id !== excluirUsuario ? [usuario.email] : [];
         const resultados = await Promise.allSettled(
@@ -157,8 +161,6 @@ export class ReservaNotificacionesService {
                   ...datosComunes,
                   nombreDestinatario: nombreAnunciante,
                   nombreContraparte: nombreInquilino || 'Huésped',
-                  emailContraparte: reserva.usuario_email,
-                  telefonoContraparte: reserva.usuario_telefono,
                 }),
             },
           ]

@@ -249,6 +249,10 @@ export class AdminService {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
   }
 
+  habilitarTransferenciaReembolso(id: number) {
+    return this.http.patch<AdminReembolso>(`${this.api}/reservas/reembolsos/${id}/habilitar-transferencia`, {});
+  }
+
   /** Multipart con el comprobante obligatorio y la referencia opcional. */
   registrarTransferenciaReembolso(id: number, comprobante: File, datos: DatosTransferencia = {}) {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/transferencia`, this.formularioTransferencia(comprobante, datos));

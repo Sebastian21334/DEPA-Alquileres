@@ -27,6 +27,7 @@ export class LoginComponent {
   protected readonly reenviandoVerificacion = signal(false);
   protected readonly verificacionReenviada = signal<string | null>(null);
   protected readonly verContrasenia = signal(false);
+  protected readonly cuentaReactivada = this.route.snapshot.queryParamMap.get('cuentaReactivada') === '1';
 
   protected readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],

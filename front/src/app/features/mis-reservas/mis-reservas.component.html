@@ -54,7 +54,7 @@
         <svg lucideX [size]="22" aria-hidden="true"></svg>
       </button>
       <div class="cancellation-icon"><svg lucideCalendarX [size]="34" aria-hidden="true"></svg></div>
-      <h2 id="cancel-title">Solicitar cancelación</h2>
+      <h2 id="cancel-title">Cancelar reserva</h2>
       @if (reservaACancelar(); as reserva) {
         <div class="cancellation-reservation">
           @let portada = reserva.publicacion?.imagenes?.[0]?.url;
@@ -72,7 +72,7 @@
           @let bloqueo = condicionesCancelacion()?.motivoBloqueo;
           @if (condicionesCancelacion()?.devolucion; as devolucion) {
             <div class="cancellation-refund" [class.cancellation-refund--warning]="devolucion.porcentaje === 0" role="status">
-              <strong>Devolución {{ cancelacionComoAnunciante() ? 'al inquilino ' : '' }}si se aprueba: {{ devolucion.moneda }} {{ monto(devolucion.importe, devolucion.moneda) }} ({{ devolucion.porcentaje }} %)</strong>
+              <strong>Importe de devolución{{ cancelacionComoAnunciante() ? ' al inquilino' : '' }}: {{ devolucion.moneda }} {{ monto(devolucion.importe, devolucion.moneda) }} ({{ devolucion.porcentaje }} %)</strong>
               <p>Calculada con la fecha de {{ condicionesCancelacion()?.solicitud ? 'tu solicitud' : 'hoy' }}:
                 {{ devolucion.fechaSolicitud | date:'dd/MM/yyyy':'UTC' }}.
                 @if (devolucion.diasAnticipacion > 0) {
@@ -83,10 +83,6 @@
                   La fecha de ingreso ya pasó.
                 }
               </p>
-              @if (cancelacionComoAnunciante() && !condicionesCancelacion()?.solicitud) {
-                <p>Como anunciante podés solicitar la cancelación antes de la fecha de ingreso, hasta el día anterior inclusive. Si se aprueba antes del ingreso, se devuelve el 100 % al inquilino.</p>
-              }
-              <p>El porcentaje se determina al enviar la solicitud. La demora en aprobarla no lo reduce, siempre que se apruebe antes de la fecha de ingreso.</p>
             </div>
           }
           @if (condicionesCancelacion()?.advertencia; as advertencia) {
@@ -108,11 +104,11 @@
             <small id="motivo-cancelacion-ayuda">Entre 10 y 500 caracteres.</small>
             <div class="cancellation-info">
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
-              <p>Un administrador revisará tu solicitud. Si corresponde una devolución, la reserva se cancela cuando se confirma el reembolso.</p>
+              <p>La cancelación se aprueba automáticamente. Si corresponde una devolución, la reserva se cancela cuando se confirma.</p>
+              @if (condicionesCancelacion()?.simulacionTarjetaHabilitada && (condicionesCancelacion()?.devolucion?.importe ?? 0) > 0) {
+                <p>Si el pago fue con tarjeta, la devolución será simulada y no se transferirá dinero.</p>
+              }
             </div>
-            @if (condicionesCancelacion()?.devolucionPorTransferencia) {
-              <p role="status">Si corresponde una devolución, vas a poder coordinar la transferencia con administración desde el detalle de la reserva.</p>
-            }
           } @else if (estadoCancelacion() === 'pendiente') {
             <div class="cancellation-info" role="status">
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
@@ -121,7 +117,7 @@
           } @else if (estadoCancelacion() === 'aprobada') {
             <div class="cancellation-info" role="status">
               <svg lucideInfo [size]="22" aria-hidden="true"></svg>
-              <p>Tu solicitud de cancelación fue aprobada. La devolución todavía está en gestión.</p>
+              <p>{{ reserva.cancelada ? 'La reserva quedó cancelada.' : 'La cancelación fue aceptada. La devolución está en gestión.' }}</p>
             </div>
           } @else if (estadoCancelacion() === 'consultando') {
             <p role="status">Consultando el estado de la solicitud…</p>
@@ -131,11 +127,10 @@
               <summary>Términos y condiciones de cancelación</summary>
               <ul>
                 <li>Como inquilino podés solicitar la cancelación en cualquier momento antes de la fecha de ingreso, incluso el día anterior. Si faltan menos de {{ politica.diasDevolucionParcial }} días, no hay devolución. Desde la fecha de ingreso no se permite cancelar; podés abrir un reclamo. Se cuentan días calendario de Argentina.</li>
-                <li>Podés solicitar la cancelación con cualquier medio de pago admitido para reservar. Las tarjetas y el dinero en cuenta utilizan el mismo circuito de devolución por Mercado Pago. Si falta el medio del pago o Mercado Pago rechaza definitivamente la devolución, administración coordina una transferencia.</li>
+                <li>Las devoluciones con dinero en cuenta se gestionan por Mercado Pago.</li>
                 <li>Si solicita el inquilino, se devuelve el {{ politica.porcentajeTotal }} % del importe pagado cuando faltan {{ politica.diasDevolucionTotal }} días o más al enviar la solicitud.</li>
                 <li>Si al solicitar faltan al menos {{ politica.diasDevolucionParcial }} días y menos de {{ politica.diasDevolucionTotal }}, se devuelve el {{ politica.porcentajeParcial }} %. Si faltan menos de {{ politica.diasDevolucionParcial }} días, corresponde el {{ politica.porcentajeFueraDePlazo }} %.</li>
-                <li>El anunciante puede solicitar la cancelación hasta el día anterior al ingreso, inclusive, con devolución del 100 % al inquilino si se aprueba antes de la fecha de ingreso.</li>
-                <li>Un Administrador debe aprobar la solicitud antes de la fecha de ingreso. Si no recibís una respuesta antes de esa fecha, tu solicitud se considera rechazada y la reserva sigue en curso. Se habilitará la opción «Reclamar por demora administrativa» para que informes los inconvenientes generados y administración evalúe el caso. Presentar el reclamo no cancela la reserva ni genera automáticamente devoluciones o compensaciones. El reclamo puede presentarse desde la fecha de ingreso y hasta siete días corridos después de finalizar la estadía.</li>
+                <li>El anunciante puede solicitar la cancelación hasta el día anterior al ingreso, inclusive, con devolución del 100 % al inquilino.</li>
               </ul>
             </details>
             @if (estadoCancelacion() === 'formulario') {
@@ -143,7 +138,7 @@
                 <input type="checkbox" name="aceptaTerminosCancelacion" required
                   [ngModel]="aceptaTerminosCancelacion()" (ngModelChange)="aceptaTerminosCancelacion.set($event)"
                   [disabled]="enviandoCancelacion() || !!bloqueo" />
-                {{ condicionesCancelacion()?.advertencia ? 'Acepto los términos y entiendo que no recibiré una devolución' : 'Acepto los términos y condiciones de cancelación' }}
+                {{ condicionesCancelacion()?.advertencia ? 'Acepto los términos y entiendo que no recibiré una devolución' : 'Acepto los términos y el importe de devolución indicado' }}
               </label>
             }
           }
@@ -152,7 +147,7 @@
             <button type="button" class="acct-btn cancellation-back" [disabled]="enviandoCancelacion()" (click)="cerrarCancelacion()">Volver</button>
             @if (estadoCancelacion() === 'formulario') {
               <button type="submit" class="acct-btn cancellation-submit" [disabled]="enviandoCancelacion() || !!bloqueo || !aceptaTerminosCancelacion() || motivoCancelacion().trim().length < 10">
-                {{ enviandoCancelacion() ? 'Enviando…' : 'Enviar solicitud' }}
+                {{ enviandoCancelacion() ? 'Procesando…' : 'Confirmar cancelación' }}
               </button>
             } @else if (estadoCancelacion() === 'error') {
               <button type="button" class="acct-btn cancellation-submit" (click)="consultarCancelacion()">Reintentar</button>
@@ -428,7 +423,7 @@
   @if (reserva.estado_estadia === 'PENDIENTE_INGRESO' || reserva.estado_estadia === 'INGRESO_NO_VERIFICADO' || ultimoCambio(reserva) || avisosPendientes(reserva).length || recibida || (puedeConsultarCodigo(reserva) && codigos()[reserva.id])) {
     <div class="booking-card__extras">
       @if (recibida) {
-        <p><strong>{{ inquilino(reserva) }}</strong> · {{ reserva.usuario_email ?? reserva.usuario?.email ?? 'Sin email' }} · {{ reserva.usuario_telefono ?? reserva.usuario?.telefono ?? 'Sin teléfono' }}</p>
+        <p><strong>{{ inquilino(reserva) }}</strong> · Contacto por el chat de DEPA</p>
       }
       <!-- Al anunciante solo se le pide el código mientras lo pueda cargar (sin bloqueo ni decisión sobre el pago). -->
       @if (reserva.estado_estadia === 'PENDIENTE_INGRESO' && (!recibida || puedeValidarCodigo(reserva))) {

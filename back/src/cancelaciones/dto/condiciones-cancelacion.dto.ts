@@ -31,5 +31,6 @@ export interface CondicionesCancelacionDto {
   advertencia: string | null;
   admiteReembolso: boolean;
   devolucionPorTransferencia: boolean;
+  simulacionTarjetaHabilitada: boolean;
   devolucion: DevolucionCancelacionDto | null;
 }

@@ -39,7 +39,9 @@
                 <app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(reembolso.id)" [etiqueta]="'Ver ' + reembolso.comprobante_nombre" />
               </p>
               <!-- El número de operación y la observación que cargó el admin con el comprobante. -->
-              @if (reembolso.referencia_externa) {
+              @if (reembolso.referencia_externa?.startsWith('SIMULADO:tarjeta:')) {
+                <p class="refund-threads__detail">Devolución simulada. No se transfirió dinero.</p>
+              } @else if (reembolso.referencia_externa) {
                 <p class="refund-threads__detail">Número de operación: {{ reembolso.referencia_externa }}</p>
               }
               @if (reembolso.observacion_transferencia) {
@@ -206,23 +208,41 @@
             <span>Datos del pago</span
             ><strong class="payment-status">{{ estadoPagoMercado(item) }}</strong>
           </div>
+          @let datosPago = pago();
+          @let monedaPago = datosPago?.currency ?? item.moneda_contratada ?? 'ARS';
           <dl>
             <div>
-              <dt>Total</dt>
-              <dd class="total">
-                {{ monto(pago()?.amount ?? item.monto_pago, pago()?.currency ?? item.moneda_contratada ?? 'ARS') }}
+              <dt>{{ datosPago?.approved_at || datosPago?.status === 'approved' || datosPago?.devolucion ? 'Total pagado' : 'Importe de la reserva' }}</dt>
+              <dd [class.total]="!datosPago?.devolucion">
+                {{ monto(datosPago?.amount ?? item.monto_pago, monedaPago) }}
               </dd>
             </div>
+            @if (datosPago?.devolucion; as devolucion) {
+              <div>
+                <dt>Total reembolsado</dt>
+                <dd>{{ monto(devolucion.reembolsado, monedaPago) }}</dd>
+              </div>
+              @if (devolucion.simulado > 0) {
+                <div>
+                  <dt>Devolución simulada</dt>
+                  <dd>{{ monto(devolucion.simulado, monedaPago) }}</dd>
+                </div>
+              }
+              <div>
+                <dt>Total sin devolver</dt>
+                <dd class="total">{{ monto(devolucion.sinDevolver, monedaPago) }}</dd>
+              </div>
+            }
             <div>
               <dt>Medio</dt>
               <dd>{{ medioPago() }}</dd>
             </div>
             <div>
-              <dt>Operación</dt>
+              <dt>Operación del pago</dt>
               <dd>{{ pago()?.payment_id ?? 'Pendiente de asignación' }}</dd>
             </div>
             <div>
-              <dt>Fecha</dt>
+              <dt>Fecha del pago</dt>
               <dd>{{ fechaHora(pago()?.approved_at ?? pago()?.created_at) }}</dd>
             </div>
             @if (cuitAnunciante(); as cuit) {
@@ -265,10 +285,10 @@
           <div>
             <span class="eyebrow">Comunicación de la reserva</span>
             <h2>Contactá a {{ nombreContacto() }}</h2>
-            @if (accesoLimitado()) {
-              <p>Podés comunicarte con la otra persona por el chat de DEPA.</p>
-            } @else if (contactoSuspendido()) {
+            @if (contactoSuspendido()) {
               <p>Esta cuenta fue dada de baja. Para otras gestiones, contactá a soporte.</p>
+            } @else if (!esInquilino() || accesoLimitado()) {
+              <p>Podés comunicarte con la otra persona por el chat de DEPA.</p>
             } @else {
               <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
             }
@@ -282,15 +302,17 @@
             >
               Mensaje por DEPA
             </button>
+            @if (whatsappUrl()) {
             <button
               type="button"
               class="acct-btn whatsapp-btn"
-              [disabled]="!whatsappUrl()"
               (click)="abrirConfirmacionWhatsapp()"
             >
               Continuar por WhatsApp
             </button>
+            }
           </div>
+          @if (whatsappUrl()) {
           <div class="safety-notice">
             <strong>Te recomendamos conversar dentro de DEPA.</strong>
             <span
@@ -299,6 +321,7 @@
               allí.</span
             >
           </div>
+          }
         </section>
       }
     }

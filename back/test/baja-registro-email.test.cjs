@@ -28,6 +28,7 @@ const accionesCorreo = {
   '/verificar-cuenta': 'verificacion',
   '/confirmar-baja': 'baja',
   '/reactivar-cuenta': 'reactivacion',
+  '/restablecer-contrasena': 'recuperacion',
 };
 const datos = {
   nombre: 'Inquilino', apellido: 'Prueba', telefono: '3515550123',
@@ -44,8 +45,8 @@ const solicitarBaja = sesion => request(servidor()).post('/usuarios/me/baja').se
 const confirmarBaja = token => request(servidor()).post('/usuarios/baja/confirmar').send({ token });
 const solicitarReactivacion = (email = datos.email, constanciaReactivacion) =>
   request(servidor()).post('/auth/reactivar-cuenta/solicitar').send({ email, constanciaReactivacion });
-const confirmarReactivacion = (token, contrasenia = datos.contrasenia) =>
-  request(servidor()).post('/auth/reactivar-cuenta/confirmar').send({ token, contrasenia });
+const confirmarReactivacion = token =>
+  request(servidor()).post('/auth/reactivar-cuenta/confirmar').send({ token });
 const login = () => request(servidor()).post('/auth/login')
   .send({ email: datos.email, contrasenia: datos.contrasenia });
 
@@ -439,7 +440,7 @@ test('los enlaces vuelven al frontend local y la recuperación conserva la cuent
   await request(servidor()).post('/auth/restablecer-contrasenia').send({
     token: enlace, nuevaContrasenia: datos.contrasenia, confirmarContrasenia: datos.contrasenia,
   }).expect(400);
-  await confirmarReactivacion(enlace, 'OtraClave123!').expect(403);
+  await request(servidor()).post('/auth/reactivar-cuenta/confirmar').send({ token: enlace, contrasenia: 'OtraClave123!' }).expect(400);
   assert.equal((await usuarios().findOneByOrFail({ id: original.id })).activa, false);
   const respuesta = await confirmarReactivacion(enlace).expect(200);
   assert.match(respuesta.body.mensaje, /Recuperaste tu cuenta/);
@@ -458,6 +459,15 @@ test('los enlaces vuelven al frontend local y la recuperación conserva la cuent
   const perfil = await request(servidor()).get('/usuarios/me')
     .set('Authorization', `Bearer ${sesionNueva}`).expect(200);
   assert.equal(perfil.body.id, original.id);
+  await request(servidor()).post('/auth/recuperar-contrasenia').send({ email: datos.email }).expect(201);
+  assert.equal(enviados.at(-1).tipo, 'recuperacion');
+  const tokenNuevaClave = tokenCorreo();
+  const nuevaContrasenia = 'NuevaClaveSegura123!';
+  await request(servidor()).post('/auth/restablecer-contrasenia').send({
+    token: tokenNuevaClave, nuevaContrasenia, confirmarContrasenia: nuevaContrasenia,
+  }).expect(201);
+  await login().expect(401);
+  await request(servidor()).post('/auth/login').send({ email: datos.email, contrasenia: nuevaContrasenia }).expect(201);
 });
 
 test('un CUIT/CUIL ocupado revierte la recuperación y permite reintentar con el mismo enlace', async () => {

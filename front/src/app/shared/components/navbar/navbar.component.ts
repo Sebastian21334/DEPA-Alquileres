@@ -14,6 +14,7 @@ import {
   LucideLogOut,
   LucideMap,
   LucideMessageCircle,
+  LucideSearch,
   LucideShieldCheck,
   LucideSquarePlus,
   LucideTrendingUp,
@@ -52,6 +53,7 @@ import { ConversationListComponent } from '../chat-dock/conversation-list.compon
     LucideLogOut,
     LucideMap,
     LucideMessageCircle,
+    LucideSearch,
     LucideShieldCheck,
     LucideSquarePlus,
     LucideTrendingUp,
@@ -86,7 +88,16 @@ export class NavbarComponent {
   protected readonly chatsAbiertos = signal(false);
   protected readonly cargandoChats = signal(false);
   protected readonly errorChats = signal('');
-  protected readonly conversaciones = signal<ConversacionResumen[]>([]);
+  protected readonly busquedaChats = signal('');
+  protected readonly limiteChats = signal(6);
+  protected readonly conversacionesFiltradas = computed(() => {
+    const normalizar = (texto: string) => texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().trim();
+    const busqueda = normalizar(this.busquedaChats());
+    return this.chat.conversaciones().filter(conversacion =>
+      !busqueda || normalizar(nombreInterlocutor(conversacion)).includes(busqueda) ||
+      normalizar(conversacion.ultimoMensaje.publicacion.titulo ?? '').includes(busqueda));
+  });
+  protected readonly conversacionesVisibles = computed(() => this.conversacionesFiltradas().slice(0, this.limiteChats()));
   protected readonly scrolled = signal(false);
   /** Nombre visible en el header; mientras carga /usuarios/me se usa el email del JWT. */
   protected readonly nombreVisible = computed(() => {
@@ -138,7 +149,7 @@ export class NavbarComponent {
     this.errorChats.set('');
     this.chat.listarConversaciones().subscribe({
       next: (lista) => {
-        this.conversaciones.set(lista);
+        this.chat.conversaciones.set(lista);
         this.cargandoChats.set(false);
       },
       error: (err: Error) => {
@@ -149,6 +160,15 @@ export class NavbarComponent {
   }
 
   protected readonly nombreOtro = nombreInterlocutor;
+
+  protected buscarChats(valor: string): void {
+    this.busquedaChats.set(valor);
+    this.limiteChats.set(6);
+  }
+
+  protected verMasChats(): void {
+    this.limiteChats.update(limite => limite + 6);
+  }
 
   protected abrirChat(conv: ConversacionResumen): void {
     this.chat.abrir({
@@ -162,6 +182,7 @@ export class NavbarComponent {
   }
 
   protected logout(): void {
+    this.buscarChats('');
     this.auth.logout();
     this.perfil.limpiar();
     this.chat.cerrarTodos();

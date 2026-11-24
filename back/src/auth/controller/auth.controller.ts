@@ -35,7 +35,7 @@ export class AuthController {
   @HttpCode(200)
   @Header('Cache-Control', 'no-store')
   confirmarReactivacion(@Body() dto: ConfirmarReactivacionDto) {
-    return this.authService.confirmarReactivacion(dto.token, dto.contrasenia);
+    return this.authService.confirmarReactivacion(dto.token);
   }
 
   @Post('login')

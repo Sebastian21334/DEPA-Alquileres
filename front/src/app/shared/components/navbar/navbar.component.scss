@@ -294,6 +294,43 @@
 .drawer__chevron.is-open { transform: rotate(180deg); }
 
 .drawer__chats { padding: 0.2rem 0 0.4rem 0.5rem; }
+.drawer__chat-search {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.75rem;
+  margin: 0.25rem 0.25rem 0.55rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+}
+.drawer__chat-search:focus-within { border-color: var(--color-primary); }
+.drawer__chat-search svg { flex-shrink: 0; }
+.drawer__chat-search input {
+  min-width: 0;
+  width: 100%;
+  padding: 0.65rem 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.drawer__chat-more {
+  display: block;
+  margin: 0.4rem auto;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+.drawer__chat-more:hover { background: #fff4e5; }
+.drawer__chat-more:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
 @media (max-width: 480px) {
   .navbar__avatar--placeholder { display: none; }

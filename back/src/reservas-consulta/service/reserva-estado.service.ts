@@ -14,7 +14,7 @@ export const MAX_INTENTOS_CODIGO = 5;
 export class ReservaEstadoService {
   constructor(private readonly publicaciones: PublicacionesService, private readonly catalogos: CatalogosService) {}
 
-  prepararRespuesta(reserva: Reserva): ReservaRespuestaDto {
+  prepararRespuesta(reserva: Reserva, incluirContactoInquilino = false): ReservaRespuestaDto {
     if (reserva.publicacion) {
       reserva.publicacion = this.publicaciones.prepararRespuesta(reserva.publicacion);
     }
@@ -26,11 +26,19 @@ export class ReservaEstadoService {
       reserva.fecha_resolucion_liquidacion = liquidacion?.fecha_resolucion ?? null;
     }
     delete reserva.liquidacion;
-    return Object.assign(reserva, {
+    const respuesta = Object.assign({ ...reserva }, {
       estado_estadia: this.calcularEstadoEstadia(reserva),
       fin_plazo_reclamo: this.finPlazoReclamo(reserva),
       intentos_codigo_restantes: this.intentosCodigoRestantes(reserva),
     });
+    if (incluirContactoInquilino) return respuesta;
+
+    respuesta.usuario_email = null;
+    respuesta.usuario_telefono = null;
+    if (respuesta.usuario) {
+      respuesta.usuario = { ...respuesta.usuario, email: null, email_historico: null, telefono: '' };
+    }
+    return respuesta;
   }
 
   intentosCodigoRestantes(reserva: Pick<Reserva, 'intentos_codigo'>): number {
