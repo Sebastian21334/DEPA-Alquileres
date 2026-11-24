@@ -38,11 +38,17 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
   `);
   const repository = new PublicacionesRepository(source.getRepository(Publicacion), source.getRepository(Reserva));
   const correos = [];
+  const reactivaciones = [];
+  const publicadas = [];
   const servicio = new PublicacionesService(
     repository,
     catalogosDePrueba(),
     undefined,
-    { enviarBajaPublicacion: async (destinatario, titulo, motivo) => { correos.push({ destinatario, titulo, motivo }); } },
+    {
+      enviarBajaPublicacion: async (destinatario, titulo, motivo) => { correos.push({ destinatario, titulo, motivo }); },
+      enviarReactivacionPublicacion: async (destinatario, titulo) => { reactivaciones.push({ destinatario, titulo }); },
+      enviarPublicacionActiva: async (destinatario, titulo, id) => { publicadas.push({ destinatario, titulo, id }); },
+    },
     { datosContacto: anunciante => ({ email: anunciante?.usuario?.email }) },
   );
   const bloqueados = new Set();
@@ -262,10 +268,15 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
 
     assert.equal((await request('/administracion/999/reactivar', 9, 'PATCH')).status, 404);
     assert.equal((await request('/administracion/invalido/reactivar', 9, 'PATCH')).status, 400);
+    // Solo las reactivaciones confirmadas avisan al dueño; los rechazos no mandan correo.
+    assert.deepEqual(reactivaciones, ['Reactivar con foto', 'Pausada con foto', 'Reactivar sin foto']
+      .map(titulo => ({ destinatario: 'dueno@example.invalid', titulo })));
 
     const activadaPorDueno = await request('/40', 2, 'PATCH', { activa: true });
     assert.equal(activadaPorDueno.status, 200);
     assert.deepEqual(await estadoDe(40), { activa: true, eliminada: false, motivo_baja_admin: null });
+    // Volver a activar una publicación que ya tenía fotos es decisión del dueño: no se le avisa.
+    assert.deepEqual(publicadas, []);
     assert.ok((await feed()).includes(40));
     assert.ok(ids(await administracion('?estado=activas&limite=100')).includes(40));
     assert.ok(!ids(await administracion('?estado=inactivas&limite=100')).includes(40));
@@ -278,6 +289,7 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     assert.deepEqual(simultaneas.map(r => r.status).sort(), [200, 409]);
     assert.deepEqual(await estadoDe(60), { activa: false, eliminada: false, motivo_baja_admin: null });
     assert.equal(correos.length, 5);
+    assert.equal(reactivaciones.length, 4);
   });
 
   await t.test('mis publicaciones: pagina y busca las vigentes y sirve la papelera simple', async () => {
@@ -334,6 +346,16 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     assert.equal((await request(`/mias/paginadas?q=${'a'.repeat(201)}`, 2)).status, 400);
     assert.equal((await request('/mias/papelera', undefined)).status, 401);
     assert.equal((await request('/mias/papelera', 1)).status, 403);
+  });
+
+  await t.test('la primera foto publica y avisa al dueño una sola vez aunque lleguen dos a la vez', async () => {
+    await db.exec(`INSERT INTO publicacion (id_publicacion,titulo,descripcion,fecha_publicacion,precio,direccion,cantidad_ambientes,superficie,id_anunciante,activa,eliminada)
+      VALUES (95,'Recién creada','Prueba',CURRENT_DATE,100,'Calle 9',1,30,3,false,false)`);
+    // Las dos subidas leen la galería vacía antes de guardar su foto.
+    const lecturas = await Promise.all([servicio.buscarPorId(95), servicio.buscarPorId(95)]);
+    await Promise.all(lecturas.map(publicacion => servicio.activar(publicacion)));
+    assert.equal((await estadoDe(95)).activa, true);
+    assert.deepEqual(publicadas, [{ destinatario: 'otro@example.invalid', titulo: 'Recién creada', id: 95 }]);
   });
 });
 

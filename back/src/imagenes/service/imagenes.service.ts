@@ -6,16 +6,23 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PreparacionImagenesService } from '../../almacenamiento/service/preparacion-imagenes.service';
 import { IMAGENES_REPOSITORY } from '../repository/imagenes.repository.interface';
 import type { IImagenesRepository } from '../repository/imagenes.repository.interface';
+import type { Imagen } from '../entity/imagen.entity';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 
+/** Tope de fotos por publicación; el front aplica el mismo en el alta y en la edición. */
+export const MAX_IMAGENES_PUBLICACION = 15;
+const MENSAJE_TOPE_IMAGENES = `Una publicación puede tener hasta ${MAX_IMAGENES_PUBLICACION} fotos. Borrá alguna antes de subir otra.`;
+
 @Injectable()
 export class ImagenesService {
+  private readonly logger = new Logger(ImagenesService.name);
   constructor(@Inject(IMAGENES_REPOSITORY) private readonly imagenesRepo: IImagenesRepository, private readonly publicacionesService: PublicacionesService, private readonly almacenamientoService: AlmacenamientoService, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
   /** Procesa una imagen, la guarda en Azure y registra su URL en la base. */
@@ -25,6 +32,8 @@ export class ImagenesService {
       anuncianteQueOpera.idUsuario,
       'No podés subir imágenes a una publicación que no es tuya',
     );
+    // Corte temprano: una foto que no entra no se procesa ni se sube a Azure.
+    if ((publicacion.imagenes?.length ?? 0) >= MAX_IMAGENES_PUBLICACION) throw new BadRequestException(MENSAJE_TOPE_IMAGENES);
 
     // Validar el contenido real evita aceptar archivos disfrazados con un mimetype de imagen.
     let bufferProcesado: Buffer;
@@ -47,11 +56,21 @@ export class ImagenesService {
       publicacion,
     });
 
-    const guardada = await this.imagenesRepo.conTransaccion(async (imagenes, transaccion) => {
-      await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion, false);
-      nuevaImagen.orden = (await imagenes.buscarUltimoOrden(idPublicacion)) + 1;
-      return imagenes.guardar(nuevaImagen);
-    });
+    let guardada: Imagen;
+    try {
+      guardada = await this.imagenesRepo.conTransaccion(async (imagenes, transaccion) => {
+        await this.publicacionesService.bloquearParaModificacion(idPublicacion, transaccion, false);
+        // Con la publicación bloqueada, dos subidas simultáneas no pueden pasar juntas el tope.
+        if ((await imagenes.buscarPorPublicacion(idPublicacion)).length >= MAX_IMAGENES_PUBLICACION) throw new BadRequestException(MENSAJE_TOPE_IMAGENES);
+        nuevaImagen.orden = (await imagenes.buscarUltimoOrden(idPublicacion)) + 1;
+        return imagenes.guardar(nuevaImagen);
+      });
+    } catch (error) {
+      // La foto ya está en Azure: si no quedó registrada, se borra para no dejarla huérfana.
+      try { await this.almacenamientoService.eliminarImagenPropia(url); }
+      catch { this.logger.warn(`No se pudo eliminar una foto no registrada de la publicación ${idPublicacion}`); }
+      throw error;
+    }
     // Con la primera imagen la publicación cumple la regla y pasa a estar visible.
     await this.publicacionesService.activar(publicacion);
     return guardada;

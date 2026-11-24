@@ -15,6 +15,7 @@ function signal(value) {
 
 function escenario() {
   const peticiones = [];
+  const subidas = [];
   const fotos = [1, 2, 3, 4].map(id => ({ id, orden: id - 1, url: `${id}.jpg` }));
   const formulario = { form: { disabled: false }, cargarCatalogos: () => of([]), cargar() {} };
   const dependencias = {
@@ -30,6 +31,11 @@ function escenario() {
         peticiones.push({ ids: [...ids], respuesta });
         return respuesta;
       },
+      subirImagen(id, archivo) {
+        assert.equal(id, 7);
+        subidas.push(archivo.name);
+        return of({ id: 100 + subidas.length, orden: 3 + subidas.length, url: `${archivo.name}.jpg` });
+      },
     },
   };
   const cache = new Map();
@@ -41,7 +47,7 @@ function escenario() {
     const contexto = { exports: {}, require(modulo) {
       if (modulo === '@angular/core') return { Component: () => clase => clase, signal, inject: token => dependencias[token] ?? {} };
       if (modulo === 'rxjs') return require('rxjs');
-      if (modulo.endsWith('/orden-imagenes')) return cargar(path.resolve(path.dirname(archivo), `${modulo}.ts`));
+      if (modulo.endsWith('/orden-imagenes') || modulo.endsWith('/imagenes-publicacion')) return cargar(path.resolve(path.dirname(archivo), `${modulo}.ts`));
       return new Proxy({}, { get: (_, nombre) => nombre });
     } };
     vm.runInNewContext(codigo, contexto, { filename: archivo });
@@ -55,8 +61,24 @@ function escenario() {
     peticion.respuesta.next(peticion.ids.map((id, orden) => ({ ...fotos.find(foto => foto.id === id), orden })));
     peticion.respuesta.complete();
   }
-  return { componente, peticiones, confirmar, ids: () => Array.from(componente.images(), foto => foto.id) };
+  return { componente, peticiones, subidas, confirmar, ids: () => Array.from(componente.images(), foto => foto.id) };
 }
+
+test('al editar se respeta el tope de 15 fotos y se avisa qué archivos quedaron afuera', () => {
+  const { componente, subidas, ids } = escenario();
+  const foto = (name, type = 'image/jpeg', size = 1024) => ({ name, type, size });
+  // La publicación ya tiene 4 fotos: de 12 válidas entran 11, y el PDF y la foto de 11 MB se descartan.
+  const validas = Array.from({ length: 12 }, (_, i) => foto(`f${i}`));
+  componente.uploadImages([foto('constancia', 'application/pdf'), foto('pesada', 'image/png', 11 * 1024 * 1024), ...validas]);
+  assert.deepEqual(subidas, validas.slice(0, 11).map(f => f.name));
+  assert.equal(ids().length, 15);
+  assert.equal(componente.imageError(), '2 archivo(s) descartado(s): solo imágenes JPG, PNG, WEBP o HEIC de hasta 10 MB. Máximo 15 imágenes por publicación.');
+  assert.equal(componente.imagesBusy(), false);
+  // Con la galería completa no se sube nada más.
+  componente.uploadImages([foto('extra')]);
+  assert.equal(subidas.length, 11);
+  assert.equal(componente.imageError(), 'Máximo 15 imágenes por publicación.');
+});
 
 test('el movimiento es inmediato aunque el servidor todavía no respondió', () => {
   const { componente, peticiones, confirmar, ids } = escenario();

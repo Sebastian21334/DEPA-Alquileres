@@ -162,26 +162,7 @@
         <!-- 04 -->
         <section class="step" id="fotos" appReveal [class.step--error]="faltanFotos()">
           <h2><span class="step__num">04</span> Fotos de la propiedad *</h2>
-          <label
-            class="drop"
-            [class.is-dragging]="arrastrando()"
-            [class.drop--error]="faltanFotos()"
-            (dragover)="onDragOver($event)"
-            (dragleave)="arrastrando.set(false)"
-            (drop)="onDrop($event)"
-          >
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-              multiple
-              [disabled]="enviando()"
-              (change)="agregarDesdeInput($event)"
-            />
-            <span class="drop__icon"><svg lucideImagePlus [size]="30"></svg></span>
-            <strong>Mostrá lo mejor de tu propiedad</strong>
-            <span>Arrastrá tus fotos acá o elegilas desde tu dispositivo.</span>
-            <span class="drop__btn">Seleccionar fotos</span>
-          </label>
+          <app-carga-fotos [deshabilitado]="enviando()" [error]="faltanFotos()" (elegidas)="agregarImagenes($event)" />
 
           @if (imagenes().length) {
             <app-galeria-imagenes [fotos]="imagenes()" [disabled]="enviando()"
@@ -194,7 +175,7 @@
           }
           <p class="acct-hint">
             Es obligatorio subir al menos una. Podés cambiar la portada y el orden antes de publicar. Usá imágenes claras
-            de los ambientes y la fachada (JPG, PNG, WEBP o HEIC, hasta 10 MB).
+            de los ambientes y la fachada.
           </p>
           @if (avisoImagenes()) {
             <p class="acct-hint acct-hint--error">{{ avisoImagenes() }}</p>

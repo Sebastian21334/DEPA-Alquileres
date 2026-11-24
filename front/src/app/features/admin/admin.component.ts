@@ -1,5 +1,4 @@
 import { ConversationPanelComponent, mensajesApelacion } from '../../shared/components/conversation-panel/conversation-panel.component';
-import { AttachmentPreviewComponent } from '../../shared/components/conversation-panel/attachment-preview.component';
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
 import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, PLATFORM_ID, signal, viewChild } from '@angular/core';
@@ -26,8 +25,6 @@ import {
   LucideUserRound,
   LucideCalendarDays,
   LucideClock3,
-  LucidePaperclip,
-  LucideSend,
   LucideReceiptText,
   LucideLockKeyhole,
   LucideInfo,
@@ -115,7 +112,6 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     ClaimHistoryComponent,
     ConversationComposerComponent,
     ConversationPanelComponent,
-    AttachmentPreviewComponent,
     ReembolsoChatComponent,
     CargaComprobanteComponent,
     VerComprobanteComponent,
@@ -144,8 +140,6 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideUserRound,
     LucideCalendarDays,
     LucideClock3,
-    LucidePaperclip,
-    LucideSend,
     LucideReceiptText,
     LucideCircleDollarSign,
     LucideGavel,
@@ -206,8 +200,9 @@ export class AdminComponent {
   protected readonly bloqueoError = signal('');
   protected motivoBloqueo = '';
   protected respuestasApelacion: Record<string, string> = {};
-  protected imagenesApelacion: Record<string, File | null> = {};
-  protected vistasPreviasApelacion: Record<string, string | null> = {};
+  protected imagenesApelacion: Record<string, File[]> = {};
+  /** Valor estable para las apelaciones sin imágenes elegidas. */
+  protected readonly sinImagenes: File[] = [];
   protected readonly usersPage = signal(1);
   protected readonly usersTotal = signal(0);
   protected readonly usersPages = signal(1);
@@ -377,9 +372,6 @@ export class AdminComponent {
   protected titularCbuConfirmado: number | null = null;
 
   constructor() {
-    this.destroyRef.onDestroy(() => {
-      for (const url of Object.values(this.vistasPreviasApelacion)) if (url) URL.revokeObjectURL(url);
-    });
     if (this.isBrowser) {
       this.reload();
       this.loadCatalogs();
@@ -1098,7 +1090,7 @@ export class AdminComponent {
 
   protected cancelarRespuesta(bloqueo: AdminBloqueo): void {
     this.respuestasApelacion[bloqueo.detalle.id] = '';
-    this.quitarImagenApelacion(bloqueo);
+    this.imagenesApelacion[bloqueo.detalle.id] = [];
     this.bloqueadosError.set('');
   }
 
@@ -1115,7 +1107,7 @@ export class AdminComponent {
     if (!texto || texto.length > 2000 || this.busy()) return;
     this.busy.set(`apelacion-${bloqueo.detalle.id}`);
     this.bloqueadosError.set('');
-    this.api.responderApelacion(bloqueo.usuario.id, bloqueo.detalle.id, texto, this.imagenesApelacion[bloqueo.detalle.id])
+    this.api.responderApelacion(bloqueo.usuario.id, bloqueo.detalle.id, texto, this.imagenesApelacion[bloqueo.detalle.id]?.[0])
       .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.busy.set(null);
@@ -1127,35 +1119,6 @@ export class AdminComponent {
           this.bloqueadosError.set(error.message);
         },
       });
-  }
-  protected enviarApelacionConEnter(evento: Event, bloqueo: AdminBloqueo): void {
-    const tecla = evento as KeyboardEvent;
-    if (tecla.shiftKey || tecla.isComposing) return;
-    tecla.preventDefault();
-    this.responderApelacion(bloqueo);
-  }
-
-  protected seleccionarImagenApelacion(evento: Event, bloqueo: AdminBloqueo): void {
-    const input = evento.target as HTMLInputElement;
-    const archivo = input.files?.[0];
-    input.value = '';
-    if (!archivo) return;
-    if (!['image/jpeg', 'image/png'].includes(archivo.type) || archivo.size > 5 * 1024 * 1024) {
-      this.bloqueadosError.set('Elegí una imagen JPEG o PNG de hasta 5 MB.');
-      return;
-    }
-    this.bloqueadosError.set('');
-    this.quitarImagenApelacion(bloqueo);
-    this.imagenesApelacion[bloqueo.detalle.id] = archivo;
-    this.vistasPreviasApelacion[bloqueo.detalle.id] = URL.createObjectURL(archivo);
-  }
-
-  protected quitarImagenApelacion(bloqueo: AdminBloqueo): void {
-    const id = bloqueo.detalle.id;
-    const url = this.vistasPreviasApelacion[id];
-    if (url) URL.revokeObjectURL(url);
-    this.vistasPreviasApelacion[id] = null;
-    this.imagenesApelacion[id] = null;
   }
 
   protected approve(request: VerificationRequest): void {

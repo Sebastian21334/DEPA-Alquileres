@@ -6,7 +6,9 @@ import { concatMap, finalize, from, map, of, switchMap } from 'rxjs';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { Imagen } from '../../shared/models/imagen.model';
 import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
+import { CargaFotosComponent } from '../../shared/components/carga-fotos/carga-fotos.component';
 import { moverImagen } from '../../shared/utils/orden-imagenes';
+import { filtrarImagenesPublicacion } from '../../shared/utils/imagenes-publicacion';
 import { ApiError } from '../../core/interceptors/api-error';
 import { ListingService } from '../home/listing.service';
 import {
@@ -37,6 +39,7 @@ import {
     SpinnerComponent,
     LocationPickerComponent,
     SelectorUbicacionComponent,
+    CargaFotosComponent,
     GaleriaImagenesComponent,
   ],
   providers: [PublicacionFormulario],
@@ -178,20 +181,13 @@ export class PublicationFormComponent {
     });
   }
 
-  protected uploadImages(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const archivos = Array.from(input.files ?? []);
-    input.value = '';
+  protected uploadImages(archivos: File[]): void {
     if (this.saving() || this.imagesBusy() || this.imageOrderSaving() || this.form.disabled) return;
-    const validos = archivos.filter((archivo) =>
-      ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(archivo.type) &&
-      archivo.size <= 10 * 1024 * 1024,
-    );
-    this.imageError.set(validos.length < archivos.length
-      ? 'Se descartaron archivos: usá imágenes JPG, PNG, WEBP o HEIC de hasta 10 MB.' : '');
-    if (!validos.length) return;
+    const { aceptadas, aviso } = filtrarImagenesPublicacion(archivos, this.images().length);
+    this.imageError.set(aviso);
+    if (!aceptadas.length) return;
     this.imagesBusy.set(true);
-    from(validos).pipe(
+    from(aceptadas).pipe(
       concatMap((archivo) => this.gestion.subirImagen(this.publicationId, archivo)),
       finalize(() => this.imagesBusy.set(false)),
     ).subscribe({
