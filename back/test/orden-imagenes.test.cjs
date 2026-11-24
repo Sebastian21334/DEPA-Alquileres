@@ -118,6 +118,39 @@ test('el dueño puede ordenar y recibe la galería actualizada', async () => {
   assert.deepEqual(await servicio.ordenar(7, [30, 10], { idUsuario: 88 }), esperado);
 });
 
+test('una publicación admite hasta 15 fotos: el tope se revisa antes de subir y con la galería bloqueada', async () => {
+  const buffer = await sharp({ create: { width: 1, height: 1, channels: 3, background: 'white' } }).png().toBuffer();
+  const quince = Array.from({ length: 15 }, (_, id) => ({ id, orden: id }));
+  const subidas = [];
+  const borradas = [];
+  const servicio = (leidas, actuales) => new ImagenesService({
+    crear: datos => datos,
+    conTransaccion: accion => accion({
+      buscarPorPublicacion: async () => actuales,
+      buscarUltimoOrden: async () => actuales.length - 1,
+      guardar: async imagen => imagen,
+    }, {}),
+  }, {
+    obtenerPropia: async () => ({ id: 7, activa: true, imagenes: leidas }),
+    bloquearParaModificacion: async () => {},
+    activar: async () => {},
+  }, {
+    subir: async () => { subidas.push('nueva.jpg'); return 'nueva.jpg'; },
+    eliminarImagenPropia: async url => { borradas.push(url); },
+  }, preparacionImagenes);
+  const tope = { status: 400, message: 'Una publicación puede tener hasta 15 fotos. Borrá alguna antes de subir otra.' };
+
+  // Con la galería completa se rechaza sin procesar ni subir la foto.
+  await assert.rejects(servicio(quince, quince).subir(7, { idUsuario: 88 }, { buffer }), tope);
+  assert.equal(subidas.length, 0);
+  // Otra subida completó la galería mientras se procesaba esta: se rechaza y la foto ya subida se borra.
+  await assert.rejects(servicio(quince.slice(1), quince).subir(7, { idUsuario: 88 }, { buffer }), tope);
+  assert.deepEqual(borradas, ['nueva.jpg']);
+  // Con lugar, la foto número 15 se guarda al final.
+  assert.equal((await servicio(quince.slice(1), quince.slice(1)).subir(7, { idUsuario: 88 }, { buffer })).orden, 14);
+  assert.deepEqual(borradas, ['nueva.jpg']);
+});
+
 // Ejecuta el mismo movimiento usado por la creación, edición y Mis publicaciones.
 const codigo = fs.readFileSync(path.join(__dirname, '../../front/src/app/shared/utils/orden-imagenes.ts'), 'utf8');
 const contexto = { exports: {} };

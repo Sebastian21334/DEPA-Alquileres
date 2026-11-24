@@ -227,6 +227,28 @@ export class MailService implements IMailService {
     );
   }
 
+  enviarPublicacionActiva(destinatario: string, titulo: string, idPublicacion: number): Promise<void> {
+    return this.enviar(
+      destinatario,
+      'Tu publicación ya está publicada',
+      `<p>Tu publicación <strong>${this.plantillas.escapar(titulo)}</strong> ya está visible en el catálogo de DEPA.</p>
+       <p>Podés editarla, sumar fotos o desactivarla cuando quieras desde Mis publicaciones.</p>
+       ${this.plantillas.boton('Ver publicación', `${this.frontendUrl}/publicaciones/${idPublicacion}`)}`,
+      'Tu publicación ya aparece en el catálogo de DEPA.',
+    );
+  }
+
+  enviarReactivacionPublicacion(destinatario: string, titulo: string): Promise<void> {
+    return this.enviar(
+      destinatario,
+      'Se levantó la baja de tu publicación',
+      `<p>Un administrador levantó la baja de tu publicación <strong>${this.plantillas.escapar(titulo)}</strong>.</p>
+       <p>La publicación sigue inactiva: cuando quieras volver a mostrarla en el catálogo, activala desde Mis publicaciones.</p>
+       ${this.plantillas.boton('Ver mis publicaciones', `${this.frontendUrl}/mis-publicaciones`)}`,
+      'Ya podés volver a activar tu publicación.',
+    );
+  }
+
   enviarConfirmacionBaja(destinatario: string, token: string, origen?: string): Promise<void> {
     const enlace = `${this.frontendDeSolicitud(origen)}/confirmar-baja#${encodeURIComponent(token)}`;
     return this.enviar(

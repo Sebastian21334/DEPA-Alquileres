@@ -6,7 +6,7 @@ const FORMATOS: Record<string, string> = { 'image/jpeg': 'JPEG', 'image/png': 'P
 let siguienteId = 0;
 
 /**
- * Elige imágenes para un formulario (reclamo del inquilino y pedido de reinicio del código).
+ * Elige imágenes para un formulario o un mensaje: reclamos, pedido de reinicio del código y apelaciones de bloqueo.
  * Descarta solo las que no cumplen y avisa cuáles; las elegidas se ven con la galería de publicaciones, sin portada ni orden.
  * El máximo, los tipos y el tamaño son parámetros: el back vuelve a validar y cada uso puede ampliar el límite.
  */
@@ -17,12 +17,12 @@ let siguienteId = 0;
     <span class="carga__etiqueta" [id]="id + '-etiqueta'">{{ etiqueta() }}@if (archivos().length) { <span class="carga__cuenta"> · {{ archivos().length }} de {{ maximo() }}</span> }</span>
     <label class="carga__zona" [class.carga__zona--arrastrando]="arrastrando()" [class.carga__zona--deshabilitada]="bloqueada()"
       (dragover)="arrastrar($event)" (dragleave)="arrastrando.set(false)" (drop)="soltar($event, entrada)">
-      <input #entrada class="carga__entrada" [id]="id" type="file" multiple [accept]="tipos().join(',')" [disabled]="bloqueada()"
+      <input #entrada class="carga__entrada" [id]="id" type="file" [multiple]="!unaSola()" [accept]="tipos().join(',')" [disabled]="bloqueada()"
         [attr.aria-labelledby]="id + '-etiqueta ' + id + '-accion'" [attr.aria-describedby]="id + '-ayuda'"
         (change)="agregar(entrada.files, entrada)" />
       <svg lucideImagePlus [size]="20" aria-hidden="true"></svg>
-      <span class="carga__accion" [id]="id + '-accion'">{{ completa() ? 'Llegaste al máximo de ' + maximo() + ' imágenes' : 'Elegí o arrastrá las imágenes' }}</span>
-      <span class="carga__ayuda" [id]="id + '-ayuda'">{{ completa() ? 'Quitá alguna para elegir otra.' : ayuda() }}</span>
+      <span class="carga__accion" [id]="id + '-accion'">{{ accion() }}</span>
+      <span class="carga__ayuda" [id]="id + '-ayuda'">{{ ayuda() }}</span>
     </label>
     @if (avisos().length) {
       <ul class="carga__error carga__avisos" role="alert">
@@ -52,8 +52,17 @@ export class CargaImagenesComponent {
     return nombres.length > 1 ? `${nombres.slice(0, -1).join(', ')} o ${nombres.at(-1)}` : nombres.join('');
   });
   protected readonly tamano = computed(() => `${Math.round(this.maxBytes() / 1024 / 1024)} MB`);
-  protected readonly ayuda = computed(() => `${this.formatos()}, hasta ${this.tamano()} cada una, máximo ${this.maximo()}`);
+  /** Con una sola imagen (apelaciones o el último lugar de un reclamo) los textos van en singular. */
+  protected readonly unaSola = computed(() => this.maximo() === 1);
   protected readonly completa = computed(() => this.archivos().length >= this.maximo());
+  protected readonly accion = computed(() => {
+    if (this.completa()) return this.unaSola() ? 'Ya elegiste la imagen' : `Llegaste al máximo de ${this.maximo()} imágenes`;
+    return this.unaSola() ? 'Elegí o arrastrá la imagen' : 'Elegí o arrastrá las imágenes';
+  });
+  protected readonly ayuda = computed(() => {
+    if (this.completa()) return this.unaSola() ? 'Quitala para elegir otra.' : 'Quitá alguna para elegir otra.';
+    return this.unaSola() ? `${this.formatos()}, hasta ${this.tamano()}` : `${this.formatos()}, hasta ${this.tamano()} cada una, máximo ${this.maximo()}`;
+  });
   protected readonly bloqueada = computed(() => this.deshabilitado() || this.completa());
   protected readonly fotos = computed(() => this.archivos().map((archivo) => ({ url: this.vistaPrevia(archivo), nombre: archivo.name })));
 
@@ -101,7 +110,9 @@ export class CargaImagenesComponent {
       else if (aceptadas.length >= this.maximo()) sobrantes.push(`«${archivo.name}»`);
       else aceptadas.push(archivo);
     }
-    if (sobrantes.length) avisos.push(`Podés adjuntar hasta ${this.maximo()} imágenes; no se agregaron: ${sobrantes.join(', ')}.`);
+    if (sobrantes.length) avisos.push(this.unaSola()
+      ? `Podés adjuntar una sola imagen; no se agregó: ${sobrantes.join(', ')}.`
+      : `Podés adjuntar hasta ${this.maximo()} imágenes; no se agregaron: ${sobrantes.join(', ')}.`);
     this.avisos.set(avisos);
     if (aceptadas.length !== this.archivos().length) this.archivos.set(aceptadas);
   }
