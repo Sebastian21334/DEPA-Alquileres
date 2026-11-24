@@ -711,7 +711,7 @@ test('administración y el vencimiento no liberan una reserva con reclamo abiert
   const operaciones = new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), {}, reclamos);
   await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /reclamo abierto/i);
   await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'PENDIENTE_PAGO_PROPIETARIO' }, 3), /reclamo abierto/i);
-  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /reclamo abierto/i);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: 'Motivo de prueba' }, 3), /reclamo abierto/i);
   await source.getRepository(Liquidacion).update({ reserva: { id: reserva.id } }, { estado: 'RETENIDO' });
   t.mock.timers.setTime(new Date('2099-01-25T03:00:00Z').getTime());
   await operaciones.avisarLiquidacionesDisponibles(new Date());
@@ -780,6 +780,183 @@ test('la migración del motivo lo toma del reembolso, ignora los textos por defe
   } finally {
     await anterior.close();
   }
+});
+
+test('la migración repara los nombres de archivo leídos como latin1, conserva los bien guardados y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261124-nombres-archivos-utf8.sql'), 'utf8');
+  // Así quedaban: los bytes UTF-8 del nombre leídos uno por uno como latin1.
+  const roto = nombre => Buffer.from(nombre, 'utf8').toString('latin1');
+  const anterior = new PGlite();
+  try {
+    await anterior.exec(`CREATE TABLE reembolso (id_reembolso integer PRIMARY KEY, comprobante_nombre varchar(255));
+      CREATE TABLE reclamo_evidencia (id_evidencia integer PRIMARY KEY, nombre_archivo varchar(255) NOT NULL);
+      CREATE TABLE liquidacion (id_liquidacion integer PRIMARY KEY, pagos_anunciante jsonb);`);
+    await anterior.query('INSERT INTO reembolso VALUES (1, $1), (2, $2), (3, NULL)', [roto('DEPA — Reparto de tareas.pdf'), 'Seña ya bien guardada.pdf']);
+    await anterior.query('INSERT INTO reclamo_evidencia VALUES (1, $1), (2, $2)', [roto('Baño sin agua.png'), 'Recibo — correcto.png']);
+    await anterior.query('INSERT INTO liquidacion VALUES (1, $1), (2, NULL), (3, $2)', [
+      JSON.stringify([{ importe: 10, comprobanteNombre: roto('Señal — banco.pdf') }, { importe: 5, comprobanteNombre: null }, { importe: 1 }]),
+      JSON.stringify([]),
+    ]);
+    const nombres = async () => [
+      ...(await anterior.query('SELECT comprobante_nombre AS n FROM reembolso ORDER BY id_reembolso')).rows.map(fila => fila.n),
+      ...(await anterior.query('SELECT nombre_archivo AS n FROM reclamo_evidencia ORDER BY id_evidencia')).rows.map(fila => fila.n),
+      ...(await anterior.query('SELECT pagos_anunciante AS n FROM liquidacion ORDER BY id_liquidacion')).rows.map(fila => fila.n),
+    ];
+    const esperado = [
+      'DEPA — Reparto de tareas.pdf', 'Seña ya bien guardada.pdf', null,
+      'Baño sin agua.png', 'Recibo — correcto.png',
+      [{ importe: 10, comprobanteNombre: 'Señal — banco.pdf' }, { importe: 5, comprobanteNombre: null }, { importe: 1 }], null, [],
+    ];
+    await anterior.exec(migracion);
+    assert.deepEqual(await nombres(), esperado);
+    await anterior.exec(migracion);
+    assert.deepEqual(await nombres(), esperado);
+  } finally {
+    await anterior.close();
+  }
+});
+
+function operacionesLiquidacion() {
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  const { almacenamiento } = almacenamientoDePrueba();
+  return new OperacionesLiquidacionService(reembolsos, reservas, liquidaciones, catalogosDePrueba(), { buscarCbuValidado: async () => 'cbu-validado' }, reclamos, undefined, almacenamiento);
+}
+
+const filaLiquidacion = async (operaciones, idReserva) =>
+  (await operaciones.listarLiquidacionesAdministracion()).find(fila => fila.id === idReserva);
+
+/** Reserva con el ingreso validado y una devolución parcial de 40 sobre 100 por reclamo, ya aprobada. */
+async function devolucionParcialPorReclamo(t) {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-22T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date('2099-01-10T15:00:00Z'), porcentaje_comision_depa: 10 });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+  const reclamo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'LIMPIEZA', descripcion: 'La casa estaba sucia' }, 1);
+  await reclamos.resolver(reclamo.id, { resolucion: ResolucionReclamo.DEVOLUCION_PARCIAL, importe: 40, observacion: 'Faltó la limpieza' }, 3);
+  return reserva;
+}
+
+test('después de devolverle una parte al inquilino por reclamo, el resto se liquida al anunciante', async (t) => {
+  const reserva = await devolucionParcialPorReclamo(t);
+  const operaciones = operacionesLiquidacion();
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  // Con devolución no se cobra comisión (regla vigente); el pago espera la fecha habitual.
+  assert.deepEqual(
+    [fila.estado_liquidacion, fila.importe_a_liquidar, fila.moneda_liquidacion, fila.importe_comision_depa, fila.importe_neto_anunciante, fila.habilitada_para_pago],
+    ['DEVUELTO_PARCIAL_INQUILINO', 60, 'ARS', 0, 60, false]);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /se habilita el 25\/01\/2099/);
+
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, true);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-anunciante' }, comprobantePdf(), 3);
+  const liquidacion = await liquidacionDe(reserva);
+  assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 60]);
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /ya fue resuelta/);
+});
+
+const desglosePorReserva = async listado => Object.fromEntries((await listado).map(pago => [pago.reservaId, pago.desglose]));
+
+test('el historial desglosa lo que pagó el inquilino, lo devuelto y lo pagado al anunciante', async (t) => {
+  const reserva = await devolucionParcialPorReclamo(t);
+  const operaciones = operacionesLiquidacion();
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
+  // Con devolución no hay comisión: lo devuelto y lo pagado suman lo que pagó el inquilino.
+  const esperado = { [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 40, comisionDepa: 0, pagadoAnunciante: 60 } };
+  assert.deepEqual(await desglosePorReserva(operaciones.listarPagosRegistrados()), esperado);
+  assert.deepEqual(await desglosePorReserva(operaciones.listarPagosDelAnunciante(2)), esperado);
+});
+
+test('la comisión del desglose es lo que quedó entre lo cobrado y lo transferido; sin cobro no hay desglose', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-26T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date('2099-01-10T15:00:00Z'), porcentaje_comision_depa: 10 });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+  // Una liquidación anterior al registro de cobros no tiene de dónde sacar el desglose.
+  const historica = await source.getRepository(Reserva).save({ monto_pago: 100, estado_pago: 'APROBADO', usuario: { id: 1 }, publicacion: { id: 1 } });
+  await source.getRepository(Liquidacion).save({ reserva: historica, estado: 'PAGADO_PROPIETARIO', importe: 100, moneda: 'ARS', fecha_pago_propietario: new Date() });
+  const operaciones = operacionesLiquidacion();
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-comision' }, comprobantePdf(), 3);
+  assert.deepEqual(await desglosePorReserva(operaciones.listarPagosRegistrados()), {
+    [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 0, comisionDepa: 10, pagadoAnunciante: 90 },
+    [historica.id]: null,
+  });
+});
+
+test('devolverle al inquilino lo que quedaba exige motivo y deriva el resto a Reembolsos', async (t) => {
+  const reserva = await devolucionParcialPorReclamo(t);
+  const operaciones = operacionesLiquidacion();
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO' }, 3), /motivo/);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: '   ' }, 3), /motivo/);
+
+  await operaciones.resolverLiquidacion(reserva.id, { estado: 'DEVUELTO_INQUILINO', observacion: 'El anunciante no respondió' }, 3);
+  const ajuste = (await reembolsos.listarPorReserva(reserva.id)).find(item => item.origen === OrigenReembolso.AJUSTE_ADMIN);
+  assert.deepEqual([Number(ajuste.importe), ajuste.estado, ajuste.motivo], [60, 'PENDIENTE', 'El anunciante no respondió']);
+  // Mientras esa devolución está en curso, la reserva sale de Liquidaciones pendientes.
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+});
+
+test('en una cancelación sin devolución, lo retenido se le liquida al anunciante en la fecha habitual', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  const { reserva } = await escenario('2099-01-10');
+  const operaciones = operacionesLiquidacion();
+  // Un día antes del ingreso corresponde el 0 %: se cancela sin devolución.
+  assert.equal((await confirmarCancelacion(reserva, 1)).estado, 'APROBADA');
+  assert.deepEqual(await reembolsos.listarPorReserva(reserva.id), []);
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.deepEqual([fila.cancelada, fila.estado_liquidacion, fila.importe_a_liquidar, fila.habilitada_para_pago],
+    [true, 'PENDIENTE_PAGO_PROPIETARIO', 100, false]);
+  // Una cancelada no vuelve a esperar el ingreso.
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /circuito de ingreso/);
+
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, true);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-retenido' }, comprobantePdf(), 3);
+  const liquidacion = await liquidacionDe(reserva);
+  assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 100]);
+});
+
+test('una cancelada que quedó en revisión se puede cerrar para pagarle al anunciante', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
+  const { reserva } = await escenario('2099-01-10');
+  const operaciones = operacionesLiquidacion();
+  await confirmarCancelacion(reserva, 1);
+  // Así quedaban las cancelaciones sin devolución antes de este cambio.
+  await source.query("UPDATE liquidacion SET estado = 'EN_REVISION' WHERE id_reserva = $1", [reserva.id]);
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, false);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /todavía no está pendiente/);
+  await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /circuito de ingreso/);
+
+  const reabierta = await operaciones.resolverLiquidacion(reserva.id, { estado: 'PENDIENTE_PAGO_PROPIETARIO', observacion: 'Revisión cerrada' }, 3);
+  assert.equal(reabierta.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
+  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, true);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-revisada' }, comprobantePdf(), 3);
+  assert.equal((await liquidacionDe(reserva)).estado, 'PAGADO_PROPIETARIO');
+});
+
+test('en una cancelación con devolución parcial, lo que no se devolvió se le liquida al anunciante', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-05T15:00:00Z') });
+  const { reserva } = await escenario('2099-01-07');
+  const operaciones = operacionesLiquidacion();
+  await confirmarCancelacion(reserva, 1);
+  // La devolución de la cancelación se procesa sola: con dinero en cuenta la hace Mercado Pago.
+  const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
+  pasarela.consultarPago = async () => ({ id: 'mp-1', status: 'approved', payment_type_id: 'account_money' });
+  assert.equal((await reembolsos.ejecutarCancelacionAutomatica(reembolso.id)).estado, 'APROBADO');
+  await operacionesReembolso.aplicarReembolsoConfirmado(reembolso.id);
+  const devuelto = Number((await reembolsos.buscar(reembolso.id)).importe);
+  assert.ok(devuelto > 0 && devuelto < 100, `devolución parcial: ${devuelto}`);
+
+  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
+  const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.deepEqual([fila.cancelada, fila.estado_liquidacion, fila.importe_a_liquidar, fila.habilitada_para_pago],
+    [true, 'DEVUELTO_PARCIAL_INQUILINO', 100 - devuelto, true]);
+  await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
+  const liquidacion = await liquidacionDe(reserva);
+  assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 100 - devuelto]);
 });
 
 test('el reporte anterior respeta el plazo y la identidad del inquilino', async (t) => {
@@ -1281,7 +1458,8 @@ test('el inquilino puede solicitar el día anterior con advertencia y sin devolu
   const actual = await reservas.obtenerReserva(reserva.id);
   assert.equal(actual.cancelada, true);
   assert.equal(actual.estado_pago, 'APROBADO');
-  assert.equal(actual.estado_liquidacion, 'EN_REVISION');
+  // Sin devolución, lo retenido es del anunciante.
+  assert.equal(actual.estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
 test('desde la medianoche argentina del ingreso se bloquea al inquilino aunque no validó el código', async (t) => {
@@ -1632,7 +1810,7 @@ test('si falla la liberación de fechas se revierte la aprobación y se puede re
   assert.equal(cancelada.cancelada, true);
   assert.equal(cancelada.cancelada_por, 'INQUILINO');
   const liquidacion = await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } });
-  assert.equal(liquidacion.estado, 'EN_REVISION');
+  assert.equal(liquidacion.estado, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
 test('si falla la aprobación no queda una devolución sin decisión', async () => {
@@ -2502,7 +2680,8 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     await request(http).patch(rutaLiquidacion).set('Authorization', admin).send({ estado: 'PAGADO_PROPIETARIO', referencia: 'pago-prueba' }).expect(400);
     await pagar({ referencia: 'pago-prueba' }, null).expect(400);
     await pagar({}, 'banco.pdf', tenant).expect(403);
-    await pagar({ referencia: 'pago-prueba', observacion: 'Transferencia acreditada' }).expect(200);
+    // El nombre llega en UTF-8, como lo manda el navegador, y se guarda sin romper la «ñ» ni la «—».
+    await pagar({ referencia: 'pago-prueba', observacion: 'Transferencia acreditada' }, 'Señal — banco.pdf').expect(200);
     await request(http).get(historialAnunciante).expect(401);
     await request(http).get(historialAnunciante).set('Authorization', tenant).expect(200, []);
     await request(http).get(historialAnunciante).set('Authorization', ajeno).expect(200, []);
@@ -2516,7 +2695,9 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.ok(historialAdministracion.body.some(item => item.reservaId === ingreso.id));
     assert.deepEqual(historialPropio, [{
       id: idPago, reservaId: ingreso.id, publicacion: 'Publicación de prueba', fecha: fechaPago, importe: 100, moneda: 'ARS',
-      referencia: 'pago-prueba', observacion: 'Transferencia acreditada', indice: 0, comprobante: 'banco.pdf',
+      referencia: 'pago-prueba', observacion: 'Transferencia acreditada', indice: 0, comprobante: 'Señal — banco.pdf',
+      // Esta reserva no tiene un cobro de Mercado Pago registrado.
+      desglose: null,
     }]);
     // El enlace firmado del comprobante, solo para el admin y el anunciante; la URL privada no viaja.
     const rutaComprobante = `/reservas/${ingreso.id}/liquidacion/pagos/0/comprobante`;

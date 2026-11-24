@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { NOMBRE_ARCHIVO_UTF8 } from '../../almacenamiento/comprobante.interceptor';
 import { JwtAuthGuard, PermitirAccesoLimitado } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
@@ -24,6 +25,7 @@ import { ReclamarFaltanteCancelacionDto } from '../dto/reclamo-faltante-cancelac
 
 // Mismo límite al crear el reclamo y en cada mensaje del chat; el servicio controla el total del reclamo.
 const EVIDENCIAS_INTERCEPTOR = FilesInterceptor('evidencias', MAX_IMAGENES_POR_ENVIO, {
+  ...NOMBRE_ARCHIVO_UTF8,
   limits: { fileSize: MAX_BYTES_IMAGEN },
 });
 

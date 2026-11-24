@@ -78,6 +78,7 @@ function liquidacionesService() {
     },
     registrarRetencion: async (reserva) => reserva.liquidacion,
     registrarValidacionCodigo: async (reserva) => reserva.liquidacion,
+    admitePagoAlAnunciante: (estado) => ['PENDIENTE_PAGO_PROPIETARIO', 'DEVUELTO_PARCIAL_INQUILINO'].includes(estado),
   };
 }
 
@@ -97,6 +98,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
   const reembolsos = {
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => pago,
+    tieneDevolucionEnCurso: async () => false,
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
     crearSolicitud: async (datos) => {
@@ -114,7 +116,7 @@ test('DEVUELTO_INQUILINO devuelve el saldo completo aunque el DTO traiga otro im
     liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
-  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', importe: 1 }, 7);
+  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', importe: 1, observacion: 'Motivo de prueba' }, 7);
 
   assert.equal(solicitudCreada.importe, 100);
   assert.equal(solicitudCreada.tipo, 'TOTAL');
@@ -130,6 +132,7 @@ test('deriva la liquidación y conserva el estado de revisión hasta confirmar l
   const reembolsos = {
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
+    tieneDevolucionEnCurso: async () => false,
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
     crearSolicitud: async () => ({ id: 1, estado: 'PENDIENTE', importe: 30 }),
@@ -148,7 +151,7 @@ test('deriva la liquidación y conserva el estado de revisión hasta confirmar l
     liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
-  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_PARCIAL_INQUILINO', importe: 30 }, 7);
+  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_PARCIAL_INQUILINO', importe: 30, observacion: 'Motivo de prueba' }, 7);
   assert.equal(guardados, 1);
   assert.equal(ejecuciones, 1);
   assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
@@ -163,6 +166,7 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
   const reembolsos = {
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
+    tieneDevolucionEnCurso: async () => false,
     listarPorReserva: async () => [],
     saldoReembolsable: () => 100,
     crearSolicitud: async (datos) => ({ id: 7, estado: 'PENDIENTE', importe: datos.importe }),
@@ -174,7 +178,7 @@ test('permite resolver la devolución de un pago tardío con reserva cancelada e
     liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
-  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
+  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', observacion: 'Motivo de prueba' }, 7);
 
   assert.equal(reserva.cancelada, true);
   assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
@@ -188,6 +192,7 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
   const reembolsos = {
     aplicarConfirmado: async (id, aplicar) => aplicar({ id }, {}),
     buscarPagoPorReserva: async () => ({ id: 10, amount: 100, amount_refunded: 0, currency: 'ARS' }),
+    tieneDevolucionEnCurso: async () => false,
     listarPorReserva: async () => [
       { id: 8, estado: 'FALLIDO', importe: 100, origen: 'AJUSTE_ADMIN', referencia_interna: 'liq:1', idempotency_key: 'liq:1:t:10000' },
     ],
@@ -201,8 +206,17 @@ test('reutiliza un reembolso FALLIDO de la misma liquidación en lugar de crear 
     liquidacionesService(), catalogosDePrueba(), {}, sinReclamos,
   );
 
-  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO' }, 7);
+  await service.resolverLiquidacion(1, { estado: 'DEVUELTO_INQUILINO', observacion: 'Motivo de prueba' }, 7);
 
   assert.equal(creados, 0);
   assert.equal(ejecutado, null);
+});
+
+test('el saldo del pago se calcula en centavos, sin colas de coma flotante', () => {
+  const { PagosService } = require('../dist/pagos/service/pagos.service');
+  const saldo = PagosService.prototype.saldoReembolsable;
+  // 1000.1 - 0.3 da 999.8000000000001 en coma flotante, que rompía el cálculo de la comisión.
+  assert.equal(saldo({ amount: '1000.10', amount_refunded: '0.30' }), 999.8);
+  assert.equal(saldo({ amount: 100, amount_refunded: 100 }), 0);
+  assert.equal(saldo({ amount: 100, amount_refunded: null }), 100);
 });

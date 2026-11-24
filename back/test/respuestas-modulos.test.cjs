@@ -77,8 +77,10 @@ test('consultar una solicitud activa conserva las relaciones que cargó el repos
     { proyectarEnReserva: async reserva => reserva }, catalogosDePrueba());
   const servicio = new CancelacionesService({ buscarActiva: async () => solicitud }, reservas, {}, catalogosDePrueba());
   const respuesta = await servicio.consultarActiva(1, 7);
-  assert.deepEqual(respuesta, solicitud);
+  // Del solicitante viaja solo su identidad (id, nombre y apellido); acá el repositorio cargó solo el id.
+  assert.deepEqual(json(respuesta), solicitud);
   assert.equal(Object.hasOwn(respuesta, 'reserva'), false);
+  assert.equal(Object.hasOwn(respuesta, 'decidida_por'), false);
   // Quien no participa de la reserva no puede consultar su solicitud.
   await assert.rejects(servicio.consultarActiva(1, 8), { status: 403 });
 });
