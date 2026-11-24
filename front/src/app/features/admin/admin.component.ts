@@ -17,7 +17,6 @@ import {
   LucideSearch,
   LucideCheck,
   LucideX,
-  LucideCalendarX,
   LucideMessageCircle,
   LucideChevronRight,
   LucideHouse,
@@ -34,7 +33,6 @@ import {
 } from '@lucide/angular';
 import {
   AdminBloqueo,
-  AdminCancellationRequest,
   AdminCatalogItem,
   AdminReembolso,
   AdminResumenReembolsos,
@@ -62,9 +60,9 @@ import { fechaArgentina } from '../../shared/utils/rental-dates';
 import { DesglosePagoComponent } from '../../shared/components/desglose-pago/desglose-pago.component';
 import { formatearImporteConMoneda } from '../../shared/utils/formato-numero';
 import {
-  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
+  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
   FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
-  textosBloqueo, textosCancelacion, textosLiquidacion, textosPagoLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
+  textosBloqueo, textosLiquidacion, textosPagoLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
   tieneDevolucion,
 } from './admin-listas';
 
@@ -88,7 +86,6 @@ const ORDEN_ESTADO_REEMBOLSO: Record<AdminReembolso['estado'], number> = {
 
 const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   resumen: 'Consultá los casos que requieren atención y accedé a cada operación.',
-  cancelaciones: 'Revisá las solicitudes para cancelar reservas y decidí si corresponde aprobarlas.',
   reclamos: 'Consultá los problemas reportados sobre reservas, su evidencia y el historial del caso.',
   reembolsos: 'Gestioná y seguí las devoluciones de dinero a los inquilinos.',
   liquidaciones: 'Registrá transferencias realizadas a anunciantes y revisá las reservas con el pago retenido.',
@@ -132,7 +129,6 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideLockKeyhole,
     LucideInfo,
     LucideLayers3,
-    LucideCalendarX,
     LucideMessageCircle,
     LucideChevronRight,
     LucideHouse,
@@ -156,9 +152,7 @@ export class AdminComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  protected readonly navigation = computed(() => ADMIN_NAVIGATION.map(group => ({
-    ...group, items: group.items.filter(item => item.id !== 'cancelaciones' || this.cancellations().length > 0),
-  })));
+  protected readonly navigation = ADMIN_NAVIGATION;
   protected readonly activeSection = signal<AdminSection>('resumen');
   protected readonly sectionDescription = computed(() => SECTION_DESCRIPTIONS[this.activeSection()]);
   protected readonly historialLiquidaciones = signal<AdminPagoLiquidacion[]>([]);
@@ -228,12 +222,6 @@ export class AdminComponent {
   protected resolucionReclamo: NonNullable<Reclamo['resolucion']> = 'SIN_DEVOLUCION';
   protected importeReclamo: number | null = null;
   protected observacionReclamo = '';
-  protected readonly cancellations = signal<AdminCancellationRequest[]>([]);
-  private readonly dialogoAprobacion = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoAprobacion');
-  protected readonly solicitudPorAprobar = signal<AdminCancellationRequest | null>(null);
-  protected readonly aprobandoCancelacion = signal(false);
-  protected readonly errorAprobacion = signal('');
-  protected observacionAprobacion = '';
   protected readonly refunds = signal<AdminReembolso[]>([]);
   private readonly orderedRefunds = computed(() => [...this.refunds()].sort((a, b) =>
     ORDEN_ESTADO_REEMBOLSO[a.estado] - ORDEN_ESTADO_REEMBOLSO[b.estado] ||
@@ -293,11 +281,6 @@ export class AdminComponent {
   );
   /** Todos los casos que esperan una acción, del más antiguo al más nuevo. */
   protected readonly pendingCases = computed(() => [
-    ...this.cancellations().map((item) => ({
-      section: 'cancelaciones' as const, id: item.id, fecha: item.creada_en,
-      label: item.reserva ? `Cancelación · Reserva #${item.reserva.id}` : `Cancelación #${item.id}`,
-      status: 'Pendiente', tone: 'pending', action: 'Revisar',
-    })),
     ...this.openClaims().map((item) => ({
       section: 'reclamos' as const, id: item.id, fecha: item.creado_en,
       label: item.reserva ? `Reclamo · Reserva #${item.reserva.id}` : `Reclamo #${item.id}`,
@@ -332,7 +315,6 @@ export class AdminComponent {
   protected readonly maxReclamosAdmin = 200;
 
   // Búsqueda, filtros y paginación de cada lista (definidos en admin-listas.ts).
-  protected readonly listaCancelaciones = new ListaFiltrable(this.cancellations, { porPagina: 10, textos: textosCancelacion, filtros: FILTROS_CANCELACION });
   protected readonly listaReclamos = new ListaFiltrable(this.claims, { porPagina: 5, textos: textosReclamo, filtros: FILTROS_RECLAMO });
   protected readonly listaReembolsos = new ListaFiltrable(this.orderedRefunds, { porPagina: 10, textos: textosReembolso, filtros: FILTROS_REEMBOLSO });
   protected readonly listaLiquidaciones = new ListaFiltrable(this.liquidacionesOrdenadas, { porPagina: 10, textos: textosLiquidacion, filtros: FILTROS_LIQUIDACION });
@@ -417,7 +399,6 @@ export class AdminComponent {
         this.summaryError.set(true);
         this.errorReclamos.set(error.message);
       }),
-      this.cargarDatoResumen(this.api.listarSolicitudesCancelacion(), (valor) => this.cancellations.set(valor)),
       this.cargarDatoResumen(this.api.listarReembolsos(), (valor) => this.refunds.set(valor)),
       this.cargarDatoResumen(this.api.resumenReembolsos(), (valor) => this.resumenReembolsos.set(valor),
         (error) => {
@@ -474,8 +455,7 @@ export class AdminComponent {
 
   /** Lleva a la página del caso; si la búsqueda o los filtros lo ocultan, los limpia. */
   private mostrarCaso(section: AdminSection, id: number): void {
-    if (section === 'cancelaciones') this.listaCancelaciones.mostrar((item) => item.id === id);
-    else if (section === 'reclamos') this.listaReclamos.mostrar((item) => item.id === id);
+    if (section === 'reclamos') this.listaReclamos.mostrar((item) => item.id === id);
     else if (section === 'reembolsos') this.listaReembolsos.mostrar((item) => item.id === id);
     else if (section === 'liquidaciones') this.listaLiquidaciones.mostrar((item) => item.id === id);
     else if (section === 'verificaciones') this.listaVerificaciones.mostrar((item) => item.id === id);
@@ -486,9 +466,8 @@ export class AdminComponent {
   }
 
   /** Cada contador abre su lista mostrando exactamente los casos que cuenta. */
-  protected abrirDesdeContador(section: 'cancelaciones' | 'reclamos' | 'reembolsos' | 'verificaciones' | 'liquidaciones' | 'bloqueos'): void {
-    if (section === 'cancelaciones') this.listaCancelaciones.limpiar();
-    else if (section === 'verificaciones') this.listaVerificaciones.limpiar();
+  protected abrirDesdeContador(section: 'reclamos' | 'reembolsos' | 'verificaciones' | 'liquidaciones' | 'bloqueos'): void {
+    if (section === 'verificaciones') this.listaVerificaciones.limpiar();
     else if (section === 'reclamos') this.aplicarFiltro(this.listaReclamos, 'estado', 'abiertos');
     else if (section === 'reembolsos') this.aplicarFiltro(this.listaReembolsos, 'estado', 'pendientes');
     else if (section === 'liquidaciones') this.aplicarFiltro(this.listaLiquidaciones, 'situacion', 'habilitado');
@@ -684,47 +663,6 @@ export class AdminComponent {
     });
   }
 
-  protected abrirAprobacionCancelacion(solicitud: AdminCancellationRequest): void {
-    if (!solicitud.devolucion) return;
-    this.solicitudPorAprobar.set(solicitud);
-    this.observacionAprobacion = '';
-    this.errorAprobacion.set('');
-    this.dialogoAprobacion().nativeElement.showModal();
-  }
-
-  protected cerrarAprobacionCancelacion(evento?: Event): void {
-    evento?.preventDefault();
-    if (this.aprobandoCancelacion()) return;
-    this.dialogoAprobacion().nativeElement.close();
-    this.solicitudPorAprobar.set(null);
-  }
-
-  protected confirmarAprobacionCancelacion(): void {
-    const solicitud = this.solicitudPorAprobar();
-    const observacion = this.observacionAprobacion.trim();
-    if (!solicitud?.devolucion || this.aprobandoCancelacion() || observacion.length > 500) return;
-
-    this.errorAprobacion.set('');
-    this.aprobandoCancelacion.set(true);
-    this.api.resolverSolicitudCancelacion(solicitud.reserva?.id ?? 0, solicitud.id, 'APROBADA', observacion || undefined)
-      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.aprobandoCancelacion.set(false)))
-      .subscribe({
-        next: ({ reembolso }) => {
-          this.aprobandoCancelacion.set(false);
-          this.cerrarAprobacionCancelacion();
-          this.cancellations.update((items) => items.filter((item) => item.id !== solicitud.id));
-          if (!reembolso) {
-            this.toast.mostrar('Cancelación aprobada sin devolución.', 'exito');
-            return;
-          }
-          this.refunds.update((items) => [reembolso, ...items.filter((item) => item.id !== reembolso.id)]);
-          this.toast.mostrar('Cancelación aprobada. La devolución quedó pendiente en Reembolsos.', 'exito');
-          this.openSection('reembolsos', reembolso.id);
-        },
-        error: (error: Error) => this.errorAprobacion.set(error.message),
-      });
-  }
-
   /** Comprobante elegido para registrar la transferencia del reembolso. */
   protected readonly comprobanteReembolso = signal<File | null>(null);
   protected observacionReembolso = '';
@@ -833,26 +771,6 @@ export class AdminComponent {
           });
         },
       });
-  }
-
-  protected rechazarCancelacion(solicitud: AdminCancellationRequest): void {
-    const observacion = window.prompt('Motivo del rechazo:')?.trim();
-    if (!observacion) return;
-    this.run(
-      `cancellation-${solicitud.id}`,
-      () =>
-        this.api.resolverSolicitudCancelacion(
-          solicitud.reserva?.id ?? 0,
-          solicitud.id,
-          'RECHAZADA',
-          observacion,
-        ),
-      () =>
-        this.cancellations.update((items) =>
-          items.filter((item) => item.id !== solicitud.id),
-        ),
-      'Solicitud de cancelación rechazada.',
-    );
   }
 
   protected abrirGestionReclamo(id: number, accion: 'mensaje' | 'resolver'): void {

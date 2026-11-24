@@ -37,7 +37,7 @@ function escenario(moneda = 'ARS') {
     tipoMoneda: { nombre: moneda },
     modalidad: { permite_reservas_por_fecha: true },
   };
-  const estado = { reservas: [], pagos: [], checkouts: [], alBloquear: () => {}, accesoLimitado: false, inquilinoBloqueado: false };
+  const estado = { reservas: [], pagos: [], checkouts: [], canceladas: [], alBloquear: () => {}, accesoLimitado: false, inquilinoBloqueado: false };
   const cotizacion = {
     id: 10, venta: '1200.000000', tipo: 'blue', proveedor: 'prueba',
     actualizada_fuente_en: new Date(), consultada_en: new Date(),
@@ -63,6 +63,7 @@ function escenario(moneda = 'ARS') {
       return reserva;
     },
     buscarPorId: async (id) => estado.reservas.find(r => r.id === id),
+    buscarCanceladasPorInquilino: async () => estado.canceladas,
   };
   const disponibilidad = {
     verificarDisponibilidad: async () => true,
@@ -89,7 +90,7 @@ function escenario(moneda = 'ARS') {
   );
   const presupuestos = new PresupuestosService(
     { obtenerVigente: async () => ({ ...cotizacion }) },
-    publicaciones, disponibilidad, new JwtService(), config,
+    publicaciones, disponibilidad, new JwtService(), config, reservas,
   );
   const pagos = new OperacionesPagoService(
     presupuestos,
@@ -156,6 +157,19 @@ test('la pausa bloquea cotización y checkout, incluso si se confirma durante la
   e.publicacion.anunciante.actividades_pausadas = true;
   const confirmada = await e.reservas.confirmarPago(e.estado.reservas[0].id, new Date());
   assert.equal(confirmada.estado_pago, 'APROBADO');
+});
+
+test('tres reservas pagadas y canceladas del mismo día impiden cotizar y pagar una cuarta', async () => {
+  const e = escenario();
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  const checkout = { ...solicitud, presupuesto_token: presupuesto.token };
+  // Mientras se pagaba, se confirmó la tercera cancelación que toca el 12/02: el checkout también lo controla.
+  e.estado.canceladas = [['2030-02-08', '2030-02-12'], ['2030-02-12', '2030-02-14'], ['2030-02-11', '2030-02-12']]
+    .map(([fecha_inicio, fecha_fin]) => ({ fecha_inicio, fecha_fin }));
+  const rechazo = { status: 409, message: 'Ya reservaste y cancelaste el 12/02/2030 tres veces en esta publicación. Elegí otras fechas.' };
+  await assert.rejects(e.presupuestos.cotizar(solicitud, USUARIO), rechazo);
+  await assert.rejects(e.pagos.crearCheckout(checkout, USUARIO), rechazo);
+  sinOperaciones(e.estado);
 });
 
 test('bloquear impide nuevos presupuestos y checkout con presupuesto anterior', async () => {
@@ -315,9 +329,38 @@ test(`un pago previo del anunciante bloqueado ${accesoLimitado ? 'se confirma du
   await e.pagos.procesarWebhook({ dataId: '123' });
   assert.equal(reserva.cancelada, !accesoLimitado);
   if (accesoLimitado) assert.equal(reserva.estado_pago, 'APROBADO');
-  else assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  else {
+    assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+    assert.equal(reserva.cancelada_por, 'SISTEMA');
+    assert.match(reserva.motivo_cancelacion, /cuenta del anunciante ya no estaba habilitada/);
+  }
 });
 }
+
+test('al vencer el plazo de pago el sistema cierra la reserva con su motivo, y un pago a tiempo la reactiva', async (t) => {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  await e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO);
+  const [reserva] = e.estado.reservas;
+  e.reservas.reservaRepository.buscarPendientesVencidas = async () => [reserva];
+  const vencimiento = reserva.pago_vencimiento.getTime();
+  t.mock.timers.setTime(vencimiento + 1);
+  assert.equal(await e.reservas.expirarPendientes(), 1);
+  assert.deepEqual([reserva.cancelada, reserva.cancelada_por, reserva.motivo_cancelacion], [true, 'SISTEMA', 'Venció el plazo de pago']);
+  // Un pago aprobado antes del vencimiento que se informa tarde recupera la reserva sin rastros del cierre.
+  await e.reservas.confirmarPago(reserva.id, new Date(vencimiento - 1000));
+  assert.deepEqual([reserva.cancelada, reserva.cancelada_por, reserva.motivo_cancelacion], [false, null, null]);
+});
+
+test('si no se puede iniciar el pago, el sistema cierra la reserva con su motivo', async () => {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  e.pagos.logger = { warn: () => {}, error: () => {} };
+  e.pagos.pasarela.crearCheckout = async () => { throw new Error('Mercado Pago no disponible'); };
+  await assert.rejects(e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO), { status: 503 });
+  const [reserva] = e.estado.reservas;
+  assert.deepEqual([reserva.cancelada, reserva.cancelada_por, reserva.motivo_cancelacion], [true, 'SISTEMA', 'No se pudo iniciar el pago con Mercado Pago']);
+});
 
 test('el bloqueo del inquilino se comprueba antes de guardar un checkout nuevo', async () => {
   const e = escenario();

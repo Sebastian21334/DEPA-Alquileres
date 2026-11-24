@@ -201,20 +201,7 @@ const page = <T>(datos: T[]) => ({
   totalRegistros: datos.length,
 });
 // Cancelaciones de prueba: el envío solo modifica este mapa en memoria.
-const cancelaciones = new Map<number, { id: number; estado: string; motivo: string; creada_en: string }>();
-const solicitudesCancelacionAdmin = [100, 50, 0, null].map((porcentaje, i) => ({
-  id: i + 1,
-  motivo: 'Cambio de planes para la estadía.',
-  estado: 'PENDIENTE',
-  creada_en: new Date().toISOString(),
-  reserva: { ...reservas[i], monto_pago: 75.35 },
-  devolucion: porcentaje === null ? null : {
-    fechaSolicitud: fecha(0), diasAnticipacion: porcentaje === 100 ? 7 : porcentaje === 50 ? 2 : 1,
-    porcentaje, importe: porcentaje === 100 ? 75.35 : porcentaje === 50 ? 37.68 : 0, moneda: 'ARS',
-  },
-}));
-const demorasAdministrativasPreview = params.has('demora') ? [{ solicitudId: 90, reservaId: 90, titulo: 'Departamento luminoso en Villa María', fechaInicio: fecha(0), fechaSolicitud: fecha(-8), reclamoAbierto: false }] : [];
-const reclamosDemoraPreview: { id: number; categoria: string; descripcion: string; estado: string; solicitud_cancelacion_id: number; reserva: { id: number; monto_pago: number; moneda_contratada: string }; inquilino: typeof user; anunciante: typeof user; resolucion: null; importe_reembolso: null; creado_en: string; resuelto_en: null; evidencias: never[]; mensajes: never[] }[] = [];
+const cancelaciones = new Map<number, { id: number; estado: string; motivo: string; creada_en: string; reserva?: (typeof reservas)[number] }>();
 let presupuestosPreview = 0;
 let ordenesPreview = 0;
 const interceptor: HttpInterceptorFn = (req) => {
@@ -251,14 +238,6 @@ const interceptor: HttpInterceptorFn = (req) => {
         emitida_en: new Date().toISOString(), vence_en: new Date(Date.now() + (params.get('pago') === 'vencido' && presupuestosPreview === 1 ? -60000 : 1200000)).toISOString(),
         cotizacion: usd ? cotizacion : null };
     }
-    else if (p === '/reclamos' && req.method === 'POST' && (req.body as { categoria: string }).categoria === 'DEMORA_ADMINISTRATIVA') {
-      const reclamo = { id: 90, categoria: 'DEMORA_ADMINISTRATIVA', descripcion: (req.body as { descripcion: string }).descripcion,
-        estado: 'ABIERTO', solicitud_cancelacion_id: 90, reserva: { id: 90, monto_pago: 75350, moneda_contratada: 'ARS' },
-        inquilino: user, anunciante: user, resolucion: null, importe_reembolso: null, creado_en: new Date().toISOString(), resuelto_en: null, evidencias: [] as never[], mensajes: [] as never[] };
-      reclamosDemoraPreview.push(reclamo);
-      demorasAdministrativasPreview.forEach(item => item.reclamoAbierto = true);
-      body = reclamo;
-    }
     else if (p.endsWith('/visualizacion')) body = { visualizaciones: 126 };
     else if (/^\/reclamos\/cancelacion\/\d+$/.test(p) && req.method === 'POST') {
       const reclamo = { id: 43, reserva: reservas[2], inquilino: user, anunciante: user,
@@ -276,23 +255,11 @@ const interceptor: HttpInterceptorFn = (req) => {
       if (importe) { saldoDevolucionFaltante.enGestion += importe; saldoDevolucionFaltante.importeReclamable -= importe; }
       body = { ...reclamo };
     }
-    else if (/^\/reservas\/\d+\/cancelacion\/\d+$/.test(p) && req.method === 'PATCH') {
-      const id = Number(p.split('/').pop());
-      const indice = solicitudesCancelacionAdmin.findIndex(solicitud => solicitud.id === id);
-      const solicitud = solicitudesCancelacionAdmin[indice];
-      if (!solicitud) return throwError(() => new HttpErrorResponse({ status: 404 }));
-      const datos = req.body as { decision: string };
-      solicitudesCancelacionAdmin.splice(indice, 1);
-      body = { solicitud: { ...solicitud, estado: datos.decision }, reembolso: datos.decision === 'APROBADA' && solicitud.devolucion?.importe
-        ? { id, tipo: solicitud.devolucion.porcentaje === 100 ? 'TOTAL' : 'PARCIAL', origen: 'CANCELACION',
-          importe: solicitud.devolucion.importe, moneda: solicitud.devolucion.moneda, estado: 'PENDIENTE',
-          creado_en: new Date().toISOString(), motivo: solicitud.motivo, reserva: solicitud.reserva }
-        : null };
-    }
     else if (location.pathname === '/mis-reservas' && /^\/reservas\/\d+\/cancelacion$/.test(p) && req.method === 'POST') {
       const id = Number(p.split('/')[2]);
       const datos = req.body as { motivo: string };
-      body = cancelaciones.get(id) ?? { id, estado: 'PENDIENTE', motivo: datos.motivo, creada_en: new Date().toISOString() };
+      // La cancelación se aprueba en el momento, como en el back.
+      body = cancelaciones.get(id) ?? { id, estado: 'APROBADA', motivo: datos.motivo, creada_en: new Date().toISOString(), reserva: reservas.find(reserva => reserva.id === id) };
       cancelaciones.set(id, body);
     }
     else if (location.pathname === '/mis-publicaciones' && /^\/publicaciones\/\d+\/restaurar$/.test(p) && req.method === 'PATCH') {
@@ -339,10 +306,8 @@ const interceptor: HttpInterceptorFn = (req) => {
   else if (p === '/usuarios/administracion')
     body = page([user, { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true }]);
   else if (p === '/publicaciones/administracion') body = page(publicaciones);
-  else if (p === '/reservas/cancelaciones/administracion') body = [...solicitudesCancelacionAdmin];
   else if (/^\/reclamos\/cancelacion\/\d+$/.test(p)) body = { devolucion: saldoDevolucionFaltante, reclamoAbierto: !!reclamosFaltante.length };
-  else if (p === '/reclamos/demoras/mias') body = [...demorasAdministrativasPreview];
-  else if (p === '/reclamos/mios' || p === '/reclamos/administracion') body = [...reclamosFaltante, ...reclamosDemoraPreview];
+  else if (p === '/reclamos/mios' || p === '/reclamos/administracion') body = [...reclamosFaltante];
   else if (p === '/publicaciones/mias') body = publicaciones.map(pub => ({ ...pub }));
   else if (p.startsWith('/publicaciones/anunciante/')) {
     const requestedCount = Number(params.get('publicacionesPerfil') ?? publicaciones.length);
