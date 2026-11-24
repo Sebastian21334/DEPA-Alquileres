@@ -91,7 +91,17 @@ export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
 }
-export type AdminSettlement = Reserva & { fecha_disponible_pago: string | null; porcentaje_comision_depa: number | null; importe_comision_depa: number; importe_neto_anunciante: number };
+/** Reserva por liquidar: el back calcula el importe desde el pago y si ya se le puede pagar al anunciante. */
+export type AdminSettlement = Reserva & {
+  fecha_disponible_pago: string | null;
+  porcentaje_comision_depa: number | null;
+  /** Lo que pagó el inquilino menos lo que ya se le devolvió. */
+  importe_a_liquidar: number;
+  moneda_liquidacion: string;
+  importe_comision_depa: number;
+  importe_neto_anunciante: number;
+  habilitada_para_pago: boolean;
+};
 
 export interface AdminPagoLiquidacion {
   id: string;

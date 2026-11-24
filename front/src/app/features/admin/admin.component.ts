@@ -63,9 +63,10 @@ import { PaginadorComponent } from '../../shared/components/paginador/paginador.
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
 import { fechaArgentina } from '../../shared/utils/rental-dates';
 import {
-  apelacionSinResponder, diasEsperaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
-  FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, reclamoAbierto, reembolsoPendiente,
+  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
+  FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
   textosBloqueo, textosCancelacion, textosLiquidacion, textosPagoLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
+  tieneDevolucion,
 } from './admin-listas';
 
 interface CatalogSection {
@@ -562,7 +563,7 @@ export class AdminComponent {
   }
 
   protected abrirPagoAnunciante(settlement: AdminSettlement): void {
-    if (this.diasEsperaLiquidacion(settlement) !== 0 || settlement.estado_liquidacion === 'EN_REVISION') return;
+    if (!settlement.habilitada_para_pago) return;
     this.pagoAnuncianteSeleccionado.set(settlement);
     this.referenciaPagoAnunciante = '';
     this.observacionPagoAnunciante = '';
@@ -601,8 +602,7 @@ export class AdminComponent {
     const comprobante = this.comprobantePago();
     const referencia = this.referenciaPagoAnunciante.trim();
     const observacion = this.observacionPagoAnunciante.trim();
-    if (!settlement || settlement.estado_liquidacion !== 'PENDIENTE_PAGO_PROPIETARIO' || !this.cbuParaPago() || !comprobante ||
-        this.diasEsperaLiquidacion(settlement) !== 0 ||
+    if (!settlement?.habilitada_para_pago || !this.cbuParaPago() || !comprobante ||
         this.registrandoPagoAnunciante() || referencia.length > 150 || observacion.length > 500) return;
 
     this.errorPagoAnunciante.set('');
@@ -625,6 +625,9 @@ export class AdminComponent {
   }
 
   protected readonly diasEsperaLiquidacion = diasEsperaLiquidacion;
+  protected readonly etiquetaLiquidacion = etiquetaLiquidacion;
+  protected readonly pendienteParaAnunciante = pendienteParaAnunciante;
+  protected readonly tieneDevolucion = tieneDevolucion;
 
   protected cargarHistorialLiquidaciones(): void {
     this.historialRequest?.unsubscribe();
@@ -656,22 +659,24 @@ export class AdminComponent {
   protected confirmarResolucionLiquidacion(): void {
     const resolucion = this.resolucionLiquidacion();
     const motivo = this.motivoResolucion.trim();
-    if (!resolucion || (!resolucion.devolver && !motivo) || motivo.length > 500 || this.resolucionCargando()) return;
+    // Tanto devolver al inquilino como cerrar la revisión exigen dejar el motivo.
+    if (!resolucion || !motivo || motivo.length > 500 || this.resolucionCargando()) return;
     const { reserva, devolver } = resolucion;
-    const estado = devolver ? 'DEVUELTO_INQUILINO'
-      : reserva.codigo_validado_en ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
+    const estado = devolver ? 'DEVUELTO_INQUILINO' : this.estadoAlCerrarRevision(reserva);
     this.resolucionError.set('');
     this.resolucionCargando.set(true);
-    this.api.resolverLiquidacion(reserva.id, estado, undefined, motivo || 'Devolución solicitada desde liquidaciones.').pipe(
+    this.api.resolverLiquidacion(reserva.id, estado, undefined, motivo).pipe(
       takeUntilDestroyed(this.destroyRef),
       finalize(() => this.resolucionCargando.set(false)),
     ).subscribe({
-      next: (actualizada) => {
+      next: () => {
         this.resolucionCargando.set(false);
         this.cerrarResolucionLiquidacion();
-        this.settlements.update(items => estado === 'PENDIENTE_PAGO_PROPIETARIO'
-          ? items.map(item => item.id === reserva.id ? { ...item, ...actualizada } : item)
-          : items.filter(item => item.id !== reserva.id));
+        this.settlements.update(items => items.filter(item => item.id !== reserva.id));
+        // Si sigue pendiente para el anunciante, el back recalcula el importe y si ya se puede pagar.
+        if (estado === 'PENDIENTE_PAGO_PROPIETARIO')
+          this.api.listarLiquidaciones().pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe({ next: (valor) => this.settlements.set(valor), error: () => undefined });
         this.toast.mostrar(devolver ? 'Caso enviado a Reembolsos.' : 'Revisión de liquidación cerrada.', 'exito');
         if (devolver) {
           this.reload();
@@ -931,11 +936,22 @@ export class AdminComponent {
   protected readonly tieneApelacion = tieneApelacion;
   protected readonly apelacionSinResponder = apelacionSinResponder;
 
+  /** Lo que se le liquida al anunciante: lo pagado menos lo que ya se le devolvió al inquilino. */
   protected montoLiquidacion(settlement: AdminSettlement): string {
-    return Number(settlement.monto_pago).toLocaleString('es-AR', {
-      style: 'currency',
-      currency: settlement.moneda_contratada ?? 'ARS',
-    });
+    return this.formatearImporte(settlement.importe_a_liquidar, settlement.moneda_liquidacion);
+  }
+
+  protected montoPagado(settlement: AdminSettlement): string {
+    return this.formatearImporte(settlement.monto_pago, settlement.moneda_liquidacion);
+  }
+
+  /** Al cerrar la revisión, una cancelada o con el ingreso validado queda para pagarle al anunciante. */
+  protected estadoAlCerrarRevision(reserva: AdminSettlement): 'PENDIENTE_PAGO_PROPIETARIO' | 'RETENIDO' {
+    return reserva.codigo_validado_en || reserva.cancelada ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
+  }
+
+  private formatearImporte(importe: number, moneda?: string | null): string {
+    return Number(importe).toLocaleString('es-AR', { style: 'currency', currency: moneda || 'ARS' });
   }
 
   protected guardarComision(): void {

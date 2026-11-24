@@ -32,7 +32,7 @@ test('el vencimiento libera solo ingresos sin código y sin revisión ni devoluc
     codigoValidado: r => !!r.codigo_validado_en,
     codigoBloqueado: r => (r.intentos_codigo ?? 0) >= 5,
   };
-  const reembolsos = { listarPorReserva: async id => id === 4 ? [{ estado: 'PENDIENTE' }] : [] };
+  const reembolsos = { tieneDevolucionEnCurso: async id => id === 4 };
   const operaciones = new OperacionesLiquidacionService(reembolsos, reservaService, liquidaciones, catalogos, {}, { tieneReclamoAbierto: async () => false });
   await operaciones.avisarLiquidacionesDisponibles(new Date('2026-11-21T12:00:00Z'));
   assert.equal(reservas[0].estado_liquidacion, 'PENDIENTE_PAGO_PROPIETARIO');
