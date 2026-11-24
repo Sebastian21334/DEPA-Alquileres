@@ -377,7 +377,6 @@ export class UsuariosService {
         this.catalogosService.codigoEstado('RECLAMO', 'ABIERTO'),
         this.catalogosService.codigoEstado('RECLAMO', 'EN_REVISION'),
       ],
-      cancelacion: this.catalogosService.codigoEstado('SOLICITUD_CANCELACION', 'PENDIENTE'),
       reembolsos: [
         this.catalogosService.codigoEstado('REEMBOLSO', 'PENDIENTE'),
         this.catalogosService.codigoEstado('REEMBOLSO', 'FALLIDO'),

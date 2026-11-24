@@ -329,9 +329,38 @@ test(`un pago previo del anunciante bloqueado ${accesoLimitado ? 'se confirma du
   await e.pagos.procesarWebhook({ dataId: '123' });
   assert.equal(reserva.cancelada, !accesoLimitado);
   if (accesoLimitado) assert.equal(reserva.estado_pago, 'APROBADO');
-  else assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+  else {
+    assert.equal(reserva.estado_liquidacion, 'EN_REVISION');
+    assert.equal(reserva.cancelada_por, 'SISTEMA');
+    assert.match(reserva.motivo_cancelacion, /cuenta del anunciante ya no estaba habilitada/);
+  }
 });
 }
+
+test('al vencer el plazo de pago el sistema cierra la reserva con su motivo, y un pago a tiempo la reactiva', async (t) => {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  await e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO);
+  const [reserva] = e.estado.reservas;
+  e.reservas.reservaRepository.buscarPendientesVencidas = async () => [reserva];
+  const vencimiento = reserva.pago_vencimiento.getTime();
+  t.mock.timers.setTime(vencimiento + 1);
+  assert.equal(await e.reservas.expirarPendientes(), 1);
+  assert.deepEqual([reserva.cancelada, reserva.cancelada_por, reserva.motivo_cancelacion], [true, 'SISTEMA', 'Venció el plazo de pago']);
+  // Un pago aprobado antes del vencimiento que se informa tarde recupera la reserva sin rastros del cierre.
+  await e.reservas.confirmarPago(reserva.id, new Date(vencimiento - 1000));
+  assert.deepEqual([reserva.cancelada, reserva.cancelada_por, reserva.motivo_cancelacion], [false, null, null]);
+});
+
+test('si no se puede iniciar el pago, el sistema cierra la reserva con su motivo', async () => {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  e.pagos.logger = { warn: () => {}, error: () => {} };
+  e.pagos.pasarela.crearCheckout = async () => { throw new Error('Mercado Pago no disponible'); };
+  await assert.rejects(e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO), { status: 503 });
+  const [reserva] = e.estado.reservas;
+  assert.deepEqual([reserva.cancelada, reserva.cancelada_por, reserva.motivo_cancelacion], [true, 'SISTEMA', 'No se pudo iniciar el pago con Mercado Pago']);
+});
 
 test('el bloqueo del inquilino se comprueba antes de guardar un checkout nuevo', async () => {
   const e = escenario();

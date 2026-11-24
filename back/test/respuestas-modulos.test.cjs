@@ -71,11 +71,12 @@ test('el historial de verificación omite secretos aunque el repositorio los hay
 });
 
 test('consultar una solicitud activa conserva las relaciones que cargó el repositorio', async () => {
-  const solicitud = { id: 5, estado: 'PENDIENTE', solicitante: { id: 7 } };
+  const solicitud = { id: 5, estado: 'APROBADA', solicitante: { id: 7 } };
   const repo = { buscarPorId: async () => ({ ...reserva(), usuario: { id: 7 } }) };
   const reservas = new ReservasService({}, repo, {}, {}, publicaciones, {}, {}, estados,
     { proyectarEnReserva: async reserva => reserva }, catalogosDePrueba());
-  const servicio = new CancelacionesService({ buscarActiva: async () => solicitud }, reservas, {}, catalogosDePrueba());
+  // La solicitud aprobada sigue en curso mientras su devolución no se confirmó.
+  const servicio = new CancelacionesService({ buscarActiva: async () => solicitud }, reservas, { tieneDevolucionDeCancelacionActiva: async () => true }, catalogosDePrueba());
   const respuesta = await servicio.consultarActiva(1, 7);
   // Del solicitante viaja solo su identidad (id, nombre y apellido); acá el repositorio cargó solo el id.
   assert.deepEqual(json(respuesta), solicitud);

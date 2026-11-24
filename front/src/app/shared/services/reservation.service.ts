@@ -164,15 +164,6 @@ export interface CondicionesCancelacion {
   };
 }
 
-export interface DemoraAdministrativa {
-  solicitudId: number;
-  reservaId: number;
-  titulo: string;
-  fechaInicio: string | null;
-  fechaSolicitud: string;
-  reclamoAbierto: boolean;
-}
-
 export interface SolicitudCancelacion {
   id: number;
   motivo: string;
@@ -353,10 +344,6 @@ export class ReservationService {
 
   refunds(id: number): Observable<Reembolso[]> {
     return this.http.get<Reembolso[]>(`${this.baseUrl}/${id}/reembolsos`);
-  }
-
-  myAdministrativeDelays(): Observable<DemoraAdministrativa[]> {
-    return this.http.get<DemoraAdministrativa[]>(`${environment.apiUrl}/reclamos/demoras/mias`);
   }
 
   createClaim(payload: { id_reserva: number; categoria: Reclamo['categoria']; descripcion: string; }): Observable<Reclamo> {

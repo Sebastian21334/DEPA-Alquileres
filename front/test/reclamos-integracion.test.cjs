@@ -31,8 +31,6 @@ const { MisReservasComponent } = cargar(path.join(__dirname, '../src/app/feature
 });
 
 for (const caso of [
-  { nombre: 'demora del anunciante', categoria: 'DEMORA_ADMINISTRATIVA', usuario: 2, esperado: 'anunciante' },
-  { nombre: 'demora del inquilino', categoria: 'DEMORA_ADMINISTRATIVA', usuario: 1, esperado: 'inquilino' },
   { nombre: 'faltante del inquilino', categoria: 'OTRO', usuario: 1, esperado: 'inquilino', solicitud_cancelacion_id: 9 },
   { nombre: 'reinicio del código', categoria: 'CODIGO_BLOQUEADO', usuario: 2, esperado: 'anunciante' },
   { nombre: 'problema de la estadía', categoria: 'MANTENIMIENTO', usuario: 1, esperado: 'inquilino' },
@@ -68,23 +66,17 @@ function servicio() {
   return { api: new ReservationService(), llamadas };
 }
 
-test('se conservan las rutas de demora, faltantes y pedido de reinicio', () => {
+test('se conservan las rutas de faltantes y pedido de reinicio', () => {
   const { api, llamadas } = servicio();
-  api.myAdministrativeDelays();
   api.cancellationRefundBalance(42);
   api.claimMissingRefund(42, 'Falta recibir parte del reembolso.');
-  for (const categoria of ['DEMORA_ADMINISTRATIVA', 'CODIGO_BLOQUEADO']) {
-    api.createClaim({ id_reserva: 42, categoria, descripcion: 'Descripción válida del inconveniente.' });
-  }
+  api.createClaim({ id_reserva: 42, categoria: 'CODIGO_BLOQUEADO', descripcion: 'Descripción válida del inconveniente.' });
   assert.deepEqual(llamadas.map(llamada => llamada.url), [
-    'http://api.example.test/reclamos/demoras/mias',
     'http://api.example.test/reclamos/cancelacion/42',
     'http://api.example.test/reclamos/cancelacion/42',
-    'http://api.example.test/reclamos',
     'http://api.example.test/reclamos',
   ]);
-  assert.equal(llamadas[3].body.categoria, 'DEMORA_ADMINISTRATIVA');
-  assert.equal(llamadas[4].body.categoria, 'CODIGO_BLOQUEADO');
+  assert.equal(llamadas[2].body.categoria, 'CODIGO_BLOQUEADO');
 });
 
 test('el chat conserva mensajes de texto y permite imágenes sin texto', () => {

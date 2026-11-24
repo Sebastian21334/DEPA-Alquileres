@@ -5,8 +5,6 @@ const { PagosService } = require('../../dist/pagos/service/pagos.service');
 const { PagosRepository } = require('../../dist/pagos/repository/pagos.repository');
 const { ReclamosLecturaService } = require('../../dist/reclamos/service/reclamos-lectura.service');
 const { ReclamosRepository } = require('../../dist/reclamos/repository/reclamos.repository');
-const { CancelacionesLecturaService } = require('../../dist/cancelaciones/service/cancelaciones-lectura.service');
-const { CancelacionesRepository } = require('../../dist/cancelaciones/repository/cancelaciones.repository');
 const { ReembolsosLecturaService } = require('../../dist/reembolsos/service/reembolsos-lectura.service');
 const { ReembolsosRepository } = require('../../dist/reembolsos/repository/reembolsos.repository');
 
@@ -16,7 +14,6 @@ function operacionesCuentaDePrueba() {
     new ReservasLecturaService(new ReservaRepository()),
     new PagosService(new PagosRepository()),
     new ReclamosLecturaService(new ReclamosRepository()),
-    new CancelacionesLecturaService(new CancelacionesRepository()),
     new ReembolsosLecturaService(new ReembolsosRepository()),
   );
 }
