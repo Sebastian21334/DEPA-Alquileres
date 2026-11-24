@@ -80,6 +80,7 @@ export class UsuariosRepository implements IUsuariosRepository {
         baja_recuperable: false,
         version_sesion: versionSesion,
         token_verificacion: null,
+        token_verificacion_expira: null,
         token_recuperacion: null,
         token_recuperacion_expira: null,
       })
@@ -191,19 +192,23 @@ export class UsuariosRepository implements IUsuariosRepository {
     return usuarios.map(usuario => ({ usuario: { id: usuario.id, nombre: usuario.nombre, apellido: usuario.apellido, email: usuario.email }, historial: usuario.historialBloqueos ?? [] }));
   }
 
-  async guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean> {
+  async guardarTokenVerificacion(id: number, email: string, token: string, expira: Date): Promise<boolean> {
     const resultado = await this.repo.update(
       { id, email, activa: true, bloqueado: false, email_verificado: false },
-      { token_verificacion: token },
+      { token_verificacion: token, token_verificacion_expira: expira },
     );
     return resultado.affected === 1;
   }
 
   async verificarCuenta(token: string): Promise<boolean> {
-    const resultado = await this.repo.update(
-      { token_verificacion: token, activa: true, email_verificado: false },
-      { email_verificado: true, token_verificacion: null },
-    );
+    // La vigencia se controla en el mismo UPDATE que consume el enlace.
+    const resultado = await this.repo.createQueryBuilder()
+      .update(Usuario)
+      .set({ email_verificado: true, token_verificacion: null, token_verificacion_expira: null })
+      .where('token_verificacion = :token', { token })
+      .andWhere('token_verificacion_expira > :ahora', { ahora: new Date() })
+      .andWhere('activa = true AND email_verificado = false')
+      .execute();
     return resultado.affected === 1;
   }
 

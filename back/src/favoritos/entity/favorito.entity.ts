@@ -24,6 +24,6 @@ export class Favorito {
   @JoinColumn({ name: 'id_publicacion' })
   publicacion: Relation<Publicacion>;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 }

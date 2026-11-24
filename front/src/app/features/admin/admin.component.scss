@@ -405,6 +405,13 @@ dd {
   .request, .settlement-card, .catalog-card { overflow-wrap: anywhere; }
   .requests { grid-template-columns: minmax(0, 1fr); }
 }
+// Barra de búsqueda y filtros, y paginador de cada lista.
+.admin-filtros { padding: 18px 24px 0; }
+.admin-paginador { display: block; padding: 0 24px 24px; }
+@media (max-width: 700px) {
+  .admin-filtros { padding: 14px 14px 0; }
+  .admin-paginador { padding: 0 14px 14px; }
+}
 .settlement-list {
   display: grid;
   gap: 14px;

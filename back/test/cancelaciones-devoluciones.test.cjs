@@ -553,6 +553,26 @@ test('administración y el vencimiento no liberan una reserva con reclamo abiert
   assert.equal((await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
+test('un segundo reclamo vuelve a poner en revisión la liquidación que esperaba el plazo de pago', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-22T15:00:00Z') });
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { codigo_validado_en: new Date('2099-01-10T15:00:00Z') });
+  await source.getRepository(Liquidacion).save({ reserva, estado: 'PENDIENTE_PAGO_PROPIETARIO', moneda: 'ARS' });
+  const estado = async () => (await source.getRepository(Liquidacion).findOneByOrFail({ reserva: { id: reserva.id } })).estado;
+
+  const primero = await reclamos.crear({ id_reserva: reserva.id, categoria: 'LIMPIEZA', descripcion: 'Primer problema de la estadía' }, 1);
+  assert.equal(await estado(), 'EN_REVISION');
+  await reclamos.resolver(primero.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
+  assert.equal(await estado(), 'PENDIENTE_PAGO_PROPIETARIO');
+
+  // Mientras el pago espera su fecha, el inquilino todavía puede reclamar otra vez: la liquidación vuelve a congelarse.
+  const segundo = await reclamos.crear({ id_reserva: reserva.id, categoria: 'MANTENIMIENTO', descripcion: 'Segundo problema de la estadía' }, 1);
+  assert.equal(await estado(), 'EN_REVISION');
+  await assert.rejects(reclamos.crear({ id_reserva: reserva.id, categoria: 'OTRO', descripcion: 'Tercer problema al mismo tiempo' }, 1), /ya tiene un reclamo abierto/);
+  await reclamos.resolver(segundo.id, { resolucion: ResolucionReclamo.SIN_DEVOLUCION }, 3);
+  assert.equal(await estado(), 'PENDIENTE_PAGO_PROPIETARIO');
+});
+
 test('el reporte anterior respeta el plazo y la identidad del inquilino', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-24T15:00:00Z') });
   const { reserva } = await escenario();

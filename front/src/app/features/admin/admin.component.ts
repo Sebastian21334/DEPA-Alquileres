@@ -2,7 +2,7 @@ import { ConversationPanelComponent, mensajesApelacion } from '../../shared/comp
 import { AttachmentPreviewComponent } from '../../shared/components/conversation-panel/attachment-preview.component';
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
-import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, linkedSignal, PLATFORM_ID, signal, viewChild } from '@angular/core';
+import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, PLATFORM_ID, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -32,6 +32,8 @@ import {
   LucideLockKeyhole,
   LucideInfo,
   LucideLayers3,
+  LucideCircleDollarSign,
+  LucideGavel,
 } from '@lucide/angular';
 import {
   AdminBloqueo,
@@ -56,6 +58,15 @@ import { CargaComprobanteComponent } from '../../shared/components/carga-comprob
 import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
 import { DatoCopiableComponent } from '../../shared/components/dato-copiable/dato-copiable.component';
 import { formatearCbu, formatearCuit, tipoCuentaBancaria } from '../../shared/utils/cuenta-bancaria';
+import { FiltrosListaComponent } from '../../shared/components/filtros-lista/filtros-lista.component';
+import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
+import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
+import { fechaArgentina } from '../../shared/utils/rental-dates';
+import {
+  apelacionSinResponder, diasEsperaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
+  FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, reclamoAbierto, reembolsoPendiente,
+  textosBloqueo, textosCancelacion, textosLiquidacion, textosPagoLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
+} from './admin-listas';
 
 interface CatalogSection {
   key: CatalogKey;
@@ -63,7 +74,9 @@ interface CatalogSection {
   items: AdminCatalogItem[];
 }
 
-const REEMBOLSOS_POR_PAGINA = 10;
+/** Pendientes del resumen: se muestran 5 y cada «Ver más» suma 10. */
+const PENDIENTES_INICIALES = 5;
+const PENDIENTES_POR_VEZ = 10;
 const ORDEN_ESTADO_REEMBOLSO: Record<AdminReembolso['estado'], number> = {
   PENDIENTE: 0,
   EN_PROCESO: 0,
@@ -104,6 +117,8 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     CargaComprobanteComponent,
     VerComprobanteComponent,
     DatoCopiableComponent,
+    FiltrosListaComponent,
+    PaginadorComponent,
     CurrencyPipe,
     DatePipe,
     FormsModule,
@@ -128,6 +143,8 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucidePaperclip,
     LucideSend,
     LucideReceiptText,
+    LucideCircleDollarSign,
+    LucideGavel,
   ],
   templateUrl: './admin.component.html',
   styleUrls: ['./admin.component.scss', './admin-dashboard.scss'],
@@ -169,7 +186,7 @@ export class AdminComponent {
   protected readonly users = signal<AdminUser[]>([]);
   protected readonly bloqueados = signal<AdminBloqueo[]>([]);
   protected readonly bloqueosOrdenados = computed(() => [...this.bloqueados()].sort((a, b) => {
-    const prioridad = (bloqueo: AdminBloqueo) => bloqueo.detalle.apelacion && !bloqueo.detalle.respuesta ? 0 : bloqueo.detalle.apelacion ? 1 : 2;
+    const prioridad = (bloqueo: AdminBloqueo) => apelacionSinResponder(bloqueo.detalle) ? 0 : tieneApelacion(bloqueo.detalle) ? 1 : 2;
     return prioridad(a) - prioridad(b) || (b.detalle.fecha ?? '').localeCompare(a.detalle.fecha ?? '');
   }));
   protected readonly vistaBloqueos = signal<'actuales' | 'historial'>('actuales');
@@ -222,15 +239,6 @@ export class AdminComponent {
     Date.parse(b.creado_en) - Date.parse(a.creado_en) ||
     b.id - a.id,
   ));
-  protected readonly refundsPages = computed(() => Math.max(1, Math.ceil(this.refunds().length / REEMBOLSOS_POR_PAGINA)));
-  protected readonly refundsPage = linkedSignal<number, number>({
-    source: this.refundsPages,
-    computation: (paginas, anterior) => Math.min(anterior?.value ?? 1, paginas),
-  });
-  protected readonly refundsPageItems = computed(() => {
-    const inicio = (this.refundsPage() - 1) * REEMBOLSOS_POR_PAGINA;
-    return this.orderedRefunds().slice(inicio, inicio + REEMBOLSOS_POR_PAGINA);
-  });
   private readonly dialogoReembolso = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoReembolso');
   protected readonly reembolsoSeleccionado = signal<AdminReembolso | null>(null);
   protected readonly guardandoReembolso = signal(false);
@@ -262,19 +270,14 @@ export class AdminComponent {
     PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', APROBADO: 'Aprobado',
     RECHAZADO: 'Rechazado', FALLIDO: 'Fallido', CANCELADO: 'Cancelado',
   };
-  protected readonly origenesReembolso: Record<string, string> = {
-    CANCELACION: 'Cancelación', RECLAMO: 'Reclamo', CONTRACARGO: 'Contracargo',
-    PAGO_TARDIO: 'Pago tardío', AJUSTE_ADMIN: 'Ajuste administrativo',
-  };
+  protected readonly origenesReembolso = ORIGENES_REEMBOLSO;
   protected readonly otherLoading = signal(true);
   protected readonly summaryError = signal(false);
-  protected readonly openClaims = computed(() =>
-    this.claims().filter(({ estado }) => estado === 'ABIERTO' || estado === 'EN_REVISION'),
-  );
+  protected readonly openClaims = computed(() => this.claims().filter(reclamoAbierto));
   protected readonly resumenReembolsos = signal<AdminResumenReembolsos | null>(null);
-  protected readonly pendingRefunds = computed(() => this.orderedRefunds().filter(({ estado }) =>
-    estado === 'PENDIENTE' || estado === 'EN_PROCESO',
-  ));
+  protected readonly pendingRefunds = computed(() => this.orderedRefunds().filter(reembolsoPendiente));
+  protected readonly liquidacionesAPagar = computed(() => this.settlements().filter(pagoHabilitado));
+  protected readonly apelacionesAResponder = computed(() => this.bloqueados().filter(({ detalle }) => apelacionSinResponder(detalle)));
   protected readonly failedRefunds = computed(() => this.refunds().filter(({ estado }) =>
     estado === 'FALLIDO',
   ));
@@ -287,29 +290,66 @@ export class AdminComponent {
   protected readonly totalReembolsos = computed(() =>
     this.resumenReembolsos()?.total ?? this.refunds().length,
   );
+  /** Todos los casos que esperan una acción, del más antiguo al más nuevo. */
   protected readonly pendingCases = computed(() => [
-    ...this.cancellations().slice(0, 2).map((item) => ({
-      section: 'cancelaciones' as const, id: item.id,
+    ...this.cancellations().map((item) => ({
+      section: 'cancelaciones' as const, id: item.id, fecha: item.creada_en,
       label: item.reserva ? `Cancelación · Reserva #${item.reserva.id}` : `Cancelación #${item.id}`,
       status: 'Pendiente', tone: 'pending', action: 'Revisar',
     })),
-    ...this.openClaims().slice(0, 2).map((item) => ({
-      section: 'reclamos' as const, id: item.id,
+    ...this.openClaims().map((item) => ({
+      section: 'reclamos' as const, id: item.id, fecha: item.creado_en,
       label: item.reserva ? `Reclamo · Reserva #${item.reserva.id}` : `Reclamo #${item.id}`,
       status: item.estado === 'EN_REVISION' ? 'En revisión' : 'Abierto', tone: 'review', action: 'Abrir',
     })),
-    ...this.pendingRefunds().slice(0, 2).map((item) => ({
-      section: 'reembolsos' as const, id: item.id,
+    ...this.pendingRefunds().map((item) => ({
+      section: 'reembolsos' as const, id: item.id, fecha: item.creado_en,
       label: item.reserva ? `Reembolso · Reserva #${item.reserva.id}` : `Reembolso #${item.id}`,
       status: this.estadosReembolso[item.estado],
       tone: 'refund', action: 'Ver detalle',
     })),
-    ...this.requests().slice(0, 2).map((item) => ({
-      section: 'verificaciones' as const, id: item.id,
+    ...this.requests().map((item) => ({
+      section: 'verificaciones' as const, id: item.id, fecha: item.actualizada_en,
       label: `Verificación · Solicitud #${item.id}`,
       status: 'Pendiente', tone: 'pending', action: 'Revisar',
     })),
-  ]);
+    ...this.liquidacionesAPagar().map((item) => ({
+      section: 'liquidaciones' as const, id: item.id, fecha: item.fecha_disponible_pago,
+      label: `Liquidación · Reserva #${item.id}`,
+      status: 'Pago habilitado', tone: 'payment', action: 'Registrar pago',
+    })),
+    ...this.apelacionesAResponder().map((item) => ({
+      section: 'bloqueos' as const, id: item.usuario.id, fecha: item.detalle.mensajes?.at(-1)?.fecha ?? item.detalle.apelacion?.fecha,
+      label: `Apelación · ${item.usuario.nombre} ${item.usuario.apellido}`,
+      status: 'Sin responder', tone: 'appeal', action: 'Responder',
+    })),
+  ].sort((a, b) => this.antiguedad(a.fecha) - this.antiguedad(b.fecha)));
+  protected readonly pendientesVisibles = signal(PENDIENTES_INICIALES);
+  protected readonly pendientesMostrados = computed(() => this.pendingCases().slice(0, this.pendientesVisibles()));
+  protected readonly pendientesIniciales = PENDIENTES_INICIALES;
+  /** Mismo tope que ReclamosRepository.listarAdministracion en el back. */
+  protected readonly maxReclamosAdmin = 200;
+
+  // Búsqueda, filtros y paginación de cada lista (definidos en admin-listas.ts).
+  protected readonly listaCancelaciones = new ListaFiltrable(this.cancellations, { porPagina: 10, textos: textosCancelacion, filtros: FILTROS_CANCELACION });
+  protected readonly listaReclamos = new ListaFiltrable(this.claims, { porPagina: 5, textos: textosReclamo, filtros: FILTROS_RECLAMO });
+  protected readonly listaReembolsos = new ListaFiltrable(this.orderedRefunds, { porPagina: 10, textos: textosReembolso, filtros: FILTROS_REEMBOLSO });
+  protected readonly listaLiquidaciones = new ListaFiltrable(this.liquidacionesOrdenadas, { porPagina: 10, textos: textosLiquidacion, filtros: FILTROS_LIQUIDACION });
+  protected readonly listaVerificaciones = new ListaFiltrable(this.requests, { porPagina: 10, textos: textosVerificacion, filtros: FILTROS_VERIFICACION });
+  protected readonly listaBloqueos = new ListaFiltrable(this.bloqueosOrdenados, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
+  protected readonly listaHistorialBloqueos = new ListaFiltrable(this.historialBloqueos, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
+  /** El historial de liquidaciones además se filtra por el día (en Argentina) en que se registró el pago. */
+  protected readonly historialDesde = signal('');
+  protected readonly historialHasta = signal('');
+  private readonly historialEnRango = computed(() => {
+    const desde = this.historialDesde(), hasta = this.historialHasta();
+    if (!desde && !hasta) return this.historialLiquidaciones();
+    return this.historialLiquidaciones().filter(({ fecha }) => {
+      const dia = fecha ? fechaArgentina(fecha) : null;
+      return !!dia && (!desde || dia >= desde) && (!hasta || dia <= hasta);
+    });
+  });
+  protected readonly listaHistorialLiquidaciones = new ListaFiltrable(this.historialEnRango, { porPagina: 10, textos: textosPagoLiquidacion });
   protected readonly loading = computed(() =>
     this.otherLoading() || this.usersLoading() || (this.publicacionesAdmin()?.publicationsLoading() ?? true),
   );
@@ -414,10 +454,7 @@ export class AdminComponent {
       void this.router.navigate([], { relativeTo: this.route, fragment: section === 'resumen' ? undefined : section, replaceUrl: true });
     if (section === 'comision') this.cargarComision();
     if (section === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
-    if (section === 'reembolsos' && caseId !== undefined) {
-      const indice = this.orderedRefunds().findIndex(({ id }) => id === caseId);
-      if (indice >= 0) this.refundsPage.set(Math.floor(indice / REEMBOLSOS_POR_PAGINA) + 1);
-    }
+    if (caseId !== undefined) this.mostrarCaso(section, caseId);
     afterNextRender(() => {
       if (this.activeSection() !== section) return;
       const heading = this.host.nativeElement.querySelector<HTMLElement>('#admin-section-title');
@@ -430,7 +467,68 @@ export class AdminComponent {
         const refund = this.refunds().find(({ id }) => id === caseId);
         if (refund) this.abrirReembolso(refund);
       }
+      if (section === 'liquidaciones' && caseId !== undefined) {
+        const liquidacion = this.liquidacionesAPagar().find(({ id }) => id === caseId);
+        if (liquidacion) this.abrirPagoAnunciante(liquidacion);
+      }
     }, { injector: this.injector });
+  }
+
+  /** Lleva a la página del caso; si la búsqueda o los filtros lo ocultan, los limpia. */
+  private mostrarCaso(section: AdminSection, id: number): void {
+    if (section === 'cancelaciones') this.listaCancelaciones.mostrar((item) => item.id === id);
+    else if (section === 'reclamos') this.listaReclamos.mostrar((item) => item.id === id);
+    else if (section === 'reembolsos') this.listaReembolsos.mostrar((item) => item.id === id);
+    else if (section === 'liquidaciones') this.listaLiquidaciones.mostrar((item) => item.id === id);
+    else if (section === 'verificaciones') this.listaVerificaciones.mostrar((item) => item.id === id);
+    else if (section === 'bloqueos') {
+      this.vistaBloqueos.set('actuales');
+      this.listaBloqueos.mostrar((item) => item.usuario.id === id);
+    }
+  }
+
+  /** Cada contador abre su lista mostrando exactamente los casos que cuenta. */
+  protected abrirDesdeContador(section: 'cancelaciones' | 'reclamos' | 'reembolsos' | 'verificaciones' | 'liquidaciones' | 'bloqueos'): void {
+    if (section === 'cancelaciones') this.listaCancelaciones.limpiar();
+    else if (section === 'verificaciones') this.listaVerificaciones.limpiar();
+    else if (section === 'reclamos') this.aplicarFiltro(this.listaReclamos, 'estado', 'abiertos');
+    else if (section === 'reembolsos') this.aplicarFiltro(this.listaReembolsos, 'estado', 'pendientes');
+    else if (section === 'liquidaciones') this.aplicarFiltro(this.listaLiquidaciones, 'situacion', 'habilitado');
+    else {
+      this.vistaBloqueos.set('actuales');
+      this.aplicarFiltro(this.listaBloqueos, 'apelacion', 'en-curso');
+    }
+    this.openSection(section);
+  }
+
+  private aplicarFiltro<T>(lista: ListaFiltrable<T>, nombre: string, valor: string): void {
+    lista.limpiar();
+    lista.filtrar(nombre, valor);
+  }
+
+  protected verMasPendientes(): void {
+    this.pendientesVisibles.update((cantidad) => cantidad + PENDIENTES_POR_VEZ);
+  }
+
+  protected verMenosPendientes(): void {
+    this.pendientesVisibles.set(PENDIENTES_INICIALES);
+  }
+
+  /** Los casos sin fecha van al final. */
+  private antiguedad(fecha: string | null | undefined): number {
+    const marca = Date.parse(fecha ?? '');
+    return Number.isFinite(marca) ? marca : Number.POSITIVE_INFINITY;
+  }
+
+  protected filtrarHistorialLiquidaciones(campo: 'desde' | 'hasta', valor: string): void {
+    (campo === 'desde' ? this.historialDesde : this.historialHasta).set(valor);
+    this.listaHistorialLiquidaciones.irAPagina(1);
+  }
+
+  protected limpiarHistorialLiquidaciones(): void {
+    this.historialDesde.set('');
+    this.historialHasta.set('');
+    this.listaHistorialLiquidaciones.limpiar();
   }
 
   protected searchUsers(value: string): void {
@@ -526,16 +624,7 @@ export class AdminComponent {
     });
   }
 
-  protected diasEsperaLiquidacion(settlement: AdminSettlement): number | null {
-    const fecha = settlement.fecha_disponible_pago;
-    if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return null;
-    const fechaPago = Date.parse(`${fecha}T00:00:00Z`);
-    if (!Number.isFinite(fechaPago) || new Date(fechaPago).toISOString().slice(0, 10) !== fecha) return null;
-    const hoy = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).format(new Date());
-    return Math.max(0, Math.round((fechaPago - Date.parse(`${hoy}T00:00:00Z`)) / 86_400_000));
-  }
+  protected readonly diasEsperaLiquidacion = diasEsperaLiquidacion;
 
   protected cargarHistorialLiquidaciones(): void {
     this.historialRequest?.unsubscribe();
@@ -838,16 +927,9 @@ export class AdminComponent {
     return Number(importe).toLocaleString('es-AR', { style: 'currency', currency: reclamo.devolucion_cancelacion?.moneda || reclamo.reserva?.moneda_contratada || 'ARS' });
   }
 
-  protected nombreInquilino(settlement: AdminSettlement): string {
-    return (
-      [
-        settlement.usuario_nombre ?? settlement.usuario?.nombre,
-        settlement.usuario_apellido ?? settlement.usuario?.apellido,
-      ]
-        .filter(Boolean)
-        .join(' ') || 'Inquilino eliminado'
-    );
-  }
+  protected readonly nombreInquilino = nombreInquilino;
+  protected readonly tieneApelacion = tieneApelacion;
+  protected readonly apelacionSinResponder = apelacionSinResponder;
 
   protected montoLiquidacion(settlement: AdminSettlement): string {
     return Number(settlement.monto_pago).toLocaleString('es-AR', {

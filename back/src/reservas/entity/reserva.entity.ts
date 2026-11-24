@@ -37,7 +37,7 @@ export class Reserva {
   @Column({ name: 'cancelada', type: 'boolean', default: false })
   cancelada: boolean;
 
-  @Column({ name: 'fecha_cancelacion', type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_cancelacion', type: 'timestamptz', nullable: true })
   fecha_cancelacion: Date | null;
 
   @Column({
@@ -131,7 +131,7 @@ export class Reserva {
   @OneToMany(() => ReprogramacionReserva, (cambio) => cambio.reserva)
   reprogramaciones: Relation<ReprogramacionReserva[]>;
 
-  @Column({ name: 'fecha_pago', type: 'timestamp', nullable: true })
+  @Column({ name: 'fecha_pago', type: 'timestamptz', nullable: true })
   fecha_pago: Date | null;
 
   @Column({ name: 'estado_pago', type: 'varchar', length: 40, default: 'APROBADO' })
@@ -161,10 +161,10 @@ export class Reserva {
   })
   codigo_alojamiento: string | null;
 
-  @Column({ name: 'codigo_generado_en', type: 'timestamp', nullable: true })
+  @Column({ name: 'codigo_generado_en', type: 'timestamptz', nullable: true })
   codigo_generado_en: Date | null;
 
-  @Column({ name: 'codigo_validado_en', type: 'timestamp', nullable: true })
+  @Column({ name: 'codigo_validado_en', type: 'timestamptz', nullable: true })
   codigo_validado_en: Date | null;
 
   @Column({ name: 'intentos_codigo', type: 'int', default: 0 })

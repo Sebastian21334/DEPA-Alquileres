@@ -44,6 +44,6 @@ export class ReclamoEvidencia {
   @Column({ name: 'tipo', type: 'varchar', length: 100, default: 'image/jpeg' })
   tipo: string;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 }
