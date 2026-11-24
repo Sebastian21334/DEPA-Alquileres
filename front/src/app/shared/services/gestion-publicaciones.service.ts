@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Publicacion, PublicacionPayload } from '../models/publicacion.model';
 import { Imagen } from '../models/imagen.model';
+import type { DesglosePago } from '../utils/desglose-pago';
 
 export interface PaginaMisPublicaciones {
   datos: Publicacion[];
@@ -27,6 +28,8 @@ export interface PagoPublicacion {
   /** Posición del pago en la liquidación, para pedir su comprobante. */
   indice: number;
   comprobante: string | null;
+  /** Null en reservas sin un cobro registrado. */
+  desglose: DesglosePago | null;
 }
 
 // Operaciones del anunciante verificado sobre sus propias publicaciones e imágenes.

@@ -27,9 +27,12 @@ import { ReclamosService } from '../../reclamos/service/reclamos.service';
 import { AlmacenamientoService, type ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
 import { RegistrarTransferenciaDto } from '../dto/registrar-transferencia.dto';
 import type { LiquidacionPendienteDto } from '../dto/liquidacion-pendiente.dto';
+import type { ConDesglose, DesglosePagoRegistradoDto } from '../dto/pago-registrado.dto';
 import type { Pago } from '../../pagos/entity/pago.entity';
 
 import type { EntityManager } from 'typeorm';
+
+const centavos = (importe: number): number => Math.round(importe * 100);
 
 @Injectable()
 export class OperacionesLiquidacionService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -161,12 +164,39 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     return { importe_comision_depa: Number(comision) / 100, importe_neto_anunciante: Number(centavos - comision) / 100 };
   }
 
-  listarPagosRegistrados() {
-    return this.liquidaciones.listarPagosRegistrados();
+  async listarPagosRegistrados() {
+    return this.conDesglose(await this.liquidaciones.listarPagosRegistrados());
   }
 
-  listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
-    return this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion);
+  async listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
+    return this.conDesglose(await this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion));
+  }
+
+  /** Suma a cada pago registrado cómo se repartió el cobro de su reserva, con los pagos de Mercado Pago en una sola consulta. */
+  private async conDesglose<T extends { reservaId: number; importe: number | null }>(registros: T[]): Promise<ConDesglose<T>[]> {
+    const cobros = await this.reembolsosService.listarPagosPorReservas([...new Set(registros.map(registro => registro.reservaId))]);
+    const cobroPorReserva = new Map(cobros.map(cobro => [cobro.reserva.id, cobro]));
+    const pagadoPorReserva = new Map<number, number>();
+    for (const { reservaId, importe } of registros)
+      pagadoPorReserva.set(reservaId, (pagadoPorReserva.get(reservaId) ?? 0) + centavos(importe ?? 0));
+    return registros.map(registro => ({
+      ...registro,
+      desglose: this.desglosar(cobroPorReserva.get(registro.reservaId), pagadoPorReserva.get(registro.reservaId) ?? 0),
+    }));
+  }
+
+  /** La comisión es lo que quedó entre lo cobrado y lo transferido, no un recálculo del porcentaje. */
+  private desglosar(cobro: Pago | undefined, pagadoEnCentavos: number): DesglosePagoRegistradoDto | null {
+    if (!cobro) return null;
+    const pagado = centavos(Number(cobro.amount));
+    const devuelto = centavos(Number(cobro.amount_refunded ?? 0));
+    const comision = (pagado - devuelto - pagadoEnCentavos) / 100;
+    return {
+      pagoInquilino: pagado / 100,
+      devueltoInquilino: devuelto / 100,
+      comisionDepa: comision > TOLERANCIA_MONETARIA ? comision : 0,
+      pagadoAnunciante: pagadoEnCentavos / 100,
+    };
   }
 
   /** Datos para transferir: el CBU validado y el CUIT/CUIL para confirmar el destinatario. */
