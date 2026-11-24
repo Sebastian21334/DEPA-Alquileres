@@ -191,7 +191,7 @@ export class OperacionesPagoService {
     const importeRegistrado = Number(pago?.amount_refunded ?? 0);
     const devolucion = pago && importeRegistrado > 0 ? await this.resumirDevolucion(pago, importeRegistrado) : null;
     return {
-      reserva,
+      reserva: Object.assign(reserva, { devolucion_inquilino: this.reembolsosService.devolucionInquilino(pago) }),
       puede_reintentar: !esAdmin && this.puedeReintentar(reserva, pago, idUsuario),
       pago: pago
         ? {

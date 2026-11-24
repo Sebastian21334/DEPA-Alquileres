@@ -487,8 +487,19 @@ export class ReservasService
    * Historial de reservas del inquilino logueado.
    */
   async listarPorUsuario(idUsuario: number): Promise<Reserva[]> {
-    const reservas = await this.reservaRepository.buscarPorUsuario(idUsuario);
-    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva, true));
+    return this.responderListado(await this.reservaRepository.buscarPorUsuario(idUsuario), true);
+  }
+
+  /** Proyecta la liquidación y suma lo devuelto al inquilino, con los pagos de todas las reservas en una sola consulta. */
+  private async responderListado(reservas: Reserva[], incluirContactoInquilino = false): Promise<ReservaRespuestaDto[]> {
+    const [proyectadas, pagos] = await Promise.all([
+      this.liquidaciones.proyectarListado(reservas),
+      this.reembolsosService.listarPagosPorReservas(reservas.map(reserva => reserva.id)),
+    ]);
+    const pagoPorReserva = new Map(pagos.map(pago => [pago.reserva.id, pago]));
+    return proyectadas.map(reserva => Object.assign(this.prepararRespuesta(reserva, incluirContactoInquilino), {
+      devolucion_inquilino: this.reembolsosService.devolucionInquilino(pagoPorReserva.get(reserva.id)),
+    }));
   }
 
   /**
@@ -501,8 +512,7 @@ export class ReservasService
       idUsuarioQueOpera,
       'No tenés permiso para consultar las reservas de esta publicación',
     );
-    const reservas = await this.reservaRepository.buscarPorPublicacion(idPublicacion);
-    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva));
+    return this.responderListado(await this.reservaRepository.buscarPorPublicacion(idPublicacion));
   }
 
   /** Todas las reservas recibidas por publicaciones del anunciante autenticado. */
@@ -513,7 +523,7 @@ export class ReservasService
         this.catalogos.codigoEstado('PAGO_RESERVA', 'REEMBOLSADO'),
       ],
     );
-    return (await this.liquidaciones.proyectarListado(reservas)).map(reserva => this.prepararRespuesta(reserva));
+    return this.responderListado(reservas);
   }
 
   async existeReservaAprobada(idPublicacion: number, idUsuarioInquilino: number): Promise<boolean> {
