@@ -55,7 +55,7 @@ export class PublicacionFormulario {
 
   readonly form = inject(FormBuilder).nonNullable.group({
     titulo: ['', [Validators.required, Validators.minLength(15), Validators.maxLength(255), Validators.pattern(PATRON_TITULO_PUBLICACION)]],
-    descripcion: ['', [Validators.required, Validators.maxLength(255)]],
+      descripcion: ['', [Validators.required, Validators.maxLength(5000)]],
     idTipoPropiedad: [null as number | null, Validators.required],
     idModalidad: [null as number | null, Validators.required],
     idTipoMoneda: [null as number | null, Validators.required],

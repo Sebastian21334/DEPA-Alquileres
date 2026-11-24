@@ -99,6 +99,16 @@ export class PublicationDetailComponent {
     viewChild.required<ConfirmDialogComponent>('confirmacionWhatsapp');
 
   protected readonly publication = signal<Publicacion | null>(null);
+  protected readonly descripcionExpandida = signal(false);
+  protected readonly descripcionCorta = computed(() => {
+    const descripcion = this.publication()?.descripcion ?? '';
+    const primerasLineas = descripcion.split('\n').slice(0, 5).join('\n');
+    const resumen = Array.from(primerasLineas).slice(0, 300).join('').trimEnd();
+    return resumen.length < descripcion.trimEnd().length ? `${resumen}…` : descripcion;
+  });
+  protected readonly descripcionTieneMas = computed(() =>
+    this.descripcionCorta() !== (this.publication()?.descripcion ?? ''),
+  );
   protected readonly perfilAnunciante = signal<AnunciantePublico | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');

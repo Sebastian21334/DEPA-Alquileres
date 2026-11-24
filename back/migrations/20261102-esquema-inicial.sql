@@ -463,7 +463,7 @@ ALTER SEQUENCE public.provincia_id_provincia_seq OWNED BY public.provincia.id_pr
 CREATE TABLE public.publicacion (
     id_publicacion integer NOT NULL,
     titulo character varying(255) NOT NULL,
-    descripcion character varying(255) NOT NULL,
+    descripcion character varying(5000) NOT NULL,
     fecha_publicacion date NOT NULL,
     precio numeric(10,2) NOT NULL,
     activa boolean DEFAULT false NOT NULL,

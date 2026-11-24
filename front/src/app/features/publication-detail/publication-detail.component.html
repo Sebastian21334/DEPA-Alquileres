@@ -140,7 +140,13 @@
 
       <section class="description" appReveal>
         <h2>Descripción</h2>
-        <p>{{ item.descripcion }}</p>
+        <p id="descripcion-publicacion">{{ descripcionExpandida() ? item.descripcion : descripcionCorta() }}</p>
+        @if (descripcionTieneMas()) {
+          <button type="button" class="description__toggle" aria-controls="descripcion-publicacion"
+            [attr.aria-expanded]="descripcionExpandida()" (click)="descripcionExpandida.set(!descripcionExpandida())">
+            {{ descripcionExpandida() ? 'Ver menos' : 'Ver más' }}
+          </button>
+        }
       </section>
 
       @if (mapEmbedUrl(); as mapSource) {

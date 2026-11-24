@@ -1,0 +1,171 @@
+import { adminGuard } from './core/guards/admin.guard';
+import { anuncianteGuard, authGuard } from './core/guards/auth.guard';
+export const routes = [
+    {
+        path: 'terminos/:tipo',
+        loadComponent: () => import('./features/terminos/terminos.component').then((m) => m.TerminosComponent),
+        title: 'Términos y condiciones - DEPA',
+    },
+    {
+        path: 'admin',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/admin/admin.component').then((m) => m.AdminComponent),
+        title: 'Panel administrativo — DEPA',
+    },
+    {
+        path: 'admin/usuarios/:id',
+        canActivate: [adminGuard],
+        loadComponent: () => import('./features/admin/admin-user-profile.component').then((m) => m.AdminUserProfileComponent),
+        title: 'Perfil de usuario - DEPA',
+    },
+    {
+        path: 'admin/publicaciones/:id',
+        canActivate: [adminGuard],
+        data: { administracion: true },
+        loadComponent: () => import('./features/publication-detail/publication-detail.component').then((m) => m.PublicationDetailComponent),
+        title: 'Publicación de la reserva - DEPA',
+    },
+    {
+        // El admin ve el resumen de cualquier reserva en solo lectura.
+        path: 'admin/reservas/:id',
+        canActivate: [adminGuard],
+        data: { administracion: true },
+        loadComponent: () => import('./features/reserva-resultado/reserva-resultado.component').then((m) => m.ReservaResultadoComponent),
+        title: 'Detalle de la reserva - DEPA',
+    },
+    {
+        path: '403',
+        loadComponent: () => import('./features/forbidden/forbidden.component').then((m) => m.ForbiddenComponent),
+        title: 'Acceso denegado — DEPA',
+    },
+    {
+        path: '',
+        loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent),
+        title: 'DEPA — Encontrá tu próximo hogar',
+    },
+    {
+        path: 'publicaciones',
+        loadComponent: () => import('./features/explorar-publicaciones/explorar-publicaciones.component').then((m) => m.ExplorarPublicacionesComponent),
+        title: 'Explorar publicaciones — DEPA',
+    },
+    {
+        // Debe ir antes de 'publicaciones/:id' para que "nueva" no se tome como id.
+        path: 'publicaciones/nueva',
+        canActivate: [anuncianteGuard],
+        data: { requiereCbu: true },
+        loadComponent: () => import('./features/crear-publicacion/crear-publicacion.component').then((m) => m.CrearPublicacionComponent),
+        title: 'Publicar propiedad — DEPA',
+    },
+    {
+        path: 'dashboard',
+        canActivate: [anuncianteGuard],
+        loadComponent: () => import('./features/dashboard/dashboard.component').then((m) => m.DashboardComponent),
+        title: 'Panel del anunciante — DEPA',
+    },
+    {
+        path: 'mis-publicaciones',
+        canActivate: [anuncianteGuard],
+        loadComponent: () => import('./features/mis-publicaciones/mis-publicaciones.component').then((m) => m.MisPublicacionesComponent),
+        title: 'Mis publicaciones — DEPA',
+    },
+    {
+        path: 'mi-perfil',
+        canActivate: [authGuard],
+        loadComponent: () => import('./features/mi-perfil/mi-perfil.component').then((m) => m.MiPerfilComponent),
+        title: 'Mi perfil — DEPA',
+    },
+    {
+        path: 'mis-reservas',
+        canActivate: [authGuard],
+        loadComponent: () => import('./features/mis-reservas/mis-reservas.component').then((m) => m.MisReservasComponent),
+        title: 'Mis reservas — DEPA',
+    },
+    {
+        path: 'reserva/resultado',
+        canActivate: [authGuard],
+        loadComponent: () => import('./features/reserva-resultado/reserva-resultado.component').then((m) => m.ReservaResultadoComponent),
+        title: 'Resumen de la reserva — DEPA',
+    },
+    {
+        path: 'favoritos',
+        canActivate: [authGuard],
+        loadComponent: () => import('./features/favorites/favorites.component').then((m) => m.FavoritesComponent),
+        title: 'Mis favoritos — DEPA',
+    },
+    {
+        path: 'ser-anunciante',
+        loadComponent: () => import('./features/ser-anunciante/ser-anunciante.component').then((m) => m.SerAnuncianteComponent),
+        title: 'Publicá tu propiedad — DEPA',
+    },
+    {
+        path: 'mi-perfil/validar-cbu',
+        canActivate: [anuncianteGuard],
+        loadComponent: () => import('./shared/components/cbu-anunciante/cbu-anunciante.component').then((m) => m.CbuAnuncianteComponent),
+        title: 'Validar CBU - DEPA',
+    },
+    {
+        path: 'mi-perfil/anunciante',
+        canActivate: [authGuard],
+        loadComponent: () => import('./features/solicitud-anunciante/solicitud-anunciante.component').then((m) => m.SolicitudAnuncianteComponent),
+        title: 'Convertite en anunciante — DEPA',
+    },
+    {
+        path: 'publicaciones/:id/editar',
+        canActivate: [anuncianteGuard],
+        loadComponent: () => import('./features/publication-form/publication-form.component').then((m) => m.PublicationFormComponent),
+        title: 'Modificar publicación — DEPA',
+    },
+    {
+        path: 'publicaciones/:id',
+        loadComponent: () => import('./features/publication-detail/publication-detail.component').then((m) => m.PublicationDetailComponent),
+        title: 'Detalle de publicación — DEPA',
+    },
+    {
+        path: 'perfil/:id',
+        loadComponent: () => import('./features/advertiser-profile/advertiser-profile.component').then((m) => m.AdvertiserProfileComponent),
+        title: 'Perfil del anunciante — DEPA',
+    },
+    {
+        path: 'login',
+        loadComponent: () => import('./features/auth/login/login.component').then((m) => m.LoginComponent),
+        title: 'Iniciar sesión — DEPA',
+    },
+    {
+        path: 'cuenta-bloqueada',
+        loadComponent: () => import('./features/auth/cuenta-bloqueada/cuenta-bloqueada.component').then((m) => m.CuentaBloqueadaComponent),
+        title: 'Cuenta bloqueada - DEPA',
+    },
+    {
+        path: 'registro',
+        loadComponent: () => import('./features/auth/register/register.component').then((m) => m.RegisterComponent),
+        title: 'Crear cuenta — DEPA',
+    },
+    {
+        path: 'verificar-cuenta',
+        loadComponent: () => import('./features/auth/verificar-cuenta/verificar-cuenta.component').then((m) => m.VerificarCuentaComponent),
+        title: 'Verificar cuenta — DEPA',
+    },
+    {
+        path: 'reactivar-cuenta',
+        loadComponent: () => import('./features/auth/reactivar-cuenta/reactivar-cuenta.component').then((m) => m.ReactivarCuentaComponent),
+        title: 'Recuperar cuenta — DEPA',
+    },
+    {
+        path: 'confirmar-baja',
+        loadComponent: () => import('./features/auth/confirmar-baja/confirmar-baja.component').then((m) => m.ConfirmarBajaComponent),
+        title: 'Confirmar baja de cuenta — DEPA',
+    },
+    {
+        path: 'recuperar-contrasenia',
+        loadComponent: () => import('./features/auth/recuperar-contrasenia/recuperar-contrasenia.component').then((m) => m.RecuperarContraseniaComponent),
+        title: 'Recuperar contraseña — DEPA',
+    },
+    {
+        // OJO: este path debe coincidir exactamente con el que arma
+        // back/src/mail/mail.service.ts#enviarRecuperacion ("restablecer-contrasena",
+        // sin la "i" de "contrasenia") o el link del mail apuntaría a un 404.
+        path: 'restablecer-contrasena',
+        loadComponent: () => import('./features/auth/restablecer-contrasenia/restablecer-contrasenia.component').then((m) => m.RestablecerContraseniaComponent),
+        title: 'Restablecer contraseña — DEPA',
+    },
+];

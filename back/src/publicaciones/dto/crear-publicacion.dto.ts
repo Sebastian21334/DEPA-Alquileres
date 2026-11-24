@@ -34,7 +34,7 @@ export class CrearPublicacionDto {
 
   @IsString()
   @IsNotEmpty()
-  @MaxLength(255)
+  @MaxLength(5000)
   descripcion: string;
 
   @IsNumber({ maxDecimalPlaces: 2 })

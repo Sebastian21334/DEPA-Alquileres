@@ -55,14 +55,14 @@
               <textarea
                 id="descripcion"
                 formControlName="descripcion"
-                maxlength="255"
+                maxlength="5000"
                 placeholder="Describí los ambientes, el estado de la propiedad y qué la hace especial."
               ></textarea>
               <span class="acct-hint" [class.acct-hint--error]="formulario.invalido('descripcion')">
                 {{
                   formulario.invalido('descripcion')
                     ? 'Ingresá una descripción.'
-                    : form.controls.descripcion.value.length + '/255 caracteres'
+                    : form.controls.descripcion.value.length + '/5000 caracteres'
                 }}
               </span>
             </div>
