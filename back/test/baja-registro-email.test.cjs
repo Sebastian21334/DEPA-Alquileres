@@ -254,6 +254,72 @@ test('un enlace sin consumir de una cuenta dada de baja no verifica la nueva cue
   await login().expect(201);
 });
 
+const reenviarVerificacion = () => request(servidor()).post('/auth/reenviar-verificacion')
+  .send({ email: datos.email, contrasenia: datos.contrasenia });
+
+test('el enlace de verificación vence a las 24 horas, sirve una vez y reenviarlo invalida el anterior', async () => {
+  await registrar();
+  const primero = tokenCorreo();
+  const cuenta = await usuarios().createQueryBuilder('u').addSelect('u.token_verificacion_expira')
+    .where('u.email = :email', { email: datos.email }).getOneOrFail();
+  const horas = (cuenta.token_verificacion_expira.getTime() - Date.now()) / 3600000;
+  assert.ok(horas > 23.9 && horas <= 24, `vence en ${horas} horas`);
+
+  await reenviarVerificacion().expect(201);
+  const segundo = tokenCorreo();
+  assert.notEqual(segundo, primero);
+  const anterior = await verificar(primero).expect(400);
+  assert.match(anterior.body.message, /no es válido o venció/);
+
+  await usuarios().update({ id: cuenta.id }, { token_verificacion_expira: new Date(Date.now() - 1000) });
+  await verificar(segundo).expect(400);
+  assert.equal((await usuarios().findOneByOrFail({ id: cuenta.id })).email_verificado, false);
+  await login().expect(403);
+
+  await reenviarVerificacion().expect(201);
+  const vigente = tokenCorreo();
+  await verificar(vigente).expect(201);
+  await verificar(vigente).expect(400);
+  const verificada = await usuarios().createQueryBuilder('u')
+    .addSelect(['u.token_verificacion', 'u.token_verificacion_expira'])
+    .where('u.id = :id', { id: cuenta.id }).getOneOrFail();
+  assert.equal(verificada.token_verificacion, null);
+  assert.equal(verificada.token_verificacion_expira, null);
+  await login().expect(201);
+});
+
+test('la migración del vencimiento deja vencidos los enlaces ya enviados y se puede repetir', async () => {
+  await registrar();
+  const enviadoAntes = tokenCorreo();
+  await base.db.exec('ALTER TABLE usuario DROP COLUMN token_verificacion_expira');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261123-vencimiento-verificacion.sql'), 'utf8');
+  await base.db.exec(migracion);
+  await base.db.exec(migracion);
+  await verificar(enviadoAntes).expect(400);
+  await reenviarVerificacion().expect(201);
+  await verificar(tokenCorreo()).expect(201);
+  await login().expect(201);
+});
+
+test('el correo no se cambia desde los datos personales, ni por el titular ni por un administrador', async () => {
+  await registrar();
+  await verificar(tokenCorreo()).expect(201);
+  const cuenta = await usuarios().findOneByOrFail({ email: datos.email });
+  const sesion = (await login().expect(201)).body.access_token;
+  const sesionAdmin = app.get(JwtService).sign({ sub: admin.id });
+  for (const autorizacion of [sesion, sesionAdmin]) {
+    await request(servidor()).patch(`/usuarios/${cuenta.id}`).set('Authorization', `Bearer ${autorizacion}`)
+      .send({ email: 'otro@example.com' }).expect(400);
+  }
+  const actualizado = await request(servidor()).patch(`/usuarios/${cuenta.id}`).set('Authorization', `Bearer ${sesion}`)
+    .send({ telefono: '3515550000' }).expect(200);
+  assert.equal(actualizado.body.email, datos.email);
+  assert.equal(actualizado.body.telefono, '3515550000');
+  const guardado = await usuarios().findOneByOrFail({ id: cuenta.id });
+  assert.equal(guardado.email, datos.email);
+  assert.equal(guardado.email_verificado, true);
+});
+
 test('el enlace distingue a un anunciante verificado aunque tenga rol de administrador', async () => {
   await source.query('INSERT INTO anunciante (id_usuario, numero_contacto, verificado) VALUES ($1, $2, true)', [admin.id, '123']);
   await solicitarBaja(app.get(JwtService).sign({ sub: admin.id })).expect(201);

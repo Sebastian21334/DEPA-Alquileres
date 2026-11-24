@@ -14,7 +14,7 @@ export interface BloqueoAdministrativo {
 export interface IUsuariosCredencialesRepository {
   buscarPorEmail(email: string): Promise<Usuario | null>;
   buscarParaLogin(email: string): Promise<Usuario | null>;
-  guardarTokenVerificacion(id: number, email: string, token: string): Promise<boolean>;
+  guardarTokenVerificacion(id: number, email: string, token: string, expira: Date): Promise<boolean>;
   verificarCuenta(token: string): Promise<boolean>;
   guardarTokenRecuperacion(id: number, email: string, token: string, expira: Date): Promise<boolean>;
   buscarPorTokenRecuperacion(token: string): Promise<Usuario | null>;

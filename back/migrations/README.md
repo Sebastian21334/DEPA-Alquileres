@@ -306,3 +306,11 @@ que escribió el backend se toman como UTC si no quedan antes de una referencia 
 fila (su creación o un `timestamptz`), y si no, como hora argentina. Lo que un backend en UTC
 escribió sin referencia, como los mensajes del chat, puede quedar corrido 3 horas. Es reejecutable:
 solo convierte las columnas que siguen sin zona horaria.
+
+# Vencimiento de la verificación de correo
+
+Ejecutar `npm run db:vencimiento-verificacion` desde `back` (también después de inicializar una
+base nueva). La migración `20261123-vencimiento-verificacion.sql` agrega
+`usuario.token_verificacion_expira`: el enlace de verificación vence a las 24 horas, se usa una sola
+vez y reenviarlo invalida el anterior. Los enlaces enviados antes de la migración quedan vencidos;
+la cuenta pide uno nuevo desde el inicio de sesión. Es reejecutable.
