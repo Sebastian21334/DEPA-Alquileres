@@ -1,5 +1,6 @@
 import type { Reserva } from '../services/reservation.service';
 import { DIAS_MINIMOS_REPROGRAMACION, diasDeAntelacion, rentalDays } from './rental-dates';
+import { formatearImporteConMoneda } from './formato-numero';
 
 export type EstadoEstadia =
   | 'PENDIENTE_PAGO'
@@ -31,6 +32,14 @@ export const etiquetasEstadia: Record<EstadoEstadia, string> = {
 export function devolucionRegistrada(reserva: Reserva) {
   if (reserva.referencia_liquidacion?.startsWith('SIMULADO:tarjeta:')) {
     return { etiqueta: 'Devolución simulada', mensaje: 'Devolución de prueba. No se transfirió dinero.' };
+  }
+  // Lo devuelto sale del pago, así que sigue visible cuando después se le paga el resto al anunciante.
+  const devolucion = reserva.devolucion_inquilino;
+  if (devolucion && devolucion.devuelto < devolucion.pagado - 0.009) {
+    return {
+      etiqueta: 'Reembolsada parcialmente',
+      mensaje: `Devolución parcial al inquilino: ${formatearImporteConMoneda(devolucion.devuelto, devolucion.moneda)} de ${formatearImporteConMoneda(devolucion.pagado, devolucion.moneda)}.`,
+    };
   }
   if (reserva.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO') {
     return {
