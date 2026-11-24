@@ -6,7 +6,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
-import { fechaArgentina } from '../../common/utils/fechas';
+import { diasDeAntelacion, fechaArgentina } from '../../common/utils/fechas';
 import { decimalEntero, importeTexto } from '../../common/utils/importes';
 import type { Pago } from '../../pagos/entity/pago.entity';
 import {
@@ -267,10 +267,7 @@ export class CancelacionesService {
   }
 
   private diasHastaIngreso(reserva: Reserva, hoy: string): number {
-    if (!reserva.fecha_inicio) return 0;
-    const inicio = new Date(`${reserva.fecha_inicio}T12:00:00Z`).getTime();
-    const ahora = new Date(`${hoy}T12:00:00Z`).getTime();
-    return (inicio - ahora) / 86_400_000;
+    return reserva.fecha_inicio ? diasDeAntelacion(reserva.fecha_inicio, hoy) : 0;
   }
 
   /** De quien pidió o decidió la solicitud solo viaja su identidad; las relaciones que no se cargaron no se agregan. */

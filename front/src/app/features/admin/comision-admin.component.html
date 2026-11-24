@@ -1,0 +1,23 @@
+<section class="commission-section" aria-label="Configuración de comisión">
+  @if (cargando()) {
+    <p role="status">Cargando comisión…</p>
+  } @else if (error()) {
+    <p class="alert alert--error" role="alert">No se pudo cargar la comisión: {{ error() }}</p>
+    <button type="button" class="button button--ghost" (click)="cargar()">Reintentar</button>
+  } @else if (actual !== null) {
+    <div class="commission-grid">
+      <div class="commission-current">
+        <div class="commission-current__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 10 5-10 5L2 7l10-5Z"/><path d="m2 12 10 5 10-5M2 17l10 5 10-5"/></svg></div>
+        <span>Porcentaje actual</span>
+        <strong>{{ actual }}<span> %</span></strong>
+      </div>
+      <form class="commission-form" (ngSubmit)="guardar()">
+        <h2><span class="commission-form__icon" aria-hidden="true">%</span> Cambiar comisión</h2>
+        <p class="commission-info"><span aria-hidden="true">ⓘ</span> El porcentaje se aplica a nuevas reservas y no modifica las anteriores.</p>
+        <label for="comision-depa">Nuevo porcentaje</label>
+        <div class="commission-input"><input id="comision-depa" type="number" name="comision" min="0" max="100" step="0.01" [(ngModel)]="nueva" required /><span aria-hidden="true">%</span></div>
+        <button class="commission-save" type="submit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 3h14l3 3v15H3V3h1Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg>Guardar comisión</button>
+      </form>
+    </div>
+  }
+</section>

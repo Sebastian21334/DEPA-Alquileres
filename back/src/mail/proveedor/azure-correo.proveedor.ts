@@ -1,13 +1,21 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { type FactoryProvider, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EmailClient } from '@azure/communication-email';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLIENTE_CORREO } from './cliente-correo.interface';
 import type { ClienteCorreo } from './cliente-correo.interface';
-import { Correo, ICorreoRepository } from '../repository/correo.repository.interface';
+import type { Correo, IProveedorCorreo } from './proveedor-correo.interface';
+
+/** Cliente del SDK de Azure Communication Services, creado con la cadena de conexión del entorno. */
+export const clienteCorreoAzure: FactoryProvider = {
+  provide: CLIENTE_CORREO,
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => new EmailClient(config.getOrThrow<string>('ACS_CONNECTION_STRING')),
+};
 
 @Injectable()
-export class AzureCorreoProveedor implements ICorreoRepository {
+export class AzureCorreoProveedor implements IProveedorCorreo {
   private readonly logger = new Logger(AzureCorreoProveedor.name);
   private readonly logo = readFileSync(join(__dirname, '../presentation/assets/logo-depa.png'), 'base64');
   private readonly remitente: string;

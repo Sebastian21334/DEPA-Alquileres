@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import {
   Body,
@@ -61,7 +62,7 @@ export class PagosController {
   @PermitirAccesoLimitado()
   @Get('reservas/:id/resumen')
   consultarResumen(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
-    return this.operaciones.consultarResumen(id, req.user.id, req.user.rol === 'Administrador');
+    return this.operaciones.consultarResumen(id, req.user.id, req.user.rol === ROL.ADMINISTRADOR);
   }
 
   @Post('webhook')

@@ -1,0 +1,90 @@
+// Listas de consulta de Catálogos y Ubicaciones.
+.management {
+  overflow: visible;
+}
+// Se mantiene el recorte que antes aplicaba .panel por orden de cascada.
+.panel.management {
+  overflow: hidden;
+}
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  padding: 22px;
+}
+.location-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: 22px;
+}
+.catalog-card {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #dfe6ea;
+  border-radius: 12px;
+  background: #fff;
+}
+.catalog-card h3 {
+  margin: 0 0 14px;
+  font-size: 1rem;
+}
+.crud-list {
+  max-height: 260px;
+  // El ítem elegido se extiende unos píxeles a los lados: solo se desplaza en vertical.
+  overflow-x: hidden;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid #edf0f2;
+}
+.crud-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 45px;
+  padding: 8px 3px;
+  border-bottom: 1px solid #edf0f2;
+  font-size: 0.88rem;
+}
+.crud-list li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.location-name {
+  min-width: 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+  border: 0;
+  background: transparent;
+  color: #102a3a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.crud-list .selected {
+  margin: 0 -3px;
+  padding-inline: 8px;
+  border-radius: 7px;
+  background: #edf3ff;
+}
+.empty-row {
+  justify-content: center;
+  color: #71818a;
+}
+@media (max-width: 1000px) {
+  .catalog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 700px) {
+  .catalog-grid,
+  .location-grid {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+}
+@media (max-width: 700px) {
+  .catalog-card { overflow-wrap: anywhere; }
+}

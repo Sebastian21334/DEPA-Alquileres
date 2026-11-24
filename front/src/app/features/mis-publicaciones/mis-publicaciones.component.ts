@@ -1,3 +1,4 @@
+import { formatearEntero } from '../../shared/utils/formato-numero';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
@@ -171,7 +172,7 @@ export class MisPublicacionesComponent {
   }
 
   protected precio(p: Publicacion): string {
-    return `${p.tipoMoneda?.nombre ?? '$'} ${Number(p.precio).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+    return `${p.tipoMoneda?.nombre ?? '$'} ${formatearEntero(Number(p.precio))}`;
   }
 
   protected ubicacion(p: Publicacion): string {

@@ -1,3 +1,4 @@
+import { formatearMoneda } from '../../shared/utils/formato-numero';
 import { Component, DestroyRef, computed, inject, input, OnInit, output, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize } from 'rxjs';
@@ -38,9 +39,7 @@ export class ReservaReprogramacionComponent implements OnInit {
   protected readonly horaActualizada = computed(() => this.actualizado()?.toLocaleTimeString('es-AR'));
   protected readonly total = computed(() => {
     const reserva = this.reserva();
-    return Number(reserva.importe_contratado ?? reserva.monto_pago).toLocaleString('es-AR', {
-      style: 'currency', currency: reserva.moneda_contratada ?? 'ARS',
-    });
+    return formatearMoneda(reserva.importe_contratado ?? reserva.monto_pago, reserva.moneda_contratada);
   });
   protected readonly errorCambio = signal('');
   protected readonly rangoDisponible = computed(() => {

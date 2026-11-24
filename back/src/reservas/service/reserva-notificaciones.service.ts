@@ -9,7 +9,7 @@ import { Reserva } from '../entity/reserva.entity';
 import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
 import type { IReservaRepository } from '../repository/reserva.repository.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
-import type { IMailService } from '../../mail/mail.interface';
+import type { IMailReservas } from '../../mail/mail.interface';
 import { conversionContratada, nombreInquilinoReserva, normalizarFechaReserva } from './reservas.utils';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
@@ -23,7 +23,7 @@ type DestinoAviso = 'inquilino' | 'anunciante' | 'admin';
 @Injectable()
 export class ReservaNotificacionesService {
   private readonly logger = new Logger(ReservaNotificacionesService.name);
-  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService, private readonly catalogos: CatalogosService, private readonly usuariosService: UsuariosService) {}
+  constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailReservas, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService, private readonly catalogos: CatalogosService, private readonly usuariosService: UsuariosService) {}
 
   async avisarCambio(reserva: Reserva, destinos: readonly DestinoAviso[], asunto: string, mensaje: string, excluirUsuario?: number): Promise<boolean> {
     const participantes = { inquilino: reserva.usuario, anunciante: reserva.publicacion?.anunciante?.usuario };
