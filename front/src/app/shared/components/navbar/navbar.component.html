@@ -146,13 +146,21 @@
         </button>
         @if (chatsAbiertos()) {
           <div class="drawer__chats">
+            <label class="drawer__chat-search">
+              <svg lucideSearch [size]="18" aria-hidden="true"></svg>
+              <input type="search" aria-label="Buscar persona o publicación" placeholder="Buscar persona o publicación"
+                [value]="busquedaChats()" (input)="buscarChats($any($event.target).value)" />
+            </label>
             <app-conversation-list
-              [conversaciones]="conversaciones()"
+              [conversaciones]="conversacionesVisibles()"
               [cargando]="cargandoChats()"
               [error]="errorChats()"
-              [vacio]="accesoLimitado() ? 'Todavía no tenés conversaciones.' : 'Todavía no tenés conversaciones. Escribile a un anunciante desde una publicación.'"
+              [vacio]="busquedaChats().trim() ? 'No encontramos conversaciones para esa búsqueda.' : accesoLimitado() ? 'Todavía no tenés conversaciones.' : 'Todavía no tenés conversaciones. Escribile a un anunciante desde una publicación.'"
               (seleccionar)="abrirChat($event)"
             />
+            @if (!cargandoChats() && !errorChats() && conversacionesVisibles().length < conversacionesFiltradas().length) {
+              <button type="button" class="drawer__chat-more" (click)="verMasChats()">Ver más</button>
+            }
           </div>
         }
       </li>

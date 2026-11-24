@@ -261,9 +261,9 @@ export class AdminService {
   conciliarReembolso(id: number, referencia: string) {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/conciliar`, { referencia });
   }
-  /** Una devolución que Mercado Pago no hizo sigue por transferencia, con chat y comprobante. */
-  pasarATransferenciaReembolso(id: number) {
-    return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/pasar-a-transferencia`, {});
+
+  habilitarTransferenciaReembolso(id: number) {
+    return this.http.patch<AdminReembolso>(`${this.api}/reservas/reembolsos/${id}/habilitar-transferencia`, {});
   }
 
   /** Multipart con el comprobante obligatorio y la referencia opcional. */

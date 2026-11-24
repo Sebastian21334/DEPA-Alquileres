@@ -29,6 +29,9 @@ export const etiquetasEstadia: Record<EstadoEstadia, string> = {
 };
 
 export function devolucionRegistrada(reserva: Reserva) {
+  if (reserva.referencia_liquidacion?.startsWith('SIMULADO:tarjeta:')) {
+    return { etiqueta: 'Devolución simulada', mensaje: 'Devolución de prueba. No se transfirió dinero.' };
+  }
   if (reserva.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO') {
     return {
       etiqueta: 'Reembolsada parcialmente',

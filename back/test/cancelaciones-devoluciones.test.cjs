@@ -22,6 +22,7 @@ const { comprobantePdf, almacenamientoDePrueba, imagenPng } = require('./soporte
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
+const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
 const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
 const { ReservaRepository } = require('../dist/reservas/repository/reserva.repository');
 const { ReservaEstadoService } = require('../dist/reservas-consulta/service/reserva-estado.service');
@@ -104,11 +105,33 @@ async function escenario(fechaInicio = '2099-01-10') {
   return { reserva, pago, crearReembolso };
 }
 
+// Las solicitudes anteriores al flujo automático siguen siendo resolubles.
+function solicitudHistorica(idReserva, dto, idUsuario) {
+  return source.getRepository(SolicitudCancelacion).save({
+    reserva: { id: idReserva }, solicitante: { id: idUsuario }, motivo: dto.motivo,
+    estado: 'PENDIENTE', creada_en: new Date(),
+  });
+}
+
+async function confirmarCancelacion(reserva, idUsuario, cambios = {}) {
+  const { devolucion } = await cancelaciones.consultarCondiciones(reserva.id, idUsuario);
+  return cancelaciones.solicitar(reserva.id, {
+    motivo: 'Cambio de planes', aceptaTerminos: true,
+    importeAceptado: devolucion?.importe, monedaAceptada: devolucion?.moneda, ...cambios,
+  }, idUsuario);
+}
+
+function consultarPagoDelInquilino(idReserva) {
+  const pagos = new PagosService(new PagosRepository(source.getRepository(Pago)));
+  const operaciones = new OperacionesPagoService(null, pagos, reservas, reembolsos, null, pasarela, catalogosDePrueba(), operacionesReembolso);
+  return operaciones.consultarResumen(idReserva, 1);
+}
+
 async function cancelacionConFaltante(recibido = 30) {
   const { reserva, pago } = await escenario();
   // Pago histórico sin el medio confirmado: conserva la gestión por transferencia.
   await source.getRepository(Pago).update(pago.id, { payment_method_id: null });
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   await source.getRepository(SolicitudCancelacion).update(solicitud.id, { creada_en: new Date('2099-01-08T15:00:00Z') });
   const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   if (recibido > 0) {
@@ -120,6 +143,151 @@ async function cancelacionConFaltante(recibido = 30) {
 }
 
 const descripcionFaltante = 'Recibí una devolución menor a la que correspondía por la cancelación.';
+
+test('automática: valida el importe aceptado y aprueba una sola solicitud', async () => {
+  const { reserva } = await escenario();
+  const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
+  const datos = { motivo: 'Cambio de planes', aceptaTerminos: true, importeAceptado: condiciones.devolucion.importe, monedaAceptada: condiciones.devolucion.moneda };
+  await assert.rejects(() => cancelaciones.solicitar(reserva.id, { ...datos, importeAceptado: datos.importeAceptado + 1 }, 1));
+  const primera = await cancelaciones.solicitar(reserva.id, datos, 1);
+  const segunda = await cancelaciones.solicitar(reserva.id, datos, 1);
+  assert.equal(primera.id, segunda.id);
+  assert.equal(primera.estado, 'APROBADA');
+  assert.equal((await source.getRepository(Reembolso).find()).length, 1);
+});
+
+test('automática: tarjeta se simula sin llamar al proveedor de devolución', async () => {
+  const { reserva } = await escenario();
+  const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 2);
+  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true, importeAceptado: condiciones.devolucion.importe, monedaAceptada: condiciones.devolucion.moneda }, 2);
+  assert.equal(solicitud.estado, 'APROBADA');
+  const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
+  pasarela.consultarPago = async () => ({ id: 'mp-1', status: 'approved', payment_type_id: 'credit_card' });
+  pasarela.permiteSimulacionTarjeta = () => true;
+  pasarela.reembolsar = async () => { throw new Error('No debe solicitarse devolución real'); };
+  const resultado = await reembolsos.ejecutarCancelacionAutomatica(reembolso.id);
+  assert.equal(resultado.estado, 'APROBADO');
+  assert.match(resultado.referencia_externa, /^SIMULADO:tarjeta:/);
+  await operacionesReembolso.aplicarReembolsoConfirmado(reembolso.id);
+  const actual = await reservas.obtenerReserva(reserva.id);
+  assert.equal(actual.cancelada, true);
+  assert.equal(actual.cancelada_por, 'ANUNCIANTE');
+  assert.equal(actual.referencia_liquidacion, resultado.referencia_externa);
+  const { pago } = await consultarPagoDelInquilino(reserva.id);
+  assert.equal(pago.amount, 100);
+  assert.deepEqual(pago.devolucion, { reembolsado: 0, simulado: 100, sinDevolver: 100 });
+});
+
+test('automática: el resumen separa el pago original de una devolución parcial aprobada', async () => {
+  const { reserva, pago } = await escenario(fechaEnDias(2));
+  await source.getRepository(Pago).update(pago.id, { amount: 6 });
+  await confirmarCancelacion(reserva, 1);
+  assert.equal((await consultarPagoDelInquilino(reserva.id)).pago.devolucion, null);
+  const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
+  pasarela.consultarPago = async () => ({ id: pago.payment_id, status: 'approved', payment_type_id: 'account_money' });
+  await reembolsos.ejecutarCancelacionAutomatica(reembolso.id);
+  const { pago: resumen } = await consultarPagoDelInquilino(reserva.id);
+  assert.equal(resumen.amount, 6);
+  assert.deepEqual(resumen.devolucion, { reembolsado: 3, simulado: 0, sinDevolver: 3 });
+});
+
+test('automática: no simula tarjeta cuando la simulación está deshabilitada', async () => {
+  const { reserva } = await escenario();
+  const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
+  await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true, importeAceptado: condiciones.devolucion.importe, monedaAceptada: condiciones.devolucion.moneda }, 1);
+  const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
+  pasarela.consultarPago = async () => ({ id: 'mp-1', status: 'approved', payment_type_id: 'debit_card' });
+  pasarela.permiteSimulacionTarjeta = () => false;
+  const resultado = await reembolsos.ejecutarCancelacionAutomatica(reembolso.id);
+  assert.equal(resultado.estado, 'PENDIENTE');
+  assert.equal(resultado.transferencia_manual, true);
+  assert.deepEqual(await reembolsos.listarCancelacionesAutomaticasPendientes(0), []);
+});
+
+test('automática: dinero en cuenta solicita devolución real y aplica la cancelación', async () => {
+  const { reserva } = await escenario();
+  const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
+  await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true, importeAceptado: condiciones.devolucion.importe, monedaAceptada: condiciones.devolucion.moneda }, 1);
+  const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
+  let llamadas = 0;
+  pasarela.consultarPago = async () => ({ id: 'mp-1', status: 'approved', payment_type_id: 'account_money' });
+  pasarela.reembolsar = async (_id, importe) => { llamadas++; return { id: 'refund-real', status: 'approved', amount: importe }; };
+  const resultado = await reembolsos.ejecutarCancelacionAutomatica(reembolso.id);
+  assert.equal(resultado.estado, 'APROBADO');
+  await reembolsos.ejecutarCancelacionAutomatica(reembolso.id);
+  assert.equal(llamadas, 1);
+  await operacionesReembolso.aplicarReembolsoConfirmado(reembolso.id);
+  assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).cancelada, true);
+  assert.deepEqual((await consultarPagoDelInquilino(reserva.id)).pago.devolucion,
+    { reembolsado: 100, simulado: 0, sinDevolver: 0 });
+});
+
+test('automática: un error al liberar las fechas deja la aprobación sin aplicar y se recupera sin devolver otra vez', async t => {
+  const { reserva } = await escenario();
+  await confirmarCancelacion(reserva, 1);
+  pasarela.consultarPago = async () => ({ id: 'mp-1', status: 'approved', payment_type_id: 'account_money' });
+  const devolver = t.mock.method(pasarela, 'reembolsar');
+  const liberar = t.mock.method(disponibilidad, 'liberarReserva', async () => { throw new Error('Calendario temporalmente indisponible'); });
+
+  await operacionesReembolso.conciliar();
+  const [reembolso] = await source.getRepository(Reembolso).find();
+  assert.equal(reembolso.estado, 'APROBADO');
+  assert.equal(reembolso.aplicado_en, null);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada, false);
+
+  liberar.mock.restore();
+  await operacionesReembolso.conciliar();
+  await operacionesReembolso.conciliar();
+  assert.ok((await reembolsos.buscar(reembolso.id)).aplicado_en);
+  assert.equal((await reservas.obtenerReserva(reserva.id)).cancelada_por, 'INQUILINO');
+  assert.equal(devolver.mock.callCount(), 1);
+});
+
+test('el anunciante puede identificar al huésped pero solo el titular y administración ven su contacto', async () => {
+  const { reserva } = await escenario();
+  await source.getRepository(Reserva).update(reserva.id, { usuario_email: 'privado@example.invalid', usuario_telefono: '555001' });
+  const recibidas = await reservas.listarRecibidasPorAnunciante(2);
+  const detalle = await reservas.buscarPorId(reserva.id, 2);
+  for (const respuesta of [recibidas[0], detalle]) {
+    assert.equal(respuesta.usuario.id, 1);
+    assert.equal(respuesta.usuario.email, null);
+    assert.equal(respuesta.usuario.email_historico, null);
+    assert.equal(respuesta.usuario.telefono, '');
+    assert.equal(respuesta.usuario_email, null);
+    assert.equal(respuesta.usuario_telefono, null);
+  }
+  assert.equal((await reservas.buscarPorId(reserva.id, 1)).usuario_email, 'privado@example.invalid');
+  assert.equal((await reservas.buscarParaAdministracion(reserva.id)).usuario_telefono, '555001');
+  await confirmarCancelacion(reserva, 1);
+  assert.equal((await cancelaciones.consultarActiva(reserva.id, 2)).solicitante.email, undefined);
+});
+
+test('el reembolso fallido pasa a transferencia solo cuando Mercado Pago permite descartar un reintegro duplicado', async () => {
+  const { reserva, pago } = await escenario();
+  await confirmarCancelacion(reserva, 1);
+  const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
+  const repo = source.getRepository(Reembolso);
+  await assert.rejects(reembolsos.habilitarTransferenciaFallida(reembolso.id), { status: 409 });
+  await repo.update(reembolso.id, { estado: 'FALLIDO', primer_intento_en: new Date() });
+  let consultas = 0;
+  pasarela.listarReembolsos = async () => { consultas++; return []; };
+  await assert.rejects(reembolsos.habilitarTransferenciaFallida(reembolso.id), { status: 409 });
+  assert.equal(consultas, 0);
+  await repo.update(reembolso.id, { primer_intento_en: new Date(Date.now() - 16 * 60_000) });
+  for (const status of ['pending', 'approved']) {
+    pasarela.listarReembolsos = async () => [{ id: 123, status, amount: 100, payment_id: pago.payment_id }];
+    await assert.rejects(reembolsos.habilitarTransferenciaFallida(reembolso.id), { status: 409 });
+  }
+  pasarela.listarReembolsos = async () => [{ id: 123, status: 'rejected', payment_id: pago.payment_id }];
+  let habilitada = await reembolsos.habilitarTransferenciaFallida(reembolso.id);
+  assert.deepEqual([habilitada.estado, habilitada.transferencia_manual], ['PENDIENTE', true]);
+  assert.equal((await reembolsos.habilitarTransferenciaFallida(reembolso.id)).id, habilitada.id);
+  assert.deepEqual(await reembolsos.listarCancelacionesAutomaticasPendientes(0), []);
+  const resultado = await operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'Banco 123' }, comprobantePdf(), 3);
+  assert.equal(resultado.reembolso.estado, 'APROBADO');
+  assert.equal(resultado.reserva.cancelada, true);
+  await assert.rejects(reembolsos.habilitarTransferenciaFallida(reembolso.id), { status: 409 });
+});
 
 test('reclama y completa solo los 20 faltantes de una devolución del 50 %, incluso antes del ingreso', async () => {
   const { reserva, pago, solicitud } = await cancelacionConFaltante();
@@ -734,8 +902,9 @@ test('en una cancelación sin devolución, lo retenido se le liquida al anuncian
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
   const { reserva } = await escenario('2099-01-10');
   const operaciones = operacionesLiquidacion();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
-  assert.equal((await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3)).reembolso, null);
+  // Un día antes del ingreso corresponde el 0 %: se cancela sin devolución.
+  assert.equal((await confirmarCancelacion(reserva, 1)).estado, 'APROBADA');
+  assert.deepEqual(await reembolsos.listarPorReserva(reserva.id), []);
   const fila = await filaLiquidacion(operaciones, reserva.id);
   assert.deepEqual([fila.cancelada, fila.estado_liquidacion, fila.importe_a_liquidar, fila.habilitada_para_pago],
     [true, 'PENDIENTE_PAGO_PROPIETARIO', 100, false]);
@@ -753,8 +922,7 @@ test('una cancelada que quedó en revisión se puede cerrar para pagarle al anun
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
   const { reserva } = await escenario('2099-01-10');
   const operaciones = operacionesLiquidacion();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
-  await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
+  await confirmarCancelacion(reserva, 1);
   // Así quedaban las cancelaciones sin devolución antes de este cambio.
   await source.query("UPDATE liquidacion SET estado = 'EN_REVISION' WHERE id_reserva = $1", [reserva.id]);
   t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
@@ -773,11 +941,14 @@ test('en una cancelación con devolución parcial, lo que no se devolvió se le 
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-05T15:00:00Z') });
   const { reserva } = await escenario('2099-01-07');
   const operaciones = operacionesLiquidacion();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
-  const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
-  const devuelto = Number(reembolso.importe);
+  await confirmarCancelacion(reserva, 1);
+  // La devolución de la cancelación se procesa sola: con dinero en cuenta la hace Mercado Pago.
+  const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
+  pasarela.consultarPago = async () => ({ id: 'mp-1', status: 'approved', payment_type_id: 'account_money' });
+  assert.equal((await reembolsos.ejecutarCancelacionAutomatica(reembolso.id)).estado, 'APROBADO');
+  await operacionesReembolso.aplicarReembolsoConfirmado(reembolso.id);
+  const devuelto = Number((await reembolsos.buscar(reembolso.id)).importe);
   assert.ok(devuelto > 0 && devuelto < 100, `devolución parcial: ${devuelto}`);
-  if (reembolso.estado !== 'APROBADO') await operacionesReembolso.ejecutar(reembolso.id, 3);
 
   t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
   const fila = await filaLiquidacion(operaciones, reserva.id);
@@ -1091,7 +1262,7 @@ test('la operación administrativa no informa éxito con una devolución externa
 
 test('la cancelación aprobada conserva la reserva hasta confirmar la devolución', async () => {
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   assert.equal(Number(resultado.reembolso.importe), 100);
   assert.equal((await source.getRepository(Reserva).findOneByOrFail({ id: reserva.id })).cancelada, false);
@@ -1128,7 +1299,7 @@ for (const caso of [
     assert.equal(condiciones.devolucion.porcentaje, caso.porcentaje);
     assert.equal(condiciones.devolucion.importe, caso.esperado);
     assert.equal(condiciones.devolucion.moneda, 'ARS');
-    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, caso.actor);
+    const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, caso.actor);
     const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
     assert.equal(Number(reembolso.importe), caso.esperado);
     assert.equal(reembolso.moneda, 'ARS');
@@ -1153,7 +1324,7 @@ test('una publicación en dólares se devuelve en la moneda y el importe del pag
   await source.getRepository(Pago).update(pago.id, { amount: 60000, currency: 'ARS' });
   const condiciones = await cancelaciones.consultarCondiciones(reserva.id, 1);
   assert.deepEqual([condiciones.devolucion.importe, condiciones.devolucion.moneda], [60000, 'ARS']);
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   assert.equal(Number(reembolso.importe), 60000);
   assert.equal(reembolso.moneda, 'ARS');
@@ -1163,7 +1334,7 @@ test('no aprueba un importe que exceda el saldo disponible ni deja una devoluci�
   const { reserva, pago, crearReembolso } = await escenario();
   await source.getRepository(Pago).update(pago.id, { amount: 75.35 });
   await crearReembolso({ origen: OrigenReembolso.AJUSTE_ADMIN, tipo: TipoReembolso.PARCIAL, importe: 40 });
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /saldo reembolsable/);
   assert.equal((await solicitudActual(solicitud.id)).estado, 'PENDIENTE');
   assert.equal(await source.getRepository(Reembolso).count(), 1);
@@ -1179,7 +1350,7 @@ for (const caso of [
   test(`la lista administrativa muestra ${caso.porcentaje} % (${caso.moneda}) según la fecha y el autor de la solicitud`, async () => {
     const { reserva, pago } = await escenario();
     await source.getRepository(Pago).update(pago.id, { amount: 75.35, currency: caso.moneda });
-    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, caso.actor);
+    const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, caso.actor);
     await source.getRepository(SolicitudCancelacion).update(solicitud.id, { creada_en: new Date(`${caso.fecha}T15:00:00Z`) });
     const [pendiente] = await cancelaciones.listarPendientes();
     assert.equal(pendiente.id, solicitud.id);
@@ -1202,7 +1373,7 @@ for (const caso of [
 test('sin pago registrado no aprueba una devolución ni reemplaza su importe por cero', async () => {
   const { reserva, pago } = await escenario();
   await source.getRepository(Pago).delete(pago.id);
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   const [pendiente] = await cancelaciones.listarPendientes();
   assert.equal(pendiente.id, solicitud.id);
   assert.equal(pendiente.devolucion, null);
@@ -1225,7 +1396,7 @@ for (const [fechaSolicitud, fechaAprobacion, porcentaje, dias] of [
       fechaSolicitud: fechaSolicitud === '2099-01-04T01:00:00Z' ? '2099-01-03' : fechaSolicitud.slice(0, 10),
       diasAnticipacion: dias, porcentaje, importe: porcentaje, moneda: 'ARS',
     });
-    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+    const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
     assert.equal(solicitud.creada_en.toISOString(), fechaSolicitud.replace('Z', '.000Z'));
     t.mock.timers.setTime(new Date(fechaAprobacion).getTime());
     const pendiente = await cancelaciones.consultarCondiciones(reserva.id, 1);
@@ -1245,7 +1416,7 @@ test('la vista previa usa el actor solicitante y redondea el importe en la moned
   assert.equal(inquilino.devolucion.importe, 50.01);
   const anunciante = await cancelaciones.consultarCondiciones(reserva.id, 2);
   assert.equal(anunciante.devolucion.porcentaje, 100);
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   const consultaDelAnunciante = await cancelaciones.consultarCondiciones(reserva.id, 2);
   assert.equal(consultaDelAnunciante.solicitud.id, solicitud.id);
   assert.deepEqual(consultaDelAnunciante.devolucion, inquilino.devolucion);
@@ -1267,8 +1438,8 @@ test('la solicitud admite exactamente dos días y exige aceptar los términos', 
   assert.equal(condiciones.motivoBloqueo, null);
   assert.equal(condiciones.politica.porcentajeParcial, 50);
   assert.equal(condiciones.advertencia, null);
-  const dto = await validar({ motivo, aceptaTerminos: true });
-  assert.equal((await cancelaciones.solicitar(reserva.id, dto, 1)).estado, 'PENDIENTE');
+  const dto = await validar({ motivo, aceptaTerminos: true, importeAceptado: 50, monedaAceptada: 'ARS' });
+  assert.equal((await cancelaciones.solicitar(reserva.id, dto, 1)).estado, 'APROBADA');
 });
 
 test('el inquilino puede solicitar el día anterior con advertencia y sin devolución', async () => {
@@ -1280,10 +1451,9 @@ test('el inquilino puede solicitar el día anterior con advertencia y sin devolu
   assert.match(condiciones.advertencia, /no recibirás devolución.*0 %/);
   assert.equal(condiciones.devolucion.importe, 0);
   assert.equal(condiciones.devolucion.porcentaje, 0);
-  const solicitud = await cancelaciones.solicitar(reserva.id, dto, 1);
-  assert.equal(solicitud.estado, 'PENDIENTE');
-  const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
-  assert.equal(resultado.reembolso, null);
+  const solicitud = await confirmarCancelacion(reserva, 1);
+  assert.equal(solicitud.estado, 'APROBADA');
+  assert.equal(solicitud.reserva.cancelada, true);
   assert.equal(await source.getRepository(Reembolso).count(), 0);
   const actual = await reservas.obtenerReserva(reserva.id);
   assert.equal(actual.cancelada, true);
@@ -1304,7 +1474,7 @@ test('desde la medianoche argentina del ingreso se bloquea al inquilino aunque n
   assert.match(desdeIngreso.motivoBloqueo, /Desde la fecha de ingreso/);
   assert.equal(desdeIngreso.advertencia, null);
   assert.equal(desdeIngreso.devolucion, null);
-  await assert.rejects(cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1), { status: 400 });
+  await assert.rejects(confirmarCancelacion(reserva, 1), { status: 400 });
   assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
 });
 
@@ -1316,7 +1486,7 @@ for (const dias of [7, 1]) {
     assert.equal(condiciones.devolucion.porcentaje, 100);
     let liberaciones = 0;
     disponibilidad.liberarReserva = async () => { liberaciones += 1; };
-    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+    const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
     const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
     assert.equal(resultado.reembolso.tipo, 'TOTAL');
     assert.equal(Number(resultado.reembolso.importe), 100);
@@ -1347,7 +1517,7 @@ for (const actor of [1, 2]) {
       test(`la solicitud del actor ${actor} queda RECHAZADA por demora al intentar ${decision} el día ${dia} del ingreso`, async t => {
         t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-10T02:59:59Z') });
         const { reserva } = await escenario();
-        const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, actor);
+        const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, actor);
         t.mock.timers.setTime(new Date(`2099-01-${dia}T03:00:00Z`).getTime());
         await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision }, 3), /rechazada por falta de resolución/);
         assert.equal((await solicitudActual(solicitud.id)).estado, 'RECHAZADA');
@@ -1361,7 +1531,7 @@ for (const actor of [1, 2]) {
 test('el código validado vence una solicitud del anunciante enviada antes del ingreso', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
   await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
   t.mock.timers.setTime(new Date('2099-01-10T15:00:00Z').getTime());
   await reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2);
@@ -1375,7 +1545,7 @@ test('una cancelación del anunciante aprobada antes del ingreso impide validar 
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
   const { reserva } = await escenario();
   await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
   await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   t.mock.timers.setTime(new Date('2099-01-10T15:00:00Z').getTime());
   await assert.rejects(reservas.validarCodigoAlojamiento(reserva.id, '12345678', 2), /cancelación aprobada/);
@@ -1385,7 +1555,7 @@ test('una cancelación del anunciante aprobada antes del ingreso impide validar 
 test('si falla el calendario al confirmar tarde una devolución aprobada antes del ingreso, se reintenta sin duplicarla', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Problema en la propiedad', aceptaTerminos: true }, 2);
   const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   t.mock.timers.setTime(new Date('2099-01-11T15:00:00Z').getTime());
   let movimientos = 0;
@@ -1409,7 +1579,7 @@ for (const medio of [null]) {
     assert.equal(condicionesPago.motivoBloqueo, null);
     assert.equal(condicionesPago.admiteReembolso, true);
     assert.equal(condicionesPago.devolucionPorTransferencia, true);
-    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+    const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
     const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
     assert.equal(resultado.reembolso.transferencia_manual, true);
     assert.equal(resultado.reembolso.estado, 'PENDIENTE');
@@ -1426,7 +1596,7 @@ for (const medio of ['account_money', 'visa', 'master', 'amex', 'debvisa']) {
       assert.equal(condiciones.devolucionPorTransferencia, false);
       const importeEsperado = parcial ? 37.68 : 100;
       assert.equal(condiciones.devolucion.importe, importeEsperado);
-      const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+      const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
       const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
       assert.equal(reembolso.transferencia_manual, false);
       assert.equal(reembolso.estado, 'PENDIENTE');
@@ -1487,51 +1657,6 @@ test('un timeout con tarjeta conserva la vía automática y reintenta con la mis
   assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
 });
 
-test('una devolución pendiente de Mercado Pago puede seguir por transferencia con comprobante', async () => {
-  const { pago, crearReembolso } = await escenario();
-  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
-  const reembolso = await crearReembolso();
-  let intentos = 0;
-  pasarela.reembolsar = async () => { intentos += 1; return { status: 'approved' }; };
-  const { reembolso: pasado } = await operacionesReembolso.pasarATransferencia(reembolso.id);
-  assert.deepEqual([pasado.transferencia_manual, pasado.estado], [true, 'PENDIENTE']);
-  assert.equal((await reembolsos.conversar(reembolso.id, { id: 1 }, 0)).abierta, true);
-  await assert.rejects(operacionesReembolso.ejecutar(reembolso.id, 3), /transferencia bancaria/);
-  const { reembolso: registrado } = await operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'trf-tarjeta' }, comprobantePdf(), 3);
-  assert.deepEqual([registrado.estado, registrado.comprobante_nombre], ['APROBADO', 'transferencia.pdf']);
-  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
-  assert.equal(intentos, 0);
-  // Una vez aprobada ya no cambia de vía.
-  assert.equal((await operacionesReembolso.pasarATransferencia(reembolso.id)).reembolso.estado, 'APROBADO');
-});
-
-test('una devolución fallida sin identificador pasa a transferencia; con identificador, en proceso o aprobada por Mercado Pago, no', async () => {
-  const { crearReembolso, pago } = await escenario();
-  await source.getRepository(Pago).update(pago.id, { payment_method_id: 'master' });
-  const reembolso = await crearReembolso();
-  pasarela.reembolsar = async () => { throw new Error('timeout simulado'); };
-  await assert.rejects(operacionesReembolso.ejecutar(reembolso.id, 3), /timeout simulado/);
-  const filas = source.getRepository(Reembolso);
-  assert.equal((await filas.findOneByOrFail({ id: reembolso.id })).estado, 'FALLIDO');
-
-  await filas.update(reembolso.id, { id_externo: 'mp-informado' });
-  await assert.rejects(operacionesReembolso.pasarATransferencia(reembolso.id), /conciliala con su identificador/);
-  await filas.update(reembolso.id, { id_externo: null, estado: 'EN_PROCESO' });
-  await assert.rejects(operacionesReembolso.pasarATransferencia(reembolso.id), /está procesando/);
-  await filas.update(reembolso.id, { estado: 'APROBADO' });
-  await assert.rejects(operacionesReembolso.pasarATransferencia(reembolso.id), /ya no se puede pasar a transferencia/);
-  await filas.update(reembolso.id, { estado: 'FALLIDO', conciliar_en: new Date() });
-
-  await operacionesReembolso.pasarATransferencia(reembolso.id);
-  const pasado = await filas.findOneOrFail({
-    where: { id: reembolso.id }, select: { id: true, transferencia_manual: true, estado: true, error_detalle: true, conciliar_en: true },
-  });
-  // Deja de conciliarse en Mercado Pago: la devolución se registra con el comprobante.
-  assert.deepEqual([pasado.transferencia_manual, pasado.estado, pasado.error_detalle, pasado.conciliar_en], [true, 'PENDIENTE', null, null]);
-  await operacionesReembolso.registrarTransferencia(reembolso.id, { referencia: 'trf-fallida' }, comprobantePdf(), 3);
-  assert.equal(Number((await source.getRepository(Pago).findOneByOrFail({ id: pago.id })).amount_refunded), 100);
-});
-
 test('una respuesta simulada con otro importe no confirma la devolución de la tarjeta', async () => {
   const { pago, crearReembolso } = await escenario();
   await source.getRepository(Pago).update(pago.id, { payment_method_id: 'visa' });
@@ -1556,7 +1681,7 @@ test('el complemento del reclamo de una tarjeta devuelve solo el faltante por la
 
 test('la devolución de una cancelación queda identificada por su solicitud', async () => {
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   const guardado = await source.getRepository(Reembolso).findOneByOrFail({ id: reembolso.id });
   assert.equal(guardado.idempotency_key, `can:${solicitud.id}`);
@@ -1566,7 +1691,7 @@ test('la devolución de una cancelación queda identificada por su solicitud', a
 
 test('resolver dos veces la misma solicitud deja una sola devolución', async () => {
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   // La segunda resolución espera el bloqueo de la solicitud y la encuentra decidida.
   await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), { status: 409 });
@@ -1577,23 +1702,23 @@ test('resolver dos veces la misma solicitud deja una sola devolución', async ()
 test('un reintento recupera la solicitud aprobada mientras su devolución está activa', async () => {
   const { reserva } = await escenario();
   const dto = { motivo: 'Cambio de planes', aceptaTerminos: true };
-  const solicitud = await cancelaciones.solicitar(reserva.id, dto, 1);
+  const solicitud = await solicitudHistorica(reserva.id, dto, 1);
   const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
   const activa = await cancelaciones.consultarActiva(reserva.id, 1);
   assert.equal(activa.id, solicitud.id);
   assert.equal(activa.estado, 'APROBADA');
-  assert.equal((await cancelaciones.solicitar(reserva.id, dto, 1)).id, solicitud.id);
+  assert.equal((await confirmarCancelacion(reserva, 1)).id, solicitud.id);
   assert.equal(await source.getRepository(SolicitudCancelacion).count(), 1);
 
   await reembolsos.rechazar(reembolso.id, 'Devolución rechazada', 3);
   assert.equal(await cancelaciones.consultarActiva(reserva.id, 1), null);
-  assert.notEqual((await cancelaciones.solicitar(reserva.id, dto, 1)).id, solicitud.id);
+  assert.notEqual((await confirmarCancelacion(reserva, 1)).id, solicitud.id);
 });
 
 test('aprobar revalida la reserva y conserva la solicitud pendiente si otro flujo la canceló', async () => {
   for (const fecha of [fechaEnDias(2), '2099-01-10']) {
     const { reserva } = await escenario(fecha);
-    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+    const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
     await source.getRepository(Reserva).update(reserva.id, { cancelada: true, cancelada_por: 'ADMINISTRADOR' });
     await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), { status: 409 });
     assert.equal((await solicitudActual(solicitud.id)).estado, 'PENDIENTE');
@@ -1605,11 +1730,12 @@ test('aprobar revalida la reserva y conserva la solicitud pendiente si otro fluj
 
 test('el alta bloquea la reserva antes de buscar solicitudes pendientes', async () => {
   const { reserva } = await escenario();
+  const { devolucion } = await cancelaciones.consultarCondiciones(reserva.id, 1);
   const consultas = [];
   const original = db.query;
   db.query = (sql, parametros) => { consultas.push(sql); return original.call(db, sql, parametros); };
   try {
-    await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+    await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true, importeAceptado: devolucion.importe, monedaAceptada: devolucion.moneda }, 1);
   } finally {
     db.query = original;
   }
@@ -1627,7 +1753,7 @@ test('la fecha de pago selecciona la versión de política y una reserva histór
     for (const [fecha, esperado] of [[null, 100], ['2026-11-12T15:00:00Z', 100], ['2026-11-13T15:00:00Z', 80]]) {
       const { reserva } = await escenario();
       if (fecha) await source.getRepository(Reserva).update(reserva.id, { fecha_pago: new Date(fecha) });
-      const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+      const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
       const { reembolso } = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
       assert.equal(Number(reembolso.importe), esperado);
       await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
@@ -1639,7 +1765,7 @@ test('la fecha de pago selecciona la versión de política y una reserva histór
 
 test('la resolución bloquea la solicitud antes de leer su estado y decide en la misma transacción', async () => {
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   const consultas = [];
   const original = db.query;
   db.query = (sql, parametros) => { consultas.push(sql); return original.call(db, sql, parametros); };
@@ -1663,7 +1789,7 @@ test('la resolución bloquea la solicitud antes de leer su estado y decide en la
 
 test('si falla la liberación de fechas se revierte la aprobación y se puede reintentar', async () => {
   const { reserva } = await escenario(fechaEnDias(1));
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   disponibilidad.liberarReserva = async () => { throw new Error('fallo simulado del calendario'); };
   await assert.rejects(cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3), /fallo simulado del calendario/);
   const pendiente = await solicitudActual(solicitud.id);
@@ -1689,7 +1815,7 @@ test('si falla la liberación de fechas se revierte la aprobación y se puede re
 
 test('si falla la aprobación no queda una devolución sin decisión', async () => {
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   let fallar = true;
   const conFallo = new CancelacionesService(repositorioInterceptado((enTransaccion) => ({
     guardar: async (actual) => {
@@ -1707,15 +1833,15 @@ test('si falla la aprobación no queda una devolución sin decisión', async () 
 
 test('rechazar o dejar vencer una solicitud no cancela la reserva ni crea devoluciones', async () => {
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
-  assert.equal((await cancelaciones.solicitar(reserva.id, { motivo: 'Otro pedido igual', aceptaTerminos: true }, 1)).id, solicitud.id);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  assert.equal((await confirmarCancelacion(reserva, 1, { motivo: 'Otro pedido igual' })).id, solicitud.id);
   const rechazo = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'RECHAZADA', observacion: ' No corresponde ' }, 3);
   assert.equal(rechazo.reembolso, null);
   assert.equal(rechazo.solicitud.estado, 'RECHAZADA');
   assert.equal(rechazo.solicitud.observacion, 'No corresponde');
   await assert.rejects(cancelaciones.resolver(reserva.id + 1, solicitud.id, { decision: 'APROBADA' }, 3), { status: 404 });
 
-  const otra = await cancelaciones.solicitar(reserva.id, { motivo: 'Segundo pedido', aceptaTerminos: true }, 1);
+  const otra = await solicitudHistorica(reserva.id, { motivo: 'Segundo pedido', aceptaTerminos: true }, 1);
   assert.notEqual(otra.id, solicitud.id);
   await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: '2026-01-01' });
   await assert.rejects(cancelaciones.resolver(reserva.id, otra.id, { decision: 'APROBADA' }, 3), /rechazada por falta de resolución/);
@@ -1868,7 +1994,7 @@ test('la migración une imágenes y mensajes, conserva las imágenes existentes 
 for (const [dias, porcentaje] of [[7, 100], [2, 50], [1, 0]]) {
   test(`cancelar con ${dias} días de anticipación aplica ${porcentaje}% de devolución`, async () => {
     const { reserva } = await escenario(fechaEnDias(dias));
-    const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+    const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
     const resultado = await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'APROBADA' }, 3);
     const listado = await reembolsos.listarAdministracion();
     if (porcentaje > 0) {
@@ -2172,7 +2298,7 @@ test('el webhook de reembolso permite recuperar la aplicación tras un fallo sin
 async function solicitudSinRespuesta(actor = 1) {
   const { fechaArgentina } = require('../dist/common/utils/fechas');
   const caso = await escenario();
-  const solicitud = await cancelaciones.solicitar(caso.reserva.id, { motivo: 'Cambio de planes antes del ingreso', aceptaTerminos: true }, actor);
+  const solicitud = await solicitudHistorica(caso.reserva.id, { motivo: 'Cambio de planes antes del ingreso', aceptaTerminos: true }, actor);
   const hoy = fechaArgentina();
   await source.getRepository(Reserva).update(caso.reserva.id, { fecha_inicio: hoy, fecha_fin: hoy });
   await source.getRepository(SolicitudCancelacion).update(solicitud.id, { creada_en: new Date(Date.now() - 8 * 86400000) });
@@ -2222,7 +2348,7 @@ test('demora administrativa: la demora no habilita a un tercero ni al participan
 
 test('demora administrativa: un rechazo administrativo antes del ingreso no habilita esta categoría', async () => {
   const { reserva } = await escenario();
-  const solicitud = await cancelaciones.solicitar(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
+  const solicitud = await solicitudHistorica(reserva.id, { motivo: 'Cambio de planes', aceptaTerminos: true }, 1);
   await cancelaciones.resolver(reserva.id, solicitud.id, { decision: 'RECHAZADA' }, 3);
   const { fechaArgentina } = require('../dist/common/utils/fechas');
   await source.getRepository(Reserva).update(reserva.id, { fecha_inicio: fechaArgentina() });
@@ -2387,6 +2513,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.equal(await estados.countBy({ codigoAmbito }), 5);
     const http = app.getHttpServer();
     const token = id => app.get(JwtService).sign({ sub: id });
+    const montoAceptado = { importeAceptado: 100, monedaAceptada: 'ARS' };
     const tenant = `Bearer ${token(1)}`, admin = `Bearer ${token(3)}`, ajeno = `Bearer ${token(4)}`;
     const { reserva, pago } = await escenario();
     cobro.external_reference = `reserva:${reserva.id}`;
@@ -2450,6 +2577,16 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     cobro.status = 'approved';
     assert.equal(await source.getRepository(Pago).count(), 1);
     const anunciante = `Bearer ${token(2)}`;
+    await source.getRepository(Reserva).update(reserva.id, { usuario_email: 'privado@example.invalid', usuario_telefono: '555002' });
+    for (const url of [`/reservas/${reserva.id}`, `/pagos/reservas/${reserva.id}/resumen`, '/reservas/recibidas']) {
+      const { body } = await request(http).get(url).set('Authorization', anunciante).expect(200);
+      const vista = body.reserva ?? (Array.isArray(body) ? body[0] : body);
+      assert.equal(vista.usuario.id, 1);
+      assert.equal(vista.usuario_email, null);
+      assert.equal(vista.usuario_telefono, null);
+      assert.equal(vista.usuario.email, null);
+      assert.equal(vista.usuario.telefono, '');
+    }
     const hoy = require('../dist/common/utils/fechas').fechaArgentina();
     const ingreso = await source.getRepository(Reserva).save({
       monto_pago: 100, estado_pago: 'APROBADO', estado_liquidacion: 'RETENIDO',
@@ -2590,9 +2727,9 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     await request(http).get('/reservas/cancelaciones/administracion').expect(401);
     await request(http).get('/reservas/cancelaciones/administracion').set('Authorization', tenant).expect(403);
     // Las rutas de solicitudes conservan su contrato al pasar al módulo de cancelaciones.
-    await request(http).post(`/reservas/${reserva.id}/cancelacion`).send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(401);
+    await request(http).post(`/reservas/${reserva.id}/cancelacion`).send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado }).expect(401);
     await request(http).post(`/reservas/${reserva.id}/cancelacion`)
-      .set('Authorization', ajeno).send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(403);
+      .set('Authorization', ajeno).send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado }).expect(403);
     await request(http).post(`/reservas/${reserva.id}/cancelacion`)
       .set('Authorization', tenant).send({ motivo: 'Corto' }).expect(400);
     const sinSolicitud = await request(http).get(`/reservas/${reserva.id}/cancelacion`)
@@ -2610,59 +2747,30 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     assert.match(condiciones.devolucion.fechaSolicitud, /^\d{4}-\d{2}-\d{2}$/);
     for (const extra of [{ fechaSolicitud: '2090-01-01' }, { importe: 999 }, { porcentaje: 100 }]) {
       await request(http).post(`/reservas/${reserva.id}/cancelacion`)
-        .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...extra }).expect(400);
+        .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado, ...extra }).expect(400);
     }
     await request(http).post(`/reservas/${reserva.id}/cancelacion`)
       .set('Authorization', tenant).send({ motivo: 'Cambio de planes' }).expect(400);
+    await request(http).post('/reservas/' + reserva.id + '/cancelacion')
+      .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado, importeAceptado: 99 }).expect(409);
     const solicitud = await request(http).post(`/reservas/${reserva.id}/cancelacion`)
-      .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
-    assert.equal(solicitud.body.estado, 'PENDIENTE');
+      .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado }).expect(201);
+    assert.equal(solicitud.body.estado, 'APROBADA');
     assert.equal(Object.hasOwn(solicitud.body, 'ambitoEstado'), false);
     assert.equal(solicitud.body.reserva.id, reserva.id);
     assert.equal(solicitud.body.reserva.estado_estadia, 'CONFIRMADA');
-    const enviadas = await request(http).get(rutaCondiciones).set('Authorization', tenant).expect(200);
-    assert.deepEqual(enviadas.body.devolucion, condiciones.devolucion);
-    const avisosCancelacion = () => correos.filter(({ content }) => content.subject === 'Nueva solicitud de cancelación')
-      .map(({ recipients }) => recipients.to[0].address).sort();
-    const admins = ['usuario3@example.invalid', 'usuario4@example.invalid'];
-    assert.deepEqual(avisosCancelacion(), admins);
-    await request(http).get(`/reservas/${reserva.id}/cancelacion`).set('Authorization', ajeno).expect(403);
-    const activa = await request(http).get(`/reservas/${reserva.id}/cancelacion`)
-      .set('Authorization', tenant).expect(200);
-    assert.equal(activa.body.id, solicitud.body.id);
-    const pendientes = await request(http).get('/reservas/cancelaciones/administracion')
-      .set('Authorization', admin).expect(200);
-    assert.deepEqual(pendientes.body.map(({ id }) => id), [solicitud.body.id]);
-    assert.equal(pendientes.body[0].reserva.estado_estadia, 'CONFIRMADA');
-    assert.equal(pendientes.body[0].devolucion.importe, 100);
-    assert.equal(pendientes.body[0].devolucion.moneda, 'ARS');
-    await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
-      .set('Authorization', tenant).send({ decision: 'APROBADA' }).expect(403);
-    await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
-      .set('Authorization', admin).send({ decision: 'OTRA' }).expect(400);
-    const resultado = await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
-      .set('Authorization', admin).send({ decision: 'APROBADA' }).expect(200);
-    assert.equal(resultado.body.solicitud.estado, 'APROBADA');
-    assert.equal(Number(resultado.body.reembolso.importe), 100);
-    const aprobada = await request(http).get(`/reservas/${reserva.id}/cancelacion`)
-      .set('Authorization', tenant).expect(200);
-    assert.equal(aprobada.body.id, solicitud.body.id);
-    assert.equal(aprobada.body.estado, 'APROBADA');
-    const reintento = await request(http).post(`/reservas/${reserva.id}/cancelacion`)
-      .set('Authorization', tenant).send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
-    assert.equal(reintento.body.id, solicitud.body.id);
-    assert.deepEqual(avisosCancelacion(), admins);
-    await request(http).patch(`/reservas/${reserva.id}/cancelacion/${solicitud.body.id}`)
-      .set('Authorization', admin).send({ decision: 'APROBADA' }).expect(409);
-    assert.equal((await source.query('SELECT disponible FROM fecha WHERE id_reserva=$1', [reserva.id]))[0].disponible, false);
-    const rutaReembolso = `/reservas/reembolsos/${resultado.body.reembolso.id}/ejecutar`;
+    await request(http).get('/reservas/cancelaciones/administracion').set('Authorization', admin).expect(200, []);
+    await request(http).get('/reservas/' + reserva.id + '/cancelacion').set('Authorization', ajeno).expect(403);
+    const reenviada = await request(http).post('/reservas/' + reserva.id + '/cancelacion').set('Authorization', tenant)
+      .send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado }).expect(201);
+    assert.equal(reenviada.body.id, solicitud.body.id);
+    const registrada = await source.getRepository(Reembolso).findOneByOrFail({ referencia_interna: 'auto-can:' + solicitud.body.id });
+    const rutaReembolso = '/reservas/reembolsos/' + registrada.id + '/ejecutar';
     await request(http).patch(rutaReembolso).send({}).expect(401);
     await request(http).patch(rutaReembolso).set('Authorization', tenant).send({}).expect(403);
-    const aplicado = await request(http).patch(rutaReembolso)
-      .set('Authorization', admin).send({}).expect(200);
-    assert.ok(aplicado.body.reembolso.aplicado_en);
+    await request(http).patch(rutaReembolso).set('Authorization', admin).send({}).expect(409);
+    await app.get(OperacionesReembolsoService).conciliar();
     assert.equal(reembolsar.mock.callCount(), 1);
-    assert.equal(aplicado.body.reembolso.referencia_interna, `can:${solicitud.body.id}`);
     const final = await request(http).get(`/reservas/${reserva.id}`).set('Authorization', tenant).expect(200);
     assert.equal(final.body.cancelada, true);
     assert.equal(final.body.estado_pago, 'REEMBOLSADO');
@@ -2718,11 +2826,9 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     await request(http).post(rutaTardia).set('Authorization', tenant)
       .send({ motivo: 'Cambio de planes', aceptaTerminos: false }).expect(400);
     const enviadaTardia = await request(http).post(rutaTardia).set('Authorization', tenant)
-      .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
-    const resueltaTardia = await request(http).patch(`${rutaTardia}/${enviadaTardia.body.id}`).set('Authorization', admin)
-      .send({ decision: 'APROBADA' }).expect(200);
-    assert.equal(resueltaTardia.body.reembolso, null);
-    assert.equal(resueltaTardia.body.solicitud.estado, 'APROBADA');
+      .send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado, importeAceptado: 0 }).expect(201);
+    assert.equal(enviadaTardia.body.estado, 'APROBADA');
+    assert.equal(enviadaTardia.body.reserva.cancelada, true);
     const detalleTardio = await request(http).get(`/reservas/${tardia.id}`).set('Authorization', tenant).expect(200);
     assert.equal(detalleTardio.body.cancelada, true);
     assert.equal(detalleTardio.body.estado_pago, 'APROBADO');
@@ -2740,7 +2846,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       assert.match(bloqueada.body.motivoBloqueo, /Desde la fecha de ingreso/);
       assert.equal(bloqueada.body.devolucion, null);
       const rechazoInicio = await request(http).post(rutaIniciada).set('Authorization', tenant)
-        .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(400);
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado }).expect(400);
       assert.match(rechazoInicio.body.message, /estadía ya comenzó/);
       assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
     }
@@ -2755,15 +2861,15 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       const rutaAnunciante = `/reservas/${delAnunciante.id}/cancelacion`;
       await request(http).get(`${rutaAnunciante}/condiciones`).set('Authorization', ajeno).expect(403);
       await request(http).post(rutaAnunciante).set('Authorization', ajeno)
-        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(403);
+        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, ...montoAceptado }).expect(403);
       await request(http).post(rutaAnunciante).set('Authorization', anunciante)
-        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, actor: 'ANUNCIANTE' }).expect(400);
+        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, ...montoAceptado, actor: 'ANUNCIANTE' }).expect(400);
       const condicionesAnunciante = await request(http).get(`${rutaAnunciante}/condiciones`).set('Authorization', anunciante).expect(200);
       if (dias <= 0) {
         assert.match(condicionesAnunciante.body.motivoBloqueo, /Desde la fecha de ingreso/);
         assert.equal(condicionesAnunciante.body.devolucion, null);
         await request(http).post(rutaAnunciante).set('Authorization', anunciante)
-          .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(400);
+          .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, ...montoAceptado }).expect(400);
         assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
         continue;
       }
@@ -2771,15 +2877,14 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       assert.equal(condicionesAnunciante.body.devolucion.porcentaje, 100);
       assert.equal(condicionesAnunciante.body.devolucion.importe, 100);
       const enviadaAnunciante = await request(http).post(rutaAnunciante).set('Authorization', anunciante)
-        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(201);
+        .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, ...montoAceptado }).expect(201);
       assert.equal(enviadaAnunciante.body.solicitante.id, 2);
-      const resueltaAnunciante = await request(http).patch(`${rutaAnunciante}/${enviadaAnunciante.body.id}`).set('Authorization', admin)
-        .send({ decision: 'APROBADA' }).expect(200);
-      assert.equal(Number(resueltaAnunciante.body.reembolso.importe), 100);
-      assert.equal(resueltaAnunciante.body.reembolso.tipo, 'TOTAL');
+      const reembolsoAnunciante = await source.getRepository(Reembolso).findOneByOrFail({ referencia_interna: 'auto-can:' + enviadaAnunciante.body.id });
+      assert.equal(Number(reembolsoAnunciante.importe), 100);
+      assert.equal(reembolsoAnunciante.tipo, 'TOTAL');
       await request(http).patch(`/reservas/${delAnunciante.id}/validar-codigo`).set('Authorization', anunciante)
         .send({ codigo: '12345678' }).expect(409);
-      await request(http).patch(`/reservas/reembolsos/${resueltaAnunciante.body.reembolso.id}/ejecutar`).set('Authorization', admin).send({}).expect(200);
+      await app.get(OperacionesReembolsoService).conciliar();
       const detalleAnunciante = await request(http).get(`/reservas/${delAnunciante.id}`).set('Authorization', tenant).expect(200);
       assert.equal(detalleAnunciante.body.cancelada, true);
       assert.equal(detalleAnunciante.body.estado_pago, 'REEMBOLSADO');
@@ -2791,17 +2896,16 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     const { reserva: ingresoValidado } = await escenario(fechaEnDias(1));
     await source.getRepository(Reserva).update(ingresoValidado.id, { codigo_alojamiento: '12345678', codigo_generado_en: new Date() });
     const rutaValidada = `/reservas/${ingresoValidado.id}/cancelacion`;
-    const solicitudAntesDelCodigo = await request(http).post(rutaValidada).set('Authorization', anunciante)
-      .send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(201);
+    const solicitudAntesDelCodigo = await solicitudHistorica(ingresoValidado.id, { motivo: 'Problema en la propiedad' }, 2);
     await source.getRepository(Reserva).update(ingresoValidado.id, { fecha_inicio: fechaEnDias(0) });
     await request(http).patch(`/reservas/${ingresoValidado.id}/validar-codigo`).set('Authorization', anunciante)
       .send({ codigo: '12345678' }).expect(200);
-    const vencidaPorCodigo = await request(http).patch(`${rutaValidada}/${solicitudAntesDelCodigo.body.id}`).set('Authorization', admin)
+    const vencidaPorCodigo = await request(http).patch(`${rutaValidada}/${solicitudAntesDelCodigo.id}`).set('Authorization', admin)
       .send({ decision: 'APROBADA' }).expect(409);
     assert.match(vencidaPorCodigo.body.message, /rechazada por falta de resolución/);
-    assert.equal((await solicitudActual(solicitudAntesDelCodigo.body.id)).estado, 'RECHAZADA');
+    assert.equal((await solicitudActual(solicitudAntesDelCodigo.id)).estado, 'RECHAZADA');
     await request(http).post(rutaValidada).set('Authorization', anunciante)
-      .send({ motivo: 'Segundo pedido de cancelación', aceptaTerminos: true }).expect(400);
+      .send({ motivo: 'Segundo pedido de cancelación', aceptaTerminos: true, ...montoAceptado }).expect(400);
     const bloqueadaPorCodigo = await request(http).get(`${rutaValidada}/condiciones`).set('Authorization', anunciante).expect(200);
     assert.match(bloqueadaPorCodigo.body.motivoBloqueo, /fecha de ingreso/);
     assert.equal(bloqueadaPorCodigo.body.devolucion, null);
@@ -2813,7 +2917,7 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       const rutaFueraDePlazo = `/reservas/${fueraDePlazo.id}/cancelacion`;
       const condicionesFueraDePlazo = await request(http).get(`${rutaFueraDePlazo}/condiciones`).set('Authorization', anunciante).expect(200);
       assert.match(condicionesFueraDePlazo.body.motivoBloqueo, /fecha de ingreso/);
-      await request(http).post(rutaFueraDePlazo).set('Authorization', anunciante).send({ motivo: 'Problema en la propiedad', aceptaTerminos: true }).expect(400);
+      await request(http).post(rutaFueraDePlazo).set('Authorization', anunciante).send({ motivo: 'Problema en la propiedad', aceptaTerminos: true, ...montoAceptado }).expect(400);
       assert.equal(await source.getRepository(SolicitudCancelacion).count(), 0);
     }
     for (const solicitante of [tenant, anunciante]) {
@@ -2821,11 +2925,10 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
         await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
         const { reserva: porVencer } = await escenario(fechaEnDias(1));
         const rutaPorVencer = `/reservas/${porVencer.id}/cancelacion`;
-        const enviadaPorVencer = await request(http).post(rutaPorVencer).set('Authorization', solicitante)
-          .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
+        const enviadaPorVencer = await solicitudHistorica(porVencer.id, { motivo: 'Cambio de planes' }, solicitante === tenant ? 1 : 2);
         await source.getRepository(Reserva).update(porVencer.id, { fecha_inicio: fechaEnDias(0) });
-        await request(http).patch(`${rutaPorVencer}/${enviadaPorVencer.body.id}`).set('Authorization', admin).send({ decision }).expect(409);
-        assert.equal((await solicitudActual(enviadaPorVencer.body.id)).estado, 'RECHAZADA');
+        await request(http).patch(`${rutaPorVencer}/${enviadaPorVencer.id}`).set('Authorization', admin).send({ decision }).expect(409);
+        assert.equal((await solicitudActual(enviadaPorVencer.id)).estado, 'RECHAZADA');
         assert.equal(await source.getRepository(Reembolso).count(), 0);
       }
     }
@@ -2841,27 +2944,21 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       assert.equal(prevista.body.devolucion.importe, esperado);
       assert.equal(prevista.body.devolucion.moneda, 'ARS');
       await request(http).post(rutaCentavos).set('Authorization', tenant)
-        .send({ motivo: 'Cambio de planes', aceptaTerminos: true, importe: 1 }).expect(400);
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado, importe: 1 }).expect(400);
       const enviadaCentavos = await request(http).post(rutaCentavos).set('Authorization', tenant)
-        .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
-      const listaCentavos = await request(http).get('/reservas/cancelaciones/administracion')
-        .set('Authorization', admin).expect(200);
-      assert.equal(listaCentavos.body.length, 1);
-      assert.equal(listaCentavos.body[0].id, enviadaCentavos.body.id);
-      assert.deepEqual(listaCentavos.body[0].devolucion, prevista.body.devolucion);
-      const resueltaCentavos = await request(http).patch(`${rutaCentavos}/${enviadaCentavos.body.id}`).set('Authorization', admin)
-        .send({ decision: 'APROBADA' }).expect(200);
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado, importeAceptado: esperado }).expect(201);
+      assert.equal(enviadaCentavos.body.estado, 'APROBADA');
       if (esperado > 0) {
-        assert.equal(Number(resueltaCentavos.body.reembolso.importe), esperado);
-        assert.equal(resueltaCentavos.body.reembolso.moneda, prevista.body.devolucion.moneda);
-        reembolsar.mock.mockImplementation(async (paymentId, importe) => {
+        const pendiente = await source.getRepository(Reembolso).findOneByOrFail({ referencia_interna: 'auto-can:' + enviadaCentavos.body.id });
+        assert.equal(Number(pendiente.importe), esperado);
+        assert.equal(pendiente.moneda, prevista.body.devolucion.moneda);
+        reembolsar.mock.mockImplementation(async (paymentId, importe, clave, total) => {
           assert.equal(importe, esperado);
+          assert.equal(total, dias === 7);
           return { id: 456, status: 'approved', amount: importe, payment_id: paymentId };
         });
-        await request(http).patch(`/reservas/reembolsos/${resueltaCentavos.body.reembolso.id}/ejecutar`)
-          .set('Authorization', admin).send({}).expect(200);
+        await app.get(OperacionesReembolsoService).conciliar();
       } else {
-        assert.equal(resueltaCentavos.body.reembolso, null);
         assert.equal(await source.getRepository(Reembolso).count(), 0);
       }
       const pagoFinal = await source.getRepository(Pago).findOneByOrFail({ id: pagoConCentavos.id });
@@ -2898,35 +2995,37 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       const condicionesTarjeta = await request(http).get(`${rutaTarjeta}/condiciones`).set('Authorization', tenant).expect(200);
       assert.equal(condicionesTarjeta.body.devolucionPorTransferencia, false);
       assert.equal(condicionesTarjeta.body.devolucion.importe, 37.68);
+      ajustes.MP_SIMULAR_REEMBOLSO_TARJETA = 'true';
+      cobro.payment_type_id = medio === 'visa' ? 'credit_card' : 'debit_card';
       const enviadaTarjeta = await request(http).post(rutaTarjeta).set('Authorization', tenant)
-        .send({ motivo: 'Cambio de planes', aceptaTerminos: true }).expect(201);
-      const resueltaTarjeta = await request(http).patch(`${rutaTarjeta}/${enviadaTarjeta.body.id}`).set('Authorization', admin)
-        .send({ decision: 'APROBADA' }).expect(200);
-      const devolucionTarjeta = resueltaTarjeta.body.reembolso;
-      assert.equal(devolucionTarjeta.transferencia_manual, false);
-      const listaTarjeta = await request(http).get('/reembolsos/administracion').set('Authorization', admin).expect(200);
-      assert.equal(listaTarjeta.body[0].transferencia_manual, false);
-      assert.equal(listaTarjeta.body[0].pago.payment_method_id, medio);
-      const rutaEjecutarTarjeta = `/reservas/reembolsos/${devolucionTarjeta.id}/ejecutar`;
-      await request(http).patch(rutaEjecutarTarjeta).send({}).expect(401);
-      await request(http).patch(rutaEjecutarTarjeta).set('Authorization', tenant).send({}).expect(403);
-      await request(http).patch(`/reservas/reembolsos/${devolucionTarjeta.id}/transferencia`).set('Authorization', admin)
-        .send({ referencia: 'no-corresponde' }).expect(409);
-      reembolsar.mock.mockImplementation(async (paymentId, importe, clave, total) => {
-        assert.deepEqual([paymentId, importe, clave, total], ['123', 37.68, `can:${enviadaTarjeta.body.id}`, false]);
-        return { id: 789, status: 'approved', amount: importe, payment_id: paymentId };
-      });
+        .send({ motivo: 'Cambio de planes', aceptaTerminos: true, ...montoAceptado, importeAceptado: 37.68 }).expect(201);
+      assert.equal(enviadaTarjeta.body.estado, 'APROBADA');
+      const pendiente = await source.getRepository(Reembolso).findOneByOrFail({ referencia_interna: 'auto-can:' + enviadaTarjeta.body.id });
       const intentosAntes = reembolsar.mock.callCount();
-      const devueltaTarjeta = await request(http).patch(rutaEjecutarTarjeta).set('Authorization', admin)
-        .send({ importe: 1 }).expect(200);
-      assert.equal(devueltaTarjeta.body.reembolso.estado, 'APROBADO');
-      assert.ok(devueltaTarjeta.body.reembolso.aplicado_en);
-      await request(http).patch(rutaEjecutarTarjeta).set('Authorization', admin).send({}).expect(200);
-      assert.equal(reembolsar.mock.callCount(), intentosAntes + 1);
+      await app.get(OperacionesReembolsoService).conciliar();
+      const devueltaTarjeta = await reembolsos.buscar(pendiente.id);
+      assert.equal(devueltaTarjeta.estado, 'APROBADO');
+      assert.match(devueltaTarjeta.referencia_externa, /^SIMULADO:tarjeta:/);
+      assert.ok(devueltaTarjeta.aplicado_en);
+      assert.equal(reembolsar.mock.callCount(), intentosAntes);
       const pagoFinalTarjeta = await source.getRepository(Pago).findOneByOrFail({ id: pagoTarjeta.id });
       assert.equal(Number(pagoFinalTarjeta.amount_refunded), 37.68);
       assert.equal((await reservas.obtenerReserva(conTarjeta.id)).cancelada, true);
     }
+    await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
+    const casoManual = await escenario();
+    const fallido = await casoManual.crearReembolso();
+    await source.getRepository(Reembolso).update(fallido.id, { estado: 'FALLIDO' });
+    t.mock.method(MercadoPagoAdapter.prototype, 'listarReembolsos', async () => []);
+    const rutaManual = `/reservas/reembolsos/${fallido.id}/habilitar-transferencia`;
+    await request(http).patch(rutaManual).expect(401);
+    await request(http).patch(rutaManual).set('Authorization', anunciante).expect(403);
+    await request(http).patch(rutaManual).set('Authorization', tenant).expect(403);
+    const habilitada = await request(http).patch(rutaManual).set('Authorization', admin).expect(200);
+    assert.deepEqual([habilitada.body.estado, habilitada.body.transferencia_manual], ['PENDIENTE', true]);
+    const devueltaManual = await request(http).patch(`/reservas/reembolsos/${fallido.id}/transferencia`).set('Authorization', admin)
+      .attach('comprobante', comprobantePdf().buffer, 'reembolso.pdf').expect(200);
+    assert.equal(devueltaManual.body.reembolso.estado, 'APROBADO');
     await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
     const casoDemora = await solicitudSinRespuesta();
     await request(http).get('/reclamos/demoras/mias').expect(401);

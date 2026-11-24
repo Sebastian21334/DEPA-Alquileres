@@ -10,6 +10,9 @@
     <p class="auth__subtitle">Ingresá con tu email y contraseña.</p>
 
     <form class="auth__form" [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+      @if (cuentaReactivada) {
+        <div class="auth__success" role="status">Tu cuenta está activa. Iniciá sesión o recuperá tu contraseña si no la recordás.</div>
+      }
       @if (puedeReenviarVerificacion()) {
         <div class="auth__verification" role="alert">
           <span class="auth__verification-icon" aria-hidden="true"><svg lucideMail [size]="24"></svg></span>

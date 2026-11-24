@@ -23,10 +23,9 @@ export class ReembolsosReservaController {
     return this.operaciones.recuperarConfirmacion(id, dto.referencia ?? '', req.user.id);
   }
 
-  /** Una devolución que Mercado Pago no hizo sigue por transferencia: se habilitan el chat y el comprobante. */
-  @Patch(':id/pasar-a-transferencia')
-  pasarATransferencia(@Param('id', ParseIntPipe) id: number) {
-    return this.operaciones.pasarATransferencia(id);
+  @Patch(':id/habilitar-transferencia')
+  habilitarTransferencia(@Param('id', ParseIntPipe) id: number) {
+    return this.operaciones.habilitarTransferenciaFallida(id);
   }
 
   /** Multipart con el comprobante obligatorio (`comprobante`), la referencia y la observación opcionales. */

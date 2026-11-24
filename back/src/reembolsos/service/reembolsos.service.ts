@@ -7,6 +7,7 @@ import {
   Logger,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { AlmacenamientoService, type ComprobanteSubido } from '../../almacenamiento/service/almacenamiento.service';
 import { createHash, randomUUID } from 'node:crypto';
@@ -27,6 +28,8 @@ import {
   REEMBOLSOS_REPOSITORY,
   type IReembolsosRepository,
 } from '../repository/reembolsos.repository.interface';
+
+const PLAZO_REINTENTOS_SIN_ID_MS = 15 * 60_000;
 
 export type CrearReembolsoDatos = {
   reserva: Reserva;
@@ -58,6 +61,21 @@ export class ReembolsosService {
   }
 
   private readonly logger = new Logger(ReembolsosService.name);
+
+  simulacionTarjetaHabilitada(): boolean {
+    return this.pasarela.permiteSimulacionTarjeta?.() ?? false;
+  }
+
+  esSimulado(reembolso: Reembolso): boolean {
+    return reembolso.referencia_interna?.startsWith('auto-can:') === true &&
+      reembolso.referencia_externa === `SIMULADO:tarjeta:${reembolso.id}` && reembolso.id_externo == null;
+  }
+
+  async importeSimuladoPorPago(idPago: number): Promise<number> {
+    const registros = await this.reembolsos.buscarPorPago(idPago);
+    return registros.reduce((total, registro) =>
+      this.estaAprobado(registro) && this.esSimulado(registro) ? total + Number(registro.importe) : total, 0);
+  }
 
   constructor(@Inject(REEMBOLSOS_REPOSITORY) private readonly reembolsos: IReembolsosRepository, private readonly pasarela: MercadoPagoService, private readonly pagos: PagosService, private readonly estadoService: ReservaEstadoService, private readonly catalogos: CatalogosService, @Optional() private readonly almacenamiento?: AlmacenamientoService) {}
 
@@ -135,7 +153,7 @@ export class ReembolsosService {
       importe,
       moneda: pago.currency,
       estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
-      transferencia_manual: this.requiereTransferencia(pago),
+      transferencia_manual: datos.referenciaInterna?.startsWith('auto-can:') ? false : this.requiereTransferencia(pago),
       motivo: datos.motivo.trim().slice(0, 500),
       referencia_interna: datos.referenciaInterna ?? null,
       referencia_externa: null,
@@ -192,33 +210,6 @@ export class ReembolsosService {
         await this.almacenamiento.eliminarComprobante(comprobante.url).catch(() =>
           this.logger.warn(`No se pudo borrar el comprobante sin usar del reembolso ${id}`));
     }
-  }
-
-  /**
-   * Pasa a transferencia una devolución que Mercado Pago no llegó a hacer: pendiente, o fallida sin identificador de devolución.
-   * Si Mercado Pago informó un identificador, primero se concilia para no devolver dos veces.
-   */
-  async pasarATransferencia(id: number): Promise<Reembolso> {
-    await this.reembolsos.conTransaccion(async repo => {
-      const actual = await repo.buscarRegistro(id, { bloquear: true });
-      if (!actual) throw new NotFoundException('Reembolso no encontrado');
-      this.verificarOrigenOperable(actual.origen);
-      if (actual.transferencia_manual) return;
-      const fallido = actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO');
-      if (actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO'))
-        throw new ConflictException('Mercado Pago está procesando la devolución; esperá su resultado');
-      if (fallido && actual.id_externo)
-        throw new ConflictException('Mercado Pago informó una devolución; conciliala con su identificador');
-      if (!fallido && actual.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'))
-        throw new ConflictException('La devolución ya no se puede pasar a transferencia');
-      await repo.actualizar(actual.id, {
-        estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
-        transferencia_manual: true,
-        conciliar_en: null,
-        error_detalle: null,
-      });
-    });
-    return this.buscar(id);
   }
 
   /** Enlace firmado del comprobante, solo para el admin y el inquilino de la reserva. */
@@ -296,6 +287,57 @@ export class ReembolsosService {
     return this.confirmar(id, { referencia: idExterno, idActor, idExterno });
   }
 
+  /** Habilita el circuito de transferencia después de descartar un reintegro en la pasarela. */
+  async habilitarTransferenciaFallida(id: number): Promise<Reembolso> {
+    await this.reembolsos.conTransaccion(async (repo, transaccion) => {
+      const reembolso = await repo.buscarRegistro(id, { bloquear: true, idsRelaciones: true });
+      if (!reembolso) throw new NotFoundException('Reembolso no encontrado');
+      this.verificarOrigenOperable(reembolso.origen);
+      if (reembolso.transferencia_manual && reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE')) return;
+      if (reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'))
+        throw new ConflictException('Solo se puede habilitar la transferencia de un reembolso fallido');
+
+      const ahora = Date.now();
+      if ((reembolso.conciliar_en?.getTime() ?? 0) > ahora)
+        throw new ConflictException('La conciliación tiene un intento en curso. Volvé a intentar más tarde.');
+      if (!reembolso.id_externo && reembolso.primer_intento_en &&
+          ahora - reembolso.primer_intento_en.getTime() <= PLAZO_REINTENTOS_SIN_ID_MS)
+        throw new ConflictException('Todavía está abierto el plazo de reintentos de Mercado Pago. Volvé a intentar más tarde.');
+
+      const pago = await this.pagos.buscarParaReembolso(reembolso.pago.id, transaccion);
+      if (!pago?.payment_id)
+        throw new ConflictException('No se pudo verificar el pago original en Mercado Pago');
+
+      let movimientos: ResultadoReembolsoExterno[];
+      try {
+        movimientos = await this.pasarela.listarReembolsos(pago.payment_id);
+      } catch {
+        throw new ServiceUnavailableException('Mercado Pago no respondió a la verificación. Volvé a intentar antes de transferir.');
+      }
+      const aprobados = new Map((await repo.buscarPorPago(pago.id))
+        .filter(registro => this.estaAprobado(registro) && registro.id_externo)
+        .map(registro => [registro.id_externo, Number(registro.importe)]));
+      const rechazado = (movimiento: ResultadoReembolsoExterno) =>
+        ['rejected', 'cancelled', 'failed'].includes(movimiento.status ?? '');
+      const todosIdentificados = movimientos.every(movimiento =>
+        movimiento.id != null &&
+        (movimiento.payment_id == null || String(movimiento.payment_id) === pago.payment_id) &&
+        (rechazado(movimiento) || (movimiento.status === 'approved' && movimiento.amount != null &&
+          Math.abs((aprobados.get(String(movimiento.id)) ?? NaN) - Number(movimiento.amount)) <= TOLERANCIA_MONETARIA)));
+      if (!todosIdentificados ||
+          (reembolso.id_externo && !movimientos.some(movimiento => String(movimiento.id) === reembolso.id_externo && rechazado(movimiento))))
+        throw new ConflictException('Mercado Pago tiene una devolución pendiente o sin conciliar para este pago. Verificala antes de transferir.');
+
+      await repo.actualizar(id, {
+        estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
+        transferencia_manual: true,
+        conciliar_en: null,
+        error_detalle: null,
+      });
+    });
+    return this.buscar(id);
+  }
+
   async ejecutarYConfirmar(id: number, idActor: number): Promise<Reembolso> {
     const reembolso = await this.ejecutar(id, idActor);
     if (!this.estaAprobado(reembolso))
@@ -309,12 +351,47 @@ export class ReembolsosService {
 
   async ejecutar(id: number, idActor: number): Promise<Reembolso> {
     const reembolso = await this.buscar(id);
+    if (reembolso.referencia_interna?.startsWith('auto-can:'))
+      throw new ConflictException('Esta devolución se procesa automáticamente');
     this.verificarOrigenOperable(reembolso.origen);
     if (!reembolso.pago.payment_id)
       throw new ConflictException('El pago no tiene identificador de Mercado Pago');
     if (reembolso.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return reembolso;
 
     return this.procesarEnPasarela(reembolso, idActor, false);
+  }
+
+  async listarCancelacionesAutomaticasPendientes(desdeId: number): Promise<Reembolso[]> {
+    return this.reembolsos.buscarCancelacionesAutomaticasPendientes(desdeId);
+  }
+
+  async ejecutarCancelacionAutomatica(id: number): Promise<Reembolso> {
+    const reembolso = await this.buscar(id);
+    if (reembolso.origen !== OrigenReembolso.CANCELACION || !reembolso.referencia_interna?.startsWith('auto-can:'))
+      throw new ConflictException('El reembolso no corresponde a una cancelación automática');
+    if (this.estaAprobado(reembolso) || reembolso.transferencia_manual) return reembolso;
+    const paymentId = reembolso.pago.payment_id;
+    if (!paymentId) return this.derivarCancelacionARevision(id, 'El pago no tiene identificador de Mercado Pago');
+    const pagoExterno = await this.pasarela.consultarPago(paymentId);
+    if (String(pagoExterno.id) !== paymentId || pagoExterno.status !== 'approved')
+      throw new ConflictException('No se pudo verificar un pago aprobado en Mercado Pago');
+    if (pagoExterno.payment_type_id === 'account_money' || (!pagoExterno.payment_type_id && pagoExterno.payment_method_id === 'account_money'))
+      return this.procesarEnPasarela(reembolso, null, false);
+    if (pagoExterno.payment_type_id === 'credit_card' || pagoExterno.payment_type_id === 'debit_card' || pagoExterno.payment_type_id === 'prepaid_card') {
+      if (!this.simulacionTarjetaHabilitada())
+        return this.derivarCancelacionARevision(id, 'La simulación de tarjeta no está habilitada en este entorno');
+      return this.confirmar(id, { referencia: `SIMULADO:tarjeta:${id}`, idActor: null, idExterno: null });
+    }
+    return this.derivarCancelacionARevision(id, 'El medio de pago requiere revisión');
+  }
+
+  private async derivarCancelacionARevision(id: number, motivo: string): Promise<Reembolso> {
+    await this.reembolsos.actualizarEnTransaccion(id, reembolso => {
+      if (reembolso.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE')) return;
+      reembolso.transferencia_manual = true;
+      reembolso.error_detalle = motivo;
+    });
+    return this.buscar(id);
   }
 
   private async procesarEnPasarela(reembolso: Reembolso, idActor: number | null, conciliacion: boolean): Promise<Reembolso> {
@@ -340,7 +417,7 @@ export class ReembolsosService {
       }
       // Los reintentos sin identificador se limitan a los intentos recientes.
       if (!pendiente && !actual.id_externo &&
-          (!actual.primer_intento_en || ahora.getTime() - actual.primer_intento_en.getTime() > 15 * 60_000)) {
+          (!actual.primer_intento_en || ahora.getTime() - actual.primer_intento_en.getTime() > PLAZO_REINTENTOS_SIN_ID_MS)) {
         await repo.actualizar(actual.id, {
           estado: this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
           conciliar_en: null,

@@ -432,7 +432,7 @@ export class MisReservasComponent {
     const motivo = this.motivoCancelacion().trim();
     const condiciones = this.condicionesCancelacion();
     if (!reserva || this.estadoCancelacion() !== 'formulario' || this.enviandoCancelacion() ||
-        !condiciones || condiciones.motivoBloqueo || !this.aceptaTerminosCancelacion() ||
+        !condiciones || !condiciones.devolucion || condiciones.motivoBloqueo || !this.aceptaTerminosCancelacion() ||
         motivo.length < 10 || motivo.length > 500) return;
     if (condiciones.devolucion && condiciones.devolucion.fechaSolicitud !== this.hoy()) {
       this.aceptaTerminosCancelacion.set(false);
@@ -442,7 +442,7 @@ export class MisReservasComponent {
     }
     this.errorCancelacion.set('');
     this.enviandoCancelacion.set(true);
-    this.reservasApi.requestCancellation(reserva.id, motivo, this.aceptaTerminosCancelacion())
+    this.reservasApi.requestCancellation(reserva.id, motivo, this.aceptaTerminosCancelacion(), condiciones.devolucion.importe, condiciones.devolucion.moneda)
       .pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.enviandoCancelacion.set(false)),
@@ -451,13 +451,21 @@ export class MisReservasComponent {
         next: (solicitud) => {
           if (solicitud.estado === 'APROBADA') {
             this.estadoCancelacion.set('aprobada');
+            this.reservaACancelar.set(solicitud.reserva);
+            this.cargarReservas(true);
+            this.toast.mostrar(solicitud.reserva.cancelada ? 'La reserva quedó cancelada.' : 'La cancelación fue aceptada.', 'exito');
           } else {
             this.estadoCancelacion.set('pendiente');
             this.toast.mostrar('La solicitud de cancelación está en revisión.', 'exito');
           }
-          this.consultarCancelacion();
         },
-        error: (err: ApiError) => this.errorCancelacion.set(err.message),
+        error: (err: ApiError) => {
+          if (err.status === 409) {
+            this.aceptaTerminosCancelacion.set(false);
+            this.consultarCancelacion();
+          }
+          this.errorCancelacion.set(err.message);
+        },
       });
   }
 

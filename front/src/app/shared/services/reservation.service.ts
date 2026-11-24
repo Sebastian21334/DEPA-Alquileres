@@ -125,6 +125,7 @@ export interface PagoResumen {
   status: string;
   status_detail: string | null;
   amount: number;
+  devolucion: { reembolsado: number; simulado: number; sinDevolver: number } | null;
   currency: string;
   payment_method_id: string | null;
   approved_at: string | null;
@@ -143,6 +144,7 @@ export interface CondicionesCancelacion {
   advertencia: string | null;
   admiteReembolso: boolean;
   devolucionPorTransferencia?: boolean;
+  simulacionTarjetaHabilitada: boolean;
   devolucion: {
     fechaSolicitud: string;
     diasAnticipacion: number;
@@ -338,8 +340,9 @@ export class ReservationService {
     return this.http.patch<Reserva>(`${this.baseUrl}/${id}/reportar-problema`, { motivo });
   }
 
-  requestCancellation(id: number, motivo: string, aceptaTerminos: boolean): Observable<SolicitudCancelacion> {
-    return this.http.post<SolicitudCancelacion>(`${this.baseUrl}/${id}/cancelacion`, { motivo, aceptaTerminos });
+  requestCancellation(id: number, motivo: string, aceptaTerminos: boolean, importeAceptado: number, monedaAceptada: string): Observable<SolicitudCancelacion & { reserva: Reserva }> {
+    return this.http.post<SolicitudCancelacion & { reserva: Reserva }>(`${this.baseUrl}/${id}/cancelacion`,
+      { motivo, aceptaTerminos, importeAceptado, monedaAceptada });
   }
 
   cancellationConditions(id: number): Observable<CondicionesCancelacion> {
