@@ -22,10 +22,17 @@ export interface FiltrosPublicaciones {
   ambientes?: string[];
 }
 
+/** Monedas en USD y venta del dólar blue con la que se comparan en pesos. */
+export interface ConversionUsd {
+  idsMoneda: number[];
+  venta: number;
+}
+
 export interface ConsultaPublicaciones extends FiltrosPublicaciones {
   pagina: number;
   limite: number;
   orden?: OrdenPublicaciones;
+  conversionUsd?: ConversionUsd;
 }
 
 export interface AreaMapaPublicaciones {
