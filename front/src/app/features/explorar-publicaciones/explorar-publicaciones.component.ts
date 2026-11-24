@@ -12,8 +12,10 @@ import { MapaPublicacionesComponent } from './mapa-publicaciones.component';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import {
   Modalidad,
+  MonedaPrecio,
   TipoPropiedad,
   admiteReservasPorFecha,
+  codigoMoneda,
 } from '../../shared/models/catalogo.model';
 
 @Component({
@@ -63,6 +65,7 @@ export class ExplorarPublicacionesComponent {
   protected readonly filtrosMapa = signal<FiltrosPublicaciones>({});
   protected readonly modalidades = signal<Modalidad[]>([]);
   protected readonly tiposPropiedad = signal<TipoPropiedad[]>([]);
+  protected readonly monedasPrecio = signal<MonedaPrecio[]>([]);
   protected readonly busqueda = this.fb.nonNullable.control('');
   protected readonly searchForm = this.fb.group({
     busqueda: this.busqueda,
@@ -72,7 +75,8 @@ export class ExplorarPublicacionesComponent {
     idProvincia: null as number | null,
     idsCiudad: [[] as number[]],
     idsTipoPropiedad: [[] as number[]],
-    idsTipoMoneda: [[] as number[]],
+    // Moneda del rango de precio: solo filtra cuando hay un precio cargado.
+    idTipoMoneda: null as number | null,
     ambientesSeleccionados: [[] as string[]],
     precioMin: null as number | null,
     precioMax: null as number | null,
@@ -202,6 +206,19 @@ export class ExplorarPublicacionesComponent {
     this.catalogos
       .getTiposPropiedad()
       .subscribe({ next: (tipos) => this.tiposPropiedad.set(tipos) });
+    this.catalogos.getTiposMoneda().subscribe({
+      next: (tipos) => {
+        const monedas = tipos
+          .map((tipo) => ({ id: tipo.id, codigo: codigoMoneda(tipo) }))
+          .filter((moneda): moneda is MonedaPrecio => moneda.codigo !== null)
+          .sort((a, b) => a.codigo.localeCompare(b.codigo));
+        this.monedasPrecio.set(monedas);
+        // Pesos de entrada, sin volver a buscar: la moneda todavía no filtra nada.
+        if (this.form.controls.idTipoMoneda.value == null) {
+          this.form.controls.idTipoMoneda.setValue(monedas[0]?.id ?? null, { emitEvent: false });
+        }
+      },
+    });
   }
 
   private sincronizarModalidad(categoria: string | null): void {
@@ -219,13 +236,14 @@ export class ExplorarPublicacionesComponent {
   private cargar(pagina: number): void {
     this.solicitudListado?.unsubscribe();
     const filtros = this.form.getRawValue();
+    const conPrecio = filtros.precioMin != null || filtros.precioMax != null;
     const consulta: FiltrosPublicaciones = {
       categoria: this.categoria() ?? undefined,
       busqueda: this.terminoBusqueda(),
       idProvincia: filtros.idProvincia ?? undefined,
       idsCiudad: filtros.idsCiudad,
       idsTipoPropiedad: filtros.idsTipoPropiedad,
-      idsTipoMoneda: filtros.idsTipoMoneda,
+      idsTipoMoneda: conPrecio && filtros.idTipoMoneda != null ? [filtros.idTipoMoneda] : [],
       precioMin: filtros.precioMin,
       precioMax: filtros.precioMax,
       superficieMin: filtros.superficieMin,

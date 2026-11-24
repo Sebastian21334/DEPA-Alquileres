@@ -23,6 +23,7 @@ import { PublicacionesController } from '../../../src/publicaciones/controller/p
 import { Publicacion } from '../../../src/publicaciones/entity/publicacion.entity';
 import { PUBLICACIONES_REPOSITORY } from '../../../src/publicaciones/repository/publicaciones.repository.interface';
 import { PublicacionesService } from '../../../src/publicaciones/service/publicaciones.service';
+import { CotizacionesLecturaService } from '../../../src/cotizaciones/service/cotizaciones-lectura.service';
 import { SeguridadModule } from '../../../src/seguridad/seguridad.module';
 import { UbicacionService } from '../../../src/ubicacion/service/ubicacion.service';
 import { UsuariosController } from '../../../src/usuarios/controller/usuarios.controller';
@@ -263,6 +264,7 @@ export async function crearAppDePrueba(): Promise<AppDePrueba> {
       { provide: PreparacionImagenesService, useValue: {} },
       { provide: OperacionesCuentaService, useValue: usuarios },
       { provide: ReservasLecturaService, useValue: { existeReserva: async () => false } },
+      { provide: CotizacionesLecturaService, useValue: { ventaRegistrada: async () => null } },
       UsuariosCredencialesService,
       { provide: HASH_CONTRASENIAS, useClass: BcryptAdapter },
       AnunciantesService,

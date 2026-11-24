@@ -160,6 +160,55 @@
   font-weight: 700;
 }
 
+.advanced__price .advanced__label {
+  width: 100%;
+}
+
+.advanced__currency {
+  display: inline-flex;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 22%);
+}
+
+.advanced__currency-option {
+  min-width: 2.6rem;
+  padding: 0.05rem 0.55rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.advanced__currency-option--active {
+  background: #fff;
+  color: var(--filter-accent, var(--color-secondary));
+}
+
+.advanced__currency-option:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.advanced__panel .advanced__currency {
+  background: #eef2f7;
+}
+
+.advanced__panel .advanced__currency-option--active {
+  background: var(--color-secondary);
+  color: #fff;
+}
+
+.advanced__panel .advanced__currency-option:focus-visible {
+  outline-color: var(--color-secondary);
+}
+
 .advanced__price-inputs {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
