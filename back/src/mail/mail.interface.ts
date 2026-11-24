@@ -42,6 +42,8 @@ export interface IMailService {
   enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: 'inquilino' | 'anunciante' | 'admin'): Promise<void>;
   enviarReprogramacionReserva(destinatario: string, detalle: ReprogramacionEmailDetalle): Promise<void>;
   enviarBajaPublicacion(destinatario: string, titulo: string, motivo: string): Promise<void>;
+  enviarPublicacionActiva(destinatario: string, titulo: string, idPublicacion: number): Promise<void>;
+  enviarReactivacionPublicacion(destinatario: string, titulo: string): Promise<void>;
   enviarVerificacion(destinatario: string, token: string, origen?: string): Promise<void>;
   enviarReactivacion(destinatario: string, token: string, origen?: string): Promise<void>;
   enviarRecuperacion(destinatario: string, token: string): Promise<void>;

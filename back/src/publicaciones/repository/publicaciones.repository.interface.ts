@@ -66,7 +66,7 @@ export interface IPublicacionesRepository {
   crear(datos: Partial<Publicacion>): Publicacion;
   guardar(publicacion: Publicacion): Promise<Publicacion>;
   actualizarSiNoEliminada(id: number, cambios: Partial<Publicacion>): Promise<boolean>;
-  marcarActiva(id: number): Promise<void>;
+  marcarActiva(id: number): Promise<boolean>;
   bloquearPorAnunciante(idUsuario: number, transaccion: EntityManager): Promise<boolean>;
   bloquearPorId(id: number, transaccion: EntityManager): Promise<Publicacion | null>;
   buscarCondicionesDeReserva(id: number, transaccion: EntityManager): Promise<Publicacion | null>;

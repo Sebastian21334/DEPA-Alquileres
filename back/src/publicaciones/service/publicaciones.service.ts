@@ -257,15 +257,17 @@ export class PublicacionesService {
     return { visualizaciones: Number(publicacion.visualizaciones ?? 0) + 1 };
   }
 
-  /** Activa con la primera foto; recibe la galería leída antes de la subida. */
+  /** Activa con la primera foto y se lo avisa al anunciante; recibe la galería leída antes de la subida. */
   async activar(publicacion: Publicacion) {
     if (publicacion.eliminada || publicacion.activa || publicacion.motivo_baja_admin || publicacion.imagenes?.length)
       return;
     // Se actualiza solo la columna: guardar la entidad completa haría que TypeORM
     // sincronice publicacion.imagenes (leída antes de subir la foto, vacía) y
     // desvincule la imagen recién creada (id_publicacion = NULL).
-    await this.publicacionesRepo.marcarActiva(publicacion.id);
+    const activada = await this.publicacionesRepo.marcarActiva(publicacion.id);
     publicacion.activa = true;
+    // Dos primeras fotos simultáneas activan una sola vez: el aviso no se duplica.
+    if (activada) await this.avisarAlAnunciante(publicacion, 'la publicación', email => this.mailService.enviarPublicacionActiva(email, publicacion.titulo, publicacion.id));
   }
 
   /** Lista pública paginada; el límite se acota para proteger la base de datos. */
@@ -443,19 +445,7 @@ export class PublicacionesService {
     await this.publicacionesRepo.darDeBaja(id, razon);
     publicacion.activa = false;
     publicacion.motivo_baja_admin = razon;
-    let correoEnviado = false;
-    try {
-      const { email } = this.anunciantesService.datosContacto(
-        publicacion.anunciante,
-      );
-      if (!email) throw new Error('El anunciante no tiene un correo registrado');
-      await this.mailService.enviarBajaPublicacion(
-        email, publicacion.titulo, razon,
-      );
-      correoEnviado = true;
-    } catch (error) {
-      this.logger.error(`No se pudo notificar la baja de la publicación ${id}`, error as Error);
-    }
+    const correoEnviado = await this.avisarAlAnunciante(publicacion, 'la baja', email => this.mailService.enviarBajaPublicacion(email, publicacion.titulo, razon));
     return { publicacion, correoEnviado };
   }
 
@@ -468,7 +458,21 @@ export class PublicacionesService {
     if (!await this.publicacionesRepo.reactivar(id)) throw new ConflictException('La publicación cambió. Recargá e intentá nuevamente');
     publicacion.motivo_baja_admin = null;
     publicacion.activa = false;
+    await this.avisarAlAnunciante(publicacion, 'la reactivación', email => this.mailService.enviarReactivacionPublicacion(email, publicacion.titulo));
     return this.prepararRespuesta(publicacion);
+  }
+
+  /** La operación ya quedó confirmada: un fallo del correo se registra y no la revierte. */
+  private async avisarAlAnunciante(publicacion: Publicacion, aviso: string, enviar: (email: string) => Promise<void>): Promise<boolean> {
+    try {
+      const { email } = this.anunciantesService.datosContacto(publicacion.anunciante);
+      if (!email) throw new Error('El anunciante no tiene un correo registrado');
+      await enviar(email);
+      return true;
+    } catch (error) {
+      this.logger.error(`No se pudo notificar ${aviso} de la publicación ${publicacion.id}`, error as Error);
+      return false;
+    }
   }
 
   /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */
