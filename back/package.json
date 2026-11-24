@@ -56,7 +56,8 @@
     "lint": "oxlint src/",
     "db:comision-depa": "node scripts/comision-depa.cjs",
     "db:comprobante-reembolso": "node scripts/comprobante-reembolso.cjs --aplicar",
-    "db:imagenes-mensajes-reclamo": "node scripts/imagenes-mensajes-reclamo.cjs --aplicar"
+    "db:imagenes-mensajes-reclamo": "node scripts/imagenes-mensajes-reclamo.cjs --aplicar",
+    "db:fechas-con-zona-horaria": "node scripts/fechas-con-zona-horaria.cjs --aplicar"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",

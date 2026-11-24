@@ -114,7 +114,7 @@ export class Usuario {
 
   @Column({
     name: 'token_recuperacion_expira',
-    type: 'timestamp',
+    type: 'timestamptz',
     nullable: true,
     select: false,
   })

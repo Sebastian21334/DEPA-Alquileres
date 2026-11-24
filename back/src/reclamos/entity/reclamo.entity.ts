@@ -101,9 +101,9 @@ export class Reclamo {
   @OneToMany(() => ReclamoMensaje, (mensaje) => mensaje.reclamo)
   mensajes: Relation<ReclamoMensaje[]>;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 
-  @Column({ name: 'resuelto_en', type: 'timestamp', nullable: true })
+  @Column({ name: 'resuelto_en', type: 'timestamptz', nullable: true })
   resuelto_en: Date | null;
 }

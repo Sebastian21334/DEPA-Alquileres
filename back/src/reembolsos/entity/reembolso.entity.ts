@@ -116,13 +116,13 @@ export class Reembolso {
   @JoinColumn({ name: 'id_resuelto_por' })
   resuelto_por: Relation<Usuario | null>;
 
-  @CreateDateColumn({ name: 'creado_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 
-  @Column({ name: 'resuelto_en', type: 'timestamp', nullable: true })
+  @Column({ name: 'resuelto_en', type: 'timestamptz', nullable: true })
   resuelto_en: Date | null;
 
-  @Column({ name: 'aplicado_en', type: 'timestamp', nullable: true })
+  @Column({ name: 'aplicado_en', type: 'timestamptz', nullable: true })
   aplicado_en: Date | null;
 
   @Column({ name: 'revision_aplicacion', type: 'boolean', default: false })
