@@ -1,3 +1,4 @@
+import { formatearMoneda } from '../../shared/utils/formato-numero';
 import { isPlatformBrowser } from '@angular/common';
 import { Component, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -55,10 +56,6 @@ export class CotizacionesAdminComponent {
       : 'Sin datos';
   }
   protected importe(valor: string): string {
-    return Number(valor).toLocaleString('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      maximumFractionDigits: 6,
-    });
+    return formatearMoneda(valor, 'ARS', 6);
   }
 }

@@ -12,7 +12,7 @@ const { ValidationPipe } = require('@nestjs/common');
 const request = require('supertest');
 const { crearPostgresPruebas } = require('./soporte/postgres-pruebas.cjs');
 const { AuthModule } = require('../dist/auth/auth.module');
-const { CORREO_REPOSITORY } = require('../dist/mail/repository/correo.repository.interface');
+const { PROVEEDOR_CORREO } = require('../dist/mail/proveedor/proveedor-correo.interface');
 const { CLIENTE_CORREO } = require('../dist/mail/proveedor/cliente-correo.interface');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
 const { Rol } = require('../dist/catalogos/entity/rol.entity');
@@ -72,7 +72,7 @@ before(async () => {
     .overrideProvider(DataSource).useValue(source)
     .overrideProvider(ConfigService).useValue(config)
     .overrideProvider(CLIENTE_CORREO).useValue({})
-    .overrideProvider(CORREO_REPOSITORY).useValue({
+    .overrideProvider(PROVEEDOR_CORREO).useValue({
       enviar: async ({ destinatario, html }) => {
         const enlace = [...html.matchAll(/href="([^"]+)"/g)]
           .map(([, href]) => new URL(href))

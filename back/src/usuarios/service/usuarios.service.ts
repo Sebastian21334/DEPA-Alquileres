@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { OperacionesCuentaService } from './operaciones-cuenta.service';
 import type { ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 import { UsuariosCredencialesService } from './usuarios-credenciales.service';
@@ -31,7 +32,7 @@ import { fechaArgentina } from '../../common/utils/fechas';
 import { formatearNombreCompleto } from '../../common/utils/nombres';
 import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.error';
 
-import type { IMailService } from '../../mail/mail.interface';
+import type { IMailCuenta } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 
 /**
@@ -61,7 +62,7 @@ type CrearUsuarioDatos = {
 export class UsuariosService {
   private readonly logger = new Logger(UsuariosService.name);
 
-  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService, private readonly jwtService: JwtService, private readonly operacionesCuenta: OperacionesCuentaService, private readonly preparacionImagenes: PreparacionImagenesService) {}
+  constructor(@Inject(USUARIOS_REPOSITORY) private readonly usuariosRepo: IUsuariosRepository, private readonly catalogosService: CatalogosService, private readonly credencialesService: UsuariosCredencialesService, @Inject(MAIL_SERVICE) private readonly mailService: IMailCuenta, private readonly almacenamientoService: AlmacenamientoService, private readonly publicacionesService: PublicacionesService, private readonly anunciantesService: AnunciantesService, private readonly jwtService: JwtService, private readonly operacionesCuenta: OperacionesCuentaService, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
   /** Busca un usuario por correo para validar duplicados o iniciar sesion. */
   async buscarPorEmail(email: string): Promise<Usuario | null> {
@@ -189,7 +190,7 @@ export class UsuariosService {
 
   /** Actualiza datos personales propios o de otro usuario cuando opera un administrador. */
   async actualizarDatosPersonales(idUsuario: number, dto: ActualizarUsuarioDto, idOperador: number, rolOperador?: string) {
-    if (idUsuario !== idOperador && rolOperador !== 'Administrador') {
+    if (idUsuario !== idOperador && rolOperador !== ROL.ADMINISTRADOR) {
       throw new ForbiddenException('Solo podés modificar tus propios datos');
     }
 
@@ -607,7 +608,7 @@ export class UsuariosService {
   async emailsAdministradores(): Promise<string[]> {
     const usuarios = await this.usuariosRepo.listarTodos();
     return usuarios
-      .filter((usuario) => usuario.rol?.nombre === 'Administrador' && usuario.activa && !usuario.bloqueado && !usuario.fecha_baja)
+      .filter((usuario) => usuario.rol?.nombre === ROL.ADMINISTRADOR && usuario.activa && !usuario.bloqueado && !usuario.fecha_baja)
       .map((usuario) => usuario.email)
       .filter((email): email is string => !!email);
   }
@@ -657,7 +658,7 @@ export class UsuariosService {
     // El cliente nunca manda el rol: el primer usuario administra el sistema y
     // todos los siguientes comienzan como usuarios normales.
     const cantidadUsuarios = await this.usuariosRepo.contarUsuarios();
-    const nombreRol = cantidadUsuarios === 0 ? 'Administrador' : 'Inquilino';
+    const nombreRol = cantidadUsuarios === 0 ? ROL.ADMINISTRADOR : ROL.INQUILINO;
 
     const rol = await this.catalogosService.getRolPorNombre(nombreRol);
     if (!rol) {

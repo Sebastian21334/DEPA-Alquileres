@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -17,7 +16,7 @@ import {
 } from '../../common/utils/importes';
 import { ReservasService, type CondicionesCobro } from '../../reservas/service/reservas.service';
 import type { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
-import { diasInclusivos, esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
+import { diasInclusivos } from '../../common/utils/fechas';
 
 interface PresupuestoFirmado extends CondicionesCobro {
   usuario: number;
@@ -32,7 +31,7 @@ const VIGENCIA_PRESUPUESTO_SEGUNDOS = 15 * 60;
 @Injectable()
 export class PresupuestosService {
   private readonly secreto: string;
-  constructor(private readonly cotizaciones: CotizacionesService, private readonly publicaciones: PublicacionesService, private readonly disponibilidad: DisponibilidadService, private readonly jwt: JwtService, private readonly config: ConfigService, private readonly reservas: ReservasService) {
+  constructor(private readonly cotizaciones: CotizacionesService, private readonly publicaciones: PublicacionesService, private readonly disponibilidad: DisponibilidadService, private readonly jwt: JwtService, config: ConfigService, private readonly reservas: ReservasService) {
     // Clave separada: un presupuesto jamás puede utilizarse como token de inicio de sesión.
     this.secreto = createHmac('sha256', config.getOrThrow<string>('JWT_SECRET'))
       .update('depa:presupuesto:v1')
@@ -40,12 +39,8 @@ export class PresupuestosService {
   }
   /** Valida la reserva y su disponibilidad, calcula el cobro y firma las condiciones ofrecidas al usuario. */
   async cotizar(dto: CrearReservaDto, idUsuario: number) {
-    if ((this.config.get<string>('MP_CURRENCY_ID') ?? 'ARS') !== 'ARS') {
-      throw new ServiceUnavailableException(
-        'Esta integración requiere configurar los cobros de Mercado Pago en ARS',
-      );
-    }
-    const { inicio, fin } = this.validarFechas(dto);
+    this.reservas.validarMonedaDeCobro();
+    const { inicio, fin } = this.reservas.validarRangoReserva(dto);
     const publicacion = await this.publicaciones.buscarPorId(dto.id_publicacion);
     this.publicaciones.validarNuevaReserva(publicacion, idUsuario, 'cotizacion');
 
@@ -95,14 +90,6 @@ export class PresupuestosService {
     };
   }
   /** Rechaza fechas inexistentes, invertidas o anteriores al día actual en Argentina. */
-  private validarFechas({ fecha_inicio, fecha_fin }: CrearReservaDto): { inicio: Date; fin: Date } {
-    if (!esFechaCalendarioValida(fecha_inicio) || !esFechaCalendarioValida(fecha_fin) ||
-        fecha_inicio > fecha_fin || fecha_inicio < fechaArgentina()) {
-      throw new BadRequestException('Las fechas de la reserva no son válidas');
-    }
-    return { inicio: new Date(fecha_inicio), fin: new Date(fecha_fin) };
-  }
-
   /** Convierte el total a pesos con precisión entera y redondea a centavos cuando corresponde. */
   private calcularCobro(centavos: bigint, cotizacion: CotizacionDolar | null): string {
     try {

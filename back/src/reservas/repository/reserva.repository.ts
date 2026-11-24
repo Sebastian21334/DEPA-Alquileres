@@ -1,4 +1,5 @@
-import type { ConsultaReservasAcceso, EstadosOperacionesReserva, OperacionesReservaPendientes } from './reserva.repository.interface';
+import type { ConsultaReservasAcceso } from './reserva.repository.interface';
+import type { EstadosOperacionesReserva, OperacionesReservaPendientes } from '../dto/operaciones-pendientes-cuenta.dto';
 import { filtrarReservasPorCuenta, type ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';

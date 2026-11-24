@@ -5,11 +5,15 @@ import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, I
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { catchError, EMPTY, finalize, forkJoin, merge, type Observable, Subscription, tap, timer } from 'rxjs';
+import { catchError, EMPTY, finalize, merge, type Observable, Subscription, tap, timer } from 'rxjs';
 import { ADMIN_NAVIGATION, AdminSection, seccionAdmin } from './admin-secciones';
 import { ToastService } from '../../core/services/toast.service';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
 import { PublicacionesAdminComponent } from './publicaciones-admin.component';
+import { ComisionAdminComponent } from './comision-admin.component';
+import { HistorialLiquidacionesAdminComponent } from './historial-liquidaciones-admin.component';
+import { CatalogosAdminComponent } from './catalogos-admin.component';
+import { UbicacionesAdminComponent } from './ubicaciones-admin.component';
 import {
   LucideUsers,
   LucideShieldCheck,
@@ -33,16 +37,11 @@ import {
 } from '@lucide/angular';
 import {
   AdminBloqueo,
-  AdminCatalogItem,
   AdminReembolso,
   AdminResumenReembolsos,
-  AdminPagoLiquidacion,
   AdminSettlement,
-  AdminCity,
-  AdminProvince,
   AdminService,
   AdminUser,
-  CatalogKey,
   VerificationRequest,
 } from './admin.service';
 import { Reclamo } from '../../shared/services/reservation.service';
@@ -56,21 +55,13 @@ import { formatearCbu, formatearCuit, tipoCuentaBancaria } from '../../shared/ut
 import { FiltrosListaComponent } from '../../shared/components/filtros-lista/filtros-lista.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
-import { fechaArgentina } from '../../shared/utils/rental-dates';
-import { DesglosePagoComponent } from '../../shared/components/desglose-pago/desglose-pago.component';
-import { formatearImporteConMoneda } from '../../shared/utils/formato-numero';
+import { formatearMoneda } from '../../shared/utils/formato-numero';
 import {
   apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
   FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
-  textosBloqueo, textosLiquidacion, textosPagoLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
+  textosBloqueo, textosLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
   tieneDevolucion,
 } from './admin-listas';
-
-interface CatalogSection {
-  key: CatalogKey;
-  label: string;
-  items: AdminCatalogItem[];
-}
 
 /** Pendientes del resumen: se muestran 5 y cada «Ver más» suma 10. */
 const PENDIENTES_INICIALES = 5;
@@ -106,13 +97,16 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   imports: [
     CotizacionesAdminComponent,
     PublicacionesAdminComponent,
+    ComisionAdminComponent,
+    HistorialLiquidacionesAdminComponent,
+    CatalogosAdminComponent,
+    UbicacionesAdminComponent,
     ClaimHistoryComponent,
     ConversationComposerComponent,
     ConversationPanelComponent,
     ReembolsoChatComponent,
     CargaComprobanteComponent,
     VerComprobanteComponent,
-    DesglosePagoComponent,
     DatoCopiableComponent,
     FiltrosListaComponent,
     PaginadorComponent,
@@ -144,10 +138,6 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   styleUrls: ['./admin.component.scss', './admin-dashboard.scss'],
 })
 export class AdminComponent {
-  protected comisionActual: number | null = null;
-  protected comisionNueva: number | null = null;
-  protected readonly comisionCargando = signal(false);
-  protected readonly comisionError = signal('');
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly router = inject(Router);
@@ -155,10 +145,6 @@ export class AdminComponent {
   protected readonly navigation = ADMIN_NAVIGATION;
   protected readonly activeSection = signal<AdminSection>('resumen');
   protected readonly sectionDescription = computed(() => SECTION_DESCRIPTIONS[this.activeSection()]);
-  protected readonly historialLiquidaciones = signal<AdminPagoLiquidacion[]>([]);
-  protected readonly historialCargando = signal(false);
-  protected readonly historialError = signal('');
-  private historialRequest?: Subscription;
   private readonly dialogoResolucion = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoResolucion');
   protected readonly resolucionLiquidacion = signal<{ reserva: AdminSettlement; devolver: boolean } | null>(null);
   protected readonly resolucionCargando = signal(false);
@@ -172,6 +158,10 @@ export class AdminComponent {
   private readonly destroyRef = inject(DestroyRef);
   private cargaResumen?: Subscription;
   private readonly publicacionesAdmin = viewChild(PublicacionesAdminComponent);
+  private readonly comisionAdmin = viewChild(ComisionAdminComponent);
+  private readonly historialAdmin = viewChild(HistorialLiquidacionesAdminComponent);
+  /** «Actualizar» espera también a que termine la consulta del historial. */
+  protected readonly historialCargando = computed(() => this.historialAdmin()?.cargando() ?? false);
   private usersRequest?: Subscription;
   private bloqueadosRequest?: Subscription;
   private actualizandoBloqueados = false;
@@ -249,7 +239,6 @@ export class AdminComponent {
   protected readonly formatearCbu = formatearCbu;
   protected readonly formatearCuit = formatearCuit;
   protected readonly tipoCuentaBancaria = tipoCuentaBancaria;
-  protected readonly urlComprobantePago = (pago: AdminPagoLiquidacion) => () => this.api.urlComprobantePago(pago.reservaId, pago.indice);
 
   /** Importe para pegar en el home banking, con coma decimal y sin separador de miles. */
   protected importeParaCopiar(importe: number | string | null | undefined): string {
@@ -321,33 +310,12 @@ export class AdminComponent {
   protected readonly listaVerificaciones = new ListaFiltrable(this.requests, { porPagina: 10, textos: textosVerificacion, filtros: FILTROS_VERIFICACION });
   protected readonly listaBloqueos = new ListaFiltrable(this.bloqueosOrdenados, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
   protected readonly listaHistorialBloqueos = new ListaFiltrable(this.historialBloqueos, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
-  /** El historial de liquidaciones además se filtra por el día (en Argentina) en que se registró el pago. */
-  protected readonly historialDesde = signal('');
-  protected readonly historialHasta = signal('');
-  private readonly historialEnRango = computed(() => {
-    const desde = this.historialDesde(), hasta = this.historialHasta();
-    if (!desde && !hasta) return this.historialLiquidaciones();
-    return this.historialLiquidaciones().filter(({ fecha }) => {
-      const dia = fecha ? fechaArgentina(fecha) : null;
-      return !!dia && (!desde || dia >= desde) && (!hasta || dia <= hasta);
-    });
-  });
-  protected readonly listaHistorialLiquidaciones = new ListaFiltrable(this.historialEnRango, { porPagina: 10, textos: textosPagoLiquidacion });
   protected readonly loading = computed(() =>
     this.otherLoading() || this.usersLoading() || (this.publicacionesAdmin()?.publicationsLoading() ?? true),
   );
   protected readonly query = signal('');
   protected readonly busy = signal<string | null>(null);
   protected readonly rejectId = signal<number | null>(null);
-  protected readonly catalogs = signal<CatalogSection[]>([
-    { key: 'tipos-anunciante', label: 'Tipos de anunciante', items: [] },
-    { key: 'tipos-propiedad', label: 'Tipos de propiedad', items: [] },
-    { key: 'modalidades', label: 'Modalidades', items: [] },
-    { key: 'tipos-moneda', label: 'Monedas', items: [] },
-  ]);
-  protected readonly provinces = signal<AdminProvince[]>([]);
-  protected readonly cities = signal<AdminCity[]>([]);
-  protected readonly selectedProvince = signal<number | null>(null);
   protected rejectReason = '';
   protected rechazarIdentidad = false;
   protected rechazarCbu = false;
@@ -356,8 +324,6 @@ export class AdminComponent {
   constructor() {
     if (this.isBrowser) {
       this.reload();
-      this.loadCatalogs();
-      this.loadProvinces();
       // Abre la sección que indica la URL, por ejemplo al volver del detalle de una reserva.
       this.route.fragment.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((fragmento) => {
         const seccion = seccionAdmin(fragmento);
@@ -380,8 +346,8 @@ export class AdminComponent {
     }
   }
   protected reload(): void {
-    if (this.activeSection() === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
-    if (this.activeSection() === 'comision') this.cargarComision();
+    if (this.activeSection() === 'historial-liquidaciones') this.historialAdmin()?.cargar();
+    if (this.activeSection() === 'comision') this.comisionAdmin()?.cargar();
     this.cargaResumen?.unsubscribe();
     this.otherLoading.set(true);
     this.summaryError.set(false);
@@ -431,8 +397,6 @@ export class AdminComponent {
     // La sección queda en la URL, así «Volver» desde el detalle de una reserva (o un perfil) vuelve a ella.
     if (this.route.snapshot.fragment !== (section === 'resumen' ? null : section))
       void this.router.navigate([], { relativeTo: this.route, fragment: section === 'resumen' ? undefined : section, replaceUrl: true });
-    if (section === 'comision') this.cargarComision();
-    if (section === 'historial-liquidaciones') this.cargarHistorialLiquidaciones();
     if (caseId !== undefined) this.mostrarCaso(section, caseId);
     afterNextRender(() => {
       if (this.activeSection() !== section) return;
@@ -495,17 +459,6 @@ export class AdminComponent {
   private antiguedad(fecha: string | null | undefined): number {
     const marca = Date.parse(fecha ?? '');
     return Number.isFinite(marca) ? marca : Number.POSITIVE_INFINITY;
-  }
-
-  protected filtrarHistorialLiquidaciones(campo: 'desde' | 'hasta', valor: string): void {
-    (campo === 'desde' ? this.historialDesde : this.historialHasta).set(valor);
-    this.listaHistorialLiquidaciones.irAPagina(1);
-  }
-
-  protected limpiarHistorialLiquidaciones(): void {
-    this.historialDesde.set('');
-    this.historialHasta.set('');
-    this.listaHistorialLiquidaciones.limpiar();
   }
 
   protected searchUsers(value: string): void {
@@ -604,19 +557,6 @@ export class AdminComponent {
   protected readonly etiquetaLiquidacion = etiquetaLiquidacion;
   protected readonly pendienteParaAnunciante = pendienteParaAnunciante;
   protected readonly tieneDevolucion = tieneDevolucion;
-
-  protected cargarHistorialLiquidaciones(): void {
-    this.historialRequest?.unsubscribe();
-    this.historialCargando.set(true);
-    this.historialError.set('');
-    this.historialRequest = this.api.listarHistorialLiquidaciones().pipe(
-      takeUntilDestroyed(this.destroyRef),
-      finalize(() => this.historialCargando.set(false)),
-    ).subscribe({
-      next: (pagos) => this.historialLiquidaciones.set(pagos),
-      error: (error: Error) => this.historialError.set(error.message),
-    });
-  }
 
   protected abrirResolucionLiquidacion(reserva: AdminSettlement, devolver: boolean): void {
     this.resolucionLiquidacion.set({ reserva, devolver });
@@ -717,7 +657,6 @@ export class AdminComponent {
   }
 
   /** Mismo formato que el desglose que va debajo, para que no se mezclen «ARS4.00» y «ARS 4,00». */
-  protected readonly importeConMoneda = formatearImporteConMoneda;
 
   protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
     const referencia = this.referenciaReembolso.trim();
@@ -871,7 +810,7 @@ export class AdminComponent {
   }
 
   protected montoReclamo(reclamo: Reclamo, importe: number): string {
-    return Number(importe).toLocaleString('es-AR', { style: 'currency', currency: reclamo.devolucion_cancelacion?.moneda || reclamo.reserva?.moneda_contratada || 'ARS' });
+    return formatearMoneda(importe, reclamo.devolucion_cancelacion?.moneda || reclamo.reserva?.moneda_contratada);
   }
 
   protected readonly nombreInquilino = nombreInquilino;
@@ -880,46 +819,16 @@ export class AdminComponent {
 
   /** Lo que se le liquida al anunciante: lo pagado menos lo que ya se le devolvió al inquilino. */
   protected montoLiquidacion(settlement: AdminSettlement): string {
-    return this.formatearImporte(settlement.importe_a_liquidar, settlement.moneda_liquidacion);
+    return formatearMoneda(settlement.importe_a_liquidar, settlement.moneda_liquidacion);
   }
 
   protected montoPagado(settlement: AdminSettlement): string {
-    return this.formatearImporte(settlement.monto_pago, settlement.moneda_liquidacion);
+    return formatearMoneda(settlement.monto_pago, settlement.moneda_liquidacion);
   }
 
   /** Al cerrar la revisión, una cancelada o con el ingreso validado queda para pagarle al anunciante. */
   protected estadoAlCerrarRevision(reserva: AdminSettlement): 'PENDIENTE_PAGO_PROPIETARIO' | 'RETENIDO' {
     return reserva.codigo_validado_en || reserva.cancelada ? 'PENDIENTE_PAGO_PROPIETARIO' : 'RETENIDO';
-  }
-
-  private formatearImporte(importe: number, moneda?: string | null): string {
-    return Number(importe).toLocaleString('es-AR', { style: 'currency', currency: moneda || 'ARS' });
-  }
-
-  protected guardarComision(): void {
-    const porcentaje = this.comisionNueva;
-    if (porcentaje == null || !Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100 || Math.abs(Math.round(porcentaje * 100) - porcentaje * 100) > 1e-8) {
-      this.toast.mostrar('Ingresá un porcentaje entre 0 y 100 con hasta dos decimales.', 'error');
-      return;
-    }
-    this.api.actualizarComisionDepa(porcentaje).subscribe({ next: (resultado) => { this.comisionActual = resultado.porcentaje; this.toast.mostrar('Comisión actualizada para nuevas reservas.', 'exito'); }, error: (e: Error) => this.toast.mostrar(e.message, 'error') });
-  }
-
-  protected cargarComision(): void {
-    this.comisionCargando.set(true);
-    this.comisionError.set('');
-    this.api.obtenerComisionDepa().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ porcentaje }) => {
-        this.comisionActual = porcentaje;
-        this.comisionNueva = porcentaje;
-        this.comisionCargando.set(false);
-      },
-      error: (error: Error) => {
-        this.comisionActual = null;
-        this.comisionCargando.set(false);
-        this.comisionError.set(error.message || 'No se pudo consultar la comisión.');
-      },
-    });
   }
 
   protected cargarBloqueados(): void {
@@ -1106,29 +1015,6 @@ export class AdminComponent {
         this.toast.mostrar(e.message, 'error');
         this.busy.set(null);
       },
-    });
-  }
-
-  protected loadCatalogs(): void {
-    const sections = this.catalogs();
-    forkJoin(sections.map((s) => this.api.listarCatalogo(s.key))).subscribe({
-      next: (values) => this.catalogs.set(sections.map((s, i) => ({ ...s, items: values[i] }))),
-      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
-    });
-  }
-  protected loadProvinces(): void {
-    this.api.listarProvincias().subscribe({
-      next: (v) => {
-        this.provinces.set(v);
-      },
-      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
-    });
-  }
-  protected selectProvince(id: number): void {
-    this.selectedProvince.set(id);
-    this.api.listarCiudades(id).subscribe({
-      next: (v) => this.cities.set(v),
-      error: (e: Error) => this.toast.mostrar(e.message, 'error'),
     });
   }
 }

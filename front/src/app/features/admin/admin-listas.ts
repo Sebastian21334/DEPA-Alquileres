@@ -1,7 +1,7 @@
 import type { FiltroLista } from '../../shared/utils/lista-filtrable';
 import type { Reclamo } from '../../shared/services/reservation.service';
 import { ETIQUETAS_CATEGORIA_RECLAMO, etiquetaCategoriaReclamo } from '../../shared/utils/reclamo-categorias';
-import { fechaHoyArgentina } from '../../shared/utils/rental-dates';
+import { fechaHoyArgentina, diasDeAntelacion, esFechaCalendario } from '../../shared/utils/rental-dates';
 import type { AdminBloqueo, AdminPagoLiquidacion, AdminReembolso, AdminSettlement, VerificationRequest } from './admin.service';
 
 // Qué datos busca y qué filtros tiene cada lista del panel admin. Todo se aplica en el navegador.
@@ -16,10 +16,7 @@ export const reembolsoPendiente = (reembolso: Pick<AdminReembolso, 'estado'>): b
 /** Días que faltan para poder pagar al anunciante; null si la fecha de habilitación no es válida. */
 export function diasEsperaLiquidacion(settlement: AdminSettlement): number | null {
   const fecha = settlement.fecha_disponible_pago;
-  if (!fecha || !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return null;
-  const fechaPago = Date.parse(`${fecha}T00:00:00Z`);
-  if (!Number.isFinite(fechaPago) || new Date(fechaPago).toISOString().slice(0, 10) !== fecha) return null;
-  return Math.max(0, Math.round((fechaPago - Date.parse(`${fechaHoyArgentina()}T00:00:00Z`)) / 86_400_000));
+  return esFechaCalendario(fecha) ? Math.max(0, diasDeAntelacion(fecha, fechaHoyArgentina())) : null;
 }
 
 // Lo decide el back: estado pendiente para el anunciante, resto mayor a cero y fecha de pago cumplida.

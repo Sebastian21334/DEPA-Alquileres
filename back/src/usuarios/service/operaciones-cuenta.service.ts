@@ -3,7 +3,7 @@ import type { EntityManager } from 'typeorm';
 import type { ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 import { PagosService } from '../../pagos/service/pagos.service';
 import { ReservasLecturaService } from '../../reservas/service/reservas-lectura.service';
-import type { EstadosOperacionesReserva } from '../../reservas/repository/reserva.repository.interface';
+import type { EstadosOperacionesReserva } from '../../reservas/dto/operaciones-pendientes-cuenta.dto';
 import { ReclamosLecturaService } from '../../reclamos/service/reclamos-lectura.service';
 import { ReembolsosLecturaService } from '../../reembolsos/service/reembolsos-lectura.service';
 

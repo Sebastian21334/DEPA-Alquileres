@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import {
   Body,
@@ -59,7 +60,7 @@ export class ReclamosController {
   }
 
   @UseGuards(RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @Get('administracion')
   listarAdministracion() {
     return this.reclamosService.listarAdministracion();
@@ -71,7 +72,7 @@ export class ReclamosController {
     return this.reclamosService.obtener(
       id,
       req.user.id,
-      req.user.rol === 'Administrador',
+      req.user.rol === ROL.ADMINISTRADOR,
     );
   }
 
@@ -82,7 +83,7 @@ export class ReclamosController {
     return this.reclamosService.subirEvidencias(
       id,
       req.user.id,
-      req.user.rol === 'Administrador',
+      req.user.rol === ROL.ADMINISTRADOR,
       archivos,
     );
   }
@@ -93,7 +94,7 @@ export class ReclamosController {
     return this.reclamosService.listarMensajes(
       id,
       req.user.id,
-      req.user.rol === 'Administrador',
+      req.user.rol === ROL.ADMINISTRADOR,
     );
   }
 
@@ -106,13 +107,13 @@ export class ReclamosController {
       id,
       dto,
       req.user.id,
-      req.user.rol === 'Administrador',
+      req.user.rol === ROL.ADMINISTRADOR,
       archivos ?? [],
     );
   }
 
   @UseGuards(RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @Patch(':id/resolver')
   resolver(@Param('id', ParseIntPipe) id: number, @Body() dto: ResolverReclamoDto, @Req() req: AuthenticatedRequest) {
     return this.reclamosService.resolver(id, dto, req.user.id);

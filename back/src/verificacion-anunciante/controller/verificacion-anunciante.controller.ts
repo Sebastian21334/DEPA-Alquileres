@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import {
   Controller,
   Post,
@@ -164,7 +165,7 @@ export class VerificacionAnuncianteController {
   @Get('pendientes')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   // Solo un administrador puede revisar solicitudes de terceros.
   async getPendientes() {
     return this.verificacionService.getPendientes();
@@ -188,7 +189,7 @@ export class VerificacionAnuncianteController {
 
   @Patch(':id/aprobar')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   async aprobar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest, @Body() dto: RevisarVerificacionDto) {
     // La aprobación cambia verificado y habilita la creación de publicaciones.
     return this.verificacionService.aprobar(id, req.user.id, dto);
@@ -196,7 +197,7 @@ export class VerificacionAnuncianteController {
 
   @Delete(':id/rechazar')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   async rechazar(@Param('id', ParseIntPipe) id: number, @Body() dto: RechazarVerificacionDto, @Req() req: AuthenticatedRequest) {
     // El motivo se valida mediante DTO y queda guardado en el historial.
     return this.verificacionService.rechazar(id, req.user.id, dto);

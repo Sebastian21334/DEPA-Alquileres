@@ -2,7 +2,7 @@ const { catalogosDePrueba, reservasDePrueba } = require('./soporte/catalogos-pru
 require('reflect-metadata');
 const assert = require('node:assert/strict');
 const { test, beforeEach } = require('node:test');
-const { ValidationPipe } = require('@nestjs/common');
+const { ConflictException, ValidationPipe } = require('@nestjs/common');
 const { JwtService } = require('@nestjs/jwt');
 const { CrearCheckoutDto } = require('../dist/operaciones-reserva/dto/crear-checkout.dto');
 const { PresupuestosService } = require('../dist/operaciones-reserva/service/presupuestos.service');
@@ -350,6 +350,45 @@ test('al vencer el plazo de pago el sistema cierra la reserva con su motivo, y u
   // Un pago aprobado antes del vencimiento que se informa tarde recupera la reserva sin rastros del cierre.
   await e.reservas.confirmarPago(reserva.id, new Date(vencimiento - 1000));
   assert.deepEqual([reserva.cancelada, reserva.cancelada_por, reserva.motivo_cancelacion], [false, null, null]);
+});
+
+/** Reserva con checkout creado y cerrada por vencimiento del plazo de pago. */
+async function reservaVencida(t) {
+  const e = escenario('ARS');
+  const presupuesto = await e.presupuestos.cotizar(solicitud, USUARIO);
+  await e.pagos.crearCheckout({ ...solicitud, presupuesto_token: presupuesto.token }, USUARIO);
+  const [reserva] = e.estado.reservas;
+  e.reservas.reservaRepository.buscarPendientesVencidas = async () => [reserva];
+  const vencimiento = reserva.pago_vencimiento.getTime();
+  t.mock.timers.setTime(vencimiento + 1);
+  await e.reservas.expirarPendientes();
+  e.reservas.logger = { warn: () => {} };
+  return { e, reserva, vencimiento };
+}
+
+const enRevision = (reserva) => [reserva.cancelada, reserva.estado_pago, reserva.estado_liquidacion];
+
+test('un pago aprobado después del vencimiento no reactiva la reserva y queda en revisión para devolverlo', async (t) => {
+  const { e, reserva, vencimiento } = await reservaVencida(t);
+  await e.reservas.confirmarPago(reserva.id, new Date(vencimiento + 1000));
+  assert.deepEqual(enRevision(reserva), [true, 'APROBADO', 'EN_REVISION']);
+  assert.match(reserva.observacion_liquidacion, /fuera del plazo/);
+});
+
+test('un pago a tiempo con las fechas ya tomadas queda en revisión para devolverlo', async (t) => {
+  const { e, reserva, vencimiento } = await reservaVencida(t);
+  e.reservas.disponibilidadService.marcarComoReservadas = async () => { throw new ConflictException('Las fechas ya están reservadas'); };
+  await e.reservas.confirmarPago(reserva.id, new Date(vencimiento - 1000));
+  assert.deepEqual(enRevision(reserva), [true, 'APROBADO', 'EN_REVISION']);
+  assert.match(reserva.observacion_liquidacion, /ya fueron reasignadas/);
+});
+
+test('una reserva cancelada por el bloqueo del anunciante no se reactiva con un pago tardío', async (t) => {
+  const { e, reserva, vencimiento } = await reservaVencida(t);
+  Object.assign(reserva, { cancelada_por: 'ADMINISTRADOR', causa_cancelacion: 'BLOQUEO_ANUNCIANTE' });
+  await e.reservas.confirmarPago(reserva.id, new Date(vencimiento - 1000));
+  assert.deepEqual(enRevision(reserva), [true, 'APROBADO', 'EN_REVISION']);
+  assert.match(reserva.observacion_liquidacion, /cancelada por bloqueo/);
 });
 
 test('si no se puede iniciar el pago, el sistema cierra la reserva con su motivo', async () => {

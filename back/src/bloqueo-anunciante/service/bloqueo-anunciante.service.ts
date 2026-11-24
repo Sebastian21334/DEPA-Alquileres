@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { MAIL_SERVICE, type IMailService } from '../../mail/mail.interface';
+import { MAIL_SERVICE, type IMailCuenta } from '../../mail/mail.interface';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 
 @Injectable()
 export class BloqueoAnuncianteService {
   private readonly logger = new Logger(BloqueoAnuncianteService.name);
-  constructor(private readonly usuarios: UsuariosService, @Inject(MAIL_SERVICE) private readonly mail: IMailService) {}
+  constructor(private readonly usuarios: UsuariosService, @Inject(MAIL_SERVICE) private readonly mail: IMailCuenta) {}
 
   async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
     const motivoNormalizado = motivo?.trim();

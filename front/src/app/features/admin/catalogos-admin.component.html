@@ -1,0 +1,22 @@
+<section class="panel management">
+  <div class="panel__title">
+    <div>
+      <h2>Catálogos</h2>
+      <p>Consulta de las opciones del sistema. Se cargan por seed o migración.</p>
+    </div>
+  </div>
+  <div class="catalog-grid">
+    @for (seccion of catalogos(); track seccion.clave) {
+      <article class="catalog-card">
+        <h3>{{ seccion.etiqueta }}</h3>
+        <ul class="crud-list">
+          @for (item of seccion.items; track item.id) {
+            <li><span>{{ item.nombre }}</span></li>
+          } @empty {
+            <li class="empty-row">Sin elementos</li>
+          }
+        </ul>
+      </article>
+    }
+  </div>
+</section>

@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import {
   Controller,
   Get,
@@ -14,7 +15,7 @@ import { Roles } from '../../seguridad/decorators/roles.decorator';
 
 @Controller('cotizaciones')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('Administrador')
+@Roles(ROL.ADMINISTRADOR)
 export class CotizacionesController {
   constructor(private readonly cotizaciones: CotizacionesService) {}
   @Get('administracion')

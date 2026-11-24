@@ -2,24 +2,16 @@ import { Module } from '@nestjs/common';
 import { MailService } from './service/mail.service';
 import { MAIL_SERVICE } from './mail.interface';
 import { MailPlantilla } from './presentation/mail-plantilla';
-import { AzureCorreoProveedor } from './proveedor/azure-correo.proveedor';
-import { CORREO_REPOSITORY } from './repository/correo.repository.interface';
-import { CLIENTE_CORREO } from './proveedor/cliente-correo.interface';
-import { EmailClient } from '@azure/communication-email';
-import { ConfigService } from '@nestjs/config';
+import { AzureCorreoProveedor, clienteCorreoAzure } from './proveedor/azure-correo.proveedor';
+import { PROVEEDOR_CORREO } from './proveedor/proveedor-correo.interface';
 
 @Module({
   providers: [
-    {
-      provide: CLIENTE_CORREO,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) =>
-        new EmailClient(config.getOrThrow<string>('ACS_CONNECTION_STRING')),
-    },
+    clienteCorreoAzure,
     MailService,
     MailPlantilla,
     AzureCorreoProveedor,
-    { provide: CORREO_REPOSITORY, useExisting: AzureCorreoProveedor },
+    { provide: PROVEEDOR_CORREO, useExisting: AzureCorreoProveedor },
     { provide: MAIL_SERVICE, useExisting: MailService },
   ],
   exports: [MAIL_SERVICE],

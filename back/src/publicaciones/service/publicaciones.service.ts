@@ -30,7 +30,7 @@ import { AnunciantesService } from '../../anunciantes/service/anunciantes.servic
 import { UbicacionService } from '../../ubicacion/service/ubicacion.service';
 import { Publicacion } from '../entity/publicacion.entity';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
-import type { IMailService } from '../../mail/mail.interface';
+import type { IMailPublicaciones } from '../../mail/mail.interface';
 import type { EntityManager } from 'typeorm';
 import { decimalEntero, importeTexto, monedaPublicacion } from '../../common/utils/importes';
 import { fechaArgentina } from '../../common/utils/fechas';
@@ -40,7 +40,7 @@ type EtapaReserva = 'cotizacion' | 'reserva';
 @Injectable()
 export class PublicacionesService {
   private readonly logger = new Logger(PublicacionesService.name);
-  constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly anunciantesService: AnunciantesService, private readonly reservasLectura: ReservasLecturaService, private readonly cotizacionesLectura: CotizacionesLecturaService) {}
+  constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailPublicaciones, private readonly anunciantesService: AnunciantesService, private readonly reservasLectura: ReservasLecturaService, private readonly cotizacionesLectura: CotizacionesLecturaService) {}
 
   /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
   async crear(anunciante: Anunciante, dto: CrearPublicacionDto) {

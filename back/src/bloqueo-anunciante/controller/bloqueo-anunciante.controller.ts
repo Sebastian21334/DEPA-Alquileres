@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import {
   Body,
   Controller,
@@ -28,7 +29,7 @@ export class BloqueoAnuncianteController {
 
   @Patch(':id/bloquear')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   bloquear(
     @Param('id', ParseIntPipe) id: number,
     @Body(new ValidationPipe({ transform: true })) dto: BloquearUsuarioDto,
@@ -44,7 +45,7 @@ export class BloqueoAnuncianteController {
 
   @Patch(':id/habilitar')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   habilitar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CambiarBloqueoDto,

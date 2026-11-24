@@ -1,12 +1,14 @@
+import { formatearMoneda } from '../../../shared/utils/formato-numero';
+import { fechaCalendarioLocal } from '../../../shared/utils/rental-dates';
 import { Component, DestroyRef, ElementRef, HostListener, afterNextRender, inject, input, output } from '@angular/core';
-import { LucideHandshake, LucideLockKeyhole, LucideX } from '@lucide/angular';
+import { LucideLockKeyhole, LucideX } from '@lucide/angular';
 import { Publicacion } from '../../../shared/models/publicacion.model';
 import { PresupuestoReserva } from '../../../shared/services/reservation.service';
 
 @Component({
   selector: 'app-payment-summary',
   standalone: true,
-  imports: [LucideHandshake, LucideLockKeyhole, LucideX],
+  imports: [LucideLockKeyhole, LucideX],
   templateUrl: './payment-summary.component.html',
   styleUrl: './payment-summary.component.scss',
 })
@@ -65,11 +67,11 @@ export class PaymentSummaryComponent {
   }
 
   protected importe(valor: string | number, moneda: string, decimales = 2): string {
-    return Number(valor).toLocaleString('es-AR', { style: 'currency', currency: moneda, maximumFractionDigits: decimales });
+    return formatearMoneda(valor, moneda, decimales);
   }
 
   protected fecha(valor: string | null): string {
-    return valor ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(new Date(`${valor.slice(0, 10)}T12:00:00`)) : 'Sin seleccionar';
+    return valor ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'medium' }).format(fechaCalendarioLocal(valor)) : 'Sin seleccionar';
   }
 
   protected fechaHora(valor: string): string {

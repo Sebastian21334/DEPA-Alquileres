@@ -1,3 +1,5 @@
+import { formatearMoneda } from '../../shared/utils/formato-numero';
+import { diasDeAntelacion, esFechaCalendario, fechaCalendarioLocal, sumarDias } from '../../shared/utils/rental-dates';
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
@@ -272,17 +274,13 @@ export class MisReservasComponent {
   }
 
   protected fechaHabilitacion(reserva: Reserva): string | null {
-    if (!reserva.fecha_fin || !/^\d{4}-\d{2}-\d{2}$/.test(reserva.fecha_fin)) return null;
-    const fecha = new Date(`${reserva.fecha_fin}T00:00:00Z`);
-    if (!Number.isFinite(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== reserva.fecha_fin ||
-        !reserva.fecha_inicio || reserva.fecha_inicio > reserva.fecha_fin) return null;
-    fecha.setUTCDate(fecha.getUTCDate() + 5);
-    return fecha.toISOString().slice(0, 10);
+    if (!esFechaCalendario(reserva.fecha_fin) || !reserva.fecha_inicio || reserva.fecha_inicio > reserva.fecha_fin) return null;
+    return sumarDias(reserva.fecha_fin, 5);
   }
 
   protected diasHastaVencimiento(reserva: Reserva): number | null {
     const fecha = this.fechaHabilitacion(reserva);
-    return fecha ? Math.max(0, Math.round((Date.parse(fecha) - Date.parse(this.hoy())) / 86_400_000)) : null;
+    return fecha ? Math.max(0, diasDeAntelacion(fecha, this.hoy())) : null;
   }
 
   protected ultimoCambio(reserva: Reserva): ReprogramacionReserva | undefined {
@@ -654,12 +652,12 @@ export class MisReservasComponent {
   }
 
   protected fecha(valor: string | null): string {
-    return valor ? new Date(`${valor.slice(0, 10)}T12:00:00`).toLocaleDateString('es-AR') : '—';
+    return valor ? fechaCalendarioLocal(valor).toLocaleDateString('es-AR') : '—';
   }
 
   protected fechaTarjeta(valor: string | null): string {
     return valor
-      ? new Date(`${valor.slice(0, 10)}T12:00:00`).toLocaleDateString('es-AR', {
+      ? fechaCalendarioLocal(valor).toLocaleDateString('es-AR', {
           day: 'numeric', month: 'short', year: 'numeric',
         })
       : '—';
@@ -670,11 +668,7 @@ export class MisReservasComponent {
   }
 
   protected monto(valor: number, moneda?: string | null, decimales = 2): string {
-    return Number(valor).toLocaleString('es-AR', {
-      style: 'currency',
-      currency: moneda ?? 'ARS',
-      maximumFractionDigits: decimales,
-    });
+    return formatearMoneda(valor, moneda, decimales);
   }
 
   protected inquilino(reserva: Reserva): string {

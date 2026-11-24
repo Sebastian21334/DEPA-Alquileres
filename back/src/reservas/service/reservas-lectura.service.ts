@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { EntityManager } from 'typeorm';
-import { RESERVA_REPOSITORY, type IReservaRepository, type ConsultaReservasAcceso, type EstadosOperacionesReserva, type OperacionesReservaPendientes } from '../repository/reserva.repository.interface';
+import { RESERVA_REPOSITORY, type IReservaRepository, type ConsultaReservasAcceso } from '../repository/reserva.repository.interface';
+import type { EstadosOperacionesReserva, OperacionesReservaPendientes } from '../dto/operaciones-pendientes-cuenta.dto';
 import type { ParticipacionEnReserva } from '../../common/persistence/participacion-en-reserva';
 
 @Injectable()
