@@ -78,7 +78,7 @@ export class Pago {
   })
   idempotency_key: string;
 
-  @Column({ name: 'approved_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'approved_at', type: 'timestamptz', nullable: true })
   approved_at: Date | null;
 
   // Agregado de los reembolsos aprobados. La fuente de verdad es la tabla reembolso.
@@ -91,13 +91,13 @@ export class Pago {
   })
   amount_refunded: number;
 
-  @Column({ name: 'refunded_at', type: 'timestamp', nullable: true })
+  @Column({ name: 'refunded_at', type: 'timestamptz', nullable: true })
   refunded_at: Date | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   created_at: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
   updated_at: Date;
 
 }

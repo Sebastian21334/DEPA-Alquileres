@@ -294,3 +294,15 @@ Antes de iniciar esta versión ejecutar `npm run db:apelaciones-bloqueo` desde
 `back`. La migración agrega el historial y recupera el último bloqueo de las
 cuentas actualmente desbloqueadas cuando todavía existe su detalle. Los bloqueos
 anteriores que ya fueron reemplazados no pueden reconstruirse. Es reejecutable.
+
+# Fechas con zona horaria
+
+Ejecutar `npm run db:fechas-con-zona-horaria` desde `back` (también después de inicializar una
+base nueva). La migración `20261123-fechas-con-zona-horaria.sql` pasa a `timestamptz` las 30
+columnas de fecha y hora que eran `timestamp` sin zona horaria. Antes, `now()` de la base guardaba
+la hora UTC y el backend la hora local de su máquina, y al leerlas aparecían corridas 3 horas.
+Los valores existentes se interpretan así: con microsegundos vienen de `now()` y están en UTC; los
+que escribió el backend se toman como UTC si no quedan antes de una referencia exacta de la misma
+fila (su creación o un `timestamptz`), y si no, como hora argentina. Lo que un backend en UTC
+escribió sin referencia, como los mensajes del chat, puede quedar corrido 3 horas. Es reejecutable:
+solo convierte las columnas que siguen sin zona horaria.

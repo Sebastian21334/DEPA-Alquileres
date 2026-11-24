@@ -58,12 +58,12 @@ export class SolicitudCancelacion {
   @JoinColumn({ name: 'id_decidida_por' })
   decidida_por: Relation<Usuario | null>;
 
-  @Column({ name: 'decidida_en', type: 'timestamp', nullable: true })
+  @Column({ name: 'decidida_en', type: 'timestamptz', nullable: true })
   decidida_en: Date | null;
 
   @Column({ name: 'observacion', type: 'varchar', length: 500, nullable: true })
   observacion: string | null;
 
-  @CreateDateColumn({ name: 'creada_en', type: 'timestamp' })
+  @CreateDateColumn({ name: 'creada_en', type: 'timestamptz' })
   creada_en: Date;
 }
