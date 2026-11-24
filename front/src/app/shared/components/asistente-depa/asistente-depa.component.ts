@@ -8,7 +8,11 @@ import { AsistenteDepaService, type MensajeAsistente, type RespuestaAsistente } 
 
 interface Intercambio extends RespuestaAsistente {
   pregunta: string;
+  bloques: BloqueRespuesta[];
 }
+
+interface FragmentoRespuesta { texto: string; destacado: boolean; }
+interface BloqueRespuesta { tipo: 'texto' | 'lista' | 'titulo'; fragmentos: FragmentoRespuesta[]; }
 
 @Component({
   selector: 'app-asistente-depa',
@@ -69,9 +73,12 @@ export class AsistenteDepaComponent {
 
     this.servicio.consultar(mensajes).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (respuesta) => {
-        this.intercambios.update((actuales) => [...actuales, { pregunta, ...respuesta }]);
+        const seguirConversacion = this.estaCercaDelFinal();
+        this.intercambios.update((actuales) => [...actuales, {
+          pregunta, ...respuesta, bloques: this.formatearRespuesta(respuesta.respuesta),
+        }]);
         this.consultaEnCurso.set('');
-        this.programarDesplazamiento();
+        if (seguirConversacion) this.mostrarInicioRespuesta();
       },
       error: (error: unknown) => {
         this.consultaEnCurso.set('');
@@ -85,11 +92,44 @@ export class AsistenteDepaComponent {
   }
 
   private programarDesplazamiento(): void {
-    afterNextRender(() => this.desplazarHistorial(), { injector: this.injector });
+    afterNextRender(() => this.desplazarHistorial(true), { injector: this.injector });
   }
 
-  private desplazarHistorial(): void {
+  private desplazarHistorial(suave = false): void {
     const panel = this.historial()?.nativeElement;
-    if (panel) panel.scrollTop = panel.scrollHeight;
+    if (panel) panel.scrollTo({ top: panel.scrollHeight, behavior: suave ? 'smooth' : 'auto' });
+  }
+
+  private estaCercaDelFinal(): boolean {
+    const panel = this.historial()?.nativeElement;
+    return !panel || panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100;
+  }
+
+  private mostrarInicioRespuesta(): void {
+    afterNextRender(() => {
+      const panel = this.historial()?.nativeElement;
+      const respuesta = panel?.querySelector<HTMLElement>('.asistente__respuesta:last-of-type');
+      if (!panel || !respuesta) return;
+      const top = panel.scrollTop + respuesta.getBoundingClientRect().top - panel.getBoundingClientRect().top - 12;
+      panel.scrollTo({ top, behavior: 'smooth' });
+    }, { injector: this.injector });
+  }
+
+  private formatearRespuesta(respuesta: string): BloqueRespuesta[] {
+    return respuesta.split(/\r?\n/).map((linea): BloqueRespuesta => {
+      const titulo = /^\s*#{1,6}\s+/.test(linea);
+      const lista = /^\s*[-*+]\s+/.test(linea);
+      const contenido = linea.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+)/, '');
+      const fragmentos = contenido.split(/(\*\*[^*]+\*\*|__[^_]+__)/g).filter(Boolean).map((texto) => {
+        const destacado = /^(?:\*\*.+\*\*|__.+__)$/.test(texto);
+        return { texto: destacado ? texto.slice(2, -2) : texto, destacado };
+      });
+      return { tipo: titulo ? 'titulo' : lista ? 'lista' : 'texto', fragmentos };
+    });
+  }
+
+  protected tipoModalidad(modalidad: string): 'temporal' | 'largo' | null {
+    const nombre = modalidad.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return nombre.includes('tempor') ? 'temporal' : nombre.includes('largo') ? 'largo' : null;
   }
 }

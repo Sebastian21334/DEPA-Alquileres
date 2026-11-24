@@ -25,12 +25,26 @@
       @for (intercambio of intercambios(); track $index) {
         <p class="mensaje mensaje--propio">{{ intercambio.pregunta }}</p>
         <div class="asistente__respuesta">
-          <p class="mensaje">{{ intercambio.respuesta }}</p>
+          <div class="mensaje mensaje--respuesta">
+            @for (bloque of intercambio.bloques; track $index) {
+              <div class="mensaje__linea" [class.mensaje__linea--lista]="bloque.tipo === 'lista'"
+                [class.mensaje__linea--titulo]="bloque.tipo === 'titulo'"
+                [class.mensaje__linea--vacia]="!bloque.fragmentos.length">
+                @for (fragmento of bloque.fragmentos; track $index) {
+                  @if (fragmento.destacado) { <strong>{{ fragmento.texto }}</strong> }
+                  @else { {{ fragmento.texto }} }
+                }
+              </div>
+            }
+          </div>
           @for (publicacion of intercambio.publicaciones; track publicacion.id) {
-            <a class="resultado" [routerLink]="['/publicaciones', publicacion.id]" (click)="cerrar(false)">
+            <a class="resultado" [class.resultado--temporal]="tipoModalidad(publicacion.modalidad) === 'temporal'"
+              [class.resultado--largo]="tipoModalidad(publicacion.modalidad) === 'largo'"
+              [routerLink]="['/publicaciones', publicacion.id]" (click)="cerrar(false)">
               <span class="resultado__detalle">
+                <span class="resultado__modalidad">{{ publicacion.modalidad }}</span>
                 <strong>{{ publicacion.titulo }}</strong>
-                <span>{{ publicacion.ciudad }} · {{ publicacion.modalidad }} · {{ publicacion.ambientes }} amb.</span>
+                <span>{{ publicacion.ciudad }} · {{ publicacion.ambientes }} amb.</span>
                 <span class="resultado__precio">{{ importe.format(publicacion.precio) }} {{ publicacion.moneda }}</span>
               </span>
               <svg lucideArrowUpRight [size]="17" aria-hidden="true"></svg>
@@ -40,7 +54,9 @@
       }
       @if (consultaEnCurso()) {
         <p class="mensaje mensaje--propio">{{ consultaEnCurso() }}</p>
-        <p class="asistente__estado" role="status">depa está respondiendo…</p>
+        <div class="mensaje asistente__escribiendo" role="status" aria-label="depa está respondiendo">
+          <span></span><span></span><span></span>
+        </div>
       }
       @if (error()) {
         <p class="asistente__error" role="alert">{{ error() }}</p>

@@ -68,7 +68,7 @@ export class ReembolsosRepository implements IReembolsosRepository {
   buscarPorPago(idPago: number): Promise<Reembolso[]> {
     return this.repository.find({
       where: { pago: { id: idPago } },
-      select: { id: true, importe: true, estado: true, origen: true, id_externo: true, referencia_externa: true,
+      select: { id: true, importe: true, estado: true, origen: true, id_externo: true, referencia_externa: true, referencia_interna: true,
         conciliar_en: true, aplicado_en: true, revision_aplicacion: true },
       order: { id: 'DESC' },
     });
@@ -124,6 +124,17 @@ export class ReembolsosRepository implements IReembolsosRepository {
       await operacion(reembolso);
       return repo.guardar(reembolso);
     });
+  }
+
+  buscarCancelacionesAutomaticasPendientes(desdeId: number): Promise<Reembolso[]> {
+    return this.repository.createQueryBuilder('reembolso')
+      .select(['reembolso.id'])
+      .where('reembolso.id > :desdeId', { desdeId })
+      .andWhere('reembolso.estado = :estado', { estado: 'PENDIENTE' })
+      .andWhere('reembolso.origen = :origen', { origen: OrigenReembolso.CANCELACION })
+      .andWhere('reembolso.transferencia_manual = false')
+      .andWhere('reembolso.referencia_interna LIKE :referencia', { referencia: 'auto-can:%' })
+      .orderBy('reembolso.id', 'ASC').limit(50).getMany();
   }
 
   buscarPendientesConciliacion(estados: string[], hasta: Date): Promise<Reembolso[]> {

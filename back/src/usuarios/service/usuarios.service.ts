@@ -310,15 +310,11 @@ export class UsuariosService {
     return guardado ? token : null;
   }
 
-  async reactivarCuenta(token: string, contrasenia: string): Promise<void> {
+  async reactivarCuenta(token: string): Promise<void> {
     const hashToken = createHash('sha256').update(token).digest('hex');
     const candidato = await this.usuariosRepo.buscarPorTokenReactivacion(hashToken);
     const email = candidato?.email_historico;
     if (!candidato || !email) throw new BadRequestException(ENLACE_REACTIVACION_INVALIDO);
-    if (!(await this.credencialesService.coincideContrasenia(contrasenia, candidato.contrasenia))) {
-      throw new ForbiddenException('La contraseña anterior es incorrecta.');
-    }
-
     try {
       await this.usuariosRepo.conTransaccion(async (transaccion) => {
         const reactivada = await this.usuariosRepo.reactivar(

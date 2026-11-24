@@ -158,7 +158,9 @@ export class AdminComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  protected readonly navigation = ADMIN_NAVIGATION;
+  protected readonly navigation = computed(() => ADMIN_NAVIGATION.map(group => ({
+    ...group, items: group.items.filter(item => item.id !== 'cancelaciones' || this.cancellations().length > 0),
+  })));
   protected readonly activeSection = signal<AdminSection>('resumen');
   protected readonly sectionDescription = computed(() => SECTION_DESCRIPTIONS[this.activeSection()]);
   protected readonly historialLiquidaciones = signal<AdminPagoLiquidacion[]>([]);
@@ -171,7 +173,7 @@ export class AdminComponent {
   protected readonly resolucionError = signal('');
   protected motivoResolucion = '';
   protected readonly sectionLabel = computed(() =>
-    this.navigation.flatMap(({ items }) => [...items]).find(({ id }) => id === this.activeSection())?.label ?? 'Resumen',
+    ADMIN_NAVIGATION.flatMap(({ items }) => [...items]).find(({ id }) => id === this.activeSection())?.label ?? 'Resumen',
   );
   private readonly api = inject(AdminService);
   private readonly toast = inject(ToastService);
@@ -743,11 +745,33 @@ export class AdminComponent {
   }
 
   protected puedeSolicitarReembolso(reembolso: AdminReembolso): boolean {
-    return !reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
+    return !reembolso.referencia_interna?.startsWith('auto-can:') &&
+      !reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
   }
 
   protected puedeConciliarReembolso(reembolso: AdminReembolso): boolean {
     return !reembolso.transferencia_manual && !!reembolso.pago?.payment_id && (reembolso.estado === 'FALLIDO' || reembolso.estado === 'EN_PROCESO');
+  }
+
+  protected puedeHabilitarTransferencia(reembolso: AdminReembolso): boolean {
+    return reembolso.estado === 'FALLIDO' && !reembolso.transferencia_manual && reembolso.origen !== 'CONTRACARGO';
+  }
+
+  protected habilitarTransferenciaReembolso(reembolso: AdminReembolso): void {
+    if (!this.puedeHabilitarTransferencia(reembolso) || this.guardandoReembolso()) return;
+    this.errorReembolso.set('');
+    this.guardandoReembolso.set(true);
+    this.api.habilitarTransferenciaReembolso(reembolso.id)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
+      .subscribe({
+        next: (actualizado) => {
+          this.reembolsoSeleccionado.set(actualizado);
+          this.referenciaReembolso = '';
+          this.toast.mostrar('Transferencia habilitada. Coordiná la devolución desde el chat.', 'exito');
+          this.reload();
+        },
+        error: (error: Error) => this.errorReembolso.set(error.message),
+      });
   }
 
   protected puedeRegistrarTransferencia(reembolso: AdminReembolso): boolean {

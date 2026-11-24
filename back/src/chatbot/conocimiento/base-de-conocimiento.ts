@@ -4,7 +4,7 @@ export const BASE_DE_CONOCIMIENTO_DEPA = `
 - DEPA reúne alquileres temporarios y de largo plazo. Podés explorar el catálogo sin iniciar sesión. Los anuncios del catálogo están activos, tienen al menos una imagen y pertenecen a anunciantes con cuenta habilitada y actividades sin pausar.
 - Podés buscar por texto y filtrar por modalidad, provincia, ciudad, tipo de propiedad, moneda, rango de precio, superficie mínima y ambientes. El mapa muestra anuncios con coordenadas. Para saber si un temporario está disponible en fechas concretas, consultá el calendario de la publicación.
 - En los alquileres a largo plazo, contactá al anunciante para acordar el alquiler. Los temporarios permiten reservar por fecha. Para guardar favoritos o usar la mensajería interna necesitás iniciar sesión.
-- El chat interno queda asociado a una publicación. El inquilino puede escribirle al anunciante. El anunciante puede responder e iniciar una conversación con un inquilino que tenga una reserva aprobada en esa publicación o con quien ya tenga una conversación allí. Desactivar un anuncio permite seguir conversando. Si el anuncio se elimina o una cuenta se da de baja, se conserva el historial y se suspende el envío de mensajes. Una cuenta bloqueada que conserva acceso limitado puede usar la mensajería.
+- El chat interno queda asociado a una publicación. El inquilino puede escribirle al anunciante. El anunciante contacta al inquilino por el chat de DEPA y puede iniciar una conversación si tiene una reserva aprobada en esa publicación o si ya tiene una conversación allí. Desactivar un anuncio permite seguir conversando. Si el anuncio se elimina o una cuenta se da de baja, se conserva el historial y se suspende el envío de mensajes. Una cuenta bloqueada que conserva acceso limitado puede usar la mensajería.
 
 ## Reservas y pagos
 
@@ -16,9 +16,9 @@ export const BASE_DE_CONOCIMIENTO_DEPA = `
 
 ## Cancelaciones y devoluciones
 
-- El inquilino titular o el anunciante puede cancelar una reserva pendiente de pago y liberar las fechas. Si ya pagó, debe solicitar la cancelación hasta el día anterior al inicio, con el motivo y la aceptación de sus términos. La solicitud requiere revisión de Administración. Si se aprueba con devolución, la reserva se cancela y libera las fechas cuando se confirma el reintegro. Si se aprueba sin devolución, se cancela al aprobarse.
+- El inquilino titular o el anunciante puede cancelar una reserva pendiente de pago y liberar las fechas. Para una reserva pagada, puede confirmar la cancelación hasta el día anterior al ingreso, indicando el motivo y aceptando las condiciones y el importe. Se aprueba automáticamente y las fechas se liberan al confirmarse la devolución, o inmediatamente si no corresponde devolución.
 - El reintegro se calcula sobre lo efectivamente pagado, según la política aplicable al momento del pago. En la política base, si el inquilino lo pide con 7 días o más de anticipación corresponde el 100 %, de 2 a 6 días el 50 % y con 1 día el 0 %. Si lo pide el anunciante, corresponde el 100 %. Para conocer lo que aplica a una reserva concreta, consultá sus condiciones de cancelación.
-- Los pagos con tarjeta y dinero en cuenta siguen el circuito de devolución de Mercado Pago cuando se registró el medio de pago. Si corresponde una transferencia manual, el inquilino puede comunicarse con Administración mientras esté pendiente y consultar el comprobante cuando se registre.
+- En cancelaciones automáticas se solicita a Mercado Pago la devolución de dinero en cuenta. Las devoluciones con tarjeta se simulan cuando el entorno está configurado para pruebas. Las devoluciones simuladas no mueven dinero.
 
 ## Reclamos
 

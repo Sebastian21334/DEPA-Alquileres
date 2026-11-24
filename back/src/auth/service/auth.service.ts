@@ -99,8 +99,8 @@ export class AuthService {
     throw new BadRequestException('Volvé al formulario para solicitar un enlace de recuperación.');
   }
 
-  async confirmarReactivacion(token: string, contrasenia: string) {
-    await this.usuariosService.reactivarCuenta(token, contrasenia);
+  async confirmarReactivacion(token: string) {
+    await this.usuariosService.reactivarCuenta(token);
     return { mensaje: 'Recuperaste tu cuenta. Ya podés iniciar sesión.' };
   }
 

@@ -6,7 +6,7 @@
       <button type="button" [attr.aria-current]="activeSection() === 'resumen' ? 'page' : null" (click)="openSection('resumen')">
         <svg lucideHouse [size]="19" aria-hidden="true"></svg> Resumen
       </button>
-      @for (group of navigation; track group.label) {
+      @for (group of navigation(); track group.label) {
         <div class="admin-nav-group">
           <h2>{{ group.label }}</h2>
           @for (item of group.items; track item.id) {
@@ -21,7 +21,7 @@
       Sección
       <select [ngModel]="activeSection()" (ngModelChange)="openSection($event)">
         <option value="resumen">Resumen</option>
-        @for (group of navigation; track group.label) {
+        @for (group of navigation(); track group.label) {
           <optgroup [label]="group.label">
             @for (item of group.items; track item.id) {
               <option [value]="item.id">{{ item.label }}</option>
@@ -82,10 +82,12 @@
       <p class="alert alert--error" role="alert">No se pudieron actualizar todos los datos del resumen. Podés volver a intentar con Actualizar.</p>
     }
     <div class="dashboard-metrics" [attr.aria-busy]="otherLoading()">
+      @if (cancellations().length) {
       <button type="button" class="dashboard-metric metric-cancellation" (click)="abrirDesdeContador('cancelaciones')">
         <svg lucideCalendarX [size]="29" aria-hidden="true"></svg>
         <span>Cancelaciones pendientes<strong>{{ otherLoading() ? '…' : cancellations().length }}</strong></span>
       </button>
+      }
       <button type="button" class="dashboard-metric" (click)="abrirDesdeContador('reclamos')">
         <svg lucideMessageCircle [size]="29" aria-hidden="true"></svg>
         <span>Reclamos abiertos<strong>{{ otherLoading() ? '…' : openClaims().length }}</strong></span>
@@ -310,7 +312,9 @@
         @for (reembolso of listaReembolsos.visibles(); track reembolso.id) {
           <article class="settlement-card" [id]="'admin-reembolsos-' + reembolso.id" tabindex="-1">
             <div>
-              <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">{{ estadosReembolso[reembolso.estado] }}</span>
+              <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">
+                {{ reembolso.referencia_externa?.startsWith('SIMULADO:tarjeta:') ? 'Simulado' : estadosReembolso[reembolso.estado] }}
+              </span>
               <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
               <p><strong>{{ reembolso.tipo }}</strong> · {{ reembolso.importe | currency: reembolso.moneda }}</p>
               <p class="muted">{{ origenesReembolso[reembolso.origen] || reembolso.origen }} · {{ reembolso.motivo }}</p>
@@ -557,7 +561,9 @@
           @if (item.pago; as pago) {
             <div><dt>Pago original</dt><dd>{{ pago.payment_id ? 'Mercado Pago #' + pago.payment_id : 'Pago #' + pago.id }}</dd></div>
           }
-          @if (item.referencia_externa) {
+          @if (item.referencia_externa?.startsWith('SIMULADO:tarjeta:')) {
+            <div><dt>Devolución de prueba</dt><dd>Simulada. No se transfirió dinero.</dd></div>
+          } @else if (item.referencia_externa) {
             <div><dt>{{ item.transferencia_manual ? 'Número de operación' : 'Referencia de devolución' }}</dt><dd>{{ item.referencia_externa }}</dd></div>
           }
           @if (item.comprobante_nombre) {
@@ -607,11 +613,17 @@
         } @else if (puedeSolicitarReembolso(item)) {
           <p class="refund-help">Al confirmar, se solicitará la devolución a Mercado Pago por el importe indicado.</p>
         } @else if (item.estado === 'PENDIENTE') {
-          <p class="refund-help">El pago original no tiene un identificador de Mercado Pago.</p>
+          <p class="refund-help">{{ item.referencia_interna?.startsWith('auto-can:') ? 'La devolución está en gestión automática.' : 'El pago original no tiene un identificador de Mercado Pago.' }}</p>
+        }
+        @if (puedeHabilitarTransferencia(item)) {
+          <p class="refund-help">Para devolver por transferencia, DEPA verifica en Mercado Pago que no haya una devolución pendiente o sin conciliar.</p>
         }
         @if (errorReembolso()) { <p class="refund-error" role="alert">{{ errorReembolso() }}</p> }
         <div class="block-actions">
           <button type="button" class="button button--ghost" [disabled]="guardandoReembolso()" (click)="cerrarReembolso()">Volver</button>
+          @if (puedeHabilitarTransferencia(item)) {
+            <button type="button" class="button button--ghost" [disabled]="guardandoReembolso()" (click)="habilitarTransferenciaReembolso(item)">Habilitar transferencia</button>
+          }
           @if (puedeRegistrarTransferencia(item) || puedeSolicitarReembolso(item) || puedeConciliarReembolso(item)) {
             <button type="submit" class="button button--success"
               [disabled]="guardandoReembolso() || !referenciaReembolsoValida(item)">
