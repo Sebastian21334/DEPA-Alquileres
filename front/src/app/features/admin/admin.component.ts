@@ -221,7 +221,7 @@ export class AdminComponent {
   protected readonly errorReclamos = signal('');
   protected readonly gestionReclamo = signal<{ id: number; accion: 'mensaje' | 'resolver' } | null>(null);
   protected textoReclamo = '';
-  /** T49: imágenes del próximo mensaje del reclamo. */
+  /** Imágenes del próximo mensaje del reclamo. */
   protected readonly imagenesReclamo = signal<File[]>([]);
   protected readonly imagenesDisponibles = imagenesDisponibles;
   protected resolucionReclamo: NonNullable<Reclamo['resolucion']> = 'SIN_DEVOLUCION';
@@ -249,20 +249,20 @@ export class AdminComponent {
   protected readonly registrandoPagoAnunciante = signal(false);
   protected readonly errorPagoAnunciante = signal('');
   protected readonly cbuParaPago = signal<string | null>(null);
-  /** T56: CUIT/CUIL del anunciante, para confirmar el destinatario en el banco. */
+  /** CUIT/CUIL del anunciante, para confirmar el destinatario en el banco. */
   protected readonly cuitParaPago = signal<string | null>(null);
   protected readonly consultandoCbuParaPago = signal(false);
   private consultaCbuParaPago?: Subscription;
   protected referenciaPagoAnunciante = '';
   protected observacionPagoAnunciante = '';
-  /** T56: comprobante obligatorio del pago al anunciante. */
+  /** Comprobante obligatorio del pago al anunciante. */
   protected readonly comprobantePago = signal<File | null>(null);
   protected readonly formatearCbu = formatearCbu;
   protected readonly formatearCuit = formatearCuit;
   protected readonly tipoCuentaBancaria = tipoCuentaBancaria;
   protected readonly urlComprobantePago = (pago: AdminPagoLiquidacion) => () => this.api.urlComprobantePago(pago.reservaId, pago.indice);
 
-  /** T56: importe para pegar en el home banking, con coma decimal y sin separador de miles. */
+  /** Importe para pegar en el home banking, con coma decimal y sin separador de miles. */
   protected importeParaCopiar(importe: number | string | null | undefined): string {
     return Number(importe ?? 0).toFixed(2).replace('.', ',');
   }
@@ -378,7 +378,7 @@ export class AdminComponent {
       this.reload();
       this.loadCatalogs();
       this.loadProvinces();
-      // T53: abre la sección que indica la URL, por ejemplo al volver del detalle de una reserva.
+      // Abre la sección que indica la URL, por ejemplo al volver del detalle de una reserva.
       this.route.fragment.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((fragmento) => {
         const seccion = seccionAdmin(fragmento);
         if (seccion && seccion !== this.activeSection()) this.openSection(seccion);
@@ -449,7 +449,7 @@ export class AdminComponent {
 
   protected openSection(section: AdminSection, caseId?: number): void {
     this.activeSection.set(section);
-    // T53: la sección queda en la URL, así «Volver» desde el detalle de una reserva (o un perfil) vuelve a ella.
+    // La sección queda en la URL, así «Volver» desde el detalle de una reserva (o un perfil) vuelve a ella.
     if (this.route.snapshot.fragment !== (section === 'resumen' ? null : section))
       void this.router.navigate([], { relativeTo: this.route, fragment: section === 'resumen' ? undefined : section, replaceUrl: true });
     if (section === 'comision') this.cargarComision();
@@ -723,7 +723,7 @@ export class AdminComponent {
       });
   }
 
-  /** T44: comprobante elegido para registrar la transferencia del reembolso. */
+  /** Comprobante elegido para registrar la transferencia del reembolso. */
   protected readonly comprobanteReembolso = signal<File | null>(null);
   protected observacionReembolso = '';
   protected readonly urlComprobanteReembolso = (id: number) => () => this.api.urlComprobanteReembolso(id);
@@ -756,7 +756,7 @@ export class AdminComponent {
 
   protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
     const referencia = this.referenciaReembolso.trim();
-    // T44: el comprobante es obligatorio; la referencia y la observación, opcionales.
+    // El comprobante es obligatorio; la referencia y la observación, opcionales.
     if (this.puedeRegistrarTransferencia(reembolso))
       return !!this.comprobanteReembolso() && referencia.length <= 150 && this.observacionReembolso.trim().length <= 500;
     if (this.puedeConciliarReembolso(reembolso)) return /^\d{1,100}$/.test(referencia);
@@ -839,7 +839,7 @@ export class AdminComponent {
     this.gestionReclamo.set({ id, accion });
   }
 
-  /** T49: el mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
+  /** El mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
   protected responderReclamo(reclamo: Reclamo): void {
     const texto = this.textoReclamo.trim();
     const imagenes = this.imagenesReclamo();

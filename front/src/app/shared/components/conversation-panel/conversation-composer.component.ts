@@ -45,9 +45,9 @@ export class ConversationComposerComponent {
   readonly deshabilitado = input(false);
   readonly limite = input(1000);
   readonly etiqueta = input('Mensaje');
-  /** T49: imágenes elegidas para el próximo mensaje. */
+  /** Imágenes elegidas para el próximo mensaje. */
   readonly imagenes = model<File[]>([]);
-  /** T49: cuántas imágenes admite el próximo mensaje; null = este chat no acepta imágenes. */
+  /** Cuántas imágenes admite el próximo mensaje; null = este chat no acepta imágenes. */
   readonly adjuntos = input<number | null>(null);
   readonly enviar = output<void>();
   private readonly abierto = signal(false);

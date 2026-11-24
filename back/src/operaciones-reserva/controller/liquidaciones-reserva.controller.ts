@@ -25,7 +25,7 @@ export class LiquidacionesReservaController {
     return this.liquidacionesService.listarPagosRegistrados();
   }
 
-  /** Historial del panel del anunciante: pagos de todas sus publicaciones (T55). */
+  /** Historial del panel del anunciante: pagos de todas sus publicaciones. */
   @UseGuards(JwtAuthGuard)
   @PermitirAccesoLimitado()
   @Get('liquidaciones/mias')
@@ -48,7 +48,7 @@ export class LiquidacionesReservaController {
     return this.liquidacionesService.consultarCbuParaPago(id);
   }
 
-  /** T56: multipart con el comprobante obligatorio (`comprobante`), la referencia y la observación opcionales. */
+  /** Multipart con el comprobante obligatorio (`comprobante`), la referencia y la observación opcionales. */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('Administrador')
   @Patch(':id/liquidacion/pago')
@@ -57,7 +57,7 @@ export class LiquidacionesReservaController {
     return this.liquidacionesService.registrarPagoAnunciante(id, dto, comprobante, req.user.id);
   }
 
-  /** T56: enlace firmado del comprobante; lo ven el admin y el anunciante de la reserva. */
+  /** Enlace firmado del comprobante; lo ven el admin y el anunciante de la reserva. */
   @UseGuards(JwtAuthGuard)
   @PermitirAccesoLimitado()
   @Get(':id/liquidacion/pagos/:indice/comprobante')

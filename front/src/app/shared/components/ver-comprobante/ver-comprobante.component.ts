@@ -3,7 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { finalize, type Observable } from 'rxjs';
 
 /**
- * T04: abre el comprobante privado con el enlace firmado que devuelve el back
+ * Abre el comprobante privado con el enlace firmado que devuelve el back
  * (dura 15 minutos y solo se entrega a las partes y al admin).
  */
 @Component({

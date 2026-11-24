@@ -3,7 +3,7 @@ const path = require('node:path');
 const { Client } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env'), quiet: true });
 
-// T49: une cada imagen de un reclamo al mensaje del chat con el que se envió. Es reejecutable.
+// Une cada imagen de un reclamo al mensaje del chat con el que se envió. Es reejecutable.
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error('Falta DATABASE_URL');
   if (!process.argv.includes('--aplicar')) {

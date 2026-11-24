@@ -182,7 +182,7 @@ export class OperacionesPagoService {
     };
   }
 
-  /** T53: el admin también lo consulta, en solo lectura, para ver el detalle de cualquier reserva. */
+  /** El admin también lo consulta, en solo lectura, para ver el detalle de cualquier reserva. */
   async consultarResumen(idReserva: number, idUsuario: number, esAdmin = false) {
     const reserva = esAdmin
       ? await this.reservasService.buscarParaAdministracion(idReserva)

@@ -9,10 +9,10 @@ export interface AutorReclamo {
   rol: { nombre: string } | null;
 }
 
-/** T49: imagen de un reclamo con su autor y un enlace firmado de 15 minutos; sin la ruta interna del archivo. */
+/** Imagen de un reclamo con su autor y un enlace firmado de 15 minutos; sin la ruta interna del archivo. */
 export interface ImagenReclamo {
   id: number;
-  /** null: es de la descripción del reclamo (se subió al crearlo o antes de T49). */
+  /** null: es de la descripción del reclamo (se subió al crearlo o antes de que el chat admitiera imágenes). */
   id_mensaje: number | null;
   nombre_archivo: string;
   creado_en: Date;

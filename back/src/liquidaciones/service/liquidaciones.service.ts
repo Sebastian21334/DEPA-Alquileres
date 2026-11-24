@@ -17,7 +17,7 @@ export type ResolucionLiquidacionDatos = {
   moneda?: string | null;
   referencia?: string | null;
   observacion?: string | null;
-  /** T56: comprobante de la transferencia al anunciante. */
+  /** Comprobante de la transferencia al anunciante. */
   comprobante?: ComprobanteSubido | null;
 };
 
@@ -26,7 +26,7 @@ export type DevolucionLiquidacionDatos = ResolucionLiquidacionDatos & {
   parcial?: boolean;
 };
 
-/** Días después del fin de la estadía hasta que se habilita el pago al anunciante (T35). */
+/** Días después del fin de la estadía hasta que se habilita el pago al anunciante. */
 export const DIAS_ESPERA_PAGO_MANUAL = 5;
 
 /**
@@ -64,7 +64,7 @@ export class LiquidacionesService {
   }
 
   /**
-   * Ingresos sin código cuyo plazo venció: retenidos y, desde T34, en revisión solo
+   * Ingresos sin código cuyo plazo venció: retenidos y en revisión solo
    * porque el código se bloqueó (`maxIntentosCodigo` intentos incorrectos).
    */
   listarIngresosNoVerificadosVencidos(ahora: Date, maxIntentosCodigo: number): Promise<number[]> {
@@ -106,7 +106,7 @@ export class LiquidacionesService {
     return this.formatearPagosRegistrados(pagos);
   }
 
-  /** Sin `idPublicacion` devuelve los pagos de todas las publicaciones del anunciante (T55). */
+  /** Sin `idPublicacion` devuelve los pagos de todas las publicaciones del anunciante. */
   async listarPagosDelAnunciante(idUsuario: number, idPublicacion?: number) {
     const pagos = await this.liquidaciones.listarPagosRegistrados(
       this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'),
@@ -118,7 +118,7 @@ export class LiquidacionesService {
     }));
   }
 
-  /** T56: comprobante de un pago registrado, con el anunciante para que el llamador verifique el acceso. */
+  /** Comprobante de un pago registrado, con el anunciante para que el llamador verifique el acceso. */
   async buscarComprobantePago(idReserva: number, indice: number): Promise<{ url: string; idAnunciante: number | null } | null> {
     const registro = await this.liquidaciones.buscarPagosConAnunciante(idReserva);
     const url = registro?.pagos[indice]?.comprobanteUrl;
@@ -152,7 +152,7 @@ export class LiquidacionesService {
         moneda: registro.moneda,
         referencia: registro.referencia,
         observacion: registro.observacion,
-        // Solo el nombre: el enlace se pide aparte y vence (T56).
+        // Solo el nombre: el enlace se pide aparte y vence.
         comprobante: registro.comprobanteNombre ?? null,
       }));
     }).sort((a, b) => (b.fecha ?? '').localeCompare(a.fecha ?? ''));

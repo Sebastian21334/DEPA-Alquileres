@@ -1,4 +1,4 @@
--- T49: cada imagen de un reclamo puede quedar adjunta al mensaje del chat con el que se envió.
+-- Cada imagen de un reclamo puede quedar adjunta al mensaje del chat con el que se envió.
 -- Las imágenes existentes quedan sin mensaje y se muestran con la descripción del reclamo.
 -- Se puede repetir: la columna y la restricción se agregan solo si faltan.
 ALTER TABLE public.reclamo_evidencia ADD COLUMN IF NOT EXISTS id_mensaje integer;

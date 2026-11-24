@@ -88,7 +88,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     }
   }
 
-  /** T36, extendido por T34: vence la retenida y la que está en revisión solo por el código bloqueado. */
+  /** Al vencer el plazo sin ingreso validado, vence la retenida y la que está en revisión solo por el código bloqueado. */
   private vencePorIngresoNoVerificado(reserva: Reserva): boolean {
     const estado = reserva.estado_liquidacion;
     return estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'RETENIDO') ||
@@ -145,7 +145,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     return this.liquidaciones.listarPagosDelAnunciante(idUsuario, idPublicacion);
   }
 
-  /** Datos para transferir: el CBU validado y el CUIT/CUIL para confirmar el destinatario (T56). */
+  /** Datos para transferir: el CBU validado y el CUIT/CUIL para confirmar el destinatario. */
   async consultarCbuParaPago(idReserva: number): Promise<{ cbu: string | null; cuit_cuil: string | null }> {
     const reserva = await this.reservasService.obtenerReserva(idReserva);
     this.validarFechaPagoManual(reserva);
@@ -156,7 +156,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
   }
 
   /**
-   * T56: el admin registra la transferencia al anunciante con el comprobante obligatorio.
+   * El admin registra la transferencia al anunciante con el comprobante obligatorio.
    * El archivo se sube después de las validaciones previas y se borra si el pago no queda registrado.
    */
   async registrarPagoAnunciante(id: number, dto: RegistrarTransferenciaDto, archivo: Express.Multer.File | undefined, idAdmin: number): Promise<Reserva> {
@@ -174,7 +174,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     }
   }
 
-  /** T56: enlace firmado del comprobante del pago, solo para el admin y el anunciante de la reserva. */
+  /** Enlace firmado del comprobante del pago, solo para el admin y el anunciante de la reserva. */
   async urlComprobantePago(idReserva: number, indice: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
     const comprobante = await this.liquidaciones.buscarComprobantePago(idReserva, indice);
     const autorizado = actor.rol === 'Administrador' || (comprobante?.idAnunciante != null && comprobante.idAnunciante === actor.id);
@@ -183,7 +183,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     return { url: await this.almacenamiento.firmarComprobante(comprobante.url) };
   }
 
-  /** El pago al anunciante se registra con su comprobante en `registrarPagoAnunciante` (T56). */
+  /** El pago al anunciante se registra con su comprobante en `registrarPagoAnunciante`. */
   async resolverLiquidacion(id: number, dto: ResolverLiquidacionDto, idAdmin: number): Promise<Reserva> {
     if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
       throw new BadRequestException('Registrá el pago al anunciante con el comprobante de la transferencia');

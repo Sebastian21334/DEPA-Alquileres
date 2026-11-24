@@ -12,7 +12,7 @@ const RELACIONES_RECLAMO: FindOptionsRelations<Reclamo> = {
   reserva: { liquidacion: true, publicacion: { anunciante: { usuario: true } }, usuario: true },
   inquilino: true,
   anunciante: true,
-  // T49: autor y mensaje de cada imagen; la respuesta los reduce a lo mínimo.
+  // Autor y mensaje de cada imagen; la respuesta los reduce a lo mínimo.
   evidencias: { usuario: { rol: true }, mensaje: true },
   mensajes: { autor: { rol: true } },
 };

@@ -14,7 +14,7 @@ import {
   type IUsuariosCredencialesRepository,
 } from '../repository/usuarios.repository.interface';
 
-// D10: el enlace de verificación del correo vence a las 24 horas.
+// El enlace de verificación del correo vence a las 24 horas.
 const VIGENCIA_VERIFICACION_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()

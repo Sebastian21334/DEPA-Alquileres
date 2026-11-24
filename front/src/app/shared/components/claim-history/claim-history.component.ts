@@ -12,7 +12,7 @@ import { CATEGORIAS_RECLAMO, etiquetaCategoriaReclamo } from '../../utils/reclam
 
 /** Mismo ritmo que los chats de mensajes y de reembolsos. */
 const INTERVALO_CHAT_MS = 5000;
-/** T49: los enlaces de las imágenes vencen a los 15 minutos; se renuevan antes. */
+/** Los enlaces de las imágenes vencen a los 15 minutos; se renuevan antes. */
 const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
 
 @Component({
@@ -32,7 +32,7 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
         <span class="status" [class.status--resolved]="item.resuelto_en || item.estado === 'CERRADO'">
           {{ estados[item.estado] }}
         </span>
-        <!-- T53: el admin va al detalle de su panel; las partes, al resumen de la reserva. -->
+        <!-- El admin va al detalle de su panel; las partes, al resumen de la reserva. -->
         @if (item.reserva?.id; as idReserva) {
           <a class="ver-reserva" [routerLink]="administracion() ? ['/admin/reservas', idReserva] : ['/reserva/resultado']"
             [queryParams]="administracion() ? { desde: 'reclamos' } : { reserva_id: idReserva }">Ver reserva</a>
@@ -118,7 +118,7 @@ const RENOVAR_ENLACE_MS = 10 * 60 * 1000;
       <p class="body">{{ item.descripcion }}</p>
     }
     @if (item.evidencias?.length) {
-      <!-- T49: imágenes de la descripción (las que se subieron al crear el reclamo), cada una con su autor. -->
+      <!-- Imágenes de la descripción (las que se subieron al crear el reclamo), cada una con su autor. -->
       <ul class="imagenes-reclamo" aria-label="Imágenes del reclamo">
         @for (imagen of item.evidencias; track imagen.id) {
           <li>
@@ -211,7 +211,7 @@ export class ClaimHistoryComponent {
   /** El admin la apaga mientras la sección Reclamos está oculta, para no consultar en segundo plano. */
   readonly actualizar = input(true);
   protected readonly puedeValidarCodigo = puedeValidarCodigo;
-  /** T53: en Mis reservas, el rol de quien mira el reclamo; el admin no lo necesita. */
+  /** En Mis reservas, el rol de quien mira el reclamo; el admin no lo necesita. */
   protected readonly rolPropio = computed(() => {
     if (this.administracion()) return '';
     return rolEnReclamo(this.reclamo(), Number(this.auth.currentUser()?.sub)) ?? '';
@@ -237,14 +237,14 @@ export class ClaimHistoryComponent {
     return '';
   }
 
-  /** T49: cada imagen dice quién la subió. */
+  /** Cada imagen dice quién la subió. */
   protected autorImagen(imagen: ReclamoEvidencia): string {
     const rol = this.rolDe(imagen.autor);
     return [this.nombreCompleto(imagen.autor) || 'un usuario', rol].filter(Boolean).join(' · ');
   }
 
   /**
-   * T49: el chat se consulta cada 5 segundos y cada respuesta trae un enlace firmado nuevo. Se conserva el primero
+   * El chat se consulta cada 5 segundos y cada respuesta trae un enlace firmado nuevo. Se conserva el primero
    * para no volver a descargar las miniaturas y se cambia por el más reciente antes de que venza (15 minutos).
    */
   protected urlImagen(imagen: ReclamoEvidencia): string {
@@ -268,7 +268,7 @@ export class ClaimHistoryComponent {
   private idConsultado?: number;
 
   constructor() {
-    // T48: el hilo de un reclamo abierto se actualiza solo, como los chats de mensajes y reembolsos.
+    // El hilo de un reclamo abierto se actualiza solo, como los chats de mensajes y reembolsos.
     effect(onCleanup => {
       const id = this.idReclamo();
       if (id !== this.idConsultado) {

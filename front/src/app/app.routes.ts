@@ -28,7 +28,7 @@ export const routes: Routes = [
     title: 'Publicación de la reserva - DEPA',
   },
   {
-    // T53: el admin ve el resumen de cualquier reserva en solo lectura.
+    // El admin ve el resumen de cualquier reserva en solo lectura.
     path: 'admin/reservas/:id',
     canActivate: [adminGuard],
     data: { administracion: true },
