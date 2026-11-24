@@ -3,7 +3,7 @@ import {
   FechaDisponible,
   FechaDisponibleAdministracion,
 } from '../../services/availability.service';
-import { RentalDateRange, availableRentalStarts, fechaHoyArgentina, isRentalRangeAvailable, rentalDays, rentalEnd } from '../../utils/rental-dates';
+import { RentalDateRange, availableRentalStarts, fechaHoyArgentina, isRentalRangeAvailable, rentalDays, rentalEnd, fechaCalendarioLocal } from '../../utils/rental-dates';
 
 export type CalendarMode = 'select' | 'manage' | 'setup' | 'reschedule';
 interface CalendarDay {
@@ -241,7 +241,7 @@ export class AvailabilityCalendarComponent {
   }
 
   private parseDate(value: string): Date {
-    return new Date(`${value}T12:00:00`);
+    return fechaCalendarioLocal(value);
   }
 
   private toIso(value: Date): string {

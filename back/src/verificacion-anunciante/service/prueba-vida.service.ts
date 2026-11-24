@@ -33,7 +33,14 @@ interface DesafioPayload {
   revision: number;
 }
 
-interface VerificacionPayload {
+/** Capturas que envía el front: neutral, una lista por acción y la final que se presentará. */
+interface CapturasPruebaVida {
+  neutral: Express.Multer.File;
+  final: Express.Multer.File;
+  acciones: Express.Multer.File[][];
+}
+
+export interface VerificacionPayload {
   sub: number;
   scope: 'face-liveness-verified';
   livePhotoHash: string;
@@ -178,65 +185,75 @@ export class PruebaVidaService {
       },
     );
 
-    const neutralPhoto = archivos.neutralPhoto?.[0];
-    const livePhoto = archivos.livePhoto?.[0];
-    // Cada acción puede llegar con hasta dos capturas tomadas con pocos
-    // milisegundos de diferencia. Se acepta la primera que valide, así un
-    // frame tomado justo cuando el gesto empezaba a bajar no invalida toda la prueba.
-    const actionPhotos = payload.actions.map(
-      (_, index) => archivos[`action${index}`] ?? [],
-    );
-    if (
-      !neutralPhoto ||
-      !livePhoto ||
-      actionPhotos.some((fotos) => fotos.length === 0)
-    ) {
-      throw new BadRequestException('Faltan capturas de la prueba de vida');
-    }
-
+    const capturas = this.capturasPruebaVida(archivos, payload.actions.length);
     const neutral = await this.analisis.analizarRostro(
-      neutralPhoto.buffer,
+      capturas.neutral.buffer,
       'la captura neutral',
     );
-    for (let index = 0; index < payload.actions.length; index++) {
-      const accion = payload.actions[index];
-      const evidencias = actionPhotos[index];
-      let validada = false;
-      let ultimoError: Error | null = null;
+    for (const [index, accion] of payload.actions.entries())
+      await this.validarAccionConCapturas(accion, index, capturas.acciones[index], neutral);
+    await this.validarCapturaFinal(capturas.final, neutral);
 
-      for (const [frameIndex, evidencia] of evidencias.entries()) {
-        try {
-          const analisis = await this.analisis.analizarRostro(
-            evidencia.buffer,
-            `la evidencia del movimiento ${index + 1} (${accion}), captura ${frameIndex + 1}`,
-          );
-          this.validarMismaPersona(neutral, analisis);
-          this.validarAccion(accion, neutral, analisis);
-          validada = true;
-          break;
-        } catch (error) {
-          ultimoError = error as Error;
-          this.logger.debug(
-            `Movimiento ${index + 1} (${accion}), captura ${frameIndex + 1} rechazada: ${(error as Error).message}`,
-          );
-        }
-      }
+    // El análisis no prolonga la vigencia del desafío original.
+    await this.verificarToken<DesafioPayload>(
+      challengeToken,
+      'face-liveness-challenge',
+      idUsuario,
+    );
+    return { valid: true, verificationToken: await this.autorizarCaptura(idUsuario, payload, capturas.final.buffer) };
+  }
 
-      if (!validada) {
-        this.logger.warn(
-          `No se pudo validar el movimiento ${index + 1} (${accion}) con ${evidencias.length} captura(s): ${ultimoError?.message ?? 'sin detalle'}`,
+  /**
+   * Cada acción puede llegar con hasta dos capturas tomadas con pocos
+   * milisegundos de diferencia; también se exigen la neutral y la final.
+   */
+  private capturasPruebaVida(archivos: Record<string, Express.Multer.File[] | undefined>, cantidadAcciones: number): CapturasPruebaVida {
+    const neutral = archivos.neutralPhoto?.[0];
+    const final = archivos.livePhoto?.[0];
+    const acciones = Array.from({ length: cantidadAcciones }, (_, index) => archivos[`action${index}`] ?? []);
+    if (!neutral || !final || acciones.some((fotos) => fotos.length === 0)) {
+      throw new BadRequestException('Faltan capturas de la prueba de vida');
+    }
+    return { neutral, final, acciones };
+  }
+
+  /**
+   * Se acepta la primera captura que valide, así un frame tomado justo cuando
+   * el gesto empezaba a bajar no invalida toda la prueba.
+   */
+  private async validarAccionConCapturas(accion: AccionVitalidad, index: number, evidencias: Express.Multer.File[], neutral: AnalisisRostro): Promise<void> {
+    let ultimoError: Error | null = null;
+    for (const [frameIndex, evidencia] of evidencias.entries()) {
+      try {
+        const analisis = await this.analisis.analizarRostro(
+          evidencia.buffer,
+          `la evidencia del movimiento ${index + 1} (${accion}), captura ${frameIndex + 1}`,
         );
-        throw (
-          ultimoError ??
-          new UnprocessableEntityException(
-            `No se pudo validar la acción “${ACCIONES.find(({ type }) => type === accion)?.label}”.`,
-          )
+        this.validarMismaPersona(neutral, analisis);
+        this.validarAccion(accion, neutral, analisis);
+        return;
+      } catch (error) {
+        ultimoError = error as Error;
+        this.logger.debug(
+          `Movimiento ${index + 1} (${accion}), captura ${frameIndex + 1} rechazada: ${(error as Error).message}`,
         );
       }
     }
+    this.logger.warn(
+      `No se pudo validar el movimiento ${index + 1} (${accion}) con ${evidencias.length} captura(s): ${ultimoError?.message ?? 'sin detalle'}`,
+    );
+    throw (
+      ultimoError ??
+      new UnprocessableEntityException(
+        `No se pudo validar la acción “${ACCIONES.find(({ type }) => type === accion)?.label}”.`,
+      )
+    );
+  }
 
+  /** La captura final debe ser de la misma persona y estar de frente. */
+  private async validarCapturaFinal(captura: Express.Multer.File, neutral: AnalisisRostro): Promise<void> {
     const live = await this.analisis.analizarRostro(
-      livePhoto.buffer,
+      captura.buffer,
       'la captura facial final',
     );
     this.validarMismaPersona(neutral, live);
@@ -248,14 +265,11 @@ export class PruebaVidaService {
         'La captura final no está centrada. Posible causa: la cabeza quedó girada o inclinada; mirá de frente e intentá nuevamente.',
       );
     }
+  }
 
-    // El análisis no prolonga la vigencia del desafío original.
-    await this.verificarToken<DesafioPayload>(
-      challengeToken,
-      'face-liveness-challenge',
-      idUsuario,
-    );
-    const livePhotoHash = this.hash(livePhoto.buffer);
+  /** Firma la autorización ligada al hash de la captura final y la registra en la solicitud. */
+  private async autorizarCaptura(idUsuario: number, payload: DesafioPayload, captura: Buffer): Promise<string> {
+    const livePhotoHash = this.hash(captura);
     const verificationToken = await this.jwtService.signAsync(
       {
         sub: idUsuario,
@@ -276,7 +290,7 @@ export class PruebaVidaService {
         await persistencia.guardarSolicitud(solicitud);
       },
     );
-    return { valid: true, verificationToken };
+    return verificationToken;
   }
 
   async verificarCapturaAutorizada(idUsuario: number, verificationToken: string, livePhoto: Buffer): Promise<VerificacionPayload> {

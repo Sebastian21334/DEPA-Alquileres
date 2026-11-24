@@ -1,7 +1,4 @@
-import {
-  type ICorreoRepository,
-  CORREO_REPOSITORY,
-} from '../repository/correo.repository.interface';
+import { type IProveedorCorreo, PROVEEDOR_CORREO } from '../proveedor/proveedor-correo.interface';
 import {
   type ReservaEmailDetalle,
   type ReprogramacionEmailDetalle,
@@ -16,7 +13,7 @@ export class MailService implements IMailService {
   private readonly frontendUrl: string;
   private readonly frontendUrls: readonly string[];
 
-  constructor(@Inject(CORREO_REPOSITORY) private readonly correos: ICorreoRepository, private readonly plantillas: MailPlantilla, config: ConfigService) {
+  constructor(@Inject(PROVEEDOR_CORREO) private readonly correos: IProveedorCorreo, private readonly plantillas: MailPlantilla, config: ConfigService) {
     this.frontendUrls = config
       .getOrThrow<string>('FRONTEND_URLS')
       .split(',')

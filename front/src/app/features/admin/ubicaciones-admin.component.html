@@ -1,0 +1,32 @@
+<section class="panel management">
+  <div class="panel__title">
+    <div>
+      <h2>Ubicaciones</h2>
+      <p>Consulta de provincias y ciudades cargadas por seed o migración.</p>
+    </div>
+  </div>
+  <div class="location-grid">
+    <article class="catalog-card">
+      <h3>Provincias</h3>
+      <ul class="crud-list">
+        @for (item of provincias(); track item.id) {
+          <li [class.selected]="provinciaElegida() === item.id">
+            <button class="location-name" type="button" (click)="elegirProvincia(item.id)">{{ item.nombre }}</button>
+          </li>
+        } @empty {
+          <li class="empty-row">Sin provincias</li>
+        }
+      </ul>
+    </article>
+    <article class="catalog-card">
+      <h3>Ciudades</h3>
+      <ul class="crud-list">
+        @for (item of ciudades(); track item.id) {
+          <li><span>{{ item.nombre }}</span></li>
+        } @empty {
+          <li class="empty-row">{{ provinciaElegida() ? 'Sin ciudades' : 'Seleccioná una provincia' }}</li>
+        }
+      </ul>
+    </article>
+  </div>
+</section>

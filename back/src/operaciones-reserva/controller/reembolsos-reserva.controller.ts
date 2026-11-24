@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { Body, Controller, Param, ParseIntPipe, Patch, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ComprobanteInterceptor } from '../../almacenamiento/comprobante.interceptor';
 import { RegistrarReembolsoManualDto } from '../../reembolsos/dto/registrar-reembolso-manual.dto';
@@ -9,7 +10,7 @@ import { OperacionesReembolsoService } from '../service/operaciones-reembolso.se
 
 @Controller('reservas/reembolsos')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('Administrador')
+@Roles(ROL.ADMINISTRADOR)
 export class ReembolsosReservaController {
   constructor(private readonly operaciones: OperacionesReembolsoService) {}
 

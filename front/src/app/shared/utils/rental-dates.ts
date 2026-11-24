@@ -18,12 +18,27 @@ export function fechaArgentina(instante: Date | string): string {
   }).format(new Date(instante));
 }
 
+/** Milisegundos de un día corrido. */
+export const MS_POR_DIA = 86_400_000;
+
+/** Fecha de calendario `AAAA-MM-DD` real (descarta, por ejemplo, el 31 de febrero). */
+export function esFechaCalendario(valor: string | null | undefined): valor is string {
+  if (!valor || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) return false;
+  const instante = Date.parse(`${valor}T00:00:00Z`);
+  return Number.isFinite(instante) && new Date(instante).toISOString().slice(0, 10) === valor;
+}
+
+/** Día de calendario a las 12 del huso local, para mostrarlo sin que el huso lo corra de día. */
+export function fechaCalendarioLocal(valor: string): Date {
+  return new Date(`${valor.slice(0, 10)}T12:00:00`);
+}
+
 export function fechaHoyArgentina(): string {
   return fechaArgentina(new Date());
 }
 
 export function sumarDias(fecha: string, dias: number): string {
-  return new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * 86_400_000)
+  return new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * MS_POR_DIA)
     .toISOString()
     .slice(0, 10);
 }
@@ -32,18 +47,18 @@ export function diasDeAntelacion(fecha: string | null, hoy = fechaHoyArgentina()
   if (!fecha) return Number.NEGATIVE_INFINITY;
   return Math.round(
     (Date.parse(`${fecha}T00:00:00Z`) - Date.parse(`${hoy}T00:00:00Z`)) /
-      86_400_000,
+      MS_POR_DIA,
   );
 }
 
 // Los alquileres incluyen tanto el primer día como el último.
 export function rentalDays(start: string | null, end: string | null): number {
   if (!start || !end || start > end) return 0;
-  return Math.round((Date.parse(end) - Date.parse(start)) / 86_400_000) + 1;
+  return Math.round((Date.parse(end) - Date.parse(start)) / MS_POR_DIA) + 1;
 }
 
 export function rentalEnd(start: string, days: number): string {
-  return new Date(Date.parse(start) + (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  return new Date(Date.parse(start) + (days - 1) * MS_POR_DIA).toISOString().slice(0, 10);
 }
 
 export function availableRentalStarts(dates: FechaDisponible[], days: number): Set<string> {
@@ -63,7 +78,7 @@ export function isRentalRangeAvailable(start: string, end: string, dates: FechaD
   if (!count) return false;
   const first = Date.parse(start);
   for (let offset = 0; offset < count; offset++) {
-    if (!available.has(new Date(first + offset * 86_400_000).toISOString().slice(0, 10)))
+    if (!available.has(new Date(first + offset * MS_POR_DIA).toISOString().slice(0, 10)))
       return false;
   }
   return true;

@@ -1,3 +1,5 @@
+import { formatearMoneda } from '../../shared/utils/formato-numero';
+import { fechaCalendarioLocal, rentalDays } from '../../shared/utils/rental-dates';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -423,19 +425,12 @@ export class ReservaResultadoComponent {
   }
 
   protected cantidadDias(reserva: Reserva): number {
-    if (!reserva.fecha_inicio || !reserva.fecha_fin) return 0;
-    return (
-      Math.floor(
-        (this.fechaLocal(reserva.fecha_fin).getTime() -
-          this.fechaLocal(reserva.fecha_inicio).getTime()) /
-          86400000,
-      ) + 1
-    );
+    return rentalDays(reserva.fecha_inicio, reserva.fecha_fin);
   }
 
   protected fecha(valor: string | null | undefined): string {
     return valor
-      ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(this.fechaLocal(valor))
+      ? new Intl.DateTimeFormat('es-AR', { dateStyle: 'long' }).format(fechaCalendarioLocal(valor))
       : '—';
   }
 
@@ -448,11 +443,7 @@ export class ReservaResultadoComponent {
   }
 
   protected monto(valor: number | undefined, moneda = 'ARS', decimales = 2): string {
-    return Number(valor ?? 0).toLocaleString('es-AR', {
-      style: 'currency',
-      currency: moneda,
-      maximumFractionDigits: decimales,
-    });
+    return formatearMoneda(valor ?? 0, moneda, decimales);
   }
 
   private cargarResumen(idReserva: number, silenciosa = false): void {
@@ -498,7 +489,4 @@ export class ReservaResultadoComponent {
       : (reserva.usuario?.id ?? null);
   }
 
-  private fechaLocal(valor: string): Date {
-    return new Date(`${valor.slice(0, 10)}T12:00:00`);
-  }
 }

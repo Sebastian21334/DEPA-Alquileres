@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { ListarPublicacionesDto } from '../dto/listar-publicaciones.dto';
 import { ListarPublicacionesMapaDto } from '../dto/listar-publicaciones-mapa.dto';
 import { ListarPublicacionesAdministracionDto } from '../dto/listar-publicaciones-administracion.dto';
@@ -49,28 +50,28 @@ export class PublicacionesController {
 
   @Get('administracion')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarPublicacionesAdministracionDto) {
     return this.publicacionesService.listarAdministracion(consulta);
   }
 
   @Get('administracion/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   obtenerAdministracion(@Param('id', ParseIntPipe) id: number) {
     return this.publicacionesService.buscarPorId(id);
   }
 
   @Patch('administracion/:id/baja')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   darDeBajaAdministracion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true, }),) dto: BajaPublicacionDto) {
     return this.publicacionesService.darDeBajaAdministracion(id, dto.motivo);
   }
 
   @Patch('administracion/:id/reactivar')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   reactivarAdministracion(@Param('id', ParseIntPipe) id: number) {
     return this.publicacionesService.reactivarAdministracion(id);
   }

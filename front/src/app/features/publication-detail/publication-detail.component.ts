@@ -1,3 +1,4 @@
+import { formatearEntero } from '../../shared/utils/formato-numero';
 import {
   Component,
   DestroyRef,
@@ -43,6 +44,7 @@ import {
   RentalDateRange,
   isRentalRangeAvailable,
   rentalDays,
+  fechaCalendarioLocal,
 } from '../../shared/utils/rental-dates';
 import { AvailabilityService, FechaDisponible } from '../../shared/services/availability.service';
 import { PresupuestoReserva, ReservationService, type Reserva } from '../../shared/services/reservation.service';
@@ -331,7 +333,7 @@ export class PublicationDetailComponent {
   }
 
   protected price(item: Publicacion): string {
-    const amount = Number(item.precio).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    const amount = formatearEntero(Number(item.precio));
     return `${item.tipoMoneda?.nombre ?? '$'} ${amount}`;
   }
 
@@ -478,7 +480,7 @@ export class PublicationDetailComponent {
   }
 
   protected formatAmount(value: number): string {
-    return value.toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    return formatearEntero(value);
   }
 
   protected confirmarWhatsapp(event: MouseEvent, url: string): void {
@@ -527,6 +529,6 @@ export class PublicationDetailComponent {
   }
 
   private parseDate(value: string): Date {
-    return new Date(`${value.slice(0, 10)}T12:00:00`);
+    return fechaCalendarioLocal(value);
   }
 }

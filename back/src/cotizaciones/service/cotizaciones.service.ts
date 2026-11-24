@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MS_POR_DIA } from '../../common/utils/fechas';
 import { COTIZACION_REPOSITORY } from '../repository/cotizacion.repository.interface';
 import type { ICotizacionRepository } from '../repository/cotizacion.repository.interface';
 import { PROVEEDOR_DOLAR } from '../proveedor/proveedor-dolar.interface';
@@ -159,7 +160,7 @@ export class CotizacionesService {
     }
     const inicio = desde ? new Date(`${desde}T00:00:00-03:00`) : undefined;
     const finExclusivo = hasta
-      ? new Date(new Date(`${hasta}T00:00:00-03:00`).getTime() + 86_400_000)
+      ? new Date(new Date(`${hasta}T00:00:00-03:00`).getTime() + MS_POR_DIA)
       : undefined;
     const [estado, historial, consultas] = await Promise.all([
       this.estado(this.repo),

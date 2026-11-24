@@ -1,3 +1,5 @@
+import { formatearMoneda } from '../../shared/utils/formato-numero';
+import { fechaCalendarioLocal } from '../../shared/utils/rental-dates';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
@@ -107,7 +109,7 @@ export class DashboardComponent {
     for (const reserva of this.reservasValidas()) {
       const value = reserva.fecha_inicio ?? reserva.fecha_pago;
       if (!value) continue;
-      const day = new Date(`${value.slice(0, 10)}T12:00:00`).getDay();
+      const day = fechaCalendarioLocal(value).getDay();
       const target = days.find((item) => item.day === day);
       if (target) target.value += 1;
     }
@@ -190,9 +192,7 @@ export class DashboardComponent {
   }
 
   protected moneda(value: number): string {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
-    }).format(value);
+    return formatearMoneda(value, 'ARS', 0);
   }
 
   protected numero(value: number): string {

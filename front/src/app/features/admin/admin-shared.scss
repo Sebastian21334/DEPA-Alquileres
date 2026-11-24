@@ -54,6 +54,15 @@ select:disabled {
   color: #b52626;
   border: 1px solid #d95555;
 }
+.alert {
+  margin: 18px 0;
+  padding: 12px 16px;
+  border-radius: 9px;
+}
+.alert--error {
+  color: #9e2020;
+  background: #ffeded;
+}
 .button--ghost {
   background: #eef1f3;
   color: #344954;
@@ -215,3 +224,25 @@ select {
     padding: 12px 14px;
   }
 }
+
+// Usadas por varias secciones del panel.
+.link-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #b12d19;
+  font-weight: 750;
+  cursor: pointer;
+}
+// Barra de búsqueda y filtros, y paginador de cada lista.
+.admin-filtros { padding: 18px 24px 0; }
+.admin-paginador { display: block; padding: 0 24px 24px; }
+@media (max-width: 700px) {
+  .admin-filtros { padding: 14px 14px 0; }
+  .admin-paginador { padding: 0 14px 14px; }
+}
+.refund-error { color: #a12525; }
+.settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }

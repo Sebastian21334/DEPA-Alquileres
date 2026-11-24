@@ -1,3 +1,4 @@
+import { ROL } from '../codigos-catalogo';
 import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
 import { CatalogosService } from '../service/catalogos.service';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
@@ -17,13 +18,13 @@ export class CatalogosController {
   }
   @Get('comision-depa')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   async obtenerComision() {
     return { porcentaje: await this.catalogosService.obtenerComision() };
   }
   @Put('comision-depa')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   async actualizarComision(@Body() datos: ComisionDto) {
     return { porcentaje: await this.catalogosService.actualizarComision(datos.porcentaje) };
   }
