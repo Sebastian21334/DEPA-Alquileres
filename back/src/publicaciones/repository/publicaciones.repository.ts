@@ -82,9 +82,11 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     return (resultado.affected ?? 0) > 0;
   }
 
-  async marcarActiva(id: number): Promise<void> {
+  async marcarActiva(id: number): Promise<boolean> {
     // UPDATE directo: no toca relaciones (a diferencia de save con la entidad cargada).
-    await this.repo.update({ id, eliminada: false, motivo_baja_admin: IsNull() }, { activa: true });
+    // Filtrar por inactiva hace que solo un pedido concurrente informe la activación.
+    const resultado = await this.repo.update({ id, eliminada: false, motivo_baja_admin: IsNull(), activa: false }, { activa: true });
+    return (resultado.affected ?? 0) > 0;
   }
 
   async darDeBaja(id: number, motivo: string): Promise<void> {

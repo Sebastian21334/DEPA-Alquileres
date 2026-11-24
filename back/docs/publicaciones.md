@@ -43,6 +43,13 @@ un alta incompleta o un fallo de subida; la regla de visibilidad la oculta con
 independencia de `activa`. La reactivación administrativa sin imágenes deja
 `activa = false` y el anunciante debe subir una foto para volver al catálogo.
 
+Cuando la primera imagen activa la publicación, el anunciante recibe el correo
+«Tu publicación ya está publicada» con el enlace al detalle. `marcarActiva` solo
+informa la activación si la publicación seguía inactiva, así que dos primeras
+fotos simultáneas mandan un solo aviso. Volver a activar una publicación pausada
+con `PATCH /publicaciones/:id` no manda correo: lo decide el propio anunciante.
+Un fallo del correo se registra y no revierte la activación.
+
 La papelera es lógica: conserva imágenes, reservas y vínculos. La baja
 administrativa tampoco cancela reservas ni libera fechas.
 
@@ -147,7 +154,7 @@ bajas se explica en la sección 8.
 | Motivo | Se limpia (`motivo_baja_admin = null`) |
 | `activa` | `false`; la publicación queda inactiva |
 | Respuesta | La publicación actualizada, con `motivo_baja_admin = null` y `activa = false` |
-| Correo | No se envía |
+| Correo | Avisa al anunciante que se levantó la baja y que puede volver a activarla; si falla, se registra y la reactivación se mantiene |
 | Historial | No se registra |
 | Reservas y cuenta | No se modifican |
 
@@ -170,7 +177,6 @@ anunciante.
 | Sin historial de motivos | Cada baja sobrescribe el motivo anterior; no se puede consultar el anterior |
 | Sin fecha de baja | No se puede ordenar ni auditar por fecha de baja |
 | Sin actor | No se registra qué administrador aplicó la baja |
-| Sin correo de reactivación | El anunciante no recibe aviso cuando se reactiva la publicación |
 | Sin restauración del estado previo | La reactivación siempre deja `activa = false`; el anunciante decide cuándo volver a publicarla |
 | Sin migración | Todo el ciclo se apoya en columnas existentes; no hay cambios de esquema |
 
