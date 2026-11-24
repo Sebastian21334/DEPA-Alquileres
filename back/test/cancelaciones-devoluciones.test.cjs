@@ -488,7 +488,7 @@ test('el código bloqueado con la estadía terminada llega al pago del anunciant
 });
 
 test('cada caso del código de alojamiento tiene su mensaje y la reserva informa los intentos restantes', async (t) => {
-  // Estadía del 10 al 20/01/2099: el código se puede cargar hasta el 24/01.
+  // Estadía del 10 al 20/01/2099: el código se carga solo durante la estadía.
   const codigo = 'K7M4P9Q2';
   const conCodigo = async () => {
     const reserva = await reservaParaReclamo({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' }, { estado: 'RETENIDO' });
@@ -518,12 +518,13 @@ test('cada caso del código de alojamiento tiene su mensaje y la reserva informa
   // Bloqueado, el código correcto tampoco pasa y el mensaje sigue siendo el del bloqueo.
   await rechaza(validar(reserva, codigo), 409, /^El código se bloqueó tras 5 intentos incorrectos\. Pedí el reinicio a Administración desde la reserva\.$/);
 
-  t.mock.timers.setTime(new Date('2099-01-25T15:00:00Z').getTime());
-  await rechaza(validar(vencida, codigo), 409, /El plazo para validar el código terminó el 24\/01\/2099/);
+  // Terminada la estadía ya no hay validación tardía: el pago sigue su plazo y los problemas van por reclamo.
+  t.mock.timers.setTime(new Date('2099-01-21T15:00:00Z').getTime());
+  await rechaza(validar(vencida, codigo), 409, /^La estadía terminó el 20\/01\/2099: el código ya no se puede validar\. Si hubo un problema con el ingreso, abrí un reclamo\.$/);
 
-  t.mock.timers.setTime(new Date('2099-01-24T15:00:00Z').getTime());
+  t.mock.timers.setTime(new Date('2099-01-16T15:00:00Z').getTime());
   await validar(vencida, codigo);
-  await rechaza(validar(vencida, codigo), 409, /El ingreso ya se validó el 24\/01\/2099/);
+  await rechaza(validar(vencida, codigo), 409, /El ingreso ya se validó el 16\/01\/2099/);
 });
 
 async function codigoBloqueado(datos = {}) {
@@ -591,6 +592,23 @@ test('el admin habilita intentos sin límite de reinicios o confirma el ingreso 
   const otra = await reservaParaReclamo({}, { estado: 'RETENIDO' });
   const comun = await reclamoAbierto(otra);
   await assert.rejects(servicio.resolver(comun.id, { resolucion: 'REINICIAR_CODIGO' }, 3), /solo corresponde a un pedido de reinicio/);
+});
+
+test('terminada la estadía el código ya no se muestra y el pedido de reinicio no habilita más intentos', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-15T15:00:00Z') });
+  const reserva = await codigoBloqueado({ fecha_inicio: '2099-01-10', fecha_fin: '2099-01-20' });
+  await source.getRepository(Reserva).update(reserva.id, { codigo_alojamiento: 'K7M4P9Q2', codigo_generado_en: new Date() });
+  assert.equal((await reservas.consultarCodigoAlojamiento(reserva.id, 1)).codigo, 'K7M4P9Q2');
+  const { servicio } = reclamosConAvisos();
+  const pedido = await pedirReinicio(servicio, reserva);
+
+  t.mock.timers.setTime(new Date('2099-01-21T15:00:00Z').getTime());
+  await assert.rejects(reservas.consultarCodigoAlojamiento(reserva.id, 1), /estadía cerrada/);
+  await assert.rejects(servicio.resolver(pedido.id, { resolucion: 'REINICIAR_CODIGO' }, 3), /La estadía ya terminó/);
+  // Confirmar el ingreso sigue disponible: el pago al anunciante se habilita en la fecha habitual.
+  const confirmado = await servicio.resolver(pedido.id, { resolucion: 'CONFIRMAR_INGRESO', observacion: 'El huésped estuvo' }, 3);
+  assert.equal(confirmado.resolucion, 'CONFIRMAR_INGRESO');
+  assert.equal((await liquidacionDe(reserva)).estado, 'PENDIENTE_PAGO_PROPIETARIO');
 });
 
 test('rechazar el pedido devuelve el total al inquilino y exige el motivo', async () => {
