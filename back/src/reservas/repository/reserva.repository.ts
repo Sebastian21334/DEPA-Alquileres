@@ -3,7 +3,7 @@ import { filtrarReservasPorCuenta, type ParticipacionEnReserva } from '../../com
 // reservas/repositorio/reserva.repository.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, LessThan, MoreThan, MoreThanOrEqual, Repository, type EntityManager } from 'typeorm';
+import { In, IsNull, LessThan, LessThanOrEqual, MoreThan, MoreThanOrEqual, Not, Repository, type EntityManager } from 'typeorm';
 import { Reserva } from '../entity/reserva.entity';
 import { IReservaRepository } from './reserva.repository.interface';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
@@ -215,6 +215,22 @@ export class ReservaRepository implements IReservaRepository {
         usuario: { id: idUsuarioInquilino },
         estado_pago: aprobado,
         cancelada: false,
+      },
+    });
+  }
+
+  /** Reservas pagadas que el propio inquilino canceló en la publicación y que tocan el rango pedido. */
+  buscarCanceladasPorInquilino(idPublicacion: number, idUsuarioInquilino: number, inicio: string, fin: string): Promise<Reserva[]> {
+    return this.repository.find({
+      select: { id: true, fecha_inicio: true, fecha_fin: true },
+      where: {
+        publicacion: { id: idPublicacion },
+        usuario: { id: idUsuarioInquilino },
+        cancelada: true,
+        cancelada_por: 'INQUILINO',
+        fecha_pago: Not(IsNull()),
+        fecha_inicio: LessThanOrEqual(fin),
+        fecha_fin: MoreThanOrEqual(inicio),
       },
     });
   }

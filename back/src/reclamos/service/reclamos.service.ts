@@ -1,4 +1,3 @@
-import type { DemoraAdministrativaDto } from '../dto/reclamo-demora-administrativa.dto';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   BadRequestException,
@@ -50,7 +49,6 @@ import type { Usuario } from '../../usuarios/entity/usuario.entity';
 export const MAX_IMAGENES_POR_ENVIO = 10;
 export const MAX_IMAGENES_POR_RECLAMO = 30;
 export const MAX_BYTES_IMAGEN = 5 * 1024 * 1024;
-const DIAS_RECLAMO_DEMORA = 7;
 
 interface ImagenPreparada { nombre: string; contenido: Buffer; }
 interface ImagenSubida { nombre: string; url: string; }
@@ -66,14 +64,6 @@ export class ReclamosService {
   private readonly logger = new Logger(ReclamosService.name);
 
   constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly cancelaciones: CancelacionesService, @Inject(ReservaNotificacionesService) private readonly notificaciones: ReservaNotificacionesService | undefined, private readonly preparacionImagenes: PreparacionImagenesService) {}
-
-  async listarDemorasMias(idUsuario: number): Promise<DemoraAdministrativaDto[]> {
-    const solicitudes = await this.cancelaciones.listarDemorasParaReclamo(idUsuario);
-    const elegibles = solicitudes.filter(({ reserva }) => !reserva.cancelada && this.reservas.pagoAprobado(reserva) && reserva.fecha_fin && !this.fueraDePlazo(reserva.fecha_fin, fechaArgentina()));
-    return Promise.all(elegibles.map(async solicitud => ({ solicitudId: solicitud.id, reservaId: solicitud.reserva.id,
-      titulo: solicitud.reserva.publicacion?.titulo ?? 'Alojamiento', fechaInicio: solicitud.reserva.fecha_inicio, fechaSolicitud: solicitud.creada_en,
-      reclamoAbierto: await this.reclamos.existeAbierto(solicitud.reserva.id, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]) })));
-  }
 
   async consultarFaltanteCancelacion(idReserva: number, idUsuario: number): Promise<FaltanteCancelacionDto> {
     const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
@@ -112,7 +102,7 @@ export class ReclamosService {
       throw new ForbiddenException('Solo el Inquilino de la reserva puede reclamar el faltante');
   }
 
-  /** Reclamos que bloquean la liquidación: los de demora administrativa se tramitan sin retenerla. */
+  /** Reclamos que bloquean la liquidación: los de demora administrativa que quedaron del circuito anterior no la retienen. */
   tieneReclamoAbierto(idReserva: number, transaccion: EntityManager): Promise<boolean> {
     return this.reclamos.enTransaccion(transaccion).existeAbierto(idReserva, [
       this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
@@ -122,17 +112,19 @@ export class ReclamosService {
 
   async crear(dto: CrearReclamoDto, idUsuario: number): Promise<ReclamoRespuestaDto> {
     if (dto.descripcion.trim().length < 20) throw new BadRequestException('La descripción debe tener al menos 20 caracteres de contenido');
-    const porDemora = dto.categoria === CategoriaReclamo.DEMORA_ADMINISTRATIVA;
+    // Las cancelaciones se confirman en el momento: ya no hay solicitudes que puedan demorarse.
+    if (dto.categoria === CategoriaReclamo.DEMORA_ADMINISTRATIVA)
+      throw new BadRequestException('Las cancelaciones son automáticas: no corresponde un reclamo por demora administrativa');
     const pedidoDeCodigo = dto.categoria === CategoriaReclamo.CODIGO_BLOQUEADO;
     let reclamo!: Reclamo;
     const crear = async (reserva: Reserva, transaccion: EntityManager): Promise<Reclamo> => {
       const reclamos = this.reclamos.enTransaccion(transaccion);
       if (pedidoDeCodigo) this.validarPedidoDeCodigo(reserva, idUsuario);
-      else if (!porDemora && !this.reservas.esDelInquilino(reserva, idUsuario))
+      else if (!this.reservas.esDelInquilino(reserva, idUsuario))
         throw new ForbiddenException(
           'Solo el Inquilino de la reserva puede iniciar un reclamo',
         );
-      if (!porDemora && this.reservas.liquidacionResuelta(reserva))
+      if (this.reservas.liquidacionResuelta(reserva))
         throw new ConflictException('La liquidación de esta reserva ya fue resuelta');
       if (reserva.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))
         throw new ConflictException('La reserva no tiene un pago aprobado');
@@ -148,28 +140,17 @@ export class ReclamosService {
       if (!reserva.usuario)
         throw new ConflictException('La reserva no tiene un Inquilino asociado');
 
-      if (porDemora) {
-        const hoy = fechaArgentina();
-        if (hoy < reserva.fecha_inicio)
-          throw new BadRequestException(
-            'Antes del inicio usá la solicitud de cancelación; el reclamo es para una estadía iniciada o finalizada',
-          );
-        if (this.fueraDePlazo(reserva.fecha_fin, hoy))
-          throw new BadRequestException(
-            `El plazo para reclamar vence a los ${DIAS_RECLAMO_DEMORA} días corridos del fin de la estadía`,
-          );
-      } else this.validarPeriodoReclamo(reserva);
+      this.validarPeriodoReclamo(reserva);
 
       if (await reclamos.existeAbierto(reserva.id, [this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'), this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION')]))
         throw new ConflictException('La reserva ya tiene un reclamo abierto');
 
-      const solicitudDemorada = porDemora ? await this.cancelaciones.buscarSolicitudParaReclamoDemora(reserva, idUsuario, transaccion) : null;
       reclamo = await reclamos.guardar({
         reserva,
         inquilino: reserva.usuario,
         anunciante: reserva.publicacion?.anunciante?.usuario ?? undefined,
         categoria: dto.categoria,
-        solicitud_cancelacion_id: solicitudDemorada?.id ?? null,
+        solicitud_cancelacion_id: null,
         descripcion: dto.descripcion.trim(),
         estado: this.catalogos.codigoEstado('RECLAMO', 'ABIERTO'),
         resolucion: null,
@@ -179,9 +160,8 @@ export class ReclamosService {
       });
       return reclamo;
     };
-    if (porDemora) await this.reservas.conReservaBloqueada(dto.id_reserva, async (reserva, tx) => { await crear(reserva, tx); });
-    else await this.reservas.conReservaParaReclamo(dto.id_reserva, crear, pedidoDeCodigo ? 'Pedido de reinicio del código en revisión' : undefined);
-    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], porDemora ? 'Reclamo por demora administrativa' : pedidoDeCodigo ? 'Pedido de reinicio del código de alojamiento' : 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
+    await this.reservas.conReservaParaReclamo(dto.id_reserva, crear, pedidoDeCodigo ? 'Pedido de reinicio del código en revisión' : undefined);
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], pedidoDeCodigo ? 'Pedido de reinicio del código de alojamiento' : 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
     return this.responder(reclamo, false);
   }
 
@@ -596,10 +576,5 @@ export class ReclamosService {
       throw new BadRequestException(
         `El plazo para reclamar terminó el ${fechaParaMostrar(finPlazo)}, antes de que se habilite el pago al anunciante.`,
       );
-  }
-  private fueraDePlazo(fechaFin: string, hoy: string): boolean {
-    const fin = new Date(`${fechaFin}T12:00:00Z`).getTime();
-    const actual = new Date(`${hoy}T12:00:00Z`).getTime();
-    return actual > fin + DIAS_RECLAMO_DEMORA * 86_400_000;
   }
 }

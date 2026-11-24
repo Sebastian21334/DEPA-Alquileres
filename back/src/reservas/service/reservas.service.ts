@@ -13,7 +13,7 @@ import { generarCodigoAlojamiento } from './reservas.utils';
 import { MAX_INTENTOS_CODIGO, ReservaEstadoService } from '../../reservas-consulta/service/reserva-estado.service';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
 import { timingSafeEqual } from 'node:crypto';
-import { diasInclusivos, esFechaCalendarioValida, fechaArgentina, fechaParaMostrar } from '../../common/utils/fechas';
+import { diasInclusivos, esFechaCalendarioValida, fechaArgentina, fechaParaMostrar, sumarDiasCalendario } from '../../common/utils/fechas';
 import {
   Inject,
   Injectable,
@@ -38,6 +38,8 @@ import type { Publicacion } from '../../publicaciones/entity/publicacion.entity'
 import type { Usuario } from '../../usuarios/entity/usuario.entity';
 
 const PLAZO_INICIO_PAGO_MS = 15 * 60_000;
+/** Veces que un inquilino puede reservar con pago y cancelar un mismo día de una publicación. */
+export const MAX_RESERVAS_CANCELADAS_POR_DIA = 3;
 
 export type CondicionesCobro = {
   precio_unitario_origen: string;
@@ -123,7 +125,7 @@ export class ReservasService
             actual.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE') ||
             !actual.pago_vencimiento || new Date(actual.pago_vencimiento).getTime() > Date.now()) return false;
 
-          this.cerrarSinPago(actual, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), undefined, 'Venció el plazo de pago');
+          this.cerrarSinPago(actual, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), 'SISTEMA', 'Venció el plazo de pago');
           const guardada = await repositorio.guardar(actual);
           await this.liquidaciones.sincronizarDesdeReserva(guardada, transaccion);
           await this.disponibilidadService.liberarReserva(actual.id, transaccion);
@@ -222,6 +224,7 @@ export class ReservasService
             'El rango de fechas seleccionado no está disponible',
           );
         }
+        await this.validarLimiteCancelaciones(dto.id_publicacion, idUsuario, dto.fecha_inicio, dto.fecha_fin, reservaRepository);
 
         const ahora = new Date();
         const comision = await this.catalogos.obtenerComision(transaccion);
@@ -249,6 +252,20 @@ export class ReservasService
       },
     );
     return this.prepararRespuesta(guardada, true);
+  }
+
+  /**
+   * Rechaza el rango si algún día ya estuvo en tres reservas pagadas que el inquilino canceló en esta publicación.
+   * Se cuenta por día: rangos corridos que no repiten un mismo día tres veces se aceptan.
+   */
+  async validarLimiteCancelaciones(idPublicacion: number, idUsuario: number, inicio: string, fin: string, reservas: IReservaRepository = this.reservaRepository): Promise<void> {
+    const canceladas = await reservas.buscarCanceladasPorInquilino(idPublicacion, idUsuario, inicio, fin);
+    if (canceladas.length < MAX_RESERVAS_CANCELADAS_POR_DIA) return;
+    for (let dia = inicio; dia <= fin; dia = sumarDiasCalendario(dia, 1)) {
+      const veces = canceladas.filter(({ fecha_inicio, fecha_fin }) => !!fecha_inicio && !!fecha_fin && fecha_inicio <= dia && dia <= fecha_fin).length;
+      if (veces >= MAX_RESERVAS_CANCELADAS_POR_DIA)
+        throw new ConflictException(`Ya reservaste y cancelaste el ${fechaParaMostrar(dia)} tres veces en esta publicación. Elegí otras fechas.`);
+    }
   }
 
   /** Vuelve a comprobar el precio, la moneda, la publicación y el vencimiento mientras la publicación está bloqueada. */
@@ -334,7 +351,7 @@ export class ReservasService
           !(anunciante?.usuario?.activa && anunciante.usuario.bloqueado &&
             await this.usuariosService.consultarAccesoPendiente(anunciante.idUsuario, transaccion))
         ) {
-          this.cerrarSinPago(reserva, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'));
+          this.cerrarSinPago(reserva, this.catalogos.codigoEstado('PAGO_RESERVA', 'CANCELADO'), 'SISTEMA', 'El pago llegó cuando la cuenta del anunciante ya no estaba habilitada; corresponde devolverlo');
           this.registrarPagoParaRevision(
             reserva,
             fechaPago,
@@ -1027,6 +1044,7 @@ export class ReservasService
     reserva.fecha_cancelacion = null;
     reserva.motivo_cancelacion = null;
     reserva.causa_cancelacion = null;
+    reserva.cancelada_por = null;
     this.registrarConfirmacionPago(reserva, fechaPago, codigoAlojamiento);
   }
 

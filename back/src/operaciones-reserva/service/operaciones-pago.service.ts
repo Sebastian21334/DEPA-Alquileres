@@ -67,7 +67,7 @@ export class OperacionesPagoService {
         expires_at: reserva.pago_vencimiento,
       };
     } catch (error) {
-      await this.reservasService.rechazarPago(reserva.id);
+      await this.reservasService.rechazarPago(reserva.id, undefined, 'SISTEMA', 'No se pudo iniciar el pago con Mercado Pago');
       this.logger.error(
         'No se pudo crear la preferencia de Mercado Pago',
         error,

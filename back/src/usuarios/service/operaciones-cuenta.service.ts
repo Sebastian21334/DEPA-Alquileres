@@ -5,7 +5,6 @@ import { PagosService } from '../../pagos/service/pagos.service';
 import { ReservasLecturaService } from '../../reservas/service/reservas-lectura.service';
 import type { EstadosOperacionesReserva } from '../../reservas/repository/reserva.repository.interface';
 import { ReclamosLecturaService } from '../../reclamos/service/reclamos-lectura.service';
-import { CancelacionesLecturaService } from '../../cancelaciones/service/cancelaciones-lectura.service';
 import { ReembolsosLecturaService } from '../../reembolsos/service/reembolsos-lectura.service';
 
 export interface OperacionesPendientesCuenta {
@@ -17,7 +16,6 @@ export interface OperacionesPendientesCuenta {
 
 export interface EstadosTramitesPendientes {
   reclamos: string[];
-  cancelacion: string;
   reembolsos: string[];
   reembolsoAprobado: string;
 }
@@ -25,7 +23,7 @@ export interface EstadosTramitesPendientes {
 // Coordina consultas de otros dominios: cada módulo conserva sus consultas y recibe la transacción de Usuarios.
 @Injectable()
 export class OperacionesCuentaService {
-  constructor(private readonly reservas: ReservasLecturaService, private readonly pagos: PagosService, private readonly reclamos: ReclamosLecturaService, private readonly cancelaciones: CancelacionesLecturaService, private readonly reembolsos: ReembolsosLecturaService) {}
+  constructor(private readonly reservas: ReservasLecturaService, private readonly pagos: PagosService, private readonly reclamos: ReclamosLecturaService, private readonly reembolsos: ReembolsosLecturaService) {}
 
   /** Combina los pendientes de reservas, estadías y liquidaciones con los pagos sin conciliar del mismo rol. */
   async contarOperacionesPendientes(idUsuario: number, participacion: ParticipacionEnReserva, hoy: string, limiteCheckout: Date, transaccion: EntityManager, estados: EstadosOperacionesReserva): Promise<OperacionesPendientesCuenta> {
@@ -34,11 +32,10 @@ export class OperacionesCuentaService {
     return { ...reservas, pagosSinConciliar };
   }
 
-  /** Comprueba si queda algún reclamo, solicitud de cancelación o reembolso por resolver. */
+  /** Comprueba si queda algún reclamo o reembolso por resolver. */
   async tieneTramitesPendientes(idUsuario: number, anuncianteVerificado: boolean, transaccion: EntityManager, estados: EstadosTramitesPendientes): Promise<boolean> {
     // Un solo trámite pendiente alcanza para mantener el acceso limitado; se omiten las consultas siguientes.
     return await this.reclamos.tienePendientesDeCuenta(idUsuario, anuncianteVerificado, transaccion, estados.reclamos)
-      || await this.cancelaciones.tienePendientesDeCuenta(idUsuario, anuncianteVerificado, transaccion, estados.cancelacion)
       || await this.reembolsos.tienePendientesDeCuenta(idUsuario, anuncianteVerificado, transaccion, estados.reembolsos, estados.reembolsoAprobado);
   }
 }

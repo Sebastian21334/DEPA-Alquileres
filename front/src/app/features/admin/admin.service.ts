@@ -2,7 +2,6 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
 import {
-  CondicionesCancelacion,
   Reclamo,
   ReclamoMensaje,
   Reserva,
@@ -170,22 +169,6 @@ export interface AdminResumenReembolsos {
   total: number;
 }
 
-export interface AdminCancellationRequest {
-  id: number;
-  motivo: string;
-  estado: 'PENDIENTE' | 'APROBADA' | 'RECHAZADA' | 'VENCIDA';
-  creada_en: string;
-  devolucion: CondicionesCancelacion['devolucion'];
-  reserva?: {
-    id: number;
-    monto_pago: number;
-    moneda_contratada?: string | null;
-    fecha_inicio?: string | null;
-    fecha_fin?: string | null;
-    publicacion?: { titulo?: string } | null;
-    usuario?: { nombre?: string; apellido?: string } | null;
-  } | null;
-}
 export type CatalogKey =
   | 'tipos-anunciante'
   | 'tipos-propiedad'
@@ -240,20 +223,6 @@ export class AdminService {
   }
   resumenReembolsos() {
     return this.http.get<AdminResumenReembolsos>(`${this.api}/reembolsos/administracion/resumen`);
-  }
-  listarSolicitudesCancelacion() {
-    return this.http.get<AdminCancellationRequest[]>(
-      `${this.api}/reservas/cancelaciones/administracion`,
-    );
-  }
-  resolverSolicitudCancelacion(idReserva: number, idSolicitud: number, decision: 'APROBADA' | 'RECHAZADA', observacion?: string) {
-    return this.http.patch<{
-      solicitud: Omit<AdminCancellationRequest, 'devolucion'>;
-      reembolso: AdminReembolso | null;
-    }>(`${this.api}/reservas/${idReserva}/cancelacion/${idSolicitud}`, {
-      decision,
-      observacion,
-    });
   }
   solicitarReembolso(id: number) {
     return this.http.patch<{ reembolso: AdminReembolso }>(`${this.api}/reservas/reembolsos/${id}/ejecutar`, {});

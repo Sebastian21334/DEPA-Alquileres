@@ -2,7 +2,6 @@ import { BcryptAdapter } from './proveedor/bcrypt.adapter';
 import { HASH_CONTRASENIAS } from './proveedor/contrasenias.interface';
 import { ReservasLecturaModule } from '../reservas/reservas-lectura.module';
 import { ReclamosLecturaModule } from '../reclamos/reclamos-lectura.module';
-import { CancelacionesLecturaModule } from '../cancelaciones/cancelaciones-lectura.module';
 import { ReembolsosLecturaModule } from '../reembolsos/reembolsos-lectura.module';
 import { PagosModule } from '../pagos/pagos.module';
 import { OperacionesCuentaService } from './service/operaciones-cuenta.service';
@@ -38,7 +37,6 @@ import { PublicacionesModule } from '../publicaciones/publicaciones.module';
     // Los módulos de lectura permiten consultar pendientes sin depender de los módulos completos de gestión.
     ReservasLecturaModule,
     ReclamosLecturaModule,
-    CancelacionesLecturaModule,
     ReembolsosLecturaModule,
     PagosModule,
     AlmacenamientoModule,

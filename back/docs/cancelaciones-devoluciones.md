@@ -5,10 +5,11 @@
 La cancelación de una reserva **pendiente de pago** es inmediata y no genera
 devolución. Las fechas se liberan al cancelar.
 
-La cancelación de una reserva **pagada** requiere una solicitud
-y una decisión administrativa. La reserva no se cancela hasta que el reembolso
-quede registrado cuando corresponde una devolución. El inquilino puede
-enviar el pedido hasta el día anterior al ingreso, inclusive. Si faltan menos
+La cancelación de una reserva **pagada** es automática: el participante indica
+el motivo, acepta las condiciones y el importe, y la solicitud queda aprobada en
+el momento, sin intervención de administración. Si corresponde una devolución,
+la reserva se cancela cuando el reembolso queda aprobado. El inquilino puede
+confirmarla hasta el día anterior al ingreso, inclusive. Si faltan menos
 de 2 días calendario, se muestra una advertencia de devolución del 0 % y debe
 aceptar los términos, que aclaran que no recibirá una devolución. Desde la
 fecha de ingreso el inquilino no puede solicitar la cancelación, aunque no se haya
@@ -17,78 +18,77 @@ de pago admitido para reservar. Las tarjetas y el dinero en cuenta usan el mismo
 circuito de devolución por Mercado Pago. Si falta el medio del pago o la pasarela
 rechaza definitivamente la devolución, se coordina una transferencia con administración.
 
-El anunciante puede solicitarla antes de la fecha de ingreso, hasta el día
-anterior inclusive, con devolución del 100 % al inquilino si se aprueba dentro
-de ese plazo. Que el código ya esté generado no impide solicitarla.
+El anunciante puede confirmarla antes de la fecha de ingreso, hasta el día
+anterior inclusive, con devolución del 100 % al inquilino. Que el código ya esté generado no impide solicitarla.
 Se conservan los controles de reserva pagada y vigente y de liquidación sin resolver.
 
-Los siguientes porcentajes se calculan con la fecha de envío de la solicitud,
-en días calendario de Argentina. Una aprobación posterior no reduce el porcentaje, pero debe ocurrir antes de la fecha de ingreso.
-El modal muestra antes de enviar el porcentaje, el importe y la moneda de la devolución
-si se aprueba. El servidor registra `creada_en` y usa esa fecha al resolver;
-el cliente no puede elegir la fecha ni el importe. La política sigue siendo la
+Los siguientes porcentajes se calculan con la fecha en que se confirma la
+cancelación, en días calendario de Argentina. El modal muestra antes de
+confirmar el porcentaje, el importe y la moneda de la devolución. El servidor
+registra `creada_en`, recalcula el importe y rechaza la solicitud con 409 si no
+coincide con el aceptado; el cliente no puede elegir la fecha ni el importe. La política sigue siendo la
 versión aplicable a la fecha del pago. No cambia el esquema de la base.
 
 El importe se calcula sobre `pago.amount`, en la moneda del pago registrado.
 No se usa el monto de la reserva ni se vuelve a convertir el precio de la
-publicación. La vista previa y la aprobación comparten este cálculo. Se trabaja
+publicación. La vista previa y la confirmación comparten este cálculo. Se trabaja
 con centavos enteros y se redondea una sola vez: por ejemplo, el 50 % de ARS 75,35
 devuelve ARS 37,68. Se conserva el control del saldo disponible de Reembolsos,
 incluidas las devoluciones ya confirmadas o reservadas. Las devoluciones anteriores
 no se modifican automáticamente.
 
-La lista administrativa de solicitudes pendientes incluye `devolucion` con el
-importe, la moneda, el porcentaje y la fecha de solicitud usados en ese mismo
-cálculo. El panel muestra esos datos en cada solicitud y antes de confirmar su
-aprobación. Un 0 % se muestra con importe cero y una aclaración de que no habrá
-devolución; si falta el pago, se informa que el importe no está disponible y se
-deshabilita la aprobación en el panel. Consultar la lista no genera reembolsos.
-
-| Situación al enviar la solicitud | Devolución |
+| Situación al confirmar la cancelación | Devolución |
 |---|---|
 | Inquilino cancela con 7 días o más de anticipación | 100 % |
 | Inquilino cancela entre 2 y 6 días antes | 50 % |
-| Inquilino cancela el día anterior al ingreso | 0 %, con advertencia antes de enviar |
-| Solicitud del Inquilino enviada dentro del plazo, aprobada cuando falta menos de 2 días calendario y la estadía aún no inició | Conserva el porcentaje del día de solicitud |
-| Anunciante solicita hasta el día anterior al ingreso y se aprueba antes del ingreso | 100 % |
-| Inquilino o anunciante solicita desde la fecha de ingreso | No admite nuevas solicitudes de cancelación |
+| Inquilino cancela el día anterior al ingreso | 0 %, con advertencia antes de confirmar |
+| Anunciante cancela hasta el día anterior al ingreso | 100 % |
+| Inquilino o anunciante intenta cancelar desde la fecha de ingreso | No admite nuevas solicitudes de cancelación |
 | Código de ingreso ya validado | No admite nuevas solicitudes de cancelación |
 
-Con devolución del 0 %, la aprobación cancela la reserva, conserva el pago y
+Con devolución del 0 %, la cancelación se aplica en el momento: conserva el pago y
 libera las fechas, sin generar un registro de reembolso. La solicitud,
 la cancelación y la liquidación se actualizan en la misma transacción.
 
-Toda solicitud pendiente, del Inquilino o del Anunciante, se considera rechazada
-si llega la fecha de ingreso sin resolución. Se registra como `RECHAZADA`, se
-conserva la reserva en curso y se habilita el reclamo por demora administrativa
-al solicitante. No se genera una devolución por la solicitud rechazada.
-
-Una solicitud aprobada antes del ingreso conserva su devolución pendiente. Si la
-confirmación llega después, se completa la cancelación y se libera el calendario
-como parte de esa decisión previa; no se vuelve a aprobar ni se modifica el porcentaje.
+Una cancelación confirmada antes del ingreso conserva su devolución pendiente. Si
+el reembolso se aprueba después, se completa la cancelación y se libera el calendario
+como parte de esa decisión previa; no se modifica el porcentaje.
 Mientras la devolución esté activa no se permite validar el código de ingreso.
 
 ### Módulo de cancelaciones
 
-`CancelacionesModule` (`back/src/cancelaciones/`) es dueño de la solicitud, de la
-política de la tabla anterior y de la decisión administrativa. Conserva las
-rutas `/reservas/:id/cancelacion`, `/reservas/:id/cancelacion/:idSolicitud` y
-`/reservas/cancelaciones/administracion`.
+`CancelacionesModule` (`back/src/cancelaciones/`) es dueño de la solicitud y de la
+política de la tabla anterior. Expone `POST /reservas/:id/cancelacion` (confirmar),
+`GET /reservas/:id/cancelacion/condiciones` (vista previa) y
+`GET /reservas/:id/cancelacion` (cancelación con la devolución todavía en gestión).
+No hay circuito administrativo de aprobación: la solicitud se guarda directamente
+como `APROBADA`, con `decidida_por = null`.
 
 - Consulta la reserva y sus permisos mediante `ReservasService`. La cancelación
   inmediata de una reserva pendiente de pago (`PATCH /reservas/:id/cancelar`)
   sigue en Reservas.
-- Al resolver, bloquea la solicitud y decide dentro de una transacción. Una
-  segunda resolución de la misma solicitud responde 409.
+- La solicitud y sus efectos comparten una transacción con la reserva bloqueada.
+  Repetir el envío devuelve la solicitud ya registrada.
 - Con devolución: crea el reembolso en esa misma transacción, con la clave de
-  idempotencia `can:<idSolicitud>`. La reserva se cancela cuando el reembolso
+  idempotencia `auto-can:<idSolicitud>`. La reserva se cancela cuando el reembolso
   queda aprobado.
 - Sin devolución: pide a `ReservasService.cancelarConRetencionTotal` que
-  cancele la estadía, deje la liquidación en revisión y libere las fechas. Si
-  alguno de esos pasos falla, la aprobación se revierte y puede reintentarse.
+  cancele la estadía, deje el importe pendiente de pago al anunciante y libere
+  las fechas. Si alguno de esos pasos falla, se revierte todo y puede reintentarse.
+- El motivo queda en `solicitud_cancelacion.motivo` y en `reserva.motivo_cancelacion`;
+  no se muestra en las pantallas.
 
-Las devoluciones de cancelaciones anteriores a este módulo conservan su clave
-aleatoria: se vinculan con su solicitud por la reserva, no por la clave.
+Las solicitudes históricas resueltas por administración (clave `can:<idSolicitud>`),
+rechazadas o vencidas se conservan con su estado. Las devoluciones de cancelaciones
+anteriores a este módulo conservan su clave aleatoria: se vinculan con su
+solicitud por la reserva, no por la clave.
+
+### Cierres del sistema
+
+Las reservas que cierra el sistema registran `cancelada_por = SISTEMA` y un motivo
+en `motivo_cancelacion`: vencimiento del plazo de pago, falla al iniciar el pago
+con Mercado Pago y pago recibido cuando la cuenta del anunciante ya no estaba
+habilitada. Las reservas cerradas antes de este cambio quedan como estaban.
 
 ## Reembolsos
 
@@ -188,7 +188,6 @@ incluida en el comando existente de preparación de cancelaciones y devoluciones
 
 - El Inquilino puede reclamar por problemas de la estadía hasta el final del cuarto día
   calendario posterior a `fecha_fin`, antes de habilitarse el pago al anunciante.
-  El reclamo por demora administrativa conserva su plazo específico de siete días.
 - El reclamo pasa `reserva.estado_liquidacion` a `EN_REVISION`.
 - El Administrador puede escribir al Inquilino y al Anunciante, dejar notas
   internas (`visible_para = ADMIN`) y revisar la evidencia.
@@ -242,33 +241,11 @@ Para modificar la política, agregar una versión con una fecha de vigencia nuev
 y conservar las versiones anteriores para las reservas ya pagadas.
 
 
-## Solicitudes sin respuesta y reclamo por demora administrativa
+## Reclamo por demora administrativa (histórico)
 
-Al llegar la fecha de ingreso, una solicitud todavía PENDIENTE se considera
-rechazada por falta de respuesta y se registra como RECHAZADA, con el motivo y
-la fecha del rechazo automático. La tarea se ejecuta al iniciar el backend y
-cada minuto. También se controla el plazo al intentar resolver o reclamar.
-La reserva sigue en curso: no se cancela, no se liberan fechas ni se devuelve
-dinero por el rechazo. Las solicitudes históricas VENCIDAS por demora conservan
-su estado y también pueden dar lugar a un reclamo dentro del plazo.
-
-El solicitante, ya sea inquilino o anunciante, puede usar «Reclamar por demora
-administrativa» desde Mis reservas. El reclamo usa el catálogo existente, con
-categoría DEMORA_ADMINISTRATIVA, y se vincula a la solicitud original. Se admite
-desde la fecha de ingreso hasta siete días corridos después de finalizar la
-estadía, con descripción de 20 a 1000 caracteres y un único reclamo abierto por
-reserva. El servidor comprueba que exista una solicitud del usuario que no se
-resolvió a tiempo; una solicitud rechazada por administración antes del ingreso
-no habilita esta opción.
-
-Presentar este reclamo conserva el estado de la reserva y de su liquidación,
-por lo que no bloquea la validación normal del código. Administración lo tramita
-mediante el circuito existente de Reclamos y decide cómo resolverlo. No hay
-confirmaciones de ausencia, reembolso garantizado ni compensación a cargo de
-DEPA por el mero hecho de la demora.
-
-La migración 20261123-reclamo-demora-administrativa.sql incorpora la categoría
-y retira la estructura de la excepción descartada únicamente si no tiene
-revisiones ni compensaciones registradas. Se detiene antes de eliminarla si
-encuentra datos que deban conservarse. Las solicitudes, pagos, reembolsos y
-reclamos anteriores se preservan.
+Como las cancelaciones se aprueban en el momento, ya no hay solicitudes que
+puedan quedar sin respuesta ni se crean reclamos por demora administrativa: el
+servidor rechaza la categoría DEMORA_ADMINISTRATIVA al crear un reclamo. La
+categoría sigue en el catálogo para mostrar los reclamos anteriores, que
+conservan su vínculo con la solicitud original y no retienen la liquidación.
+La migración 20261123-reclamo-demora-administrativa.sql que la incorporó no se modifica.

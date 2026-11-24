@@ -15,7 +15,7 @@ import {
   decimalEntero,
   importeTexto,
 } from '../../common/utils/importes';
-import type { CondicionesCobro } from '../../reservas/service/reservas.service';
+import { ReservasService, type CondicionesCobro } from '../../reservas/service/reservas.service';
 import type { CrearReservaDto } from '../../reservas/dto/crear-reserva.dto';
 import { diasInclusivos, esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
 
@@ -32,7 +32,7 @@ const VIGENCIA_PRESUPUESTO_SEGUNDOS = 15 * 60;
 @Injectable()
 export class PresupuestosService {
   private readonly secreto: string;
-  constructor(private readonly cotizaciones: CotizacionesService, private readonly publicaciones: PublicacionesService, private readonly disponibilidad: DisponibilidadService, private readonly jwt: JwtService, private readonly config: ConfigService) {
+  constructor(private readonly cotizaciones: CotizacionesService, private readonly publicaciones: PublicacionesService, private readonly disponibilidad: DisponibilidadService, private readonly jwt: JwtService, private readonly config: ConfigService, private readonly reservas: ReservasService) {
     // Clave separada: un presupuesto jamás puede utilizarse como token de inicio de sesión.
     this.secreto = createHmac('sha256', config.getOrThrow<string>('JWT_SECRET'))
       .update('depa:presupuesto:v1')
@@ -59,6 +59,8 @@ export class PresupuestosService {
       ))
     )
       throw new ConflictException('El rango de fechas no está disponible');
+    // Se avisa al cotizar, antes de pagar; crearPendiente lo vuelve a controlar dentro de la transacción.
+    await this.reservas.validarLimiteCancelaciones(publicacion.id, idUsuario, dto.fecha_inicio, dto.fecha_fin);
     // La consulta externa termina antes de bloquear el calendario o crear una reserva.
     const cotizacion = tarifa.moneda === 'USD' ? await this.cotizaciones.obtenerVigente() : null;
     const cobro = this.calcularCobro(tarifa.centavos, cotizacion);

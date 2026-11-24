@@ -8,7 +8,6 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
   CondicionesCancelacion,
-  DemoraAdministrativa,
   FaltanteCancelacion,
   Reserva,
   ReprogramacionReserva,
@@ -60,44 +59,6 @@ export class MisReservasComponent {
     ? this.auth.currentUser()?.anuncianteVerificado === true
     : this.perfil.esAnuncianteVerificado());
 
-  protected readonly demorasAdministrativas = signal<DemoraAdministrativa[]>([]);
-  protected readonly errorDemorasAdministrativas = signal('');
-  private readonly dialogoDemora = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoDemora');
-  protected readonly demoraSeleccionada = signal<DemoraAdministrativa | null>(null);
-  protected readonly enviandoDemora = signal(false);
-  protected readonly errorDemora = signal('');
-  protected descripcionDemora = '';
-
-  protected abrirDemora(item: DemoraAdministrativa): void {
-    if (item.reclamoAbierto || this.enviandoDemora()) return;
-    this.demoraSeleccionada.set(item);
-    this.descripcionDemora = '';
-    this.errorDemora.set('');
-    this.dialogoDemora().nativeElement.showModal();
-  }
-
-  protected cerrarDemora(evento?: Event): void {
-    evento?.preventDefault();
-    if (this.enviandoDemora()) return;
-    this.dialogoDemora().nativeElement.close();
-    this.demoraSeleccionada.set(null);
-  }
-
-  protected enviarDemora(): void {
-    const item = this.demoraSeleccionada();
-    const descripcion = this.descripcionDemora.trim();
-    if (!item || this.enviandoDemora() || descripcion.length < 20 || descripcion.length > 1000) return;
-    this.enviandoDemora.set(true);
-    this.errorDemora.set('');
-    this.reservasApi.createClaim({ id_reserva: item.reservaId, categoria: 'DEMORA_ADMINISTRATIVA', descripcion }).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.enviandoDemora.set(false))).subscribe({
-      next: (reclamo) => {
-        this.enviandoDemora.set(false);
-        this.cerrarDemora();
-        this.finalizarReclamo(reclamo, 'Reclamo por demora administrativa enviado. La reserva sigue en curso; administración revisará los inconvenientes informados.');
-      },
-      error: (error: ApiError) => this.errorDemora.set(error.message),
-    });
-  }
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
@@ -169,7 +130,7 @@ export class MisReservasComponent {
   private accionCancelacion?: HTMLButtonElement;
   protected readonly reservaACancelar = signal<Reserva | null>(null);
   protected readonly cancelacionComoAnunciante = signal(false);
-  protected readonly estadoCancelacion = signal<'consultando' | 'formulario' | 'pendiente' | 'aprobada' | 'error'>('consultando');
+  protected readonly estadoCancelacion = signal<'consultando' | 'formulario' | 'aprobada' | 'error'>('consultando');
   protected readonly motivoCancelacion = signal('');
   protected readonly condicionesCancelacion = signal<CondicionesCancelacion | null>(null);
   protected readonly aceptaTerminosCancelacion = signal(false);
@@ -257,10 +218,6 @@ export class MisReservasComponent {
     this.consultaReservas?.unsubscribe();
     const anunciante = this.accesoLimitado() ? of(this.esAnunciante()) : this.perfil.esAnunciante();
     this.consultaReservas = forkJoin({
-      demoras: this.reservasApi.myAdministrativeDelays().pipe(catchError((error: ApiError) => {
-        this.errorDemorasAdministrativas.set(error.message);
-        return of(null);
-      })),
       propias: this.reservasApi.mine(),
       recibidas: anunciante.pipe(
         switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received() : of<Reserva[]>([])),
@@ -270,8 +227,7 @@ export class MisReservasComponent {
         return of(null);
       })),
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: ({ propias, recibidas, reclamos, demoras }) => {
-        if (demoras) { this.demorasAdministrativas.set(demoras); this.errorDemorasAdministrativas.set(''); }
+      next: ({ propias, recibidas, reclamos }) => {
         this.propias.set(propias);
         this.recibidas.set(recibidas);
         if (reclamos) {
@@ -415,10 +371,8 @@ export class MisReservasComponent {
       .subscribe({
         next: (condiciones) => {
           this.condicionesCancelacion.set(condiciones);
-          const { solicitud } = condiciones;
-          this.estadoCancelacion.set(
-            solicitud?.estado === 'APROBADA' ? 'aprobada' : solicitud ? 'pendiente' : 'formulario',
-          );
+          // Solo vuelve una solicitud mientras su devolución sigue en gestión: siempre está aprobada.
+          this.estadoCancelacion.set(condiciones.solicitud ? 'aprobada' : 'formulario');
         },
         error: (err: ApiError) => {
           this.estadoCancelacion.set('error');
@@ -449,15 +403,10 @@ export class MisReservasComponent {
       )
       .subscribe({
         next: (solicitud) => {
-          if (solicitud.estado === 'APROBADA') {
-            this.estadoCancelacion.set('aprobada');
-            this.reservaACancelar.set(solicitud.reserva);
-            this.cargarReservas(true);
-            this.toast.mostrar(solicitud.reserva.cancelada ? 'La reserva quedó cancelada.' : 'La cancelación fue aceptada.', 'exito');
-          } else {
-            this.estadoCancelacion.set('pendiente');
-            this.toast.mostrar('La solicitud de cancelación está en revisión.', 'exito');
-          }
+          this.estadoCancelacion.set('aprobada');
+          this.reservaACancelar.set(solicitud.reserva);
+          this.cargarReservas(true);
+          this.toast.mostrar(solicitud.reserva.cancelada ? 'La reserva quedó cancelada.' : 'La cancelación fue aceptada.', 'exito');
         },
         error: (err: ApiError) => {
           if (err.status === 409) {
@@ -671,7 +620,7 @@ export class MisReservasComponent {
         : 'Reclamo enviado. Podés seguirlo y responder desde esta sección.'),
     );
     this.vista.set('reclamos');
-    // La demora puede reclamarla cualquiera de las partes; se muestra el rol del reclamo creado.
+    // Se muestra la pestaña del rol con que se creó el reclamo: el pedido de código lo hace el anunciante.
     this.vistaReclamos.set(rolEnReclamo(reclamo, this.idUsuario()) ?? (pedido ? 'anunciante' : 'inquilino'));
     this.cargarReservas(true);
   }

@@ -11,42 +11,6 @@
       </div>
     </div>
 
-    @if (errorDemorasAdministrativas()) { <p class="cancellation-error" role="alert">{{ errorDemorasAdministrativas() }}</p> }
-    @if (demorasAdministrativas().length) {
-      <section class="administrative-delays" aria-labelledby="administrative-delays-title">
-        <h2 id="administrative-delays-title">Solicitudes sin respuesta antes del ingreso</h2>
-        @for (item of demorasAdministrativas(); track item.solicitudId) {
-          <article class="administrative-delay">
-            <h3>Reserva #{{ item.reservaId }} · {{ item.titulo }}</h3>
-            <p>Tu solicitud de cancelación no fue respondida antes de la fecha de ingreso y se considera rechazada. La reserva sigue en curso.</p>
-            @if (item.reclamoAbierto) {
-              <p>Ya hay un reclamo abierto para esta reserva.</p>
-              <button type="button" class="booking-button" (click)="vista.set('reclamos')">Ver reclamos</button>
-            } @else {
-              <button type="button" class="booking-button booking-button--primary" (click)="abrirDemora(item)">Reclamar por demora administrativa</button>
-            }
-          </article>
-        }
-      </section>
-    }
-    <dialog #dialogoDemora class="cancellation-dialog" aria-labelledby="administrative-delay-title" (cancel)="cerrarDemora($event)">
-      <h2 id="administrative-delay-title">Reclamar por demora administrativa</h2>
-      @if (demoraSeleccionada(); as item) {
-        <p>Reserva #{{ item.reservaId }} · {{ item.titulo }}</p>
-        <p>Contanos qué inconvenientes te generó la falta de respuesta a tu solicitud. Administración revisará el caso. Enviar el reclamo no cancela la reserva ni genera automáticamente un reembolso.</p>
-        <form (ngSubmit)="enviarDemora()" [attr.aria-busy]="enviandoDemora()">
-          <label for="descripcion-demora">Descripción de los inconvenientes</label>
-          <textarea id="descripcion-demora" name="descripcionDemora" [(ngModel)]="descripcionDemora" rows="5" required minlength="20" maxlength="1000" [disabled]="enviandoDemora()" autofocus></textarea>
-          <small>Entre 20 y 1000 caracteres. Podrás adjuntar evidencias y seguir el caso desde Reclamos.</small>
-          @if (errorDemora()) { <p class="cancellation-error" role="alert">{{ errorDemora() }}</p> }
-          <div class="cancellation-actions">
-            <button type="button" class="booking-button" [disabled]="enviandoDemora()" (click)="cerrarDemora()">Volver</button>
-            <button type="submit" class="booking-button booking-button--primary" [disabled]="enviandoDemora() || descripcionDemora.trim().length < 20">{{ enviandoDemora() ? 'Enviando…' : 'Enviar reclamo' }}</button>
-          </div>
-        </form>
-      }
-    </dialog>
-
     <dialog #dialogoCancelacion class="cancellation-dialog" aria-labelledby="cancel-title"
       (cancel)="cerrarCancelacion($event)" (close)="limpiarCancelacion()">
       <button type="button" class="cancellation-close" aria-label="Cerrar" autofocus
@@ -108,11 +72,6 @@
               @if (condicionesCancelacion()?.simulacionTarjetaHabilitada && (condicionesCancelacion()?.devolucion?.importe ?? 0) > 0) {
                 <p>Si el pago fue con tarjeta, la devolución será simulada y no se transferirá dinero.</p>
               }
-            </div>
-          } @else if (estadoCancelacion() === 'pendiente') {
-            <div class="cancellation-info" role="status">
-              <svg lucideInfo [size]="22" aria-hidden="true"></svg>
-              <p>Hay una solicitud de cancelación para esta reserva. Está en revisión.</p>
             </div>
           } @else if (estadoCancelacion() === 'aprobada') {
             <div class="cancellation-info" role="status">

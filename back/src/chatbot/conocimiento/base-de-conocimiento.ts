@@ -23,7 +23,6 @@ export const BASE_DE_CONOCIMIENTO_DEPA = `
 ## Reclamos
 
 - El inquilino titular puede reclamar por una estadía con pago aprobado desde el inicio hasta el cuarto día corrido posterior al fin, inclusive. El reclamo se revisa sin cancelar la reserva. En el expediente se pueden enviar mensajes y adjuntar JPEG o PNG de hasta 5 MB cada uno, con un máximo de 10 imágenes por envío y 30 en total.
-- Si una solicitud de cancelación sigue sin resolverse al llegar el día de inicio, se rechaza por demora y la reserva sigue vigente. Quien la solicitó puede reclamar por demora administrativa desde el inicio hasta el séptimo día corrido posterior al fin, inclusive.
 - Si se aprobó una cancelación y queda un importe de devolución sin cubrir, el inquilino titular puede reclamar el faltante. El cálculo tiene en cuenta lo recibido y lo que sigue en gestión.
 
 ## Alta de anunciante y gestión de publicaciones

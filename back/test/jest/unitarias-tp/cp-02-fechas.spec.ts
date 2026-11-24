@@ -29,6 +29,7 @@ describe('CP-02 · Fechas de reserva · PDF Pruebas Unitarias - TP', () => {
     crear: jest.fn((datos: Partial<Reserva>) => Object.assign(new Reserva(), datos)),
     guardar: jest.fn(async (reserva: Reserva) => Object.assign(reserva, { id: 99 })),
     buscarPendientesVencidas: jest.fn(async (): Promise<Reserva[]> => []),
+    buscarCanceladasPorInquilino: jest.fn(async (): Promise<Reserva[]> => []),
     conTransaccion: jest.fn(),
   };
   const disponibilidad = {
