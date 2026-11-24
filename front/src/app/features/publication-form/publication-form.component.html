@@ -152,11 +152,7 @@
           <span>3</span>
           <div><h2>Fotos de la propiedad</h2><p>La primera foto es la portada. Los cambios en las fotos se guardan automáticamente.</p></div>
         </div>
-        <label class="image-upload">
-          Agregar fotos
-          <input type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-            [disabled]="saving() || imagesBusy() || imageOrderSaving() || form.disabled" (change)="uploadImages($event)" />
-        </label>
+        <app-carga-fotos [deshabilitado]="saving() || imagesBusy() || imageOrderSaving() || form.disabled" (elegidas)="uploadImages($event)" />
         <app-galeria-imagenes [fotos]="images()" [minimo]="1"
           [disabled]="saving() || imagesBusy() || form.disabled" [quitarDeshabilitado]="imageOrderSaving()"
           (reordenar)="reorderImages($event)" (quitar)="removeImage($event)" />

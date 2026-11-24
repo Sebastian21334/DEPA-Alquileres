@@ -8,7 +8,7 @@ import { CargaImagenesComponent } from '../carga-imagenes/carga-imagenes.compone
   imports: [FormsModule, LucidePaperclip, LucideSend, CargaImagenesComponent],
   template: `
     @if (mostrarAdjuntos()) {
-      <app-carga-imagenes etiqueta="Imágenes para enviar" [(archivos)]="imagenes" [maximo]="adjuntos() ?? 0" [deshabilitado]="deshabilitado()" />
+      <app-carga-imagenes [etiqueta]="adjuntos() === 1 ? 'Imagen para enviar' : 'Imágenes para enviar'" [(archivos)]="imagenes" [maximo]="adjuntos() ?? 0" [deshabilitado]="deshabilitado()" />
     }
     <div class="fila">
       @if (adjuntos() !== null) {
@@ -49,11 +49,13 @@ export class ConversationComposerComponent {
   readonly imagenes = model<File[]>([]);
   /** Cuántas imágenes admite el próximo mensaje; null = este chat no acepta imágenes. */
   readonly adjuntos = input<number | null>(null);
+  /** Las apelaciones exigen texto: una imagen sola no alcanza para enviar. */
+  readonly textoObligatorio = input(false);
   readonly enviar = output<void>();
   private readonly abierto = signal(false);
   /** Con imágenes elegidas la zona queda a la vista, para que se puedan revisar o quitar antes de enviar. */
   protected readonly mostrarAdjuntos = computed(() => this.abierto() || this.imagenes().length > 0);
-  protected readonly hayContenido = computed(() => !!this.texto().trim() || this.imagenes().length > 0);
+  protected readonly hayContenido = computed(() => !!this.texto().trim() || (!this.textoObligatorio() && this.imagenes().length > 0));
   protected readonly textoAdjuntar = computed(() => {
     if (!this.adjuntos() && !this.imagenes().length) return 'Ya no se pueden adjuntar más imágenes';
     return this.mostrarAdjuntos() && !this.imagenes().length ? 'Cerrar adjuntos' : 'Adjuntar imágenes';

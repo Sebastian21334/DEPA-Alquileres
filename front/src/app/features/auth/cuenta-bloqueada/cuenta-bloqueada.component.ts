@@ -1,19 +1,19 @@
 import { ConversationPanelComponent, mensajesApelacion } from '../../../shared/components/conversation-panel/conversation-panel.component';
-import { AttachmentPreviewComponent } from '../../../shared/components/conversation-panel/attachment-preview.component';
+import { CargaImagenesComponent } from '../../../shared/components/carga-imagenes/carga-imagenes.component';
 import { DatePipe, isPlatformBrowser } from '@angular/common';
 import { Component, DestroyRef, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideCalendar, LucideImagePlus, LucideLockKeyhole, LucideMessageCircle, LucideSend } from '@lucide/angular';
+import { LucideArrowLeft, LucideCalendar, LucideLockKeyhole, LucideMessageCircle, LucideSend } from '@lucide/angular';
 import { ApiError } from '../../../core/interceptors/api-error';
 import { AuthService, type VistaBloqueo } from '../../../core/services/auth.service';
 import { finalize, timer } from 'rxjs';
 
 @Component({
   selector: 'app-cuenta-bloqueada',
-  imports: [DatePipe, FormsModule, RouterLink, ConversationPanelComponent, AttachmentPreviewComponent, LucideArrowLeft, LucideCalendar,
-    LucideImagePlus, LucideLockKeyhole, LucideMessageCircle, LucideSend],
+  imports: [DatePipe, FormsModule, RouterLink, ConversationPanelComponent, CargaImagenesComponent, LucideArrowLeft, LucideCalendar,
+    LucideLockKeyhole, LucideMessageCircle, LucideSend],
   templateUrl: './cuenta-bloqueada.component.html',
   styleUrl: './cuenta-bloqueada.component.scss',
 })
@@ -26,8 +26,8 @@ export class CuentaBloqueadaComponent {
   protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
   protected readonly accesoVigente = signal(Boolean(this.auth.tokenBloqueo) || this.accesoLimitado());
   protected texto = '';
-  protected imagen: File | null = null;
-  protected vistaPreviaImagen: string | null = null;
+  /** El back admite una imagen por mensaje; `app-carga-imagenes` la valida. */
+  protected readonly imagenes = signal<File[]>([]);
   private version = 0;
   private actualizando = false;
   protected readonly mensajesApelacion = mensajesApelacion;
@@ -40,7 +40,6 @@ export class CuentaBloqueadaComponent {
   }
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.liberarVistaPrevia());
     if (this.accesoVigente()) this.consultar();
     if (isPlatformBrowser(inject(PLATFORM_ID)))
       timer(15_000, 15_000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.actualizarSilencioso());
@@ -79,40 +78,15 @@ export class CuentaBloqueadaComponent {
     this.version++;
     this.ocupado.set(true);
     this.error.set('');
-    this.auth.apelarBloqueo(token, texto, this.imagen).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.auth.apelarBloqueo(token, texto, this.imagenes()[0] ?? null).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (bloqueo) => {
         this.bloqueo.set(bloqueo);
         this.texto = '';
-        this.quitarImagen();
+        this.imagenes.set([]);
         this.ocupado.set(false);
       },
       error: (error: ApiError) => this.mostrarError(error),
     });
-  }
-
-  protected seleccionarImagen(evento: Event): void {
-    const input = evento.target as HTMLInputElement;
-    const archivo = input.files?.[0];
-    input.value = '';
-    if (!archivo) return;
-    if (!['image/jpeg', 'image/png'].includes(archivo.type) || archivo.size > 5 * 1024 * 1024) {
-      this.error.set('Elegí una imagen JPEG o PNG de hasta 5 MB.');
-      return;
-    }
-    this.error.set('');
-    this.liberarVistaPrevia();
-    this.imagen = archivo;
-    this.vistaPreviaImagen = URL.createObjectURL(archivo);
-  }
-
-  protected quitarImagen(): void {
-    this.liberarVistaPrevia();
-    this.imagen = null;
-  }
-
-  private liberarVistaPrevia(): void {
-    if (this.vistaPreviaImagen) URL.revokeObjectURL(this.vistaPreviaImagen);
-    this.vistaPreviaImagen = null;
   }
 
   protected apelarConEnter(evento: Event): void {

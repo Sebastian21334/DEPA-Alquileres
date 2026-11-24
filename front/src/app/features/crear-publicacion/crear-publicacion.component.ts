@@ -4,9 +4,10 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { concatMap, from, of, toArray, catchError } from 'rxjs';
-import { LucideImagePlus } from '@lucide/angular';
 import { GaleriaImagenesComponent } from '../../shared/components/galeria-imagenes/galeria-imagenes.component';
+import { CargaFotosComponent } from '../../shared/components/carga-fotos/carga-fotos.component';
 import { moverImagen } from '../../shared/utils/orden-imagenes';
+import { filtrarImagenesPublicacion } from '../../shared/utils/imagenes-publicacion';
 import { ApiError } from '../../core/interceptors/api-error';
 import { GestionPublicacionesService } from '../../shared/services/gestion-publicaciones.service';
 import { AvailabilityService } from '../../shared/services/availability.service';
@@ -19,10 +20,6 @@ import {
   LocationPickerComponent,
   UbicacionConfirmada,
 } from '../../shared/components/location-picker/location-picker.component';
-
-const TIPOS_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
-const MAX_IMAGEN = 10 * 1024 * 1024;
-const MAX_IMAGENES = 15;
 
 interface ImagenSeleccionada {
   archivo: File;
@@ -43,7 +40,7 @@ interface ImagenSeleccionada {
     AvailabilityCalendarComponent,
     LocationPickerComponent,
     SelectorUbicacionComponent,
-    LucideImagePlus,
+    CargaFotosComponent,
     GaleriaImagenesComponent,
   ],
   providers: [PublicacionFormulario],
@@ -83,55 +80,17 @@ export class CrearPublicacionComponent {
     );
   }
 
-  protected readonly arrastrando = signal(false);
   protected readonly faltanFotos = signal(false);
 
-  protected agregarDesdeInput(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.agregarImagenes(input.files);
-    input.value = '';
-  }
-
-  protected onDragOver(event: DragEvent): void {
-    event.preventDefault();
-    this.arrastrando.set(true);
-  }
-
-  protected onDrop(event: DragEvent): void {
-    event.preventDefault();
-    this.arrastrando.set(false);
-    this.agregarImagenes(event.dataTransfer?.files ?? null);
-  }
-
-  private agregarImagenes(files: FileList | null): void {
+  protected agregarImagenes(archivos: File[]): void {
     if (this.enviando()) return;
-    const nuevas: ImagenSeleccionada[] = [];
-    let descartadas = 0;
-
-    for (const archivo of Array.from(files ?? [])) {
-      if (!TIPOS_IMAGEN.includes(archivo.type) || archivo.size > MAX_IMAGEN) {
-        descartadas++;
-        continue;
-      }
-      nuevas.push({ archivo, url: URL.createObjectURL(archivo) });
-    }
-
-    const total = [...this.imagenes(), ...nuevas];
-    total.slice(MAX_IMAGENES).forEach((img) => URL.revokeObjectURL(img.url));
-    this.imagenes.set(total.slice(0, MAX_IMAGENES));
+    const { aceptadas, aviso } = filtrarImagenesPublicacion(archivos, this.imagenes().length);
+    this.imagenes.update((lista) => [...lista, ...aceptadas.map((archivo) => ({ archivo, url: URL.createObjectURL(archivo) }))]);
     if (this.imagenes().length) {
       this.faltanFotos.set(false);
       if (this.error().startsWith('Agregá al menos una foto')) this.error.set('');
     }
-
-    const avisos = [];
-    if (descartadas)
-      avisos.push(
-        `${descartadas} archivo(s) descartado(s): solo imágenes JPG, PNG, WEBP o HEIC de hasta 10 MB.`,
-      );
-    if (total.length > MAX_IMAGENES)
-      avisos.push(`Máximo ${MAX_IMAGENES} imágenes por publicación.`);
-    this.avisoImagenes.set(avisos.join(' '));
+    this.avisoImagenes.set(aviso);
   }
 
   protected quitarImagen(index: number): void {

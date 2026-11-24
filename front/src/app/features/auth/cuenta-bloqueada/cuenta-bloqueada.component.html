@@ -44,19 +44,7 @@
           <textarea id="appeal-message" name="mensaje" [(ngModel)]="texto" rows="4" maxlength="2000"
             required [disabled]="ocupado()" placeholder="Escribí un mensaje…"
             (keydown.enter)="apelarConEnter($event)"></textarea>
-          <div class="appeal-attachment">
-            <div class="appeal-attachment__heading">
-              <div><strong>Adjuntar imagen</strong><p>JPEG o PNG, hasta 5 MB</p></div>
-              <label for="appeal-image" class="appeal-attachment__select" [class.appeal-attachment__select--disabled]="ocupado()">
-                <svg lucideImagePlus [size]="18" aria-hidden="true"></svg>
-                {{ imagen ? 'Cambiar imagen' : 'Elegir imagen' }}
-              </label>
-              <input id="appeal-image" class="appeal-attachment__input" type="file" accept="image/jpeg,image/png" [disabled]="ocupado()" (change)="seleccionarImagen($event)" />
-            </div>
-            @if (imagen && vistaPreviaImagen) {
-              <app-attachment-preview class="appeal-attachment__preview" [url]="vistaPreviaImagen" [nombre]="imagen.name" [deshabilitado]="ocupado()" (quitar)="quitarImagen()" />
-            }
-          </div>
+          <app-carga-imagenes class="appeal-attachment" etiqueta="Imagen (opcional)" [maximo]="1" [(archivos)]="imagenes" [deshabilitado]="ocupado()" />
         </form>
       </section>
     } @else if (ocupado()) {
