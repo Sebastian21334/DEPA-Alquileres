@@ -109,11 +109,9 @@ export class ReservaResultadoComponent {
   });
   protected readonly whatsappUrl = computed(() => {
     const reserva = this.reserva();
-    if (!reserva || this.accesoLimitado() || this.contactoSuspendido()) return null;
-    const telefono = this.esInquilino()
-      ? (reserva.publicacion?.anunciante?.numero_contacto ??
-        reserva.publicacion?.anunciante?.usuario?.telefono)
-      : (reserva.usuario_telefono ?? reserva.usuario?.telefono);
+    if (!reserva || !this.esInquilino() || this.accesoLimitado() || this.contactoSuspendido()) return null;
+    const telefono = reserva.publicacion?.anunciante?.numero_contacto ??
+      reserva.publicacion?.anunciante?.usuario?.telefono;
     const digits = telefono?.replace(/\D/g, '');
     if (!digits) return null;
     const mensaje = `Hola, te contacto por la reserva #${reserva.id} de ${reserva.publicacion?.titulo ?? 'la propiedad'}.`;
@@ -377,7 +375,13 @@ export class ReservaResultadoComponent {
   }
 
   protected estadoPagoMercado(reserva: Reserva): string {
-    const status = this.pago()?.status;
+    const pago = this.pago();
+    const status = pago?.status;
+    if (pago?.devolucion && status !== 'charged_back') {
+      const { reembolsado, simulado, sinDevolver } = pago.devolucion;
+      if (reembolsado > 0) return sinDevolver === 0 ? 'Reembolsado' : 'Reembolsado parcialmente';
+      if (simulado > 0) return 'Devolución simulada';
+    }
     if (status === 'approved' && reserva.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO')
       return 'Reembolsado parcialmente';
     const labels: Record<string, string> = {

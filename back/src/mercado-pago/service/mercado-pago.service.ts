@@ -30,6 +30,10 @@ export class MercadoPagoService {
     return this.proveedor.consultarPago(id);
   }
 
+  permiteSimulacionTarjeta(): boolean {
+    return this.config.get<string>('MP_SIMULAR_REEMBOLSO_TARJETA') === 'true';
+  }
+
   consultarCheckout(id: string): Promise<string> {
     this.configRequerida('MP_ACCESS_TOKEN');
     return this.proveedor.consultarCheckout(id);

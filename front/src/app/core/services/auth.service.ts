@@ -110,8 +110,8 @@ export class AuthService {
     return this.http.post<MensajeResponse>(`${this.baseUrl}/reactivar-cuenta/solicitar`, { email, constanciaReactivacion });
   }
 
-  confirmarReactivacion(token: string, contrasenia: string): Observable<MensajeResponse> {
-    return this.http.post<MensajeResponse>(`${this.baseUrl}/reactivar-cuenta/confirmar`, { token, contrasenia });
+  confirmarReactivacion(token: string): Observable<MensajeResponse> {
+    return this.http.post<MensajeResponse>(`${this.baseUrl}/reactivar-cuenta/confirmar`, { token });
   }
 
   /** POST /auth/verificar-cuenta — consume el token del link recibido por mail. */

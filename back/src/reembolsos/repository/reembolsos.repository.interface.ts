@@ -31,6 +31,7 @@ export interface IReembolsosRepository {
   sumarImportesReservados(idPago: number, estados: string[]): Promise<number>;
   actualizarEnTransaccion(id: number, operacion: (reembolso: Reembolso) => void | Promise<void>): Promise<Reembolso | null>;
   buscarPendientesConciliacion(estados: string[], hasta: Date): Promise<Reembolso[]>;
+  buscarCancelacionesAutomaticasPendientes(desdeId: number): Promise<Reembolso[]>;
   buscarPendientesAplicacion(estado: string, desdeId: number): Promise<Reembolso[]>;
   buscarPorOrigen(origen: Reembolso['origen'], referencia: string): Promise<Reembolso | null>;
   contarPorEstado(): Promise<Array<{ estado: string; cantidad: string }>>;

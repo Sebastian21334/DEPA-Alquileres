@@ -29,6 +29,7 @@ export type PagoExterno = {
   status?: string;
   status_detail?: string;
   payment_method_id?: string;
+  payment_type_id?: string;
   date_approved?: string;
   refunds?: ResultadoReembolsoExterno[];
 };

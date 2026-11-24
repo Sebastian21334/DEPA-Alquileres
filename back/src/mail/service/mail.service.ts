@@ -151,12 +151,11 @@ export class MailService implements IMailService {
       `<p style="margin:0 0 16px">Hola <strong>${this.plantillas.escapar(detalle.nombreDestinatario)}</strong>, recibiste una nueva reserva con el pago acreditado.</p>
        ${this.plantillas.detalleReserva(detalle)}
        <div style="margin:20px 0;padding:16px;border-radius:10px;background:#eef4ff;border:1px solid #c7d7fe;color:#163a70">
-         <strong>Datos del huésped</strong><br>
-         ${this.plantillas.escapar(detalle.nombreContraparte)}<br>
-         ${detalle.emailContraparte ? this.plantillas.escapar(detalle.emailContraparte) : 'Correo no informado'} · ${detalle.telefonoContraparte ? this.plantillas.escapar(detalle.telefonoContraparte) : 'Teléfono no informado'}
+         <strong>Huésped</strong><br>
+         ${this.plantillas.escapar(detalle.nombreContraparte)}
        </div>
        ${this.plantillas.boton('Ver reserva y contactar', enlace)}
-       ${this.plantillas.avisoContacto()}`,
+       <p style="margin:16px 0 0">Para comunicarte con el huésped, usá el chat de DEPA en el detalle de la reserva.</p>`,
       `${detalle.nombreContraparte} reservó ${detalle.titulo}.`,
     );
   }

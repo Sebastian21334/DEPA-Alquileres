@@ -188,6 +188,8 @@ export class OperacionesPagoService {
       ? await this.reservasService.buscarParaAdministracion(idReserva)
       : await this.reservasService.buscarPorId(idReserva, idUsuario);
     const pago = await this.pagos.buscarPorReserva(idReserva, false);
+    const importeRegistrado = Number(pago?.amount_refunded ?? 0);
+    const devolucion = pago && importeRegistrado > 0 ? await this.resumirDevolucion(pago, importeRegistrado) : null;
     return {
       reserva,
       puede_reintentar: !esAdmin && this.puedeReintentar(reserva, pago, idUsuario),
@@ -198,6 +200,7 @@ export class OperacionesPagoService {
             status: pago.status,
             status_detail: pago.status_detail,
             amount: Number(pago.amount),
+            devolucion,
             currency: pago.currency,
             payment_method_id: pago.payment_method_id,
             approved_at: pago.approved_at,
@@ -205,6 +208,13 @@ export class OperacionesPagoService {
           }
         : null,
     };
+  }
+
+  private async resumirDevolucion(pago: Pago, importeRegistrado: number): Promise<{ reembolsado: number; simulado: number; sinDevolver: number }> {
+    const simulado = Math.min(importeRegistrado, await this.reembolsosService.importeSimuladoPorPago(pago.id));
+    const reembolsado = Math.round((importeRegistrado - simulado) * 100) / 100;
+    const sinDevolver = Math.max(0, Math.round((Number(pago.amount) - reembolsado) * 100) / 100);
+    return { reembolsado, simulado: Math.round(simulado * 100) / 100, sinDevolver };
   }
 
   async reintentarCheckout(idReserva: number, idUsuario: number) {

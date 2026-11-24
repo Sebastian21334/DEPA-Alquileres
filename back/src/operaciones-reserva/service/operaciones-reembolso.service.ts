@@ -3,7 +3,7 @@ import { ReembolsosService } from '../../reembolsos/service/reembolsos.service';
 import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { ReclamosService } from '../../reclamos/service/reclamos.service';
-import { OrigenReembolso } from '../../reembolsos/entity/reembolso.entity';
+import { OrigenReembolso, type Reembolso } from '../../reembolsos/entity/reembolso.entity';
 
 @Injectable()
 export class OperacionesReembolsoService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -30,8 +30,8 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
     return this.aplicarReembolsoConfirmado(id);
   }
 
-  async pasarATransferencia(id: number) {
-    return { reembolso: await this.reembolsos.pasarATransferencia(id) };
+  habilitarTransferenciaFallida(id: number): Promise<Reembolso> {
+    return this.reembolsos.habilitarTransferenciaFallida(id);
   }
 
   async aplicarReembolsoConfirmado(id: number) {
@@ -42,8 +42,10 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
     });
     const reembolso = await this.reembolsos.buscar(id);
     if (aplicada) {
-      const asunto = aplicada.cancelada ? 'Reserva cancelada y devolución registrada' : 'Devolución registrada';
-      await this.notificaciones?.avisarCambio(aplicada, ['inquilino', 'anunciante'], asunto, 'La devolución del pago quedó registrada. Consultá el estado de la reserva en DEPA.');
+      const simulada = this.reembolsos.esSimulado(reembolso);
+      const asunto = simulada ? 'Cancelación con devolución simulada' : aplicada.cancelada ? 'Reserva cancelada y devolución registrada' : 'Devolución registrada';
+      const mensaje = simulada ? 'La devolución con tarjeta fue simulada para pruebas; no se transfirió dinero.' : 'La devolución del pago quedó registrada. Consultá el estado de la reserva en DEPA.';
+      await this.notificaciones?.avisarCambio(aplicada, ['inquilino', 'anunciante'], asunto, mensaje);
     }
     return { reembolso, reserva: aplicada ?? reembolso.reserva };
   }
@@ -66,6 +68,21 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
   private async conciliar(): Promise<void> {
     try {
       await this.reembolsos.reconciliarPendientes();
+      let desdeId = 0;
+      for (;;) {
+        const automaticos = await this.reembolsos.listarCancelacionesAutomaticasPendientes(desdeId);
+        if (!automaticos.length) break;
+        for (const { id } of automaticos) {
+          desdeId = id;
+          try {
+            const reembolso = await this.reembolsos.ejecutarCancelacionAutomatica(id);
+            if (this.reembolsos.estaAprobado(reembolso)) await this.aplicarReembolsoConfirmado(id);
+          } catch {
+            this.logger.warn(`No se pudo procesar el reembolso automático ${id}; se revisará en la próxima conciliación`);
+          }
+        }
+        if (automaticos.length < 50) break;
+      }
       const pendientes = await this.reembolsos.listarPendientesAplicacion(this.ultimoIdAplicacion);
       this.ultimoIdAplicacion = pendientes.at(-1)?.id ?? 0;
       for (const { id } of pendientes) {

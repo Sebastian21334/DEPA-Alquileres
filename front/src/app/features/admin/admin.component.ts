@@ -65,7 +65,7 @@ import { fechaArgentina } from '../../shared/utils/rental-dates';
 import { DesglosePagoComponent } from '../../shared/components/desglose-pago/desglose-pago.component';
 import { formatearImporteConMoneda } from '../../shared/utils/formato-numero';
 import {
-  admitePasarATransferencia, apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
+  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_CANCELACION, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
   FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
   textosBloqueo, textosCancelacion, textosLiquidacion, textosPagoLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
   tieneDevolucion,
@@ -162,7 +162,9 @@ export class AdminComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  protected readonly navigation = ADMIN_NAVIGATION;
+  protected readonly navigation = computed(() => ADMIN_NAVIGATION.map(group => ({
+    ...group, items: group.items.filter(item => item.id !== 'cancelaciones' || this.cancellations().length > 0),
+  })));
   protected readonly activeSection = signal<AdminSection>('resumen');
   protected readonly sectionDescription = computed(() => SECTION_DESCRIPTIONS[this.activeSection()]);
   protected readonly historialLiquidaciones = signal<AdminPagoLiquidacion[]>([]);
@@ -175,7 +177,7 @@ export class AdminComponent {
   protected readonly resolucionError = signal('');
   protected motivoResolucion = '';
   protected readonly sectionLabel = computed(() =>
-    this.navigation.flatMap(({ items }) => [...items]).find(({ id }) => id === this.activeSection())?.label ?? 'Resumen',
+    ADMIN_NAVIGATION.flatMap(({ items }) => [...items]).find(({ id }) => id === this.activeSection())?.label ?? 'Resumen',
   );
   private readonly api = inject(AdminService);
   private readonly toast = inject(ToastService);
@@ -751,38 +753,41 @@ export class AdminComponent {
   }
 
   protected puedeSolicitarReembolso(reembolso: AdminReembolso): boolean {
-    return !reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
+    return !reembolso.referencia_interna?.startsWith('auto-can:') &&
+      !reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
   }
 
   protected puedeConciliarReembolso(reembolso: AdminReembolso): boolean {
     return !reembolso.transferencia_manual && !!reembolso.pago?.payment_id && (reembolso.estado === 'FALLIDO' || reembolso.estado === 'EN_PROCESO');
   }
 
+  protected puedeHabilitarTransferencia(reembolso: AdminReembolso): boolean {
+    return reembolso.estado === 'FALLIDO' && !reembolso.transferencia_manual && reembolso.origen !== 'CONTRACARGO';
+  }
+
+  protected habilitarTransferenciaReembolso(reembolso: AdminReembolso): void {
+    if (!this.puedeHabilitarTransferencia(reembolso) || this.guardandoReembolso()) return;
+    this.errorReembolso.set('');
+    this.guardandoReembolso.set(true);
+    this.api.habilitarTransferenciaReembolso(reembolso.id)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
+      .subscribe({
+        next: (actualizado) => {
+          this.reembolsoSeleccionado.set(actualizado);
+          this.referenciaReembolso = '';
+          this.toast.mostrar('Transferencia habilitada. Coordiná la devolución desde el chat.', 'exito');
+          this.reload();
+        },
+        error: (error: Error) => this.errorReembolso.set(error.message),
+      });
+  }
+
   protected puedeRegistrarTransferencia(reembolso: AdminReembolso): boolean {
     return !!reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE';
   }
 
-  protected readonly admitePasarATransferencia = admitePasarATransferencia;
   /** Mismo formato que el desglose que va debajo, para que no se mezclen «ARS4.00» y «ARS 4,00». */
   protected readonly importeConMoneda = formatearImporteConMoneda;
-
-  /** Habilita el chat y el comprobante; la devolución se registra después, como cualquier transferencia. */
-  protected pasarATransferencia(reembolso: AdminReembolso): void {
-    if (this.guardandoReembolso() || !admitePasarATransferencia(reembolso)) return;
-    this.errorReembolso.set('');
-    this.guardandoReembolso.set(true);
-    this.api.pasarATransferenciaReembolso(reembolso.id)
-      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
-      .subscribe({
-        next: ({ reembolso: actualizado }) => {
-          this.reembolsoSeleccionado.set(actualizado);
-          this.referenciaReembolso = '';
-          this.toast.mostrar('La devolución sigue por transferencia. Pedile el CBU al inquilino por el chat.', 'exito');
-          this.reload();
-        },
-        error: (e: Error) => this.errorReembolso.set(e.message),
-      });
-  }
 
   protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
     const referencia = this.referenciaReembolso.trim();
