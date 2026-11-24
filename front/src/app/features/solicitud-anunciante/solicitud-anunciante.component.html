@@ -108,7 +108,7 @@
               </section>
 
               <div class="terminos-consentimiento">
-                <label><input type="checkbox" formControlName="aceptaTerminos" /> <span>Leí y acepto los <a routerLink="/terminos/anunciantes" target="_blank" rel="noopener">términos y condiciones para anunciantes</a>.</span></label>
+                <label class="check-field"><input type="checkbox" formControlName="aceptaTerminos" /> <span>Leí y acepto los <a routerLink="/terminos/anunciantes" target="_blank" rel="noopener">términos y condiciones para anunciantes</a>.</span></label>
                 @if (form.controls.aceptaTerminos.invalid && form.controls.aceptaTerminos.touched) {
                   <span class="acct-hint acct-hint--error" role="alert">Aceptá los términos para continuar.</span>
                 }
