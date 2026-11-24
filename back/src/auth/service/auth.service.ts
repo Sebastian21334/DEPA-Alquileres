@@ -17,7 +17,7 @@ import { LoginDto } from '../dto/login.dto';
 import { CambiarContraseniaDto } from '../dto/cambiar-contrasenia.dto';
 import type { RestablecerContraseniaDto } from '../dto/restablecer-contrasenia.dto';
 import type { SolicitarReactivacionDto } from '../dto/solicitar-reactivacion.dto';
-import type { IMailService } from '../../mail/mail.interface';
+import type { IMailCuenta } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
 
 const AUDIENCIA_BLOQUEO = 'depa:apelacion-bloqueo';
@@ -27,7 +27,7 @@ const AUDIENCIA_REACTIVACION = 'depa:solicitar-reactivacion';
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  constructor(private readonly usuariosService: UsuariosService, private readonly credencialesService: UsuariosCredencialesService, private readonly jwtService: JwtService, @Inject(MAIL_SERVICE) private readonly mailService: IMailService) {}
+  constructor(private readonly usuariosService: UsuariosService, private readonly credencialesService: UsuariosCredencialesService, private readonly jwtService: JwtService, @Inject(MAIL_SERVICE) private readonly mailService: IMailCuenta) {}
 
   /** Registra un usuario nuevo, genera el token de verificación y dispara el mail. */
   async register(dto: RegisterDto, origen?: string) {

@@ -2,19 +2,7 @@ import type { ParticipacionEnReserva } from '../../common/persistence/participac
 import { Reserva } from '../entity/reserva.entity';
 import { ReprogramacionReserva } from '../entity/reprogramacion-reserva.entity';
 import type { EntityManager } from 'typeorm';
-
-export interface EstadosOperacionesReserva {
-  pagoPendiente: string;
-  pagoAprobado: string;
-  liquidacionesResueltas: string[];
-  enRevision: string;
-}
-
-export interface OperacionesReservaPendientes {
-  reservasPendientes: number;
-  estadiasVigentes: number;
-  liquidacionesPendientes: number;
-}
+import type { EstadosOperacionesReserva, OperacionesReservaPendientes } from '../dto/operaciones-pendientes-cuenta.dto';
 
 export interface ConsultaReservasAcceso {
   idPublicacion: number;

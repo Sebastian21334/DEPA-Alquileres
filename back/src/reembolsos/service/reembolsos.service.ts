@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   BadRequestException,
@@ -31,6 +32,10 @@ import {
 } from '../repository/reembolsos.repository.interface';
 
 const PLAZO_REINTENTOS_SIN_ID_MS = 15 * 60_000;
+
+/** Intento de devolución reservado antes de llamar a la pasarela. */
+type IntentoReembolso = Pick<Reembolso, 'id' | 'importe' | 'idempotency_key' | 'id_externo'> & { vigencia: Date };
+type RespuestaReembolsoPasarela = Awaited<ReturnType<MercadoPagoService['reembolsar']>>;
 
 export type CrearReembolsoDatos = {
   reserva: Reserva;
@@ -216,7 +221,7 @@ export class ReembolsosService {
   /** Enlace firmado del comprobante, solo para el admin y el inquilino de la reserva. */
   async urlComprobante(id: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
     const comprobante = await this.reembolsos.buscarComprobante(id);
-    const autorizado = actor.rol === 'Administrador' || comprobante?.idInquilino === actor.id;
+    const autorizado = actor.rol === ROL.ADMINISTRADOR || comprobante?.idInquilino === actor.id;
     if (!comprobante || !autorizado || !comprobante.url)
       throw new NotFoundException('Comprobante no encontrado');
     if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
@@ -226,7 +231,7 @@ export class ReembolsosService {
   async conversar(id: number, actor: { id: number; rol?: string }, despuesDe: number, texto?: string) {
     if (despuesDe < 0 || despuesDe > 2_147_483_647)
       throw new BadRequestException('El identificador del mensaje es inválido');
-    const administracion = actor.rol === 'Administrador';
+    const administracion = actor.rol === ROL.ADMINISTRADOR;
     return this.reembolsos.conTransaccion(async repo => {
       const reembolso = await repo.buscarPorId(id);
       if (!reembolso?.transferencia_manual || (!administracion && reembolso.reserva?.usuario?.id !== actor.id))
@@ -399,8 +404,32 @@ export class ReembolsosService {
     const paymentId = reembolso.pago.payment_id;
     if (!paymentId) throw new ConflictException('El pago no tiene identificador de Mercado Pago');
 
-    const intento = await this.reembolsos.conTransaccion(async (repo) => {
-      const actual = await repo.buscarRegistro(reembolso.id, { bloquear: true, idsRelaciones: true });
+    const intento = await this.reservarIntento(reembolso.id, idActor, conciliacion);
+    if (!intento) return this.buscar(reembolso.id);
+    try {
+      const importe = Number(intento.importe);
+      const total = Number(reembolso.pago.amount_refunded) === 0 && importe === Number(reembolso.pago.amount);
+      const resultado = intento.id_externo
+        ? await this.pasarela.consultarReembolso(paymentId, intento.id_externo)
+        : await this.pasarela.reembolsar(paymentId, importe, intento.idempotency_key, total);
+      const { idExterno, rechazoDefinitivo } = this.validarRespuestaPasarela(resultado, intento, paymentId, total);
+      const vigente = await this.registrarRespuestaPasarela(intento, idExterno, rechazoDefinitivo);
+      if (vigente && resultado.status === 'approved' && idExterno)
+        return await this.confirmar(intento.id, { referencia: idExterno, idActor, idExterno });
+      return this.buscar(intento.id);
+    } catch (error) {
+      await this.marcarIntentoFallido(intento);
+      throw error;
+    }
+  }
+
+  /**
+   * Toma el reembolso bloqueado y lo pasa a EN_PROCESO con una vigencia corta.
+   * Devuelve null si no corresponde llamar a la pasarela.
+   */
+  private async reservarIntento(id: number, idActor: number | null, conciliacion: boolean): Promise<IntentoReembolso | null> {
+    return this.reembolsos.conTransaccion(async (repo) => {
+      const actual = await repo.buscarRegistro(id, { bloquear: true, idsRelaciones: true });
       if (!actual) throw new NotFoundException('Reembolso no encontrado');
       if (actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'APROBADO')) return null;
       if (actual.transferencia_manual) {
@@ -436,56 +465,57 @@ export class ReembolsosService {
       return { id: actual.id, importe: actual.importe, idempotency_key: actual.idempotency_key,
         id_externo: actual.id_externo, vigencia };
     });
+  }
 
-    if (!intento) return this.buscar(reembolso.id);
-    try {
-      const importe = Number(intento.importe);
-      const total = Number(reembolso.pago.amount_refunded) === 0 && importe === Number(reembolso.pago.amount);
-      const resultado = intento.id_externo
-        ? await this.pasarela.consultarReembolso(paymentId, intento.id_externo)
-        : await this.pasarela.reembolsar(paymentId, importe, intento.idempotency_key, total);
-      const rechazoDefinitivo = ['rejected', 'cancelled', 'failed'].includes(resultado.status ?? '');
-      const idExterno = resultado.id == null ? intento.id_externo : String(resultado.id);
-      if ((!idExterno && !rechazoDefinitivo) || (intento.id_externo && intento.id_externo !== idExterno))
-        throw new ConflictException('La pasarela no confirmó el identificador del reembolso');
-      if ((((total && !rechazoDefinitivo) || resultado.amount != null) && !(Math.abs(Number(resultado.amount) - importe) <= TOLERANCIA_MONETARIA)) ||
-          (resultado.payment_id != null && String(resultado.payment_id) !== paymentId))
-        throw new ConflictException('La devolución informada no coincide con la solicitud');
-      const vigente = await this.reembolsos.conTransaccion(async (repo) => {
-        const actual = await repo.buscarRegistro(intento.id, { bloquear: true });
-        if (!actual) return false;
-        if (actual.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') ||
-            actual.conciliar_en?.getTime() !== intento.vigencia.getTime()) return false;
-        if (actual.id_externo && actual.id_externo !== idExterno)
-          throw new ConflictException('La pasarela informó otro identificador para el mismo reembolso');
-        await repo.actualizar(actual.id, {
-          id_externo: idExterno,
-          referencia_externa: idExterno,
-          ...(rechazoDefinitivo ? {
-            estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
-            transferencia_manual: true,
-            conciliar_en: null,
-            error_detalle: 'Mercado Pago rechazó el reembolso. Continuá por transferencia.',
-          } : {}),
-        });
-        return true;
+  /** La respuesta debe identificar la devolución y coincidir con el pago y el importe pedidos. */
+  private validarRespuestaPasarela(resultado: RespuestaReembolsoPasarela, intento: IntentoReembolso, paymentId: string, total: boolean): { idExterno: string | null; rechazoDefinitivo: boolean } {
+    const importe = Number(intento.importe);
+    const rechazoDefinitivo = ['rejected', 'cancelled', 'failed'].includes(resultado.status ?? '');
+    const idExterno = resultado.id == null ? intento.id_externo : String(resultado.id);
+    if ((!idExterno && !rechazoDefinitivo) || (intento.id_externo && intento.id_externo !== idExterno))
+      throw new ConflictException('La pasarela no confirmó el identificador del reembolso');
+    if ((((total && !rechazoDefinitivo) || resultado.amount != null) && !(Math.abs(Number(resultado.amount) - importe) <= TOLERANCIA_MONETARIA)) ||
+        (resultado.payment_id != null && String(resultado.payment_id) !== paymentId))
+      throw new ConflictException('La devolución informada no coincide con la solicitud');
+    return { idExterno, rechazoDefinitivo };
+  }
+
+  /** Guarda la respuesta si el intento sigue vigente; un rechazo definitivo deriva a transferencia. */
+  private async registrarRespuestaPasarela(intento: IntentoReembolso, idExterno: string | null, rechazoDefinitivo: boolean): Promise<boolean> {
+    return this.reembolsos.conTransaccion(async (repo) => {
+      const actual = await repo.buscarRegistro(intento.id, { bloquear: true });
+      if (!actual || !this.intentoVigente(actual, intento)) return false;
+      if (actual.id_externo && actual.id_externo !== idExterno)
+        throw new ConflictException('La pasarela informó otro identificador para el mismo reembolso');
+      await repo.actualizar(actual.id, {
+        id_externo: idExterno,
+        referencia_externa: idExterno,
+        ...(rechazoDefinitivo ? {
+          estado: this.catalogos.codigoEstado('REEMBOLSO', 'PENDIENTE'),
+          transferencia_manual: true,
+          conciliar_en: null,
+          error_detalle: 'Mercado Pago rechazó el reembolso. Continuá por transferencia.',
+        } : {}),
       });
-      if (vigente && resultado.status === 'approved' && idExterno)
-        return await this.confirmar(intento.id, { referencia: idExterno, idActor, idExterno });
-      return this.buscar(intento.id);
-    } catch (error) {
-      await this.reembolsos.conTransaccion(async (repo) => {
-        const actual = await repo.buscarRegistro(intento.id, { bloquear: true });
-        if (!actual) return;
-        if (actual.estado !== this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') ||
-            actual.conciliar_en?.getTime() !== intento.vigencia.getTime()) return;
-        await repo.actualizar(actual.id, {
-          estado: this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
-          error_detalle: 'No se pudo confirmar el resultado de Mercado Pago',
-        });
+      return true;
+    });
+  }
+
+  private async marcarIntentoFallido(intento: IntentoReembolso): Promise<void> {
+    await this.reembolsos.conTransaccion(async (repo) => {
+      const actual = await repo.buscarRegistro(intento.id, { bloquear: true });
+      if (!actual || !this.intentoVigente(actual, intento)) return;
+      await repo.actualizar(actual.id, {
+        estado: this.catalogos.codigoEstado('REEMBOLSO', 'FALLIDO'),
+        error_detalle: 'No se pudo confirmar el resultado de Mercado Pago',
       });
-      throw error;
-    }
+    });
+  }
+
+  /** Sigue siendo el mismo intento: en proceso y con la vigencia que se le asignó. */
+  private intentoVigente(actual: Reembolso, intento: IntentoReembolso): boolean {
+    return actual.estado === this.catalogos.codigoEstado('REEMBOLSO', 'EN_PROCESO') &&
+      actual.conciliar_en?.getTime() === intento.vigencia.getTime();
   }
 
   private async confirmar(id: number, datos: { referencia: string; idActor: number | null; idExterno: string | null; transferencia?: boolean; comprobante?: ComprobanteSubido; observacion?: string | null; alGuardarComprobante?: () => void }): Promise<Reembolso> {

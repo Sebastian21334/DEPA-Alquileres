@@ -138,97 +138,9 @@
   .blocked-user__details > div + div { border-left: 0; }
 }
 
-.management {
-  overflow: visible;
-}
-// Se mantiene el recorte que antes aplicaba .panel por orden de cascada.
-.panel.management {
-  overflow: hidden;
-}
-.catalog-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
-  padding: 22px;
-}
-.location-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18px;
-  padding: 22px;
-}
-.catalog-card {
-  min-width: 0;
-  padding: 18px;
-  border: 1px solid #dfe6ea;
-  border-radius: 12px;
-  background: #fff;
-}
-.catalog-card h3 {
-  margin: 0 0 14px;
-  font-size: 1rem;
-}
 .button--primary {
   background: #e14414;
   color: white;
-}
-.crud-list {
-  max-height: 260px;
-  overflow: auto;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid #edf0f2;
-}
-.crud-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 45px;
-  padding: 8px 3px;
-  border-bottom: 1px solid #edf0f2;
-  font-size: 0.88rem;
-}
-.crud-list li > span:first-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.location-name {
-  min-width: 0;
-  padding: 0;
-  overflow-wrap: anywhere;
-  border: 0;
-  background: transparent;
-  color: #102a3a;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.crud-list .selected {
-  margin: 0 -3px;
-  padding-inline: 8px;
-  border-radius: 7px;
-  background: #edf3ff;
-}
-.empty-row {
-  justify-content: center;
-  color: #71818a;
-}
-@media (max-width: 1000px) {
-  .catalog-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 700px) {
-  .catalog-grid,
-  .location-grid {
-    grid-template-columns: 1fr;
-    padding: 14px;
-  }
-}
-.link-button:disabled {
-  opacity: 0.5;
-  cursor: wait;
 }
 .button--light {
   background: white;
@@ -330,72 +242,11 @@ dd {
   gap: 9px;
   margin-top: 18px;
 }
-.settlement-history-caption {
-  text-align: left;
-}
-.settlement-history td {
-  vertical-align: top;
-  overflow-wrap: anywhere;
-}
-.settlement-history {
-  padding: 0 12px 12px;
-  color: #142441;
-}
-.settlement-history-caption {
-  padding: 20px 8px;
-  font-size: 1.05rem;
-  font-weight: 750;
-}
-.settlement-history__table { table-layout: fixed; }
-.settlement-history__table th {
-  padding: 12px 10px;
-  background: #edf2f7;
-  color: #62738d;
-  font-size: .68rem;
-  letter-spacing: 0;
-}
-.settlement-history__table th:first-child { width: 13%; border-radius: 8px 0 0 8px; }
-.settlement-history__table th:nth-child(2) { width: 18%; }
-.settlement-history__table th:nth-child(3) { width: 14%; }
-.settlement-history__table th:nth-child(4) { width: 13%; }
-.settlement-history__table th:nth-child(5) { width: 26%; }
-.settlement-history__table th:last-child { width: 16%; border-radius: 0 8px 8px 0; }
-.settlement-history__table td { padding: 16px 10px; font-size: .82rem; line-height: 1.35; }
-.settlement-history__table tbody tr:last-child td { border-bottom: 0; }
-.settlement-history__date { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
-.settlement-history__date svg { flex: none; color: #8295ae; }
-.settlement-history__time { margin-top: 5px; color: #74849a; }
-.settlement-history__reservation { display: inline-block; padding: 3px 8px; border-radius: 6px; background: #fff0e3; color: #f17800; font-size: .9rem; font-weight: 750; }
-.settlement-history__publication { display: block; margin-top: 5px; }
-.settlement-history__amount { font-weight: 750; white-space: nowrap; }
-.settlement-history .settlement-note { margin: 5px 0 0; padding: 6px 9px; background: #fff2df; white-space: pre-wrap; }
-@media (max-width: 800px) {
-  .settlement-history__table, .settlement-history__table tbody, .settlement-history__table tr, .settlement-history__table td { display: block; width: 100%; }
-  .settlement-history__table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .settlement-history__table tr { padding: 14px 8px; border-bottom: 1px solid #edf0f2; }
-  .settlement-history__table tr:last-child { border-bottom: 0; }
-  .settlement-history__table td { padding: 6px 0; border: 0; }
-  .settlement-history__table td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: #62738d; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
-}
-.link-button {
-  border: 0;
-  background: transparent;
-  color: #b12d19;
-  font-weight: 750;
-  cursor: pointer;
-}
 
 @media (max-width: 700px) {
   .responsive-table .link-button { min-height: 44px; padding-inline: 12px; }
-  .request, .settlement-card, .catalog-card { overflow-wrap: anywhere; }
+  .request, .settlement-card { overflow-wrap: anywhere; }
   .requests { grid-template-columns: minmax(0, 1fr); }
-}
-// Barra de búsqueda y filtros, y paginador de cada lista.
-.admin-filtros { padding: 18px 24px 0; }
-.admin-paginador { display: block; padding: 0 24px 24px; }
-@media (max-width: 700px) {
-  .admin-filtros { padding: 14px 14px 0; }
-  .admin-paginador { padding: 0 14px 14px; }
 }
 .settlement-list {
   display: grid;
@@ -441,15 +292,7 @@ dd {
 .claim-card > .actions { margin-top: 0; }
 .claim-card .button--ghost { border: 1px solid #10233f; color: #10233f; }
 .button--resolve-claim { background: #081b38; color: #fff; }
-.settlement-note { max-width: 700px; padding: 9px 11px; border-radius: 7px; background: #fff7e8; }.alert {
-  margin: 18px 0;
-  padding: 12px 16px;
-  border-radius: 9px;
-}
-.alert--error {
-  color: #9e2020;
-  background: #ffeded;
-}
+
 @media (max-width: 700px) {
   .requests {
     grid-template-columns: 1fr;
@@ -475,11 +318,9 @@ dd {
 .refund-chat[open] { padding-bottom: 12px; }
 .refund-chat summary { padding: 10px 0; color: #172b45; font-weight: 650; cursor: pointer; }
 .refund-dialog label .muted { font-weight: 400; }
-.settlement-history__reference { margin: 4px 0 0; }
 .refund-data { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem 1rem; margin: 0; }
 .refund-data dt { font-size: .85rem; }
 .refund-data dd { margin: .2rem 0 0; font-weight: 650; }
 .refund-reason { grid-column: 1 / -1; padding: .75rem; border-radius: 8px; background: #f4f6f8; }
 .refund-reason dd { white-space: pre-wrap; }
 .refund-dialog input, .refund-dialog textarea { box-sizing: border-box; width: 100%; padding: .65rem .75rem; border: 1px solid #9baab4; border-radius: 8px; font: inherit; }
-.refund-error { color: #a12525; }

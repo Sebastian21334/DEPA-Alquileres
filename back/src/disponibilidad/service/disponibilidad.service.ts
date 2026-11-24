@@ -14,7 +14,7 @@ import { FECHA_REPOSITORY } from '../repository/fecha.repository.interface';
 import { FechaDisponibilidadPublicaDto } from '../dto/fecha-disponibilidad-publica.dto';
 import { FechaDisponibilidadAdministracionDto } from '../dto/fecha-disponibilidad-administracion.dto';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
-import { diasDeAntelacion, esFechaCalendarioValida } from '../../common/utils/fechas';
+import { diasDeAntelacion, diasInclusivos, esFechaCalendarioValida } from '../../common/utils/fechas';
 import { Reserva } from '../../reservas/entity/reserva.entity';
 
 const MAX_DIAS_POR_RANGO = 366;
@@ -220,10 +220,7 @@ export class DisponibilidadService {
 
     // Si falta aunque sea una fila, el anunciante nunca habilito todo el rango
     // solicitado y la reserva debe rechazarse aunque las filas existentes esten libres.
-    const diasEsperados =
-      Math.floor(
-        (fechaFin.getTime() - fechaInicio.getTime()) / (1000 * 60 * 60 * 24),
-      ) + 1;
+    const diasEsperados = diasInclusivos(fechaInicio, fechaFin);
 
     // Tener menos filas que días pedidos significa que el rango nunca fue habilitado completo.
     if (fechas.length !== diasEsperados) return false;
@@ -282,8 +279,7 @@ export class DisponibilidadService {
       fechaInicio,
       fechaFin,
     );
-    const diasEsperados =
-      Math.floor((fechaFin.getTime() - fechaInicio.getTime()) / 86_400_000) + 1;
+    const diasEsperados = diasInclusivos(fechaInicio, fechaFin);
     if (nuevasFechas.length !== diasEsperados) return false;
     if (!nuevasFechas.every(({ reserva, disponible }) =>
       reserva ? reserva.id === idReserva : disponible,

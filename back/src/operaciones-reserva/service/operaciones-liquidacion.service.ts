@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import {
   Injectable,
@@ -231,7 +232,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
   /** Enlace firmado del comprobante del pago, solo para el admin y el anunciante de la reserva. */
   async urlComprobantePago(idReserva: number, indice: number, actor: { id: number; rol?: string }): Promise<{ url: string }> {
     const comprobante = await this.liquidaciones.buscarComprobantePago(idReserva, indice);
-    const autorizado = actor.rol === 'Administrador' || (comprobante?.idAnunciante != null && comprobante.idAnunciante === actor.id);
+    const autorizado = actor.rol === ROL.ADMINISTRADOR || (comprobante?.idAnunciante != null && comprobante.idAnunciante === actor.id);
     if (!comprobante || !autorizado) throw new NotFoundException('Comprobante no encontrado');
     if (!this.almacenamiento) throw new Error('Falta el almacenamiento de comprobantes');
     return { url: await this.almacenamiento.firmarComprobante(comprobante.url) };

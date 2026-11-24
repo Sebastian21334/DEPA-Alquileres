@@ -1,4 +1,4 @@
-import { type IMailService, MAIL_SERVICE } from '../../mail/mail.interface';
+import { type IMailVerificacionAnunciante, MAIL_SERVICE } from '../../mail/mail.interface';
 import {
   type IVerificacionRepository,
   VERIFICACION_REPOSITORY,
@@ -27,7 +27,7 @@ import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
 import { SolicitudVerificacion } from '../entity/solicitud-verificacion.entity';
 
 import { RechazarVerificacionDto } from '../dto/rechazar-verificacion.dto';
-import { PruebaVidaService } from './prueba-vida.service';
+import { PruebaVidaService, type VerificacionPayload } from './prueba-vida.service';
 import type { RevisarVerificacionDto } from '../dto/revisar-verificacion.dto';
 import { PreparacionImagenesService } from '../../almacenamiento/service/preparacion-imagenes.service';
 import { EliminacionDocumentosService } from './eliminacion-documentos.service';
@@ -36,11 +36,22 @@ import {
   type SolicitudVerificacionRespuestaDto,
 } from '../dto/solicitud-verificacion-respuesta.dto';
 
+/** Archivos que entrega FileFieldsInterceptor para la presentación de identidad. */
+type ArchivosVerificacion = Partial<Record<'dni_frente' | 'dni_dorso' | 'rostro' | 'matricula' | 'constancia_cuit', Express.Multer.File[]>>;
+
+interface PresentacionDocumentos {
+  frente: Express.Multer.File;
+  dorso: Express.Multer.File;
+  rostro: Express.Multer.File;
+  /** Solo las inmobiliarias presentan matrícula y constancia de CUIT. */
+  constancias: { matricula: Express.Multer.File; constanciaCuit: Express.Multer.File } | null;
+}
+
 @Injectable()
 export class VerificacionAnuncianteService {
   private readonly logger = new Logger(VerificacionAnuncianteService.name);
 
-  constructor(private readonly anunciantesService: AnunciantesService, private readonly usuariosService: UsuariosService, private readonly catalogosService: CatalogosService, @Inject(VERIFICACION_REPOSITORY) private readonly verificacionRepo: IVerificacionRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailService, private readonly almacenamientoService: AlmacenamientoService, private readonly pruebaVidaService: PruebaVidaService, private readonly eliminacionDocumentos: EliminacionDocumentosService, private readonly preparacionImagenes: PreparacionImagenesService) {}
+  constructor(private readonly anunciantesService: AnunciantesService, private readonly usuariosService: UsuariosService, private readonly catalogosService: CatalogosService, @Inject(VERIFICACION_REPOSITORY) private readonly verificacionRepo: IVerificacionRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailVerificacionAnunciante, private readonly almacenamientoService: AlmacenamientoService, private readonly pruebaVidaService: PruebaVidaService, private readonly eliminacionDocumentos: EliminacionDocumentosService, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
   /** Guarda los datos como borrador y evita que un usuario tenga dos solicitudes. */
   async solicitarAlta(idUsuario: number, dto: SolicitarAnuncianteDto) {
@@ -203,9 +214,40 @@ export class VerificacionAnuncianteService {
   }
 
   /** Carga y valida los tres documentos obligatorios de identidad. */
-  async subirDocumentos(idUsuario: number, archivos: { dni_frente?: Express.Multer.File[]; dni_dorso?: Express.Multer.File[]; rostro?: Express.Multer.File[]; matricula?: Express.Multer.File[]; constancia_cuit?: Express.Multer.File[]; }, verificationToken: string, reenvio = false) {
-    // Se recupera la solicitud vigente y se impide modificar una ya aprobada.
+  async subirDocumentos(idUsuario: number, archivos: ArchivosVerificacion, verificationToken: string, reenvio = false) {
     const solicitud = await this.obtenerSolicitud(idUsuario);
+    const presentacion = this.validarPresentacion(solicitud, archivos, reenvio);
+
+    // La autorización está firmada y ligada al hash exacto de la captura final:
+    // no se puede reemplazar por un archivo elegido después de superar la prueba.
+    const autorizacion =
+      await this.pruebaVidaService.verificarCapturaAutorizada(
+        idUsuario,
+        verificationToken,
+        presentacion.rostro.buffer,
+      );
+    const comprobarAutorizacion = (actual: SolicitudVerificacion | null) =>
+      this.autorizacionVigente(actual, autorizacion, reenvio);
+    await this.verificacionRepo.conSolicitudBloqueada(
+      idUsuario,
+      async (actual) => {
+        comprobarAutorizacion(actual);
+      },
+    );
+
+    const guardada = await this.guardarPresentacion(
+      idUsuario,
+      presentacion,
+      reenvio,
+      comprobarAutorizacion,
+    );
+    await this.avisarSolicitudParaRevision(solicitud);
+    return this.respuestaSolicitud(guardada);
+  }
+
+  /** Comprueba que la solicitud admita documentos y que lleguen los archivos que corresponden a su tipo. */
+  private validarPresentacion(solicitud: SolicitudVerificacion, archivos: ArchivosVerificacion, reenvio: boolean): PresentacionDocumentos {
+    // Se impide modificar una solicitud ya aprobada.
     if (solicitud.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada')) {
       throw new ConflictException('La identidad ya fue aprobada');
     }
@@ -217,11 +259,11 @@ export class VerificacionAnuncianteService {
 
     const esEmpresa =
       this.catalogosService.esInmobiliaria(solicitud.anunciante.tipoAnunciante);
+    const matricula = archivos.matricula?.[0];
+    const constanciaCuit = archivos.constancia_cuit?.[0];
     if (
       esEmpresa &&
-      (!this.tieneDatosInmobiliaria(solicitud) ||
-        !archivos.matricula?.[0] ||
-        !archivos.constancia_cuit?.[0])
+      (!this.tieneDatosInmobiliaria(solicitud) || !matricula || !constanciaCuit)
     ) {
       throw new BadRequestException(
         'La inmobiliaria debe completar sus datos y adjuntar matrícula y constancia de CUIT',
@@ -236,9 +278,9 @@ export class VerificacionAnuncianteService {
       );
     }
     // FileFieldsInterceptor entrega cada archivo dentro de un arreglo.
-    const frente = archivos?.dni_frente?.[0];
-    const dorso = archivos?.dni_dorso?.[0];
-    const rostro = archivos?.rostro?.[0];
+    const frente = archivos.dni_frente?.[0];
+    const dorso = archivos.dni_dorso?.[0];
+    const rostro = archivos.rostro?.[0];
     if (!frente || !dorso || !rostro) {
       throw new BadRequestException(
         'Se requieren las capturas de DNI frente, DNI dorso y rostro',
@@ -254,69 +296,60 @@ export class VerificacionAnuncianteService {
         'Las tres fotos deben capturarse en el momento desde la cámara.',
       );
     }
-
-    // La autorización está firmada y ligada al hash exacto de la captura final:
-    // no se puede reemplazar por un archivo elegido después de superar la prueba.
-    const autorizacion =
-      await this.pruebaVidaService.verificarCapturaAutorizada(
-        idUsuario,
-        verificationToken,
-        rostro.buffer,
-      );
-    const comprobarAutorizacion = (actual: SolicitudVerificacion | null) => {
-      if (
-        !actual ||
-        actual.id !== autorizacion.solicitudId ||
-        !this.pruebaVidaService.puedeRecibirDocumentos(actual, reenvio) ||
-        !this.pruebaVidaService.autorizacionPruebaVidaVigente(
-          actual,
-          autorizacion.jti,
-          autorizacion.revision,
-          autorizacion.livePhotoHash,
-        )
-      )
-        throw new ConflictException(
-          'La autorización de prueba de vida venció, fue utilizada o pertenece a otra revisión',
-        );
-      return actual;
+    return {
+      frente,
+      dorso,
+      rostro,
+      constancias: esEmpresa && matricula && constanciaCuit
+        ? { matricula, constanciaCuit }
+        : null,
     };
-    await this.verificacionRepo.conSolicitudBloqueada(
-      idUsuario,
-      async (actual) => {
-        comprobarAutorizacion(actual);
-      },
-    );
+  }
 
-    // El almacenamiento externo queda fuera del bloqueo. Antes de confirmar
-    // se verifica otra vez la autorización y se consume en la misma transacción.
+  /** La autorización debe seguir vigente para la misma revisión y la misma captura. */
+  private autorizacionVigente(actual: SolicitudVerificacion | null, autorizacion: VerificacionPayload, reenvio: boolean): SolicitudVerificacion {
+    if (
+      !actual ||
+      actual.id !== autorizacion.solicitudId ||
+      !this.pruebaVidaService.puedeRecibirDocumentos(actual, reenvio) ||
+      !this.pruebaVidaService.autorizacionPruebaVidaVigente(
+        actual,
+        autorizacion.jti,
+        autorizacion.revision,
+        autorizacion.livePhotoHash,
+      )
+    )
+      throw new ConflictException(
+        'La autorización de prueba de vida venció, fue utilizada o pertenece a otra revisión',
+      );
+    return actual;
+  }
+
+  /**
+   * El almacenamiento externo queda fuera del bloqueo. Antes de confirmar
+   * se verifica otra vez la autorización y se consume en la misma transacción.
+   */
+  private async guardarPresentacion(idUsuario: number, presentacion: PresentacionDocumentos, reenvio: boolean, comprobarAutorizacion: (actual: SolicitudVerificacion | null) => SolicitudVerificacion): Promise<SolicitudVerificacion> {
     const subidos: string[] = [];
     let confirmacionIniciada = false;
-    let guardada: SolicitudVerificacion;
     try {
       for (const [archivo, nombre] of [
-        [frente, 'dni-frente'],
-        [dorso, 'dni-dorso'],
-        [rostro, 'rostro'],
+        [presentacion.frente, 'dni-frente'],
+        [presentacion.dorso, 'dni-dorso'],
+        [presentacion.rostro, 'rostro'],
       ] as const)
         subidos.push(await this.subirDocumento(archivo, idUsuario, nombre));
-      if (esEmpresa) {
+      const { constancias } = presentacion;
+      if (constancias) {
         subidos.push(
-          await this.subirConstancia(
-            archivos.matricula![0],
-            idUsuario,
-            'matricula',
-          ),
+          await this.subirConstancia(constancias.matricula, idUsuario, 'matricula'),
         );
         subidos.push(
-          await this.subirConstancia(
-            archivos.constancia_cuit![0],
-            idUsuario,
-            'constancia-cuit',
-          ),
+          await this.subirConstancia(constancias.constanciaCuit, idUsuario, 'constancia-cuit'),
         );
       }
       confirmacionIniciada = true;
-      guardada = await this.verificacionRepo.conSolicitudBloqueada(
+      return await this.verificacionRepo.conSolicitudBloqueada(
         idUsuario,
         async (actual, persistencia) => {
           const vigente = comprobarAutorizacion(actual);
@@ -329,7 +362,7 @@ export class VerificacionAnuncianteService {
             },
             reenvio,
           );
-          if (esEmpresa) {
+          if (constancias) {
             if (!this.tieneDatosInmobiliaria(vigente))
               throw new ConflictException('Faltan datos de la inmobiliaria');
             vigente.matricula_url = subidos[3];
@@ -354,6 +387,10 @@ export class VerificacionAnuncianteService {
       }
       throw error;
     }
+  }
+
+  /** El aviso a administración no debe deshacer una presentación ya guardada. */
+  private async avisarSolicitudParaRevision(solicitud: SolicitudVerificacion): Promise<void> {
     try {
       const { nombre, email } = this.anunciantesService.datosContacto(
         solicitud.anunciante,
@@ -373,7 +410,6 @@ export class VerificacionAnuncianteService {
         error as Error,
       );
     }
-    return this.respuestaSolicitud(guardada);
   }
 
   /** Solo una resolución administrativa habilita a publicar. */

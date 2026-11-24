@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { Body, Controller, DefaultValuePipe, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard, PermitirAccesoLimitado, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import { RolesGuard } from '../../seguridad/guards/roles.guard';
@@ -11,13 +12,13 @@ export class ReembolsosController {
   constructor(private readonly reembolsosService: ReembolsosService) {}
 
   @Get('administracion')
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   listar() {
     return this.reembolsosService.listarAdministracion();
   }
 
   @Get('administracion/resumen')
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   resumen() {
     return this.reembolsosService.resumenAdministracion();
   }

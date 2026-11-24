@@ -1,0 +1,53 @@
+@use './admin-shared';
+
+:host {
+  display: block;
+}
+.settlement-history-caption {
+  text-align: left;
+}
+.settlement-history td {
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.settlement-history {
+  padding: 0 12px 12px;
+  color: #142441;
+}
+.settlement-history-caption {
+  padding: 20px 8px;
+  font-size: 1.05rem;
+  font-weight: 750;
+}
+.settlement-history__table { table-layout: fixed; }
+.settlement-history__table th {
+  padding: 12px 10px;
+  background: #edf2f7;
+  color: #62738d;
+  font-size: .68rem;
+  letter-spacing: 0;
+}
+.settlement-history__table th:first-child { width: 13%; border-radius: 8px 0 0 8px; }
+.settlement-history__table th:nth-child(2) { width: 18%; }
+.settlement-history__table th:nth-child(3) { width: 14%; }
+.settlement-history__table th:nth-child(4) { width: 13%; }
+.settlement-history__table th:nth-child(5) { width: 26%; }
+.settlement-history__table th:last-child { width: 16%; border-radius: 0 8px 8px 0; }
+.settlement-history__table td { padding: 16px 10px; font-size: .82rem; line-height: 1.35; }
+.settlement-history__table tbody tr:last-child td { border-bottom: 0; }
+.settlement-history__date { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.settlement-history__date svg { flex: none; color: #8295ae; }
+.settlement-history__time { margin-top: 5px; color: #74849a; }
+.settlement-history__reservation { display: inline-block; padding: 3px 8px; border-radius: 6px; background: #fff0e3; color: #f17800; font-size: .9rem; font-weight: 750; }
+.settlement-history__publication { display: block; margin-top: 5px; }
+.settlement-history__amount { font-weight: 750; white-space: nowrap; }
+.settlement-history .settlement-note { margin: 5px 0 0; padding: 6px 9px; background: #fff2df; white-space: pre-wrap; }
+@media (max-width: 800px) {
+  .settlement-history__table, .settlement-history__table tbody, .settlement-history__table tr, .settlement-history__table td { display: block; width: 100%; }
+  .settlement-history__table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .settlement-history__table tr { padding: 14px 8px; border-bottom: 1px solid #edf0f2; }
+  .settlement-history__table tr:last-child { border-bottom: 0; }
+  .settlement-history__table td { padding: 6px 0; border: 0; }
+  .settlement-history__table td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: #62738d; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+}
+.settlement-history__reference { margin: 4px 0 0; }

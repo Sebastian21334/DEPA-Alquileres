@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { Body, Controller, Get, Header, Param, ParseIntPipe, Patch, Req, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ComprobanteInterceptor } from '../../almacenamiento/comprobante.interceptor';
 import { JwtAuthGuard, PermitirAccesoLimitado, type AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
@@ -12,14 +13,14 @@ export class LiquidacionesReservaController {
   constructor(private readonly liquidacionesService: OperacionesLiquidacionService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @Get('liquidaciones/administracion')
   listarLiquidacionesAdministracion() {
     return this.liquidacionesService.listarLiquidacionesAdministracion();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @Get('liquidaciones/administracion/historial')
   listarPagosRegistrados() {
     return this.liquidacionesService.listarPagosRegistrados();
@@ -41,7 +42,7 @@ export class LiquidacionesReservaController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @Get(':id/liquidacion/cbu')
   @Header('Cache-Control', 'no-store')
   consultarCbuParaPago(@Param('id', ParseIntPipe) id: number) {
@@ -50,7 +51,7 @@ export class LiquidacionesReservaController {
 
   /** Multipart con el comprobante obligatorio (`comprobante`), la referencia y la observación opcionales. */
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @Patch(':id/liquidacion/pago')
   @UseInterceptors(ComprobanteInterceptor())
   registrarPagoAnunciante(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarTransferenciaDto, @UploadedFile() comprobante: Express.Multer.File | undefined, @Req() req: AuthenticatedRequest) {
@@ -67,7 +68,7 @@ export class LiquidacionesReservaController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @Patch(':id/liquidacion')
   resolverLiquidacion(@Param('id', ParseIntPipe) id: number, @Body() dto: ResolverLiquidacionDto, @Req() req: AuthenticatedRequest) {
     return this.liquidacionesService.resolverLiquidacion(id, dto, req.user.id);

@@ -1,3 +1,4 @@
+import { formatearEntero } from '../../utils/formato-numero';
 import { Component, EventEmitter, Output, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
@@ -69,11 +70,11 @@ export class ListingCardComponent {
   }
 
   protected get precioFormateado(): string {
-    return Number(this.publicacion().precio).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    return formatearEntero(Number(this.publicacion().precio));
   }
 
   protected get superficie(): string {
-    return Number(this.publicacion().superficie).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    return formatearEntero(Number(this.publicacion().superficie));
   }
 
   protected get esTemporaria(): boolean {

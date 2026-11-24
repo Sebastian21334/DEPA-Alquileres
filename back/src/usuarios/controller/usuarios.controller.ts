@@ -1,3 +1,4 @@
+import { ROL } from '../../catalogos/codigos-catalogo';
 import {
   BadRequestException,
   Controller,
@@ -43,14 +44,14 @@ export class UsuariosController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   listarTodos() {
     return this.usuariosService.listarTodos();
   }
 
   @Get('administracion')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   listarAdministracion(@Query(new ValidationPipe({ transform: true })) consulta: ListarAdministracionDto) {
     return this.usuariosService.listarAdministracion(consulta);
   }
@@ -58,7 +59,7 @@ export class UsuariosController {
   @Get('administracion/bloqueados')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   listarBloqueados() {
     return this.usuariosService.listarBloqueados();
   }
@@ -66,7 +67,7 @@ export class UsuariosController {
   @Get('administracion/historial-bloqueos')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   listarHistorialBloqueos() {
     return this.usuariosService.listarHistorialBloqueos();
   }
@@ -74,14 +75,14 @@ export class UsuariosController {
   @Get('administracion/:id')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   obtenerPerfilAdministracion(@Param('id', ParseIntPipe) id: number) {
     return this.usuariosService.obtenerPerfil(id);
   }
 
   @Post(':id/bloqueo/responder')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   responderApelacion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true })) dto: ResponderApelacionDto, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto);
   }
@@ -89,7 +90,7 @@ export class UsuariosController {
   @Post(':id/bloqueo/mensajes')
   @Header('Cache-Control', 'no-store')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   @UseInterceptors(FileInterceptor('imagen', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   enviarMensajeApelacion(@Param('id', ParseIntPipe) id: number, @Body(new ValidationPipe({ transform: true })) dto: ResponderApelacionDto, @Req() req: AuthenticatedRequest, @UploadedFile() archivo?: Express.Multer.File) {
     return this.usuariosService.responderApelacion(id, dto.bloqueoId, req.user.id, dto.texto, archivo);
@@ -166,7 +167,7 @@ export class UsuariosController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   eliminar(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
     return this.usuariosService.eliminar(id, req.user.id);
   }

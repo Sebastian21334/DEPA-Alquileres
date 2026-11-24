@@ -1,3 +1,4 @@
+import { MS_POR_DIA } from '../utils/rental-dates';
 import { Pipe, PipeTransform } from '@angular/core';
 
 @Pipe({ name: 'relativeTime', standalone: true, pure: true })
@@ -11,7 +12,7 @@ export class RelativeTimePipe implements PipeTransform {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     published.setHours(0, 0, 0, 0);
-    const days = Math.max(0, Math.floor((today.getTime() - published.getTime()) / 86_400_000));
+    const days = Math.max(0, Math.floor((today.getTime() - published.getTime()) / MS_POR_DIA));
 
     if (days === 0) return 'Publicado hoy';
     if (days === 1) return 'Publicado ayer';
