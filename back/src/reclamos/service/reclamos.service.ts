@@ -208,12 +208,15 @@ export class ReclamosService {
     return this.imagenesRespuesta(guardadas);
   }
 
-  /** El mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
-  async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, esAdmin: boolean, archivos: Express.Multer.File[] = []): Promise<MensajeReclamoRespuesta> {
-    const reclamo = await this.buscarComoParticipante(id, idUsuario, esAdmin);
+  /**
+   * El mensaje puede llevar imágenes; con imágenes, el texto es opcional. `comoAdministracion` indica que se escribe
+   * desde el panel de Administración; desde el chat de las partes, un admin participa con su rol en la reserva.
+   */
+  async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, comoAdministracion: boolean, archivos: Express.Multer.File[] = []): Promise<MensajeReclamoRespuesta> {
+    const reclamo = await this.buscarComoParticipante(id, idUsuario, comoAdministracion);
     this.verificarNoCerrado(reclamo);
     const visibilidad = dto.visible_para ?? VisibilidadMensajeReclamo.TODOS;
-    if (visibilidad === VisibilidadMensajeReclamo.ADMIN && !esAdmin)
+    if (visibilidad === VisibilidadMensajeReclamo.ADMIN && !comoAdministracion)
       throw new ForbiddenException('Solo el Administrador puede dejar notas internas');
     // Las imágenes de un mensaje las ven todas las partes: una nota interna no puede llevarlas.
     if (visibilidad === VisibilidadMensajeReclamo.ADMIN && archivos.length)
@@ -223,17 +226,17 @@ export class ReclamosService {
       throw new BadRequestException('Escribí un mensaje o adjuntá al menos una imagen');
     const subidas = archivos.length ? await this.subirImagenes(reclamo, await this.prepararImagenes(id, archivos)) : [];
     const { mensaje, evidencias } = await this.guardarConImagenes(id, subidas, async (reclamos, vigente) => {
-      if (esAdmin && vigente.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
+      if (comoAdministracion && vigente.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
         await reclamos.guardar({ id, estado: this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION') });
       }
-      const guardado = await reclamos.guardarMensaje({ reclamo, autor: referenciaUsuario(idUsuario), texto, visible_para: visibilidad });
+      const guardado = await reclamos.guardarMensaje({ reclamo, autor: referenciaUsuario(idUsuario), texto, visible_para: visibilidad, como_administracion: comoAdministracion });
       return {
         mensaje: guardado,
         evidencias: subidas.length ? await reclamos.guardarEvidencias(this.evidenciasDe(reclamo, subidas, guardado.autor, guardado)) : [],
       };
     });
     if (visibilidad === VisibilidadMensajeReclamo.TODOS)
-      await this.notificaciones?.avisarCambio(reclamo.reserva, esAdmin ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', idUsuario);
+      await this.notificaciones?.avisarCambio(reclamo.reserva, comoAdministracion ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', idUsuario);
     return this.mensajeRespuesta(mensaje, await this.imagenesRespuesta(evidencias));
   }
 
@@ -478,7 +481,7 @@ export class ReclamosService {
   }
 
   private mensajeRespuesta(mensaje: ReclamoMensaje, evidencias: ImagenReclamo[]): MensajeReclamoRespuesta {
-    return { id: mensaje.id, texto: mensaje.texto, visible_para: mensaje.visible_para, creado_en: mensaje.creado_en, autor: autorRespuesta(mensaje.autor), evidencias };
+    return { id: mensaje.id, texto: mensaje.texto, visible_para: mensaje.visible_para, como_administracion: mensaje.como_administracion, creado_en: mensaje.creado_en, autor: autorRespuesta(mensaje.autor), evidencias };
   }
 
   private imagenesRespuesta(evidencias: ReclamoEvidencia[]): Promise<ImagenReclamo[]> {

@@ -253,6 +253,8 @@ export interface ReclamoMensaje {
   id: number;
   texto: string;
   visible_para: 'TODOS' | 'ADMIN';
+  /** Se escribió desde el panel de Administración. */
+  como_administracion: boolean;
   creado_en: string;
   autor?: AutorReclamo | null;
   /** Imágenes enviadas con este mensaje. */
@@ -368,8 +370,9 @@ export class ReservationService {
     return this.http.post<ReclamoEvidencia[]>(`${environment.apiUrl}/reclamos/${id}/evidencias`, datos);
   }
 
-  claimMessages(id: number): Observable<ReclamoMensaje[]> {
-    return this.http.get<ReclamoMensaje[]>(`${environment.apiUrl}/reclamos/${id}/mensajes`);
+  /** Desde Administración, el chat completo con las notas internas; desde Mis reservas, el de las partes. */
+  claimMessages(id: number, desdeAdministracion = false): Observable<ReclamoMensaje[]> {
+    return this.http.get<ReclamoMensaje[]>(`${environment.apiUrl}/reclamos/${id}/mensajes${desdeAdministracion ? '/administracion' : ''}`);
   }
 
   sendClaimMessage(id: number, texto: string, imagenes: readonly File[] = []): Observable<ReclamoMensaje> {

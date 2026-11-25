@@ -846,6 +846,29 @@ test('la migración del motivo lo toma del reembolso, ignora los textos por defe
   }
 });
 
+test('la migración marca como de Administración los mensajes de quien no es parte de la reserva y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261125-mensajes-reclamo-administracion.sql'), 'utf8');
+  const anterior = new PGlite();
+  try {
+    await anterior.exec(`CREATE TABLE reclamo_reserva (id_reclamo integer PRIMARY KEY, id_inquilino integer NOT NULL, id_anunciante integer);
+      CREATE TABLE reclamo_mensaje (id_mensaje_reclamo integer PRIMARY KEY, id_reclamo integer NOT NULL, id_autor integer NOT NULL);
+      INSERT INTO reclamo_reserva VALUES (1, 1, 2), (2, 3, NULL);
+      INSERT INTO reclamo_mensaje VALUES (1, 1, 1), (2, 1, 2), (3, 1, 3), (4, 2, 3), (5, 2, 4);`);
+    await anterior.exec(migracion);
+    const marcados = async () => (await anterior.query('SELECT id_mensaje_reclamo, como_administracion FROM reclamo_mensaje ORDER BY 1')).rows
+      .map(({ id_mensaje_reclamo, como_administracion }) => [id_mensaje_reclamo, como_administracion]);
+    // Las partes conservan su rol aunque su cuenta sea de administrador; quien no es parte escribió desde Administración.
+    assert.deepEqual(await marcados(), [[1, false], [2, false], [3, true], [4, false], [5, true]]);
+    // Repetirla no desmarca un mensaje que una parte escribió después desde Administración.
+    await anterior.exec('UPDATE reclamo_mensaje SET como_administracion = true WHERE id_mensaje_reclamo = 4');
+    await anterior.exec(migracion);
+    assert.deepEqual(await marcados(), [[1, false], [2, false], [3, true], [4, true], [5, true]]);
+  } finally {
+    await anterior.close();
+  }
+});
+
 test('la migración repara los nombres de archivo leídos como latin1, conserva los bien guardados y se puede repetir', async () => {
   const { PGlite } = require('@electric-sql/pglite');
   const migracion = readFileSync(path.join(__dirname, '../migrations/20261124-nombres-archivos-utf8.sql'), 'utf8');
@@ -1828,6 +1851,28 @@ test('las notas internas de reclamos solo se entregan al administrador', async (
   assert.doesNotMatch(avisos[0][3], /Respuesta pública/);
 });
 
+test('un admin que es parte de la reserva escribe con su rol desde su chat y como Admin desde Administración', async () => {
+  const avisos = [];
+  reclamos.notificaciones = { avisarCambio: async (...args) => avisos.push(args) };
+  const { reserva } = await escenario();
+  // El usuario 3 es administrador y, en este reclamo, también el inquilino.
+  const reclamo = await source.getRepository(Reclamo).save({
+    reserva, inquilino: { id: 3 }, anunciante: { id: 2 }, categoria: 'OTRO', descripcion: 'Reclamo de prueba',
+  });
+  const estado = async () => (await source.getRepository(Reclamo).findOneBy({ id: reclamo.id })).estado;
+  const comoParte = await reclamos.enviarMensaje(reclamo.id, { texto: 'Escribo como inquilino' }, 3, false);
+  // Desde su chat no interviene la administración: el reclamo sigue abierto y se avisa también al admin.
+  assert.deepEqual([comoParte.como_administracion, await estado(), avisos[0][1]], [false, 'ABIERTO', ['inquilino', 'anunciante', 'admin']]);
+  await assert.rejects(reclamos.enviarMensaje(reclamo.id, { texto: 'Nota', visible_para: 'ADMIN' }, 3, false), /Solo el Administrador/);
+  const comoAdmin = await reclamos.enviarMensaje(reclamo.id, { texto: 'Respondo desde Administración' }, 3, true);
+  assert.deepEqual([comoAdmin.como_administracion, await estado()], [true, 'EN_REVISION']);
+  assert.deepEqual((await reclamos.obtener(reclamo.id, 2, false)).mensajes.map(({ texto, como_administracion }) => [texto, como_administracion]), [
+    ['Escribo como inquilino', false], ['Respondo desde Administración', true],
+  ]);
+  // Un admin que no es parte no puede usar el chat de las partes.
+  await assert.rejects(reclamos.enviarMensaje(reclamo.id, { texto: 'Hola' }, 4, false), /No formás parte/);
+});
+
 /** Servicio de reclamos con almacenamiento de prueba, para subir imágenes. */
 function reclamosConImagenes() {
   const { almacenamiento, archivos } = almacenamientoDePrueba();
@@ -2666,8 +2711,20 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       .attach('evidencias', (await imagenPng()).buffer, 'pileta.png').expect(201);
     assert.deepEqual([conImagen.texto, conImagen.evidencias.length, Object.hasOwn(conImagen, 'reclamo')], ['', 1, false]);
     await request(http).post(rutaMensajes).set('Authorization', tenant).send({ texto: '   ' }).expect(400);
-    const { body: soloTexto } = await request(http).post(rutaMensajes).set('Authorization', admin).send({ texto: 'Recibido' }).expect(201);
-    assert.deepEqual(soloTexto.evidencias, []);
+    assert.equal(conImagen.como_administracion, false);
+    // El admin responde desde Administración: el chat de las partes es solo para ellas, y la ruta de Administración, solo para el admin.
+    await request(http).post(rutaMensajes).set('Authorization', admin).send({ texto: 'Recibido' }).expect(403);
+    await request(http).post(`${rutaMensajes}/administracion`).set('Authorization', tenant).send({ texto: 'Recibido' }).expect(403);
+    const { body: soloTexto } = await request(http).post(`${rutaMensajes}/administracion`).set('Authorization', admin).send({ texto: 'Recibido' }).expect(201);
+    assert.deepEqual([soloTexto.evidencias, soloTexto.como_administracion], [[], true]);
+    // Las lecturas también se separan: el admin lee por Administración, con las notas internas, y las partes, por su chat.
+    await request(http).post(`${rutaMensajes}/administracion`).set('Authorization', admin).send({ texto: 'Nota interna', visible_para: 'ADMIN' }).expect(201);
+    await request(http).get(rutaMensajes).set('Authorization', admin).expect(403);
+    await request(http).get(`/reclamos/${abierto.id}`).set('Authorization', admin).expect(403);
+    await request(http).get(`${rutaMensajes}/administracion`).set('Authorization', tenant).expect(403);
+    const { body: leidosAdmin } = await request(http).get(`${rutaMensajes}/administracion`).set('Authorization', admin).expect(200);
+    const { body: leidosParte } = await request(http).get(rutaMensajes).set('Authorization', tenant).expect(200);
+    assert.deepEqual([leidosAdmin.length, leidosParte.map(({ texto }) => texto)], [3, ['', 'Recibido']]);
     const rutaResolver = `/reclamos/${abierto.id}/resolver`;
     await request(http).patch(rutaResolver).set('Authorization', tenant)
       .send({ resolucion: 'DEVOLUCION_TOTAL', observacion: 'Pedido del inquilino' }).expect(403);

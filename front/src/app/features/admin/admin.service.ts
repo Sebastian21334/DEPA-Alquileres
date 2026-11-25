@@ -277,7 +277,7 @@ export class AdminService {
     return this.http.get<Reclamo[]>(`${this.api}/reclamos/administracion`);
   }
   responderReclamo(id: number, texto: string, imagenes: readonly File[] = []) {
-    return this.http.post<ReclamoMensaje>(`${this.api}/reclamos/${id}/mensajes`, cuerpoMensajeReclamo(texto, imagenes));
+    return this.http.post<ReclamoMensaje>(`${this.api}/reclamos/${id}/mensajes/administracion`, cuerpoMensajeReclamo(texto, imagenes));
   }
   resolverReclamo(id: number, resolucion: NonNullable<Reclamo['resolucion']>, importe?: number, observacion?: string) {
     return this.http.patch<Reclamo>(`${this.api}/reclamos/${id}/resolver`, {

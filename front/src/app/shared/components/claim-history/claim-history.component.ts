@@ -5,9 +5,9 @@ import { Component, computed, effect, inject, input, output, PLATFORM_ID, signal
 import { RouterLink } from '@angular/router';
 import { EMPTY, catchError, exhaustMap, timer } from 'rxjs';
 import { ReservationService } from '../../services/reservation.service';
-import type { AutorReclamo, ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
+import type { ParticipanteReclamo, Reclamo, ReclamoEvidencia, ReclamoMensaje } from '../../services/reservation.service';
 import { puedeValidarCodigo } from '../../utils/reservation-state';
-import { rolEnReclamo } from '../../utils/reclamo-rol';
+import { etiquetaAutorReclamo, rolEnReclamo } from '../../utils/reclamo-rol';
 import { CATEGORIAS_RECLAMO, etiquetaCategoriaReclamo } from '../../utils/reclamo-categorias';
 
 /** Mismo ritmo que los chats de mensajes y de reembolsos. */
@@ -231,17 +231,9 @@ export class ClaimHistoryComponent {
     return [usuario?.nombre, usuario?.apellido].map((nombre) => nombre?.trim().charAt(0)).join('').toUpperCase() || '?';
   }
 
-  private rolDe(autor?: AutorReclamo | null): string {
-    if (!autor) return '';
-    if (autor.rol?.nombre === 'Administrador') return 'Admin';
-    if (autor.id === this.reclamo().inquilino?.id) return 'Inquilino';
-    if (autor.id === this.reclamo().anunciante?.id) return 'Anunciante';
-    return '';
-  }
-
   /** Cada imagen dice quién la subió. */
   protected autorImagen(imagen: ReclamoEvidencia): string {
-    const rol = this.rolDe(imagen.autor);
+    const rol = etiquetaAutorReclamo(this.reclamo(), imagen.autor);
     return [this.nombreCompleto(imagen.autor) || 'un usuario', rol].filter(Boolean).join(' · ');
   }
 
@@ -278,9 +270,10 @@ export class ClaimHistoryComponent {
         this.mensajesRecibidos.set([]);
       }
       if (!this.esNavegador || !this.abierto() || !this.actualizar()) return;
+      const administracion = this.administracion();
       const consulta = timer(INTERVALO_CHAT_MS, INTERVALO_CHAT_MS).pipe(
         // Un fallo puntual no corta la actualización: se reintenta en el próximo intervalo.
-        exhaustMap(() => this.reservas.claimMessages(id).pipe(catchError(() => EMPTY))),
+        exhaustMap(() => this.reservas.claimMessages(id, administracion).pipe(catchError(() => EMPTY))),
       ).subscribe(mensajes => this.mensajesRecibidos.set(mensajes));
       onCleanup(() => consulta.unsubscribe());
     });
@@ -293,7 +286,7 @@ export class ClaimHistoryComponent {
     .map(mensaje => ({
       id: mensaje.id, autor: this.nombreCompleto(mensaje.autor) || 'Usuario',
       texto: mensaje.texto, fecha: mensaje.creado_en,
-      rol: this.rolDe(mensaje.autor), interno: mensaje.visible_para === 'ADMIN',
+      rol: etiquetaAutorReclamo(this.reclamo(), mensaje.autor, mensaje.como_administracion), interno: mensaje.visible_para === 'ADMIN',
       propio: mensaje.autor?.id === Number(this.auth.currentUser()?.sub),
       imagenes: (mensaje.evidencias ?? []).map((imagen) => ({ url: this.urlImagen(imagen), nombre: imagen.nombre_archivo })),
     })));

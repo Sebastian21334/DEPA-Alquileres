@@ -61,7 +61,8 @@
     "db:fechas-con-zona-horaria": "node scripts/fechas-con-zona-horaria.cjs --aplicar",
     "db:vencimiento-verificacion": "node scripts/vencimiento-verificacion.cjs --aplicar",
     "db:motivo-resolucion-reclamo": "node scripts/motivo-resolucion-reclamo.cjs --aplicar",
-    "db:nombres-archivos-utf8": "node scripts/nombres-archivos-utf8.cjs --aplicar"
+    "db:nombres-archivos-utf8": "node scripts/nombres-archivos-utf8.cjs --aplicar",
+    "db:mensajes-reclamo-administracion": "node scripts/mensajes-reclamo-administracion.cjs --aplicar"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",

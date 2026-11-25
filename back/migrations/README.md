@@ -331,3 +331,13 @@ ya guardados, ejecutar `node scripts/nombres-archivos-utf8.cjs` (solo informa cu
 `npm run db:nombres-archivos-utf8` desde `back`. La migración `20261124-nombres-archivos-utf8.sql`
 corrige `reembolso.comprobante_nombre`, `reclamo_evidencia.nombre_archivo` y el `comprobanteNombre` de
 cada pago en `liquidacion.pagos_anunciante`. Es reejecutable: un nombre bien guardado queda igual.
+
+# Mensajes de reclamos escritos desde Administración
+
+Antes de iniciar esta versión del backend, ejecutar `npm run db:mensajes-reclamo-administracion` desde
+`back` (también después de inicializar una base nueva). La migración
+`20261125-mensajes-reclamo-administracion.sql` agrega `reclamo_mensaje.como_administracion`, que indica
+si el mensaje se escribió desde el panel de Administración. El chat del reclamo muestra «Admin» solo en
+esos mensajes: un administrador que es inquilino o anunciante de la reserva aparece con ese rol cuando
+escribe desde su propio chat. Los mensajes anteriores se marcan según su autor: los de quien no es parte
+de la reserva quedan como escritos desde Administración. Es reejecutable.

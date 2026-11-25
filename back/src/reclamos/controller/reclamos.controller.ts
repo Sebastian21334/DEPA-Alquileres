@@ -66,50 +66,50 @@ export class ReclamosController {
     return this.reclamosService.listarAdministracion();
   }
 
+  // Las rutas sin `/administracion` son de las partes: quien las usa participa con su rol en la reserva,
+  // aunque su cuenta sea de administrador, y no ve las notas internas.
   @PermitirAccesoLimitado()
   @Get(':id')
   obtener(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
-    return this.reclamosService.obtener(
-      id,
-      req.user.id,
-      req.user.rol === ROL.ADMINISTRADOR,
-    );
+    return this.reclamosService.obtener(id, req.user.id, false);
   }
 
   @PermitirAccesoLimitado()
   @Post(':id/evidencias')
   @UseInterceptors(EVIDENCIAS_INTERCEPTOR)
   subirEvidencias(@Param('id', ParseIntPipe) id: number, @UploadedFiles() archivos: Express.Multer.File[], @Req() req: AuthenticatedRequest) {
-    return this.reclamosService.subirEvidencias(
-      id,
-      req.user.id,
-      req.user.rol === ROL.ADMINISTRADOR,
-      archivos,
-    );
+    return this.reclamosService.subirEvidencias(id, req.user.id, false, archivos);
   }
 
   @PermitirAccesoLimitado()
   @Get(':id/mensajes')
   listarMensajes(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
-    return this.reclamosService.listarMensajes(
-      id,
-      req.user.id,
-      req.user.rol === ROL.ADMINISTRADOR,
-    );
+    return this.reclamosService.listarMensajes(id, req.user.id, false);
   }
 
-  /** JSON con solo texto, o multipart con texto opcional e imágenes en `evidencias`. */
+  /** El chat completo, con las notas internas, para el panel de Administración. */
+  @UseGuards(RolesGuard)
+  @Roles(ROL.ADMINISTRADOR)
+  @Get(':id/mensajes/administracion')
+  listarMensajesAdministracion(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
+    return this.reclamosService.listarMensajes(id, req.user.id, true);
+  }
+
+  /** Chat de las partes: JSON con solo texto, o multipart con texto opcional e imágenes en `evidencias`. */
   @PermitirAccesoLimitado()
   @Post(':id/mensajes')
   @UseInterceptors(EVIDENCIAS_INTERCEPTOR)
   enviarMensaje(@Param('id', ParseIntPipe) id: number, @Body() dto: EnviarMensajeReclamoDto, @UploadedFiles() archivos: Express.Multer.File[] | undefined, @Req() req: AuthenticatedRequest) {
-    return this.reclamosService.enviarMensaje(
-      id,
-      dto,
-      req.user.id,
-      req.user.rol === ROL.ADMINISTRADOR,
-      archivos ?? [],
-    );
+    return this.reclamosService.enviarMensaje(id, dto, req.user.id, false, archivos ?? []);
+  }
+
+  /** El mismo chat desde el panel de Administración: el mensaje se muestra como del Admin. */
+  @UseGuards(RolesGuard)
+  @Roles(ROL.ADMINISTRADOR)
+  @Post(':id/mensajes/administracion')
+  @UseInterceptors(EVIDENCIAS_INTERCEPTOR)
+  responderComoAdministracion(@Param('id', ParseIntPipe) id: number, @Body() dto: EnviarMensajeReclamoDto, @UploadedFiles() archivos: Express.Multer.File[] | undefined, @Req() req: AuthenticatedRequest) {
+    return this.reclamosService.enviarMensaje(id, dto, req.user.id, true, archivos ?? []);
   }
 
   @UseGuards(RolesGuard)

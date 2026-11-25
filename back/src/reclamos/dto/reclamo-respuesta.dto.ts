@@ -24,6 +24,8 @@ export interface MensajeReclamoRespuesta {
   id: number;
   texto: string;
   visible_para: VisibilidadMensajeReclamo;
+  /** Se escribió desde el panel de Administración: el autor se muestra como Admin y no con su rol en la reserva. */
+  como_administracion: boolean;
   creado_en: Date;
   autor: AutorReclamo | null;
   evidencias: ImagenReclamo[];

@@ -45,6 +45,10 @@ export class ReclamoMensaje {
   })
   visible_para: VisibilidadMensajeReclamo;
 
+  // Se escribió desde el panel de Administración; un admin que es parte de la reserva escribe como parte desde su chat.
+  @Column({ name: 'como_administracion', type: 'boolean', default: false })
+  como_administracion: boolean;
+
   @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' })
   creado_en: Date;
 
