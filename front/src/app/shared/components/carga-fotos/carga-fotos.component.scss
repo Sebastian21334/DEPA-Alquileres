@@ -15,7 +15,7 @@
 .drop--deshabilitada input { cursor: not-allowed; }
 .drop strong { font-size: 1.05rem; }
 .drop > span { font-size: 0.88rem; color: var(--color-text-muted); }
-.drop__icon { color: var(--color-accent); transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.drop__icon { color: var(--color-accent); transition: transform 0.35s var(--ease-rebote); }
 .drop:hover .drop__icon, .drop.is-dragging .drop__icon { transform: translateY(-5px) scale(1.12); }
 .drop--deshabilitada:hover .drop__icon { transform: none; }
 .drop .drop__btn {

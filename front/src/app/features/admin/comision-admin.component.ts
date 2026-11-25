@@ -2,13 +2,14 @@ import { Component, DestroyRef, effect, inject, input, signal, untracked } from 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ToastService } from '../../core/services/toast.service';
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { AdminService } from './admin.service';
 
 /** Comisión de DEPA aplicable a nuevas reservas. Se consulta cada vez que se abre la sección. */
 @Component({
   selector: 'app-comision-admin',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, EsqueletoListaComponent],
   templateUrl: './comision-admin.component.html',
   styleUrl: './comision-admin.component.scss',
 })

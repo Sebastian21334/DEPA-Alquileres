@@ -77,3 +77,6 @@
 @media (max-width: 640px) {
   .modalidades--map .modalidad-btn { min-height: 32px; padding-inline: .52rem; font-size: .75rem; }
 }
+
+/* Al pasar de la lista al mapa (y al volver), la vista nueva entra con un fundido. */
+app-mapa-publicaciones, app-listing-grid { display: block; animation: depa-fade-in var(--motion-lenta) ease backwards; }

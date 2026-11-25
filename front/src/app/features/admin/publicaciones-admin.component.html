@@ -20,12 +20,12 @@
     </div>
   </div>
   @if (publicationsLoading()) {
-    <p class="empty">Cargando publicaciones…</p>
+    <app-esqueleto-lista [cantidad]="5" etiqueta="Cargando publicaciones…" />
   } @else {
     <div class="table-wrap">
       <table class="responsive-table" role="table">
         <thead><tr><th>Publicación</th><th>Anunciante</th><th>Estado</th><th class="right">Acciones</th></tr></thead>
-        <tbody>
+        <tbody class="lista-escalonada">
           @for (publication of publications(); track publication.id) {
             <tr>
               <td data-label="Publicación"><strong>{{ publication.titulo }}</strong><small>#{{ publication.id }} · {{ publication.direccion }}</small></td>

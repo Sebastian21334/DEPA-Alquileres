@@ -15,7 +15,7 @@ import {
   ReprogramacionReserva,
   Reclamo,
 } from '../../shared/services/reservation.service';
-import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
@@ -33,7 +33,7 @@ import { rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol'
   selector: 'app-mis-reservas',
   standalone: true,
   imports: [
-    RouterLink, SpinnerComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, NgTemplateOutlet, DatePipe,
+    RouterLink, EsqueletoListaComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, NgTemplateOutlet, DatePipe,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
   ],

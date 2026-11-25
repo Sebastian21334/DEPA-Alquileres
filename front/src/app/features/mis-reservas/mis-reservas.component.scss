@@ -2,7 +2,7 @@
 
 
 .reservation-tabs { display: flex; gap: .5rem; padding: .35rem; border: 1px solid var(--color-border); border-radius: 10px; background: #fff; }
-.reservation-tabs button { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .55rem 1rem; border: 0; border-radius: 7px; background: transparent; color: var(--color-text-muted); font-weight: 800; cursor: pointer; }
+.reservation-tabs button { display: inline-flex; flex: 1; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; padding: .55rem 1rem; border: 0; border-radius: 7px; background: transparent; color: var(--color-text-muted); font-weight: 800; cursor: pointer; transition: background var(--motion-media) ease, color var(--motion-media) ease, box-shadow var(--motion-media) ease; }
 .reservation-tabs button:hover { background: var(--color-bg); color: var(--color-text); }
 .reservation-tabs button.is-active { background: var(--color-secondary); color: #fff; box-shadow: 0 3px 9px color-mix(in srgb, var(--color-secondary), transparent 70%); }
 .reservation-tabs button span { display: grid; min-width: 1.45rem; height: 1.45rem; place-items: center; padding: 0 .35rem; border-radius: 999px; background: rgba(255,255,255,.2); font-size: .74rem; }

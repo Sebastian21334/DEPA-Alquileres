@@ -17,7 +17,10 @@
   box-shadow: 0 3px 10px rgb(16 24 40 / 25%);
   font: 800 .8rem / 1.25 Figtree, sans-serif;
   white-space: nowrap;
-  transform: translateX(-50%);
+  /* Centrado con translate (no transform) para que scale y las animaciones se combinen sin pisarlo. */
+  translate: -50% 0;
+  transform-origin: center bottom;
+  transition: scale var(--motion-media) var(--ease-rebote), box-shadow var(--motion-media) ease;
 }
 .mapa__lienzo .depa-pin--largo span { background: var(--color-primary-dark); }
 .mapa__lienzo .depa-pin--grupo span { min-width: 2rem; background: #233654; text-align: center; }
@@ -35,11 +38,37 @@
   transform: rotate(45deg);
   content: '';
 }
+.mapa__lienzo .depa-pin:hover span { scale: 1.1; box-shadow: 0 6px 16px rgb(16 24 40 / 32%); }
 .mapa__lienzo .depa-pin--seleccionado span {
   outline: 3px solid var(--color-accent);
   box-shadow: 0 4px 16px rgb(16 24 40 / 36%);
-  transform: translateX(-50%) scale(1.14);
-  transform-origin: center bottom;
+  scale: 1.14;
+}
+.mapa__lienzo .depa-pin--seleccionado:hover span { scale: 1.18; }
+/* Resaltado desde el listado (o al pasar el mouse): crece y late con un anillo. */
+.mapa__lienzo .depa-pin--resaltado span { scale: 1.1; animation: depa-pin-latido 1.3s ease-out infinite; }
+
+/* Animaciones de una sola vez (mapa-publicaciones.component.ts las agrega y las quita al terminar). */
+.mapa__lienzo .depa-pin span.depa-pin__entrada { animation: depa-pin-entrar .45s var(--ease-rebote) backwards; }
+.mapa__lienzo .depa-pin span.depa-pin__seleccion { animation: depa-pin-saltar .45s ease-out; }
+.mapa__lienzo .depa-pin span.depa-pin__despliegue { animation: depa-pin-desplegar .45s var(--ease-salida) backwards; }
+.mapa__lienzo .depa-pin-linea--despliegue { stroke-dasharray: 1; animation: depa-pin-trazo .45s var(--ease-salida) backwards; }
+@keyframes depa-pin-entrar {
+  from { opacity: 0; scale: .3; }
+}
+@keyframes depa-pin-saltar {
+  0% { scale: 1; }
+  45% { scale: 1.32; }
+}
+@keyframes depa-pin-desplegar {
+  from { opacity: 0; scale: .5; translate: calc(-50% + var(--desde-x, 0px)) var(--desde-y, 0px); }
+}
+@keyframes depa-pin-trazo {
+  from { stroke-dashoffset: 1; }
+}
+@keyframes depa-pin-latido {
+  0% { box-shadow: 0 4px 14px rgb(16 24 40 / 30%), 0 0 0 0 rgb(255 151 2 / 60%); }
+  100% { box-shadow: 0 4px 14px rgb(16 24 40 / 30%), 0 0 0 12px rgb(255 151 2 / 0%); }
 }
 
 @font-face {
@@ -101,6 +130,13 @@
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
   --shadow-card-hover: 0 8px 20px rgba(16, 24, 40, 0.14);
   --max-width-page: 1200px;
+
+  /* Movimiento: duraciones y curvas que comparten todas las animaciones. */
+  --motion-rapida: 150ms;
+  --motion-media: 250ms;
+  --motion-lenta: 450ms;
+  --ease-salida: cubic-bezier(0.22, 1, 0.36, 1); /* frena al llegar: entradas y desplazamientos */
+  --ease-rebote: cubic-bezier(0.34, 1.56, 0.64, 1); /* se pasa un poco y vuelve: hover y apariciones */
 
   color-scheme: light;
   font-family: 'Figtree', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -254,8 +290,8 @@ button {
 .reveal {
   opacity: 0;
   transition:
-    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 0.7s var(--ease-salida),
+    transform 0.7s var(--ease-salida);
   transition-delay: var(--reveal-delay, 0ms);
   will-change: opacity, transform;
 }
@@ -291,6 +327,91 @@ button {
   50% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
 }
 
+/* Entrada sutil para pantallas de trabajo: menos recorrido que depa-fade-up. */
+@keyframes depa-entrar {
+  from { opacity: 0; transform: translateY(12px); }
+}
+@keyframes depa-esqueleto {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+/* Bloque de carga con brillo: reemplaza al texto «Cargando…» en listas y tarjetas. */
+.esqueleto {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(100deg, var(--color-border) 30%, #f0f1f3 50%, var(--color-border) 70%);
+  background-size: 200% 100%;
+  animation: depa-esqueleto 1.4s ease-in-out infinite;
+}
+
+/* Listas: los primeros elementos entran escalonados; los que se agregan después entran solos. */
+.lista-escalonada > :not(dialog) { animation: depa-entrar var(--motion-lenta) var(--ease-salida) backwards; }
+.lista-escalonada > :nth-child(2) { animation-delay: 40ms; }
+.lista-escalonada > :nth-child(3) { animation-delay: 80ms; }
+.lista-escalonada > :nth-child(4) { animation-delay: 120ms; }
+.lista-escalonada > :nth-child(5) { animation-delay: 160ms; }
+.lista-escalonada > :nth-child(6) { animation-delay: 200ms; }
+.lista-escalonada > :nth-child(7) { animation-delay: 240ms; }
+.lista-escalonada > :nth-child(n+8) { animation-delay: 280ms; }
+
+/* Valor que llega después de cargar o que cambia (contadores, estados): aparece con un pequeño rebote. */
+.depa-aparecer { animation: depa-pop var(--motion-lenta) ease backwards; }
+:where(.depa-aparecer) { display: inline-block; } /* sin especificidad: respeta el display propio (por ejemplo, las insignias) */
+
+/* Respuesta al presionar un botón. Usa scale para no pisar el transform del hover. */
+:is(.acct-btn, .btn, .button, .booking-button):active:not(:disabled) { scale: 0.97; }
+
+/*
+ * Ventanas emergentes (<dialog>): entran y salen con un fundido y una leve ampliación,
+ * y el fondo se oscurece. Donde el navegador no anima la salida, se cierran como antes.
+ */
+dialog {
+  opacity: 0;
+  transform: translateY(12px) scale(0.97);
+  transition:
+    opacity var(--motion-media) var(--ease-salida),
+    transform var(--motion-media) var(--ease-salida),
+    overlay var(--motion-media) allow-discrete,
+    display var(--motion-media) allow-discrete;
+}
+dialog[open] { opacity: 1; transform: none; }
+dialog::backdrop {
+  opacity: 0;
+  transition:
+    opacity var(--motion-media) ease,
+    overlay var(--motion-media) allow-discrete,
+    display var(--motion-media) allow-discrete;
+}
+dialog[open]::backdrop { opacity: 1; }
+@starting-style {
+  dialog[open] { opacity: 0; transform: translateY(12px) scale(0.97); }
+  dialog[open]::backdrop { opacity: 0; }
+}
+
+/*
+ * Páginas de cuenta (Mi perfil, Mis reservas, Mis publicaciones…): los bloques entran escalonados.
+ * Las ventanas emergentes tienen su propia transición y no cuentan para el orden.
+ */
+.acct-wrap > :not(dialog) { animation: depa-entrar var(--motion-lenta) var(--ease-salida) backwards; }
+.acct-wrap > :nth-child(2 of :not(dialog)) { animation-delay: 50ms; }
+.acct-wrap > :nth-child(3 of :not(dialog)) { animation-delay: 100ms; }
+.acct-wrap > :nth-child(4 of :not(dialog)) { animation-delay: 150ms; }
+.acct-wrap > :nth-child(5 of :not(dialog)) { animation-delay: 200ms; }
+.acct-wrap > :nth-child(n+6 of :not(dialog)) { animation-delay: 250ms; }
+
+/*
+ * Pantallas de acceso (ingreso, registro, recuperar y restablecer contraseña, verificar cuenta):
+ * la tarjeta entra con una leve ampliación y se sacude cuando aparece un error.
+ * La sacudida se suma a la entrada sin reiniciarla y usa translate para no pisar su transform.
+ */
+.auth__card { animation: depa-entrar-tarjeta 0.5s var(--ease-salida) backwards; }
+.auth__card:has(.auth__error) { animation: depa-entrar-tarjeta 0.5s var(--ease-salida) backwards, depa-sacudir 0.4s ease; }
+@keyframes depa-entrar-tarjeta { from { opacity: 0; transform: translateY(16px) scale(0.97); } }
+@keyframes depa-sacudir {
+  20%, 60% { translate: -6px 0; }
+  40%, 80% { translate: 6px 0; }
+}
+
 /* Brillo que cruza un botón al pasar el mouse. Requiere position/overflow en el botón. */
 .shine {
   position: relative;
@@ -313,7 +434,7 @@ button {
 /* Transición entre páginas (Router withViewTransitions). El header queda fijo. */
 app-navbar .navbar { view-transition-name: depa-header; }
 ::view-transition-old(root) { animation: 0.25s ease both vt-out; }
-::view-transition-new(root) { animation: 0.45s cubic-bezier(0.22, 1, 0.36, 1) both vt-in; }
+::view-transition-new(root) { animation: 0.45s var(--ease-salida) both vt-in; }
 @keyframes vt-out { to { opacity: 0; transform: translateY(-12px); } }
 @keyframes vt-in { from { opacity: 0; transform: translateY(24px); } }
 
@@ -326,4 +447,9 @@ app-navbar .navbar { view-transition-name: depa-header; }
     scroll-behavior: auto !important;
   }
   .reveal { opacity: 1; transform: none; }
+  :is(.acct-btn, .btn, .button, .booking-button):active { scale: none; }
+  .esqueleto { animation: none; }
+  .status-icon__tilde { stroke-dashoffset: 0 !important; }
+  .mapa__lienzo .depa-pin span, .mapa__lienzo .depa-pin-linea { animation: none !important; }
+  dialog, dialog[open] { transform: none; }
 }

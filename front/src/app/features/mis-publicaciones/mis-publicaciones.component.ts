@@ -1,3 +1,4 @@
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { formatearEntero } from '../../shared/utils/formato-numero';
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,7 +17,7 @@ import { SearchFieldComponent } from '../../shared/components/search-field/searc
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, HistorialLiquidacionesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, EsqueletoListaComponent, HistorialLiquidacionesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })

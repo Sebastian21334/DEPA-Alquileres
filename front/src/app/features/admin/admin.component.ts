@@ -54,6 +54,7 @@ import { DatoCopiableComponent } from '../../shared/components/dato-copiable/dat
 import { formatearCbu, formatearCuit, tipoCuentaBancaria } from '../../shared/utils/cuenta-bancaria';
 import { FiltrosListaComponent } from '../../shared/components/filtros-lista/filtros-lista.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
 import { formatearMoneda } from '../../shared/utils/formato-numero';
 import {
@@ -110,6 +111,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     DatoCopiableComponent,
     FiltrosListaComponent,
     PaginadorComponent,
+    EsqueletoListaComponent,
     CurrencyPipe,
     DatePipe,
     FormsModule,

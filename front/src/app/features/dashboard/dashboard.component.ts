@@ -1,3 +1,4 @@
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { formatearMoneda } from '../../shared/utils/formato-numero';
 import { fechaCalendarioLocal } from '../../shared/utils/rental-dates';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
@@ -11,7 +12,6 @@ import { AuthService } from '../../core/services/auth.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { GestionPublicacionesService, type PagoPublicacion } from '../../shared/services/gestion-publicaciones.service';
 import { Reserva, ReservationService } from '../../shared/services/reservation.service';
-import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { HistorialLiquidacionesComponent } from '../../shared/components/historial-liquidaciones/historial-liquidaciones.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
@@ -34,7 +34,7 @@ interface RendimientoPublicacion {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, PaginadorComponent, SearchFieldComponent, HistorialLiquidacionesComponent],
+  imports: [RouterLink, EsqueletoListaComponent, PaginadorComponent, SearchFieldComponent, HistorialLiquidacionesComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })

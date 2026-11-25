@@ -153,7 +153,7 @@
     @if (mensaje()) { <div class="acct-alert acct-alert--info" role="status">{{ mensaje() }}</div> }
     @if (error()) { <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div> }
     @if (cargando()) {
-      <div class="acct-state"><app-spinner /><p>Cargando reservas…</p></div>
+      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando reservas…" />
     } @else {
       <div class="reservation-tabs" role="tablist" aria-label="Tipo de reservas">
         <button type="button" role="tab" [attr.aria-selected]="vista() === 'realizadas'" [class.is-active]="vista() === 'realizadas'" (click)="vista.set('realizadas')">
@@ -170,7 +170,7 @@
       </div>
 
       @if (vista() === 'realizadas') {
-        <section class="reservation-section" role="tabpanel">
+        <section class="reservation-section lista-escalonada" role="tabpanel">
           @for (reserva of propias(); track reserva.id) {
             <article class="acct-card booking-card">
               <ng-container *ngTemplateOutlet="tarjetaReserva; context: { $implicit: reserva, recibida: false }" />
@@ -183,7 +183,7 @@
           }
         </section>
       } @else if (vista() === 'recibidas' && esAnunciante()) {
-        <section class="reservation-section" role="tabpanel">
+        <section class="reservation-section lista-escalonada" role="tabpanel">
           <div class="reservation-filters">
             <label>Estado
               <select [ngModel]="filtroEstadoRecibidas()" (ngModelChange)="cambiarFiltroRecibidas('estado', $event)">
@@ -222,7 +222,7 @@
           }
         </section>
       } @else {
-        <section class="reservation-section" role="tabpanel">
+        <section class="reservation-section lista-escalonada" role="tabpanel">
           <div class="section-heading">
             <h2>Reclamos</h2>
             <p>Seguimiento de los reclamos en los que participás como Inquilino o Anunciante.</p>
@@ -291,7 +291,9 @@
       <div class="booking-card__info">
         <div class="booking-card__heading">
           <h2>{{ reserva.publicacion?.titulo || 'Publicación no disponible' }}</h2>
-          <span class="acct-badge" [class.acct-badge--error]="!devolucionPendiente && (reserva.cancelada || reserva.estado_estadia === 'INGRESO_NO_VERIFICADO')" [class.acct-badge--ok]="!devolucionPendiente && estadiaActiva(reserva)">{{ devolucionPendiente ? 'Devolución pendiente' : estado(reserva) }}</span>
+          @for (estadoVisible of [devolucionPendiente ? 'Devolución pendiente' : estado(reserva)]; track estadoVisible) {
+            <span class="acct-badge depa-aparecer" [class.acct-badge--error]="!devolucionPendiente && (reserva.cancelada || reserva.estado_estadia === 'INGRESO_NO_VERIFICADO')" [class.acct-badge--ok]="!devolucionPendiente && estadiaActiva(reserva)">{{ estadoVisible }}</span>
+          }
         </div>
         <dl class="booking-card__dates">
           <div><dt>Ingreso</dt><dd>{{ fechaTarjeta(reserva.fecha_inicio) }}</dd></div>

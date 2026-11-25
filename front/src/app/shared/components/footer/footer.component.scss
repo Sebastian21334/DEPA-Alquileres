@@ -21,7 +21,7 @@
   height: 48px;
   width: auto;
   display: block;
-  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.35s var(--ease-rebote);
 }
 .footer__logo:hover {
   transform: scale(1.06) rotate(-2deg);

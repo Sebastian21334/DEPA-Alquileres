@@ -50,7 +50,7 @@
 .hero__subtitle,
 .hero__modalidades,
 .hero__search {
-  animation: depa-fade-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: depa-fade-up 0.9s var(--ease-salida) both;
 }
 .hero__subtitle { animation-delay: 0.15s; }
 .hero__modalidades { animation-delay: 0.3s; }
@@ -94,7 +94,7 @@
   cursor: pointer;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
   transition:
-    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform 0.25s var(--ease-rebote),
     box-shadow 0.25s ease,
     filter 0.2s ease;
 }

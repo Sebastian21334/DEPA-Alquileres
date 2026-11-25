@@ -5,7 +5,7 @@
 .photo { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; flex-shrink: 0; }
 .photo__picker { position: relative; display: block; border-radius: 50%; cursor: pointer; }
 .photo__picker input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 2; }
-.photo__picker .profile-hero__avatar { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--color-accent); transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.photo__picker .profile-hero__avatar { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--color-accent); transition: transform 0.35s var(--ease-rebote); }
 .photo__picker:hover .profile-hero__avatar { transform: scale(1.05); }
 .photo__overlay {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;

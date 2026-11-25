@@ -1,6 +1,6 @@
 <section class="panel">
   @if (cargando()) {
-    <p class="empty" role="status">Cargando historial de liquidaciones.</p>
+    <app-esqueleto-lista [cantidad]="5" etiqueta="Cargando historial de liquidaciones…" />
   } @else if (error()) {
     <p class="refund-error" role="alert">{{ error() }}</p>
     <button type="button" class="button button--ghost" (click)="cargar()">Reintentar</button>
@@ -27,7 +27,7 @@
         <thead>
           <tr><th scope="col">Fecha de registro</th><th scope="col">Reserva</th><th scope="col">Anunciante</th><th scope="col">Importe</th><th scope="col">Comprobante y observación</th><th scope="col">Registrado por</th></tr>
         </thead>
-        <tbody>
+        <tbody class="lista-escalonada">
           @for (pago of lista.visibles(); track pago.id) {
             <tr>
               <td data-label="Fecha de registro">

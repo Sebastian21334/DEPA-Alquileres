@@ -22,11 +22,14 @@
         } @else if (!cargando() && !cantidad()) {
           <p class="mapa-listado__vacio">No encontramos publicaciones con ubicación para esta búsqueda.</p>
         }
-        <ul class="mapa-listado__resultados">
+        <ul class="mapa-listado__resultados lista-escalonada">
           @for (punto of puntos(); track punto.id) {
             <li>
               <button type="button" class="mapa-listado__resultado"
-                [attr.aria-pressed]="seleccionado() === punto.id" (click)="seleccionarDesdeListado(punto)">
+                [class.mapa-listado__resultado--resaltado]="resaltado() === punto.id"
+                [attr.aria-pressed]="seleccionado() === punto.id" (click)="seleccionarDesdeListado(punto)"
+                (mouseenter)="resaltado.set(punto.id)" (mouseleave)="resaltado.set(null)"
+                (focus)="resaltado.set(punto.id)" (blur)="resaltado.set(null)">
                 <span class="mapa-listado__datos">
                   <span class="mapa-listado__modalidad" [class.mapa-listado__modalidad--temporal]="punto.temporal">
                     {{ punto.temporal ? 'Temporal' : 'Largo plazo' }}
@@ -82,7 +85,8 @@
     </div>
 
     @if (detalleAbierto() || grupo().length) {
-      <aside class="mapa__vista" aria-label="Publicaciones seleccionadas" (keydown.escape)="cerrarDetalle()">
+      <aside class="mapa__vista" animate.leave="mapa__vista--salir" aria-label="Publicaciones seleccionadas"
+        (keydown.escape)="cerrarDetalle()">
         <button class="mapa__cerrar" type="button" (click)="cerrarDetalle()" aria-label="Cerrar vista previa">
           <svg lucideX [size]="18" aria-hidden="true"></svg>
         </button>

@@ -376,9 +376,9 @@
 .navbar__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 .navbar__avatar { transition: transform .25s ease, box-shadow .25s ease; }
 .navbar__user:hover .navbar__avatar { transform: scale(1.08); box-shadow: 0 0 0 4px #ffe0b2; }
-.navbar__logo-img { transition: transform .3s cubic-bezier(.34,1.56,.64,1); }
+.navbar__logo-img { transition: transform .3s var(--ease-rebote); }
 .navbar__logo:hover .navbar__logo-img { transform: scale(1.06) rotate(-1deg); }
-.drawer.is-open .drawer__list > li { animation: depa-fade-up .45s cubic-bezier(.22,1,.36,1) both; }
+.drawer.is-open .drawer__list > li { animation: depa-fade-up .45s var(--ease-salida) both; }
 .drawer.is-open .drawer__list > li:nth-child(2) { animation-delay: .04s; }
 .drawer.is-open .drawer__list > li:nth-child(3) { animation-delay: .08s; }
 .drawer.is-open .drawer__list > li:nth-child(4) { animation-delay: .12s; }

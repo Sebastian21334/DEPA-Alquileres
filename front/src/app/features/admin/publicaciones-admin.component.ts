@@ -1,3 +1,4 @@
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { isPlatformBrowser } from '@angular/common';
 import { Component, DestroyRef, inject, PLATFORM_ID, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -11,7 +12,7 @@ import { AdminPublicacionEstado, AdminService } from './admin.service';
 @Component({
   selector: 'app-publicaciones-admin',
   standalone: true,
-  imports: [FormsModule, LucideCheck, LucideSearch],
+  imports: [FormsModule, LucideCheck, LucideSearch, EsqueletoListaComponent],
   templateUrl: './publicaciones-admin.component.html',
   styleUrl: './publicaciones-admin.component.scss',
 })

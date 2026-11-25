@@ -28,7 +28,7 @@
     } @else if (loading()) {
       <div class="results__grid" aria-busy="true">
         @for (s of skeletons; track $index) {
-          <div class="skeleton-card"></div>
+          <div class="skeleton-card esqueleto"></div>
         }
       </div>
     } @else if (listings().length === 0) {
