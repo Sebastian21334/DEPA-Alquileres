@@ -14,14 +14,18 @@ import { NombresUbicacion } from '../components/selector-ubicacion/selector-ubic
 import { UbicacionConfirmada } from '../components/location-picker/location-picker.component';
 import { decimalesValidator } from '../validators/decimales.validator';
 import { formatearEntero, formatearImporte } from '../utils/formato-numero';
-import { PUBLICACION_LIMITES } from './publicacion-limites.generated';
 
 type CampoPublicacion = keyof PublicacionFormulario['form']['controls'];
 
 const PATRON_TITULO_PUBLICACION =
   /^(?=\S)(?=.*[\p{L}\p{Nd}])(?!.*[\uFE0F\u20E3])[\p{L}\p{M}\p{Nd} ,:.]+(?<! )$/u;
 
-// Los límites se generan desde contratos/publicacion.json; no editar a mano.
+// Mismos topes que PUBLICACION_LIMITES de crear-publicacion.dto.ts: si cambian, se actualizan ambos.
+const PUBLICACION_LIMITES = {
+  precioMaximo: 99999999.99,
+  superficieMaxima: 10000,
+  ambientesMaximos: 10,
+} as const;
 
 // Formulario de una publicación, único para el alta (CrearPublicacionComponent) y la
 // edición (PublicationFormComponent). Cada pantalla lo declara en sus `providers`, así

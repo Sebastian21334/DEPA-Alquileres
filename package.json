@@ -4,8 +4,6 @@
   "private": true,
   "scripts": {
     "start": "node scripts/dev.cjs",
-    "dev": "node scripts/dev.cjs",
-    "contratos:generar": "node scripts/generar-contratos-publicacion.cjs",
-    "contratos:verificar": "node scripts/generar-contratos-publicacion.cjs --check"
+    "dev": "node scripts/dev.cjs"
   }
 }

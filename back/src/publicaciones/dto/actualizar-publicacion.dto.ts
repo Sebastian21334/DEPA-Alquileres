@@ -22,8 +22,8 @@ import {
   MENSAJE_PRECIO_RANGO,
   MENSAJE_SUPERFICIE_RANGO,
   PATRON_TITULO_PUBLICACION,
+  PUBLICACION_LIMITES,
 } from './crear-publicacion.dto';
-import { PUBLICACION_LIMITES } from './publicacion-limites.generated';
 
 export class ActualizarPublicacionDto {
   @ValidateIf((_dto, titulo: unknown) => titulo !== undefined)
