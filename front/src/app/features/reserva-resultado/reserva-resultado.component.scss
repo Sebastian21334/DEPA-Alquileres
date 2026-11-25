@@ -10,6 +10,43 @@
   display: grid;
   gap: 1.2rem;
 }
+.reservation-heading__actions, .receipt-hero__actions { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; }
+.receipt-export { border: 1px solid #cbd5e1; background: #fff; color: #243754; }
+.receipt-export:hover, .receipt-export:focus-visible { border-color: var(--color-secondary); color: var(--color-secondary); background: #f5f8ff; }
+.reservation-report { display: none; }
+
+@media print {
+  .receipt-page { min-height: 0; padding: 0; background: white; }
+  .receipt-wrap { display: block; max-width: none; }
+  .receipt-wrap > :not(.reservation-report) { display: none !important; }
+  .reservation-report { display: block; color: #172b43; font-size: 9pt; line-height: 1.2; }
+  .reservation-report__header { display: flex; align-items: center; gap: 14pt; padding-bottom: 8pt; border-bottom: 3pt solid #d94217; }
+  .reservation-report__header img { width: 82pt; max-height: 34pt; object-fit: contain; }
+  .reservation-report__header h1 { margin: 2pt 0; font-size: 18pt; }
+  .reservation-report__header p { margin: 0; color: #d94217; font-size: 8pt; font-weight: 800; letter-spacing: .08em; }
+  .reservation-report__header span { color: #536270; }
+  .reservation-report__status { margin: 8pt 0; padding: 6pt 9pt; border-left: 3pt solid #0e47a1; background: #e8eefb; }
+  .reservation-report__status span, .reservation-report__status strong { display: block; }
+  .reservation-report__status span, .reservation-report__grid span { color: #536270; font-size: 9pt; }
+  .reservation-report__status strong { margin-top: 3pt; font-size: 13pt; }
+  .reservation-report__status p { margin: 3pt 0 0; }
+  .reservation-report section { margin-top: 9pt; break-inside: avoid; }
+  .reservation-report h2 { margin: 0 0 5pt; color: #0e47a1; font-size: 11pt; }
+  .reservation-report h3 { margin: 0 0 4pt; font-size: 11pt; }
+  .reservation-report section > p { margin: 3pt 0; overflow-wrap: anywhere; }
+  .reservation-report__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7pt; margin-top: 6pt; }
+  .reservation-report__grid div { padding: 5pt; border: 1pt solid #e0e7ee; }
+  .reservation-report__grid span, .reservation-report__grid strong { display: block; }
+  .reservation-report__grid strong { margin-top: 3pt; }
+  .reservation-report__data { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18pt; }
+  .reservation-report__data div { display: flex; justify-content: space-between; gap: 8pt; padding: 3pt 0; border-bottom: 1pt solid #e5e9ef; }
+  .reservation-report__data dt { color: #536270; }
+  .reservation-report__data dd { margin: 0; text-align: right; font-weight: 700; overflow-wrap: anywhere; }
+  .reservation-report__note { color: #536270; font-size: 9pt; }
+  .reservation-report__code { padding: 6pt 9pt; border: 1pt solid #f2c572; background: #fff7e8; }
+  .reservation-report__code strong { display: inline-block; margin-top: 3pt; font-size: 13pt; letter-spacing: .12em; }
+  .reservation-report footer { margin-top: 10pt; padding-top: 5pt; border-top: 1pt solid #e5e9ef; color: #687989; font-size: 8pt; }
+}
 .receipt-state {
   min-height: 55vh;
   display: grid;
@@ -404,8 +441,9 @@
   .receipt-hero {
     grid-template-columns: auto 1fr;
   }
-  .receipt-hero > a {
+  .receipt-hero__actions {
     grid-column: 1 / -1;
+    justify-content: flex-start;
   }
   .receipt-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -462,6 +500,7 @@
 .reservation-summary__total strong { font-size: 1.5rem; }
 .reservation-notice { margin: 0; padding: .85rem 1rem; }
 @media (max-width: 550px) {
+  .reservation-heading__actions { width: 100%; justify-content: flex-start; }
   .reservation-summary img { width: 100%; aspect-ratio: 3 / 1; }
   .reservation-summary__total { padding-inline: 0; }
 }

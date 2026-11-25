@@ -57,6 +57,16 @@ export class ReclamosRepository implements IReclamosRepository {
     });
   }
 
+  listarPorReservas(ids: number[]): Promise<Reclamo[]> {
+    if (!ids.length) return Promise.resolve([]);
+    return this.reclamos.find({
+      where: { reserva: { id: In(ids) } },
+      select: { id: true, categoria: true, estado: true, resolucion: true, motivo_resolucion: true, solicitud_cancelacion_id: true, creado_en: true, reserva: { id: true } },
+      relations: { reserva: true },
+      order: { creado_en: 'DESC', id: 'DESC' },
+    });
+  }
+
   async listarAdministracion(): Promise<Reclamo[]> {
     const reclamos = await this.reclamos.find({
       relations: {

@@ -89,6 +89,8 @@ test('el panel incluye liquidaciones en espera y en revisión y calcula la fecha
 
   assert.equal(service.fechaDisponiblePagoManual(reserva), '2026-11-21');
   assert.equal(service.fechaDisponiblePagoManual(revision), null);
+  assert.equal(service.fechaDisponiblePagoManual({ ...reserva, cancelada: true, fecha_cancelacion: new Date('2026-11-10T02:30:00Z') }), '2026-11-09');
+  assert.equal(service.fechaDisponiblePagoManual({ ...revision, cancelada: true, fecha_cancelacion: null }), require('../dist/common/utils/fechas').fechaArgentina());
   assert.deepEqual((await service.listarParaAdministracion()).map(r => r.id), [1, 2]);
 });
 

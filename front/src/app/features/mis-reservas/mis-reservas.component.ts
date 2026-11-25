@@ -28,6 +28,7 @@ import { ActividadReembolsosService } from '../../core/services/actividad-reembo
 import { CargaImagenesComponent } from '../../shared/components/carga-imagenes/carga-imagenes.component';
 import { imagenesDisponibles, MAX_IMAGENES_POR_ENVIO } from '../../shared/utils/reclamo-imagenes';
 import { rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol';
+import { normalizarTexto } from '../../shared/utils/texto';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -64,13 +65,30 @@ export class MisReservasComponent {
 
   protected readonly propias = signal<Reserva[]>([]);
   protected readonly recibidas = signal<Reserva[]>([]);
+  protected readonly filtroEstadoRealizadas = signal('todos');
+  protected readonly filtroBusquedaRealizadas = signal('');
+  protected readonly filtroDesdeRealizadas = signal('');
+  protected readonly filtroHastaRealizadas = signal('');
+  protected readonly propiasFiltradas = computed(() => {
+    const estado = this.filtroEstadoRealizadas();
+    const busqueda = this.filtroBusquedaRealizadas();
+    const desde = this.filtroDesdeRealizadas();
+    const hasta = this.filtroHastaRealizadas();
+    return this.propias().filter(reserva => {
+      const fecha = reserva.fecha_inicio?.slice(0, 10);
+      const anunciante = reserva.publicacion?.anunciante;
+      return (estado === 'todos' || reserva.estado_estadia === estado) &&
+        this.coincideBusqueda(reserva, busqueda, [anunciante?.usuario?.nombre, anunciante?.usuario?.apellido, anunciante?.idUsuario]) &&
+        (!desde || (!!fecha && fecha >= desde)) && (!hasta || (!!fecha && fecha <= hasta));
+    });
+  });
   protected readonly filtroEstadoRecibidas = signal('todos');
   protected readonly filtroPublicacionRecibidas = signal('');
   protected readonly filtroDesdeRecibidas = signal('');
   protected readonly filtroHastaRecibidas = signal('');
   protected readonly recibidasFiltradas = computed(() => {
     const estado = this.filtroEstadoRecibidas();
-    const busqueda = this.filtroPublicacionRecibidas().trim().toLocaleLowerCase('es-AR');
+    const busqueda = this.filtroPublicacionRecibidas();
     const desde = this.filtroDesdeRecibidas();
     const hasta = this.filtroHastaRecibidas();
     return this.recibidas().filter(reserva => {
@@ -78,7 +96,7 @@ export class MisReservasComponent {
       const fecha = reserva.fecha_inicio?.slice(0, 10);
       const terminada = !reserva.cancelada && (reserva.finalizada || reserva.estado_estadia === 'FINALIZADA');
       return (estado === 'todos' || categoria === estado || (estado === 'terminada' && terminada)) &&
-        (!busqueda || (reserva.publicacion?.titulo ?? '').toLocaleLowerCase('es-AR').includes(busqueda)) &&
+        this.coincideBusqueda(reserva, busqueda, [reserva.usuario_nombre ?? reserva.usuario?.nombre, reserva.usuario_apellido ?? reserva.usuario?.apellido, reserva.usuario?.id]) &&
         (!desde || (!!fecha && fecha >= desde)) && (!hasta || (!!fecha && fecha <= hasta));
     }).sort((a, b) => {
       const orden = ['codigo', 'liquidacion', 'confirmada', 'terminada', 'historial'];
@@ -255,6 +273,12 @@ export class MisReservasComponent {
     }).format(new Date());
   }
 
+  private coincideBusqueda(reserva: Reserva, busqueda: string, usuario: (string | number | null | undefined)[]): boolean {
+    const terminos = normalizarTexto(busqueda).trim().replace(/^#/, '').split(/\s+/).filter(Boolean);
+    const texto = normalizarTexto([reserva.id, reserva.publicacion?.titulo, ...usuario].filter(valor => valor != null).join(' '));
+    return terminos.every(termino => texto.includes(termino));
+  }
+
   protected cambiarFiltroRecibidas(filtro: 'estado' | 'publicacion' | 'desde' | 'hasta', valor: string): void {
     const filtros = { estado: this.filtroEstadoRecibidas, publicacion: this.filtroPublicacionRecibidas,
       desde: this.filtroDesdeRecibidas, hasta: this.filtroHastaRecibidas };
@@ -274,6 +298,14 @@ export class MisReservasComponent {
   }
 
   protected fechaHabilitacion(reserva: Reserva): string | null {
+    if (reserva.cancelada) {
+      if (!reserva.fecha_cancelacion) return this.hoy();
+      const fecha = new Date(reserva.fecha_cancelacion);
+      if (!Number.isFinite(fecha.getTime())) return null;
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(fecha);
+    }
     if (!esFechaCalendario(reserva.fecha_fin) || !reserva.fecha_inicio || reserva.fecha_inicio > reserva.fecha_fin) return null;
     return sumarDias(reserva.fecha_fin, 5);
   }

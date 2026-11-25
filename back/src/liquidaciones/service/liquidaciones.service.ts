@@ -48,7 +48,10 @@ export class LiquidacionesService {
     });
   }
 
-  fechaDisponiblePagoManual(reserva: Pick<Reserva, 'fecha_inicio' | 'fecha_fin'>): string | null {
+  fechaDisponiblePagoManual(reserva: Pick<Reserva, 'fecha_inicio' | 'fecha_fin'> & Partial<Pick<Reserva, 'cancelada' | 'fecha_cancelacion'>>): string | null {
+    if (reserva.cancelada) {
+      return reserva.fecha_cancelacion ? fechaArgentina(reserva.fecha_cancelacion) : fechaArgentina();
+    }
     if (!esFechaCalendarioValida(reserva.fecha_inicio) || !esFechaCalendarioValida(reserva.fecha_fin) ||
         reserva.fecha_inicio > reserva.fecha_fin) return null;
     return this.desplazarFecha(reserva.fecha_fin, DIAS_ESPERA_PAGO_MANUAL);

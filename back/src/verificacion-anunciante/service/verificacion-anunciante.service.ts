@@ -674,6 +674,34 @@ export class VerificacionAnuncianteService {
     };
   }
 
+  async buscarHistorialAdministracion(idUsuario: number) {
+    const solicitud = await this.verificacionRepo.buscarSolicitudPorAnunciante(idUsuario);
+    const anunciante = solicitud?.anunciante ?? await this.anunciantesService.buscarPorUsuario(idUsuario);
+    const esAnunciante = anunciante?.verificado === true;
+    if (!solicitud) return { esAnunciante, solicitud: null };
+
+    const revisiones = await this.verificacionRepo.buscarRevisiones(idUsuario);
+    return {
+      esAnunciante,
+      solicitud: {
+        id: solicitud.id,
+        estado: solicitud.estado,
+        numero_revision: solicitud.numero_revision,
+        creada_en: solicitud.creada_en,
+        actualizada_en: solicitud.actualizada_en,
+        revisiones: revisiones.map(({ id, numero_revision, estado, motivo, identidad_aprobada, cbu_aprobado, creada_en }) => ({
+          id,
+          numero_revision,
+          estado,
+          motivo,
+          identidad_aprobada,
+          cbu_aprobado,
+          creada_en,
+        })),
+      },
+    };
+  }
+
   private async obtenerSolicitud(idUsuario: number): Promise<SolicitudVerificacion> {
     const solicitud =
       await this.verificacionRepo.buscarSolicitudPorAnunciante(idUsuario);

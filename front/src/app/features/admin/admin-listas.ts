@@ -34,7 +34,29 @@ export function etiquetaLiquidacion(settlement: AdminSettlement): string {
   if (settlement.estado_liquidacion === 'EN_REVISION') return 'En revisión';
   if (settlement.estado_liquidacion === 'DEVUELTO_PARCIAL_INQUILINO') return 'Devolución parcial · resto al anunciante';
   if (settlement.cancelada) return 'Cancelada · retención para el anunciante';
-  return settlement.codigo_validado_en ? 'Código validado' : 'Ingreso no verificado: plazo vencido';
+  return settlement.codigo_validado_en ? 'Código validado' : 'Ingreso sin verificar';
+}
+
+export function estadoReclamoLiquidacion(estado: string): string {
+  const etiquetas: Record<string, string> = {
+    ABIERTO: 'Abierto', EN_REVISION: 'En revisión', RESUELTO_INQUILINO: 'Resuelto a favor del inquilino',
+    RESUELTO_ANUNCIANTE: 'Resuelto a favor del anunciante', CERRADO: 'Cerrado',
+  };
+  return etiquetas[estado] ?? estado;
+}
+
+export function resolucionLiquidacion(resolucion: string): string {
+  const etiquetas: Record<string, string> = {
+    SIN_DEVOLUCION: 'Sin devolución', DEVOLUCION_TOTAL: 'Devolución total',
+    DEVOLUCION_PARCIAL: 'Devolución parcial', REINICIAR_CODIGO: 'Nuevos intentos del código',
+    CONFIRMAR_INGRESO: 'Ingreso confirmado sin código',
+  };
+  return etiquetas[resolucion] ?? resolucion;
+}
+
+export function estadoCancelacionLiquidacion(estado: string): string {
+  const etiquetas: Record<string, string> = { PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', VENCIDA: 'Vencida' };
+  return etiquetas[estado] ?? estado;
 }
 
 export function nombreInquilino(settlement: AdminSettlement): string {

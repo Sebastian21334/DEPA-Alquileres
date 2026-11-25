@@ -1,11 +1,12 @@
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
-import { formatearMoneda } from '../../shared/utils/formato-numero';
+import { formatearImporteConMoneda, formatearMoneda } from '../../shared/utils/formato-numero';
 import { fechaCalendarioLocal } from '../../shared/utils/rental-dates';
 import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { estadiaActiva } from '../../shared/utils/reservation-state';
 import { RouterLink } from '@angular/router';
+import { LucideEye, LucideHouse, LucideCalendarDays, LucideWallet } from '@lucide/angular';
 import { forkJoin, Subscription } from 'rxjs';
 import { ApiError } from '../../core/interceptors/api-error';
 import { AuthService } from '../../core/services/auth.service';
@@ -17,7 +18,7 @@ import { PaginadorComponent } from '../../shared/components/paginador/paginador.
 import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
 import { normalizarTexto } from '../../shared/utils/texto';
 
-interface SerieMensual {
+interface SerieEvolucion {
   key: string;
   label: string;
   ingresos: number;
@@ -34,7 +35,7 @@ interface RendimientoPublicacion {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, EsqueletoListaComponent, PaginadorComponent, SearchFieldComponent, HistorialLiquidacionesComponent],
+  imports: [RouterLink, EsqueletoListaComponent, PaginadorComponent, SearchFieldComponent, HistorialLiquidacionesComponent, LucideEye, LucideHouse, LucideCalendarDays, LucideWallet],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -52,6 +53,15 @@ export class DashboardComponent {
   /** Historial de pagos de todas las publicaciones; null mientras carga. */
   protected readonly pagos = signal<PagoPublicacion[] | null>(null);
   protected readonly errorPagos = signal(false);
+  protected readonly periodo = signal<'dias' | 'semanas' | 'meses'>('meses');
+  protected readonly verTodasPendientes = signal(false);
+  protected readonly liquidacionesPendientes = computed(() => this.reservas().filter(reserva =>
+    reserva.estado_pago === 'APROBADO' &&
+    ['RETENIDO', 'EN_REVISION', 'PENDIENTE_PAGO_PROPIETARIO', 'DEVUELTO_PARCIAL_INQUILINO'].includes(reserva.estado_liquidacion),
+  ));
+  protected readonly pendientesVisibles = computed(() => this.verTodasPendientes()
+    ? this.liquidacionesPendientes()
+    : this.liquidacionesPendientes().slice(0, 5));
 
   protected readonly reservasValidas = computed(() => this.reservas().filter((reserva) => !reserva.cancelada));
   protected readonly totalVisualizaciones = computed(() =>
@@ -69,35 +79,71 @@ export class DashboardComponent {
     return vistas ? Math.min(100, (this.reservasValidas().length / vistas) * 100) : 0;
   });
 
-  protected readonly serieMensual = computed<SerieMensual[]>(() => {
-    const now = new Date();
-    const months = Array.from({ length: 6 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
-      return {
-        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
-        label: new Intl.DateTimeFormat('es-AR', { month: 'short' }).format(date).replace('.', ''),
-        ingresos: 0,
-        reservas: 0,
-      };
+  protected readonly serieMensual = computed<SerieEvolucion[]>(() => {
+    const fechaActual = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const hoy = new Date(fechaActual + 'T12:00:00Z');
+    const periodo = this.periodo();
+    const cantidad = periodo === 'meses' ? 6 : periodo === 'semanas' ? 8 : 14;
+    const inicio = new Date(hoy);
+    if (periodo === 'meses') inicio.setUTCDate(1);
+    if (periodo === 'semanas') inicio.setUTCDate(inicio.getUTCDate() - (inicio.getUTCDay() + 6) % 7);
+    const intervalos = Array.from({ length: cantidad }, (_, index) => {
+      const fecha = new Date(inicio);
+      const desplazamiento = index - cantidad + 1;
+      if (periodo === 'meses') fecha.setUTCMonth(fecha.getUTCMonth() + desplazamiento);
+      else fecha.setUTCDate(fecha.getUTCDate() + desplazamiento * (periodo === 'semanas' ? 7 : 1));
+      const key = fecha.toISOString().slice(0, 10);
+      const label = periodo === 'meses'
+        ? new Intl.DateTimeFormat('es-AR', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(fecha).replace('.', '')
+        : new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }).format(fecha);
+      return { key, label, ingresos: 0, reservas: 0 };
     });
-    const byMonth = new Map(months.map((month) => [month.key, month]));
+    const porFecha = new Map(intervalos.map((item) => [item.key, item]));
     for (const reserva of this.reservasValidas()) {
       if (!reserva.fecha_pago) continue;
-      const month = byMonth.get(reserva.fecha_pago.slice(0, 7));
-      if (!month) continue;
-      month.reservas += 1;
-      month.ingresos += Number(reserva.monto_pago ?? 0);
+      const fechaPago = new Date(reserva.fecha_pago);
+      if (!Number.isFinite(fechaPago.getTime())) continue;
+      const fechaArgentina = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit' }).format(fechaPago);
+      const fecha = new Date(fechaArgentina + 'T12:00:00Z');
+      if (periodo === 'meses') fecha.setUTCDate(1);
+      if (periodo === 'semanas') fecha.setUTCDate(fecha.getUTCDate() - (fecha.getUTCDay() + 6) % 7);
+      const intervalo = porFecha.get(fecha.toISOString().slice(0, 10));
+      if (!intervalo) continue;
+      intervalo.reservas += 1;
+      intervalo.ingresos += Number(reserva.monto_pago ?? 0);
     }
-    return months;
+    return intervalos;
   });
 
   protected readonly linePoints = computed(() => {
     const max = Math.max(...this.serieMensual().map((item) => item.ingresos), 1);
     return this.serieMensual()
-      .map((item, index) => `${20 + index * 112},${190 - (item.ingresos / max) * 150}`)
+      .map((item, index) => `${20 + index * 560 / (this.serieMensual().length - 1)},${190 - (item.ingresos / max) * 150}`)
       .join(' ');
   });
   protected readonly areaPath = computed(() => `M20 190 L${this.linePoints().replaceAll(' ', ' L')} L580 190 Z`);
+  protected readonly totalPeriodo = computed(() => this.serieMensual().reduce((total, item) => total + item.ingresos, 0));
+  protected readonly tituloPeriodo = computed(() => ({ dias: 'Últimos 14 días', semanas: 'Últimas 8 semanas', meses: 'Últimos 6 meses' })[this.periodo()]);
+
+  protected estadoLiquidacion(reserva: Reserva): string {
+    const estados: Record<string, string> = {
+      RETENIDO: 'Pago retenido', EN_REVISION: 'En revisión',
+      PENDIENTE_PAGO_PROPIETARIO: 'Pendiente de pago', DEVUELTO_PARCIAL_INQUILINO: 'Devolución parcial · resto pendiente',
+    };
+    return estados[reserva.estado_liquidacion] ?? reserva.estado_liquidacion;
+  }
+
+  protected exportarPdf(): void {
+    window.print();
+  }
+
+  protected importePago(importe: number, moneda: string | null): string {
+    return formatearImporteConMoneda(importe, moneda);
+  }
+
+  protected fechaReporte(fecha: string): string {
+    return new Date(fecha).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' });
+  }
 
   protected readonly actividadSemanal = computed(() => {
     const days = [

@@ -654,6 +654,10 @@ test('el pedido de reinicio se resuelve con una devolución parcial y el resto s
   t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
   const operaciones = operacionesLiquidacion();
   const fila = await filaLiquidacion(operaciones, reserva.id);
+  assert.equal(fila.reclamos.length, 1);
+  assert.equal(fila.reclamos[0].resolucion, 'DEVOLUCION_PARCIAL');
+  assert.equal(fila.reclamos[0].motivo_resolucion, 'Entró un día tarde');
+  assert.deepEqual(fila.cancelaciones, []);
   assert.deepEqual([fila.importe_a_liquidar, fila.habilitada_para_pago], [60, true]);
   await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
   assert.equal((await liquidacionDe(reserva)).estado, 'PAGADO_PROPIETARIO');
@@ -958,7 +962,7 @@ test('devolverle al inquilino lo que quedaba exige motivo y deriva el resto a Re
   assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
 });
 
-test('en una cancelación sin devolución, lo retenido se le liquida al anunciante en la fecha habitual', async (t) => {
+test('en una cancelación sin devolución, lo retenido se puede liquidar inmediatamente', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: new Date('2099-01-09T15:00:00Z') });
   const { reserva } = await escenario('2099-01-10');
   const operaciones = operacionesLiquidacion();
@@ -967,12 +971,13 @@ test('en una cancelación sin devolución, lo retenido se le liquida al anuncian
   assert.deepEqual(await reembolsos.listarPorReserva(reserva.id), []);
   const fila = await filaLiquidacion(operaciones, reserva.id);
   assert.deepEqual([fila.cancelada, fila.estado_liquidacion, fila.importe_a_liquidar, fila.habilitada_para_pago],
-    [true, 'PENDIENTE_PAGO_PROPIETARIO', 100, false]);
+    [true, 'PENDIENTE_PAGO_PROPIETARIO', 100, true]);
+  assert.equal(fila.fecha_disponible_pago, '2099-01-09');
+  const liquidaciones = new LiquidacionesService(new LiquidacionRepository(source.getRepository(Liquidacion)), catalogosDePrueba());
+  assert.ok((await liquidaciones.listarReservasPendientesDeAviso(new Date())).includes(reserva.id));
   // Una cancelada no vuelve a esperar el ingreso.
   await assert.rejects(operaciones.resolverLiquidacion(reserva.id, { estado: 'RETENIDO' }, 3), /circuito de ingreso/);
 
-  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
-  assert.equal((await filaLiquidacion(operaciones, reserva.id)).habilitada_para_pago, true);
   await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-retenido' }, comprobantePdf(), 3);
   const liquidacion = await liquidacionDe(reserva);
   assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 100]);
@@ -1002,6 +1007,8 @@ test('en una cancelación con devolución parcial, lo que no se devolvió se le 
   const { reserva } = await escenario('2099-01-07');
   const operaciones = operacionesLiquidacion();
   await confirmarCancelacion(reserva, 1);
+  assert.equal(await filaLiquidacion(operaciones, reserva.id), undefined);
+  await assert.rejects(operaciones.registrarPagoAnunciante(reserva.id, {}, comprobantePdf(), 3), /revisión|pendiente|devolución/i);
   // La devolución de la cancelación se procesa sola: con dinero en cuenta la hace Mercado Pago.
   const [reembolso] = await reembolsos.listarCancelacionesAutomaticasPendientes(0);
   pasarela.consultarPago = async () => ({ id: 'mp-1', status: 'approved', payment_type_id: 'account_money' });
@@ -1010,10 +1017,10 @@ test('en una cancelación con devolución parcial, lo que no se devolvió se le 
   const devuelto = Number((await reembolsos.buscar(reembolso.id)).importe);
   assert.ok(devuelto > 0 && devuelto < 100, `devolución parcial: ${devuelto}`);
 
-  t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
   const fila = await filaLiquidacion(operaciones, reserva.id);
   assert.deepEqual([fila.cancelada, fila.estado_liquidacion, fila.importe_a_liquidar, fila.habilitada_para_pago],
     [true, 'DEVUELTO_PARCIAL_INQUILINO', 100 - devuelto, true]);
+  assert.equal(fila.fecha_disponible_pago, '2099-01-05');
   await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
   const liquidacion = await liquidacionDe(reserva);
   assert.deepEqual([liquidacion.estado, Number(liquidacion.importe)], ['PAGADO_PROPIETARIO', 100 - devuelto]);

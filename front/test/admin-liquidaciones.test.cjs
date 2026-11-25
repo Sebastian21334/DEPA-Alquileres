@@ -26,7 +26,7 @@ test('la etiqueta dice por qué el pago queda para el anunciante', () => {
   assert.equal(etiquetaLiquidacion(liquidacion({ estado_liquidacion: 'DEVUELTO_PARCIAL_INQUILINO' })), 'Devolución parcial · resto al anunciante');
   assert.equal(etiquetaLiquidacion(liquidacion({ cancelada: true, codigo_validado_en: null })), 'Cancelada · retención para el anunciante');
   assert.equal(etiquetaLiquidacion(liquidacion({})), 'Código validado');
-  assert.equal(etiquetaLiquidacion(liquidacion({ codigo_validado_en: null })), 'Ingreso no verificado: plazo vencido');
+  assert.equal(etiquetaLiquidacion(liquidacion({ codigo_validado_en: null })), 'Ingreso sin verificar');
 });
 
 test('el pago habilitado y la devolución salen de los datos que calcula el back', () => {

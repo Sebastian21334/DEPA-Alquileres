@@ -31,6 +31,10 @@ const user = {
   email_verificado: true,
   foto_url: null,
 };
+const usuariosAdmin = [
+  user,
+  { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true, rol: { id: 2, nombre: 'Inquilino' } },
+];
 const auth = {
   currentUser: signal(publico ? null : { sub: 7, email: user.email, rol, exp: 9999999999 }),
   get isAuthenticated() {
@@ -304,7 +308,23 @@ const interceptor: HttpInterceptorFn = (req) => {
     ];
   else if (p.startsWith('/ubicacion/ciudades')) body = [{ id: 1, nombre: 'Villa María' }];
   else if (p === '/usuarios/administracion')
-    body = page([user, { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true }]);
+    body = { ...page(usuariosAdmin), totalRegistros: usuariosAdmin.length };
+  else if (/^\/usuarios\/administracion\/\d+$/.test(p))
+    body = usuariosAdmin.find(usuario => usuario.id === Number(p.split('/').at(-1)));
+  else if (/^\/anunciantes\/administracion\/usuarios\/\d+\/solicitud$/.test(p)) {
+    const esAnunciante = Number(p.split('/').at(-2)) === user.id;
+    body = { esAnunciante, solicitud: esAnunciante ? {
+      id: solicitud.id,
+      estado: 'aprobada',
+      numero_revision: solicitud.numero_revision,
+      creada_en: solicitud.creada_en,
+      actualizada_en: solicitud.actualizada_en,
+      revisiones: [{
+        id: 1, estado: 'aprobada', numero_revision: 1, creada_en: solicitud.actualizada_en,
+        identidad_aprobada: true, cbu_aprobado: true, motivo: null,
+      }],
+    } : null };
+  }
   else if (p === '/publicaciones/administracion') body = page(publicaciones);
   else if (/^\/reclamos\/cancelacion\/\d+$/.test(p)) body = { devolucion: saldoDevolucionFaltante, reclamoAbierto: !!reclamosFaltante.length };
   else if (p === '/reclamos/mios' || p === '/reclamos/administracion') body = [...reclamosFaltante];

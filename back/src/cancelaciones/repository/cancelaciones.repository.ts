@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, Repository, type EntityManager } from 'typeorm';
+import { In, LessThanOrEqual, Repository, type EntityManager } from 'typeorm';
 import { PoliticaCancelacion } from '../entity/politica-cancelacion.entity';
 import { SolicitudCancelacion } from '../entity/solicitud-cancelacion.entity';
 import type { ICancelacionesRepository } from './cancelaciones.repository.interface';
@@ -35,6 +35,16 @@ export class CancelacionesRepository implements ICancelacionesRepository {
       },
       relations: { solicitante: true, decidida_por: true },
       order: { id: 'DESC' },
+    });
+  }
+
+  listarPorReservas(ids: number[]): Promise<SolicitudCancelacion[]> {
+    if (!ids.length) return Promise.resolve([]);
+    return this.repository.find({
+      where: { reserva: { id: In(ids) } },
+      select: { id: true, estado: true, motivo: true, observacion: true, creada_en: true, reserva: { id: true }, solicitante: { id: true } },
+      relations: { reserva: true, solicitante: true },
+      order: { creada_en: 'DESC', id: 'DESC' },
     });
   }
 

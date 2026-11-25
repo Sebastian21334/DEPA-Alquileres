@@ -28,7 +28,7 @@ export class LiquidacionRepository implements ILiquidacionRepository {
       .where('liquidacion.estado IN (:...estadosLiquidacion)', { estadosLiquidacion })
       .andWhere('(liquidacion.aviso_pago_admin_en IS NULL OR liquidacion.aviso_pago_anunciante_en IS NULL)')
       .andWhere('reserva.estado_pago = :estadoPago', { estadoPago })
-      .andWhere('reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite', { fechaFinLimite })
+      .andWhere('(reserva.cancelada = true OR (reserva.fecha_inicio <= reserva.fecha_fin AND reserva.fecha_fin <= :fechaFinLimite))', { fechaFinLimite })
       .orderBy('reserva.id', 'ASC')
       .getRawMany<{ id: number }>();
     return filas.map(({ id }) => id);

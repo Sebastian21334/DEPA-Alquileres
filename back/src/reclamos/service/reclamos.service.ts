@@ -65,6 +65,14 @@ export class ReclamosService {
 
   constructor(@Inject(RECLAMOS_REPOSITORY) private readonly reclamos: IReclamosRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly almacenamientoService: AlmacenamientoService, private readonly catalogos: CatalogosService, private readonly cancelaciones: CancelacionesService, @Inject(ReservaNotificacionesService) private readonly notificaciones: ReservaNotificacionesService | undefined, private readonly preparacionImagenes: PreparacionImagenesService) {}
 
+  async contextoLiquidaciones(ids: number[]) {
+    const [reclamos, cancelaciones] = await Promise.all([
+      this.reclamos.listarPorReservas(ids),
+      this.cancelaciones.listarPorReservas(ids),
+    ]);
+    return { reclamos, cancelaciones };
+  }
+
   async consultarFaltanteCancelacion(idReserva: number, idUsuario: number): Promise<FaltanteCancelacionDto> {
     const reserva = await this.reservas.buscarPorId(idReserva, idUsuario);
     this.verificarInquilino(reserva, idUsuario);

@@ -678,7 +678,7 @@ export class ReservasService
     const reservas = this.reservaRepository.enTransaccion(transaccion);
     const reserva = await this.obtenerReserva(idReserva, transaccion);
     this.marcarCancelada(reserva, actor, motivo);
-    // Sin devolución, lo retenido es del anunciante y se le paga en la fecha habitual.
+    // Sin devolución, el importe retenido queda disponible para el anunciante.
     reserva.estado_liquidacion = this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PENDIENTE_PAGO_PROPIETARIO');
     reserva.observacion_liquidacion =
       'Cancelación sin devolución: el importe corresponde al anunciante';

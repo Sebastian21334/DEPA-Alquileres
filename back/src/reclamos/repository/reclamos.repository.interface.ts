@@ -16,6 +16,7 @@ export interface IReclamosRepository {
   guardar(reclamo: Partial<Reclamo>): Promise<Reclamo>;
   listarPorParticipante(idUsuario: number): Promise<Reclamo[]>;
   listarAdministracion(): Promise<Reclamo[]>;
+  listarPorReservas(ids: number[]): Promise<Reclamo[]>;
   buscarPorId(id: number): Promise<Reclamo | null>;
   contarEvidencias(idReclamo: number): Promise<number>;
   guardarEvidencias(evidencias: Partial<ReclamoEvidencia>[]): Promise<ReclamoEvidencia[]>;

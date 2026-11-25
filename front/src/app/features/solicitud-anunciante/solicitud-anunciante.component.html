@@ -224,21 +224,7 @@
       @if (solicitud()?.revisiones?.length) {
         <section class="acct-card">
           <h2>Historial de revisiones</h2>
-          <ul class="history">
-            @for (r of solicitud()!.revisiones; track r.id) {
-              <li>
-                <span class="acct-badge" [class.acct-badge--ok]="r.estado === 'aprobada'" [class.acct-badge--error]="r.estado === 'rechazada'">
-                  {{ r.estado }}
-                </span>
-                <div>
-                  <strong>Revisión #{{ r.numero_revision }}</strong> · {{ fecha(r.creada_en) }}
-                  @if (r.identidad_aprobada != null) { <p>Identidad {{ r.identidad_aprobada ? 'aprobada' : 'rechazada' }}.</p> }
-                  @if (r.cbu_aprobado != null) { <p>CBU {{ r.cbu_aprobado ? 'aprobado' : 'rechazado' }}.</p> }
-                  @if (r.motivo) { <p>{{ r.motivo }}</p> }
-                </div>
-              </li>
-            }
-          </ul>
+          <app-historial-verificacion [revisiones]="solicitud()!.revisiones" />
         </section>
       }
     }

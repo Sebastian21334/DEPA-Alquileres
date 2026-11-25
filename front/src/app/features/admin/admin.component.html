@@ -184,6 +184,27 @@
               <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
               <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
               <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
+              <section class="settlement-context" [attr.aria-label]="'Situación de la reserva ' + settlement.id">
+                <h4>Situación de la reserva</h4>
+                <p><strong>Estadía:</strong> {{ etiquetasEstadia[settlement.estado_estadia] || settlement.estado_estadia }}</p>
+                @if (settlement.fecha_inicio && settlement.fecha_fin) {
+                  <p><strong>Fechas:</strong> {{ settlement.fecha_inicio | date:'dd/MM/yyyy':'UTC' }} al {{ settlement.fecha_fin | date:'dd/MM/yyyy':'UTC' }}</p>
+                }
+                @for (cancelacion of settlement.cancelaciones ?? []; track cancelacion.id) {
+                  <div class="settlement-context__item">
+                    <p><strong>Cancelación #{{ cancelacion.id }}:</strong> {{ estadoCancelacionLiquidacion(cancelacion.estado) }}</p>
+                    <p><strong>Motivo:</strong> {{ cancelacion.motivo }}</p>
+                    @if (cancelacion.observacion) { <p><strong>Decisión:</strong> {{ cancelacion.observacion }}</p> }
+                  </div>
+                }
+                @for (reclamo of settlement.reclamos ?? []; track reclamo.id) {
+                  <div class="settlement-context__item">
+                    <p><strong>Reclamo #{{ reclamo.id }}:</strong> {{ etiquetaCategoriaReclamo(reclamo) }} · {{ estadoReclamoLiquidacion(reclamo.estado) }}</p>
+                    @if (reclamo.resolucion) { <p><strong>Resolución:</strong> {{ etiquetaResolucionReclamo(reclamo.resolucion) }}</p> }
+                    @if (reclamo.motivo_resolucion) { <p><strong>Motivo de la resolución:</strong> {{ reclamo.motivo_resolucion }}</p> }
+                  </div>
+                }
+              </section>
               @if (tieneDevolucion(settlement)) {
                 <p><strong>Pagó el inquilino:</strong> {{ montoPagado(settlement) }}</p>
               }
@@ -214,6 +235,8 @@
                     <span class="settlement-payment-unavailable__tooltip" role="tooltip" [id]="'payment-wait-' + settlement.id">
                       @if (diasPago === null) {
                         No se puede registrar el pago: la fecha de habilitación está pendiente de revisión.
+                      } @else if (diasPago === 0) {
+                        El pago todavía no está habilitado. Revisá el estado de la reserva y su liquidación.
                       } @else {
                         No se puede registrar el pago todavía. {{ diasPago === 1 ? 'Falta 1 día' : 'Faltan ' + diasPago + ' días' }} para habilitarlo.
                       }
@@ -815,17 +838,22 @@
                 }
               </td>
               <td data-label="Acciones" class="right">
-                <!-- La baja es definitiva: bloquear o habilitar no aplica. -->
-                @if (user.activa) {
-                  <button
-                    type="button"
-                    class="link-button"
-                    (click)="toggleUser(user)"
-                    [disabled]="busy() === 'user-' + user.id"
-                  >
-                    {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
-                  </button>
-                }
+                <div class="user-actions">
+                  <a class="user-profile-link" [routerLink]="['/admin/usuarios', user.id]" [queryParams]="{ desde: 'usuarios' }"
+                    [attr.aria-label]="'Ver perfil de ' + user.nombre + ' ' + user.apellido">
+                    <svg lucideEye [size]="17" aria-hidden="true"></svg> Ver perfil
+                  </a>
+                  @if (user.activa) {
+                    <button
+                      type="button"
+                      class="link-button"
+                      (click)="toggleUser(user)"
+                      [disabled]="busy() === 'user-' + user.id"
+                    >
+                      {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
           } @empty {

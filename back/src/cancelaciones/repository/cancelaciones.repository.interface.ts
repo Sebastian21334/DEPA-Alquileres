@@ -10,5 +10,6 @@ export interface ICancelacionesRepository {
   crear(datos: Partial<SolicitudCancelacion>): SolicitudCancelacion;
   guardar(solicitud: SolicitudCancelacion): Promise<SolicitudCancelacion>;
   buscarActiva(idReserva: number, estado: string): Promise<SolicitudCancelacion | null>;
+  listarPorReservas(ids: number[]): Promise<SolicitudCancelacion[]>;
   buscarPolitica(fechaPago: string | null): Promise<PoliticaCancelacion | null>;
 }

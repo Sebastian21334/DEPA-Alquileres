@@ -17,6 +17,63 @@
         }
       </section>
     } @else if (reserva(); as item) {
+      <article class="print-report reservation-report" aria-label="Detalle de la reserva">
+        <header class="reservation-report__header">
+          <img src="/images/Logo.png" alt="DEPA" />
+          <div><p>DEPA ALQUILERES</p><h1>Detalle de tu reserva</h1><span>Reserva #{{ item.id }}</span></div>
+        </header>
+        <div class="reservation-report__status">
+          <span>Estado de la reserva</span>
+          <strong>{{ tituloEstado(item) }}</strong>
+          <p>{{ descripcionEstado(item) }}</p>
+        </div>
+        <section>
+          <h2>Datos de la estadía</h2>
+          <h3>{{ item.publicacion?.titulo ?? 'Publicación no disponible' }}</h3>
+          <p>{{ direccion(item) }}</p>
+          <div class="reservation-report__grid">
+            <div><span>Ingreso</span><strong>{{ fecha(item.fecha_inicio) }}</strong></div>
+            <div><span>Salida</span><strong>{{ fecha(item.fecha_fin) }}</strong></div>
+            <div><span>Duración</span><strong>{{ cantidadDias(item) }} {{ cantidadDias(item) === 1 ? 'día' : 'días' }}</strong></div>
+          </div>
+        </section>
+        <section>
+          <h2>Datos del pago</h2>
+          @let pagoReporte = pago();
+          @let monedaReporte = pagoReporte?.currency ?? item.moneda_contratada ?? 'ARS';
+          <dl class="reservation-report__data">
+            <div><dt>Estado</dt><dd>{{ estadoPagoMercado(item) }}</dd></div>
+            <div><dt>{{ pagoReporte?.approved_at || pagoReporte?.status === 'approved' || pagoReporte?.devolucion ? 'Total pagado' : 'Importe de la reserva' }}</dt><dd>{{ monto(pagoReporte?.amount ?? item.monto_pago, monedaReporte) }}</dd></div>
+            @if (pagoReporte?.devolucion; as devolucion) {
+              <div><dt>Total reembolsado</dt><dd>{{ monto(devolucion.reembolsado, monedaReporte) }}</dd></div>
+              @if (devolucion.simulado > 0) { <div><dt>Devolución simulada</dt><dd>{{ monto(devolucion.simulado, monedaReporte) }}</dd></div> }
+              <div><dt>Total sin devolver</dt><dd>{{ monto(devolucion.sinDevolver, monedaReporte) }}</dd></div>
+            }
+            <div><dt>Medio de pago</dt><dd>{{ medioPago() }}</dd></div>
+            <div><dt>Operación</dt><dd>{{ pagoReporte?.payment_id ?? 'Pendiente de asignación' }}</dd></div>
+            <div><dt>Fecha del pago</dt><dd>{{ fechaHora(pagoReporte?.approved_at ?? pagoReporte?.created_at) }}</dd></div>
+            @if (cuitAnunciante(); as cuit) { <div><dt>CUIT/CUIL del anunciante</dt><dd>{{ cuit }}</dd></div> }
+          </dl>
+          @if (item.cotizacion_dolar; as dolar) {
+            <p class="reservation-report__note">Importe publicado {{ monto(item.importe_origen ?? 0, item.moneda_origen ?? 'USD') }} · Dólar blue venta {{ monto(+dolar.venta, 'ARS', 6) }} por USD · Fuente {{ dolar.proveedor }}.</p>
+          }
+        </section>
+        @if (mostrarCodigo() && !codigoValidado() && !item.finalizada && codigo(); as ingreso) {
+          <section class="reservation-report__code">
+            <h2>Código de ingreso</h2>
+            <p>Mostráselo al anunciante al llegar al alojamiento.</p>
+            <strong>{{ ingreso.codigo }}</strong>
+          </section>
+        }
+        @if (!administracion && item.estado_pago === 'APROBADO' && !contactoSuspendido()) {
+          <section>
+            <h2>Contacto de la reserva</h2>
+            <p>{{ nombreContacto() }}</p>
+            @if (esInquilino() && !accesoLimitado()) { <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p> }
+          </section>
+        }
+        <footer>DEPA Alquileres · Detalle de reserva #{{ item.id }}</footer>
+      </article>
       @if (esInquilino() && conversacionesReembolso().length) {
         <section class="receipt-card refund-threads" aria-label="Transferencias de reembolsos">
           @for (reembolso of conversacionesReembolso(); track reembolso.id) {
@@ -60,9 +117,14 @@
         </nav>
         <header class="reservation-heading">
           <h1>Detalle de la reserva</h1>
-          <button type="button" class="acct-btn change-dates" [attr.aria-expanded]="reprogramando()" (click)="abrirReprogramacion()">
-            <svg lucideCalendar [size]="18" aria-hidden="true"></svg> Cambiar fechas
-          </button>
+          <div class="reservation-heading__actions">
+            <button type="button" class="acct-btn receipt-export" (click)="exportarReserva()">
+              <svg lucideDownload [size]="18" aria-hidden="true"></svg> Descargar PDF
+            </button>
+            <button type="button" class="acct-btn change-dates" [attr.aria-expanded]="reprogramando()" (click)="abrirReprogramacion()">
+              <svg lucideCalendar [size]="18" aria-hidden="true"></svg> Cambiar fechas
+            </button>
+          </div>
         </header>
         <section class="receipt-card reservation-summary">
           @if (item.publicacion?.imagenes?.[0]?.url; as portada) {
@@ -110,11 +172,16 @@
             </button>
           }
         </div>
-        @if (administracion) {
-          <a class="acct-btn acct-btn--ghost" routerLink="/admin" [fragment]="seccionOrigen ?? undefined">← {{ textoVolver }}</a>
-        } @else {
-          <a class="acct-btn acct-btn--ghost" routerLink="/mis-reservas">Ver todas mis reservas</a>
-        }
+        <div class="receipt-hero__actions">
+          <button type="button" class="acct-btn receipt-export" (click)="exportarReserva()">
+            <svg lucideDownload [size]="18" aria-hidden="true"></svg> Descargar PDF
+          </button>
+          @if (administracion) {
+            <a class="acct-btn acct-btn--ghost" routerLink="/admin" [fragment]="seccionOrigen ?? undefined">← {{ textoVolver }}</a>
+          } @else {
+            <a class="acct-btn acct-btn--ghost" routerLink="/mis-reservas">Ver todas mis reservas</a>
+          }
+        </div>
       </header>
       }
       @if (errorVerificacion() && item.estado_pago !== 'APROBADO') {

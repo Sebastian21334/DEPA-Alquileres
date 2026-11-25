@@ -128,17 +128,22 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     const reservas = await this.liquidaciones.listarParaAdministracion();
     const ids = reservas.map(reserva => reserva.id);
     // Primero se le paga al inquilino en Reembolsos; recién después aparece el resto para el anunciante.
-    const [enCurso, pagos] = await Promise.all([
+    const [enCurso, pagos, contexto] = await Promise.all([
       this.reembolsosService.listarEnCursoPorReservas(ids),
       this.reembolsosService.listarPagosPorReservas(ids),
+      this.reclamos.contextoLiquidaciones(ids),
     ]);
     const conDevolucionEnCurso = new Set(enCurso.map(reembolso => reembolso.reserva.id));
     const pagoPorReserva = new Map(pagos.map(pago => [pago.reserva.id, pago]));
     return reservas.filter(reserva => !conDevolucionEnCurso.has(reserva.id))
-      .map(reserva => this.conDatosDeLiquidacion(reserva, pagoPorReserva.get(reserva.id) ?? null));
+      .map(reserva => ({
+        ...this.conDatosDeLiquidacion(reserva, pagoPorReserva.get(reserva.id) ?? null),
+        reclamos: contexto.reclamos.filter(reclamo => reclamo.reserva.id === reserva.id).map(({ id, categoria, estado, resolucion, motivo_resolucion, solicitud_cancelacion_id }) => ({ id, categoria, estado, resolucion, motivo_resolucion, solicitud_cancelacion_id })),
+        cancelaciones: contexto.cancelaciones.filter(cancelacion => cancelacion.reserva.id === reserva.id).map(({ id, estado, motivo, observacion, solicitante }) => ({ id, estado, motivo, observacion, solicitante_id: solicitante.id })),
+      }));
   }
 
-  private conDatosDeLiquidacion(reserva: Reserva, pago: Pago | null): LiquidacionPendienteDto {
+  private conDatosDeLiquidacion(reserva: Reserva, pago: Pago | null): Omit<LiquidacionPendienteDto, 'reclamos' | 'cancelaciones'> {
     const importe = this.importeParaAnunciante(reserva, pago);
     const fecha = this.liquidaciones.fechaDisponiblePagoManual(reserva);
     return {

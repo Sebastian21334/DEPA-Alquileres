@@ -19,6 +19,7 @@ import {
   LucideShieldCheck,
   LucideRefreshCw,
   LucideSearch,
+  LucideEye,
   LucideCheck,
   LucideX,
   LucideMessageCircle,
@@ -57,8 +58,10 @@ import { PaginadorComponent } from '../../shared/components/paginador/paginador.
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
 import { formatearMoneda } from '../../shared/utils/formato-numero';
+import { etiquetaCategoriaReclamo } from '../../shared/utils/reclamo-categorias';
+import { etiquetasEstadia } from '../../shared/utils/reservation-state';
 import {
-  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, FILTROS_BLOQUEO, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
+  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, estadoReclamoLiquidacion, resolucionLiquidacion, estadoCancelacionLiquidacion, FILTROS_BLOQUEO, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
   FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
   textosBloqueo, textosLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
   tieneDevolucion,
@@ -120,6 +123,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideShieldCheck,
     LucideRefreshCw,
     LucideSearch,
+    LucideEye,
     LucideCheck,
     LucideX,
     LucideLockKeyhole,
@@ -557,6 +561,11 @@ export class AdminComponent {
 
   protected readonly diasEsperaLiquidacion = diasEsperaLiquidacion;
   protected readonly etiquetaLiquidacion = etiquetaLiquidacion;
+  protected readonly estadoReclamoLiquidacion = estadoReclamoLiquidacion;
+  protected readonly etiquetaResolucionReclamo = resolucionLiquidacion;
+  protected readonly estadoCancelacionLiquidacion = estadoCancelacionLiquidacion;
+  protected readonly etiquetaCategoriaReclamo = etiquetaCategoriaReclamo;
+  protected readonly etiquetasEstadia = etiquetasEstadia;
   protected readonly pendienteParaAnunciante = pendienteParaAnunciante;
   protected readonly tieneDevolucion = tieneDevolucion;
 

@@ -12,6 +12,7 @@ import { TipoAnunciante } from '../../shared/models/catalogo.model';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { CbuAnuncianteComponent } from '../../shared/components/cbu-anunciante/cbu-anunciante.component';
 import { CargaComprobanteComponent } from '../../shared/components/carga-comprobante/carga-comprobante.component';
+import { HistorialVerificacionComponent } from '../../shared/components/historial-verificacion/historial-verificacion.component';
 import {
   CapturaIdentidadComponent,
   IdentidadCapturada,
@@ -24,7 +25,7 @@ import {
 @Component({
   selector: 'app-solicitud-anunciante',
   standalone: true,
-  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, CbuAnuncianteComponent, CargaComprobanteComponent, LucideBadgeCheck, LucideClock],
+  imports: [NgTemplateOutlet, ReactiveFormsModule, RouterLink, SpinnerComponent, CapturaIdentidadComponent, CbuAnuncianteComponent, CargaComprobanteComponent, HistorialVerificacionComponent, LucideBadgeCheck, LucideClock],
   templateUrl: './solicitud-anunciante.component.html',
   styleUrl: './solicitud-anunciante.component.scss',
 })
@@ -221,9 +222,5 @@ export class SolicitudAnuncianteComponent {
     this.documentosPendientes.set(null);
     this.error.set('');
     this.capturaAbierta.set(true);
-  }
-
-  protected fecha(valor: string): string {
-    return new Date(valor).toLocaleString('es-AR', { dateStyle: 'medium', timeStyle: 'short' });
   }
 }

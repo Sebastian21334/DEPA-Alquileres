@@ -142,19 +142,6 @@
 }
 .status__icon--wait { background: #fff4e5; color: var(--color-accent); }
 
-.history { list-style: none; margin: 0; padding: 0; }
-.history li {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.7rem 0;
-  border-bottom: 1px solid var(--color-border);
-  font-size: 0.9rem;
-}
-.history li:last-child { border-bottom: 0; }
-.history .acct-badge { text-transform: capitalize; min-width: 84px; justify-content: center; }
-.history p { margin: 0.25rem 0 0; color: var(--color-text-muted); }
-
 @media (max-width: 640px) {
   .steps { gap: 0.35rem; }
   .steps li {

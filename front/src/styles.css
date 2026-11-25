@@ -2,6 +2,22 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+@media print {
+  @page { size: A4; margin: 15mm; }
+  body:has(.print-report) { visibility: hidden; }
+  body:has(.reservation-report) app-root { min-height: 0 !important; display: block; }
+  body:has(.reservation-report) app-navbar,
+  body:has(.reservation-report) app-footer,
+  body:has(.reservation-report) app-chat-dock,
+  body:has(.reservation-report) app-asistente-depa,
+  body:has(.reservation-report) app-toast,
+  body:has(.reservation-report) .cbu-header,
+  body:has(.reservation-report) .acceso-limitado-aviso { display: none !important; }
+  body:has(.reservation-report) .app-content { flex: none; }
+  .print-report, .print-report * { visibility: visible; }
+  .print-report { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+
 /* Leaflet crea los nodos de los pines fuera del render de Angular. */
 .mapa__lienzo .depa-pin { overflow: visible; outline: none; }
 .mapa__lienzo .depa-pin span {

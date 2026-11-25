@@ -7,6 +7,7 @@
         <p>Conocé el rendimiento de tus publicaciones y reservas.</p>
       </div>
       <div class="dashboard-heading__actions">
+        <button type="button" class="acct-btn acct-btn--ghost" (click)="exportarPdf()" [disabled]="cargando() || !!error() || pagos() === null || errorPagos()">Exportar PDF</button>
         <a routerLink="/mis-publicaciones" class="acct-btn acct-btn--ghost">Administrar publicaciones</a>
         <a routerLink="/publicaciones/nueva" class="acct-btn acct-btn--primary">+ Nueva publicación</a>
       </div>
@@ -19,19 +20,19 @@
     } @else {
       <div class="kpi-grid lista-escalonada">
         <article class="kpi-card">
-          <span class="kpi-card__icon kpi-card__icon--orange" aria-hidden="true">◉</span>
+          <span class="kpi-card__icon kpi-card__icon--orange" aria-hidden="true"><svg lucideEye [size]="21"></svg></span>
           <div><small>Visualizaciones</small><strong class="depa-aparecer">{{ numero(totalVisualizaciones()) }}</strong><p>Aperturas de tus publicaciones</p></div>
         </article>
         <article class="kpi-card">
-          <span class="kpi-card__icon kpi-card__icon--blue" aria-hidden="true">⌂</span>
+          <span class="kpi-card__icon kpi-card__icon--blue" aria-hidden="true"><svg lucideHouse [size]="21"></svg></span>
           <div><small>Publicaciones activas</small><strong class="depa-aparecer">{{ publicacionesActivas() }}</strong><p>de {{ publicaciones().length }} en total</p></div>
         </article>
         <article class="kpi-card">
-          <span class="kpi-card__icon kpi-card__icon--green" aria-hidden="true">✓</span>
+          <span class="kpi-card__icon kpi-card__icon--green" aria-hidden="true"><svg lucideCalendarDays [size]="21"></svg></span>
           <div><small>Reservas recibidas</small><strong class="depa-aparecer">{{ reservasValidas().length }}</strong><p>{{ pendientes() }} pendientes o en curso</p></div>
         </article>
         <article class="kpi-card">
-          <span class="kpi-card__icon kpi-card__icon--yellow" aria-hidden="true">$</span>
+          <span class="kpi-card__icon kpi-card__icon--yellow" aria-hidden="true"><svg lucideWallet [size]="21"></svg></span>
           <div><small>Ingresos por reservas</small><strong class="depa-aparecer">{{ moneda(ingresos()) }}</strong><p>Sin contar cancelaciones</p></div>
         </article>
       </div>
@@ -39,10 +40,15 @@
       <div class="dashboard-grid dashboard-grid--main lista-escalonada">
         <article class="dashboard-card revenue-card">
           <div class="card-heading">
-            <div><span>Evolución</span><h2>Ingresos de los últimos 6 meses</h2></div>
-            <strong class="depa-aparecer">{{ moneda(ingresos()) }}</strong>
+            <div><span>Evolución de reservas</span><h2>Ingresos por fecha de pago</h2><p class="chart-period">{{ tituloPeriodo() }} · {{ moneda(totalPeriodo()) }}</p></div>
           </div>
-          <div class="chart" role="img" aria-label="Gráfico de ingresos mensuales">
+          <div class="period-switch" role="group" aria-label="Agrupar evolución por">
+            <button type="button" (click)="periodo.set('dias')" [attr.aria-pressed]="periodo() === 'dias'">Días</button>
+            <button type="button" (click)="periodo.set('semanas')" [attr.aria-pressed]="periodo() === 'semanas'">Semanas</button>
+            <button type="button" (click)="periodo.set('meses')" [attr.aria-pressed]="periodo() === 'meses'">Meses</button>
+          </div>
+          <div class="chart-scroll">
+          <div class="chart" [class.chart--daily]="periodo() === 'dias'" role="img" [attr.aria-label]="'Evolución de ingresos. ' + tituloPeriodo()">
             <svg viewBox="0 0 600 220" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="dashboard-area" x1="0" x2="0" y1="0" y2="1">
@@ -57,15 +63,24 @@
               <path [attr.d]="areaPath()" fill="url(#dashboard-area)" />
               <polyline [attr.points]="linePoints()" class="chart__line" pathLength="1" />
               @for (month of serieMensual(); track month.key; let index = $index) {
-                <circle [attr.cx]="20 + index * 112" [attr.cy]="linePoints().split(' ')[index].split(',')[1]" r="5" class="chart__dot"><title>{{ month.label }}: {{ moneda(month.ingresos) }}</title></circle>
+                <circle [attr.cx]="20 + index * 560 / (serieMensual().length - 1)" [attr.cy]="linePoints().split(' ')[index].split(',')[1]" r="5" class="chart__dot"><title>{{ month.label }}: {{ moneda(month.ingresos) }}</title></circle>
               }
             </svg>
-            <div class="chart__labels">
+            <div class="chart__labels" [style.grid-template-columns]="'repeat(' + serieMensual().length + ', minmax(0, 1fr))'">
               @for (month of serieMensual(); track month.key) {
                 <span><strong>{{ month.label }}</strong><small>{{ month.reservas }} res.</small></span>
               }
             </div>
           </div>
+          </div>
+          <details class="chart-details">
+            <summary>Ver detalle de la evolución</summary>
+            <div class="chart-details__table">
+              <table><thead><tr><th>Período</th><th>Reservas</th><th>Ingresos</th></tr></thead><tbody>
+                @for (item of serieMensual(); track item.key) { <tr><td>{{ item.label }}</td><td>{{ item.reservas }}</td><td>{{ moneda(item.ingresos) }}</td></tr> }
+              </tbody></table>
+            </div>
+          </details>
         </article>
 
         <article class="dashboard-card activity-card">
@@ -138,6 +153,27 @@
         </article>
       </div>
 
+      <article class="dashboard-card settlements-card" aria-labelledby="liquidaciones-pendientes">
+        <div class="card-heading">
+          <div><span>Liquidaciones</span><h2 id="liquidaciones-pendientes">Pendientes</h2></div>
+          <strong>{{ liquidacionesPendientes().length }}</strong>
+        </div>
+        <p class="settlement-caption">Reservas con liquidación en espera, revisión o pendiente de pago.</p>
+        @for (reserva of pendientesVisibles(); track reserva.id) {
+          <div class="pending-settlement">
+            <div><strong>{{ reserva.publicacion?.titulo || 'Publicación no disponible' }}</strong><small>Reserva #{{ reserva.id }}</small></div>
+            <span class="pending-settlement__status">{{ estadoLiquidacion(reserva) }}</span>
+          </div>
+        } @empty {
+          <p class="settlement-caption">No tenés liquidaciones pendientes.</p>
+        }
+        @if (liquidacionesPendientes().length > 5) {
+          <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="verTodasPendientes.set(!verTodasPendientes())" [attr.aria-expanded]="verTodasPendientes()">
+            {{ verTodasPendientes() ? 'Ver menos' : 'Ver todas (' + liquidacionesPendientes().length + ')' }}
+          </button>
+        }
+      </article>
+
       <article class="dashboard-card settlements-card" aria-labelledby="historial-liquidaciones">
         <div class="card-heading">
           <div><span>Liquidaciones</span><h2 id="historial-liquidaciones">Historial de liquidaciones</h2></div>
@@ -152,6 +188,44 @@
           <p role="status">Cargando liquidaciones…</p>
         }
       </article>
+
+      <section class="print-report" aria-label="Informe de estadísticas">
+        <header class="report-header">
+          <img src="/images/Logo.png" alt="DEPA" />
+          <div><p>DEPA ALQUILERES</p><h1>Informe de actividad</h1><span>Panel del anunciante</span></div>
+        </header>
+        <div class="report-summary">
+          <div><span>Visualizaciones</span><strong>{{ numero(totalVisualizaciones()) }}</strong></div>
+          <div><span>Publicaciones activas</span><strong>{{ publicacionesActivas() }}</strong></div>
+          <div><span>Reservas recibidas</span><strong>{{ reservasValidas().length }}</strong></div>
+          <div><span>Ingresos por reservas</span><strong>{{ moneda(ingresos()) }}</strong></div>
+        </div>
+        <p class="report-note">Importes de reservas no canceladas, por fecha de pago. Los ingresos no representan pagos ya liquidados.</p>
+        <p class="report-note">Conversión de vistas a reservas: {{ porcentaje(conversion()) }} · {{ pendientes() }} estadías pendientes o en curso.</p>
+        <h2>Evolución · {{ tituloPeriodo() }}</h2>
+        <table><thead><tr><th>Período</th><th>Reservas</th><th>Ingresos</th></tr></thead><tbody>
+          @for (item of serieMensual(); track item.key) { <tr><td>{{ item.label }}</td><td>{{ item.reservas }}</td><td>{{ moneda(item.ingresos) }}</td></tr> }
+        </tbody></table>
+        <h2>Reservas por día de la semana</h2>
+        <table><thead><tr><th>Día</th><th>Reservas</th></tr></thead><tbody>
+          @for (dia of actividadSemanal(); track dia.day) { <tr><td>{{ dia.label }}</td><td>{{ dia.value }}</td></tr> }
+        </tbody></table>
+        <h2>Rendimiento por publicación</h2>
+        <table><thead><tr><th>Publicación</th><th>Visualizaciones</th><th>Reservas</th><th>Ingresos</th></tr></thead><tbody>
+          @for (item of rendimientoCompleto(); track item.publicacion.id) { <tr><td>{{ item.publicacion.titulo }}</td><td>{{ numero(item.visualizaciones) }}</td><td>{{ item.reservas }}</td><td>{{ moneda(item.ingresos) }}</td></tr> }
+          @empty { <tr><td colspan="4">No hay publicaciones registradas.</td></tr> }
+        </tbody></table>
+        <h2>Liquidaciones pendientes</h2>
+        <table><thead><tr><th>Reserva</th><th>Publicación</th><th>Estado</th></tr></thead><tbody>
+          @for (reserva of liquidacionesPendientes(); track reserva.id) { <tr><td>#{{ reserva.id }}</td><td>{{ reserva.publicacion?.titulo || 'Publicación no disponible' }}</td><td>{{ estadoLiquidacion(reserva) }}</td></tr> }
+          @empty { <tr><td colspan="3">No hay liquidaciones pendientes.</td></tr> }
+        </tbody></table>
+        <h2>Pagos registrados</h2>
+        <table><thead><tr><th>Reserva</th><th>Publicación</th><th>Fecha</th><th>Importe</th></tr></thead><tbody>
+          @for (pago of pagos() ?? []; track pago.id) { <tr><td>#{{ pago.reservaId }}</td><td>{{ pago.publicacion || 'Publicación no disponible' }}</td><td>{{ pago.fecha ? fechaReporte(pago.fecha) : 'Sin fecha' }}</td><td>{{ pago.importe === null ? 'Sin importe' : importePago(pago.importe, pago.moneda) }}</td></tr> }
+          @empty { <tr><td colspan="4">No hay pagos registrados.</td></tr> }
+        </tbody></table>
+      </section>
     }
   </div>
 </section>

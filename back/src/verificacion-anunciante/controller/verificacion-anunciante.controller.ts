@@ -181,6 +181,17 @@ export class VerificacionAnuncianteController {
     return this.verificacionService.buscarSolicitudConHistorial(req.user.id);
   }
 
+  @Get('administracion/usuarios/:id/solicitud')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROL.ADMINISTRADOR)
+  obtenerSolicitudAdministracion(@Param('id', ParseIntPipe) id: number) {
+    if (!Number.isSafeInteger(id) || id < 1 || id > 2_147_483_647) {
+      throw new BadRequestException('El identificador de usuario no es válido');
+    }
+    return this.verificacionService.buscarHistorialAdministracion(id);
+  }
+
   @Get(':id/publico')
   @Header('Cache-Control', 'no-store')
   perfilPublico(@Param('id', ParseIntPipe) id: number) {

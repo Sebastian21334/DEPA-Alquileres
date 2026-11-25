@@ -12,7 +12,7 @@ import { ActividadReembolsosService } from '../../core/services/actividad-reembo
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LucideCalendar, LucideCheck, LucideChevronDown, LucideCopy, LucideKeyRound, LucideLandmark } from '@lucide/angular';
+import { LucideCalendar, LucideCheck, LucideChevronDown, LucideCopy, LucideDownload, LucideKeyRound, LucideLandmark } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
 import { ChatService } from '../../core/services/chat.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -29,7 +29,7 @@ import {
 @Component({
   selector: 'app-reserva-resultado',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, ReservaReprogramacionComponent, ReembolsoChatComponent, VerComprobanteComponent],
+  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, LucideDownload, ReservaReprogramacionComponent, ReembolsoChatComponent, VerComprobanteComponent],
   templateUrl: './reserva-resultado.component.html',
   styleUrl: './reserva-resultado.component.scss',
 })
@@ -239,6 +239,10 @@ export class ReservaResultadoComponent {
 
   protected reintentarCodigo(): void {
     this.reintentoCodigo.update((intento) => intento + 1);
+  }
+
+  protected exportarReserva(): void {
+    window.print();
   }
 
   protected async copiarCodigo(): Promise<void> {

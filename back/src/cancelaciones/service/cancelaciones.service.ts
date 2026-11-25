@@ -38,6 +38,10 @@ import {
 export class CancelacionesService {
   constructor(@Inject(CANCELACIONES_REPOSITORY) private readonly cancelaciones: ICancelacionesRepository, private readonly reservas: ReservasService, private readonly reembolsos: ReembolsosService, private readonly catalogos: CatalogosService, private readonly notificaciones?: ReservaNotificacionesService) {}
 
+  listarPorReservas(ids: number[]): Promise<SolicitudCancelacion[]> {
+    return this.cancelaciones.listarPorReservas(ids);
+  }
+
   /**
    * Confirma la cancelación con el importe aceptado por un participante.
    * Si hay devolución, se registra en la misma transacción para procesarla después.

@@ -7,6 +7,7 @@ import {
   Reserva,
 } from '../../shared/services/reservation.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
+import type { SolicitudVerificacion } from '../../shared/models/perfil.model';
 import { cuerpoMensajeReclamo } from '../../shared/utils/reclamo-imagenes';
 import type { DesglosePago } from '../../shared/utils/desglose-pago';
 
@@ -38,6 +39,11 @@ export interface AdminPage<T> {
   limite: number;
   total: number;
   totalPaginas: number;
+}
+
+export interface AdminHistorialAnunciante {
+  esAnunciante: boolean;
+  solicitud: Pick<SolicitudVerificacion, 'id' | 'estado' | 'numero_revision' | 'creada_en' | 'actualizada_en' | 'revisiones'> | null;
 }
 
 export interface AdminBloqueo {
@@ -93,6 +99,8 @@ export interface AdminCity extends AdminCatalogItem {
 }
 /** Reserva por liquidar: el back calcula el importe desde el pago y si ya se le puede pagar al anunciante. */
 export type AdminSettlement = Reserva & {
+  reclamos: { id: number; categoria: Reclamo['categoria']; estado: string; resolucion: string | null; motivo_resolucion: string | null; solicitud_cancelacion_id: number | null }[];
+  cancelaciones: { id: number; estado: string; motivo: string; observacion: string | null; solicitante_id: number }[];
   fecha_disponible_pago: string | null;
   porcentaje_comision_depa: number | null;
   /** Lo que pagó el inquilino menos lo que ya se le devolvió. */
@@ -193,6 +201,10 @@ export class AdminService {
   }
   obtenerPerfilUsuario(id: number) {
     return this.http.get<AdminUser & { foto_url: string | null }>(`${this.api}/usuarios/administracion/${id}`);
+  }
+
+  obtenerHistorialAnunciante(id: number) {
+    return this.http.get<AdminHistorialAnunciante>(`${this.api}/anunciantes/administracion/usuarios/${id}/solicitud`);
   }
 
   listarUsuarios(pagina = 1, q = '') {
