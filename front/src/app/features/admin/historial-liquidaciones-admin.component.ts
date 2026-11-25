@@ -8,6 +8,7 @@ import { DesglosePagoComponent } from '../../shared/components/desglose-pago/des
 import { FiltrosListaComponent } from '../../shared/components/filtros-lista/filtros-lista.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { formatearImporteConMoneda } from '../../shared/utils/formato-numero';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
 import { fechaArgentina } from '../../shared/utils/rental-dates';
@@ -18,7 +19,7 @@ import { AdminPagoLiquidacion, AdminService } from './admin.service';
 @Component({
   selector: 'app-historial-liquidaciones-admin',
   standalone: true,
-  imports: [DatePipe, RouterLink, FiltrosListaComponent, PaginadorComponent, DesglosePagoComponent, VerComprobanteComponent, LucideCalendarDays, LucideClock3],
+  imports: [DatePipe, RouterLink, FiltrosListaComponent, PaginadorComponent, DesglosePagoComponent, VerComprobanteComponent, EsqueletoListaComponent, LucideCalendarDays, LucideClock3],
   templateUrl: './historial-liquidaciones-admin.component.html',
   styleUrl: './historial-liquidaciones-admin.component.scss',
 })

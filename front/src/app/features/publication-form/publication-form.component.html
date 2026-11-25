@@ -7,13 +7,10 @@
   </header>
 
   @if (loading()) {
-    <div class="state">
-      <app-spinner />
-      <p>Cargando publicación…</p>
-    </div>
+    <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando publicación…" />
   } @else {
     <form class="publication-form" [formGroup]="form" (ngSubmit)="submit()">
-      <section class="form-card">
+      <section class="form-card" appReveal>
         <div class="card-heading">
           <span>1</span>
           <div>
@@ -84,7 +81,7 @@
         </div>
       </section>
 
-      <section class="form-card">
+      <section class="form-card" appReveal>
         <div class="card-heading">
           <span>2</span>
           <div>
@@ -148,7 +145,7 @@
         </div>
       </section>
 
-      <section class="form-card form-card--calendar">
+      <section class="form-card form-card--calendar" appReveal>
         <div class="card-heading">
           <span>3</span>
           <div><h2>Fotos de la propiedad</h2><p>La primera foto es la portada. Los cambios en las fotos se guardan automáticamente.</p></div>
@@ -164,7 +161,7 @@
       </section>
 
       @if (formulario.esTemporaria()) {
-        <section class="form-card form-card--calendar">
+        <section class="form-card form-card--calendar" appReveal>
           <div class="card-heading">
             <span>4</span>
             <div>

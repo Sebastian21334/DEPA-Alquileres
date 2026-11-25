@@ -48,11 +48,13 @@
   text-align: start;
   cursor: pointer;
 }
+.admin-nav button { transition: background var(--motion-media) ease, color var(--motion-media) ease, box-shadow var(--motion-media) var(--ease-salida); }
 .admin-nav button:hover { background: var(--color-bg); }
 .admin-nav button[aria-current] {
   background: var(--color-primary-light);
   color: var(--color-primary-dark);
   font-weight: 750;
+  box-shadow: inset 3px 0 0 var(--color-primary);
 }
 .admin-section-picker { display: none; }
 .admin-workspace { min-width: 0; }
@@ -73,6 +75,13 @@
 .admin-topbar span { display: flex; align-items: center; gap: 8px; }
 .admin-content { padding: 28px clamp(16px, 2.5vw, 32px) 48px; }
 .admin [hidden] { display: none; }
+// Cada sección entra con un fundido al elegirla: la animación se reinicia cada vez que deja de estar oculta.
+.admin-module, .dashboard-metrics, .dashboard-columns,
+app-cotizaciones-admin, app-publicaciones-admin, app-historial-liquidaciones-admin,
+app-comision-admin, app-catalogos-admin, app-ubicaciones-admin {
+  animation: depa-entrar var(--motion-lenta) var(--ease-salida) backwards;
+}
+.dashboard-columns { animation-delay: 80ms; }
 #admin-section-title, .admin-module article[id] { scroll-margin-top: 88px; }
 .admin-module article[id]:focus { outline: 2px solid var(--color-secondary); outline-offset: 2px; }
 .admin button:focus-visible, .admin-section-picker select:focus-visible {

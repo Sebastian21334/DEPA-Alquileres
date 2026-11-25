@@ -84,35 +84,35 @@
     <div class="dashboard-metrics" [attr.aria-busy]="otherLoading()">
       <button type="button" class="dashboard-metric" (click)="abrirDesdeContador('reclamos')">
         <svg lucideMessageCircle [size]="29" aria-hidden="true"></svg>
-        <span>Reclamos abiertos<strong>{{ otherLoading() ? '…' : openClaims().length }}</strong></span>
+        <span>Reclamos abiertos<strong>@if (otherLoading()) { … } @else { <span class="depa-aparecer">{{ openClaims().length }}</span> }</strong></span>
       </button>
       <button type="button" class="dashboard-metric metric-refund" (click)="abrirDesdeContador('reembolsos')">
         <svg lucideWallet [size]="29" aria-hidden="true"></svg>
-        <span>Reembolsos pendientes<strong>{{ otherLoading() ? '…' : conteoPendientes() }}</strong></span>
+        <span>Reembolsos pendientes<strong>@if (otherLoading()) { … } @else { <span class="depa-aparecer">{{ conteoPendientes() }}</span> }</strong></span>
       </button>
       <button type="button" class="dashboard-metric" (click)="abrirDesdeContador('verificaciones')">
         <svg lucideShieldCheck [size]="29" aria-hidden="true"></svg>
-        <span>Verificaciones pendientes<strong>{{ otherLoading() ? '…' : requests().length }}</strong></span>
+        <span>Verificaciones pendientes<strong>@if (otherLoading()) { … } @else { <span class="depa-aparecer">{{ requests().length }}</span> }</strong></span>
       </button>
       <button type="button" class="dashboard-metric metric-settlement" (click)="abrirDesdeContador('liquidaciones')">
         <svg lucideCircleDollarSign [size]="29" aria-hidden="true"></svg>
-        <span>Liquidaciones a pagar<strong>{{ otherLoading() ? '…' : liquidacionesAPagar().length }}</strong></span>
+        <span>Liquidaciones a pagar<strong>@if (otherLoading()) { … } @else { <span class="depa-aparecer">{{ liquidacionesAPagar().length }}</span> }</strong></span>
       </button>
       <button type="button" class="dashboard-metric metric-appeal" (click)="abrirDesdeContador('bloqueos')">
         <svg lucideGavel [size]="29" aria-hidden="true"></svg>
-        <span>Apelaciones a responder<strong>{{ bloqueadosCargando() ? '…' : apelacionesAResponder().length }}</strong></span>
+        <span>Apelaciones a responder<strong>@if (bloqueadosCargando()) { … } @else { <span class="depa-aparecer">{{ apelacionesAResponder().length }}</span> }</strong></span>
       </button>
     </div>
     <div class="dashboard-columns">
       <section class="dashboard-card">
         <h2>Pendientes de atención</h2>
         @if (otherLoading()) {
-          <p role="status">Cargando pendientes…</p>
+          <app-esqueleto-lista [cantidad]="4" etiqueta="Cargando pendientes…" />
         } @else if (pendingCases().length) {
           <div class="dashboard-table">
             <table>
               <thead><tr><th scope="col">Caso</th><th scope="col">Estado</th><th scope="col">Acción</th></tr></thead>
-              <tbody>
+              <tbody class="lista-escalonada">
                 @for (item of pendientesMostrados(); track item.section + '-' + item.id) {
                   <tr>
                     <td>{{ item.label }}</td>
@@ -160,13 +160,13 @@
       <span class="counter">{{ settlements().length }}</span>
     </div>
     @if (otherLoading()) {
-      <p class="empty">Cargando liquidaciones…</p>
+      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando liquidaciones…" />
     } @else if (!settlements().length) {
       <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
     } @else {
       <app-filtros-lista class="admin-filtros" [lista]="listaLiquidaciones" etiqueta="Buscar liquidaciones"
         placeholder="Buscar por reserva, publicación, inquilino o anunciante" />
-      <div class="settlement-list">
+      <div class="settlement-list lista-escalonada">
         @for (settlement of listaLiquidaciones.visibles(); track settlement.id) {
           <article class="settlement-card" [id]="'admin-liquidaciones-' + settlement.id" tabindex="-1">
             <div>
@@ -249,12 +249,14 @@
     @if (totalReembolsos() > refunds().length) {
       <p class="refund-note" role="status">Mostrando los últimos {{ refunds().length }} de {{ totalReembolsos() }}.</p>
     }
-    @if (!refunds().length) {
+    @if (otherLoading() && !refunds().length) {
+      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando reembolsos…" />
+    } @else if (!refunds().length) {
       <p class="empty">No hay reembolsos registrados.</p>
     } @else {
       <app-filtros-lista class="admin-filtros" [lista]="listaReembolsos" etiqueta="Buscar reembolsos"
         placeholder="Buscar por reembolso, reserva, publicación, inquilino, motivo u operación" />
-      <div class="settlement-list">
+      <div class="settlement-list lista-escalonada">
         @for (reembolso of listaReembolsos.visibles(); track reembolso.id) {
           <article class="settlement-card" [id]="'admin-reembolsos-' + reembolso.id" tabindex="-1">
             <div>
@@ -503,7 +505,7 @@
       <p class="alert alert--error" role="alert">{{ errorReclamos() }}</p>
     }
     @if (!claims().length && !errorReclamos()) {
-      <p class="empty">{{ loading() ? 'Cargando reclamos…' : 'No hay reclamos registrados.' }}</p>
+      @if (loading()) { <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando reclamos…" /> } @else { <p class="empty">No hay reclamos registrados.</p> }
     } @else if (claims().length) {
       @if (claims().length >= maxReclamosAdmin) {
         <p class="refund-note" role="status">Se muestran los {{ maxReclamosAdmin }} reclamos más recientes.</p>
@@ -511,7 +513,7 @@
       <app-filtros-lista class="admin-filtros" [lista]="listaReclamos" etiqueta="Buscar reclamos"
         placeholder="Buscar por reclamo, reserva, publicación, inquilino, anunciante o descripción" />
     }
-    <div class="settlement-list">
+    <div class="settlement-list lista-escalonada">
       @for (claim of listaReclamos.visibles(); track claim.id) {
         <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
           <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
@@ -604,7 +606,7 @@
       <span class="counter">{{ requests().length }}</span>
     </div>
     @if (otherLoading()) {
-      <p class="empty">Cargando solicitudes…</p>
+      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando solicitudes…" />
     } @else if (!requests().length) {
       <p class="empty">No hay solicitudes pendientes.</p>
     } @else {
@@ -613,7 +615,7 @@
       @if (!listaVerificaciones.filtrados().length) {
         <p class="empty">No hay solicitudes que coincidan. <button type="button" class="link-button" (click)="listaVerificaciones.limpiar()">Limpiar filtros</button></p>
       }
-      <div class="requests">
+      <div class="requests lista-escalonada">
         @for (request of listaVerificaciones.visibles(); track request.id) {
           <article class="request" [id]="'admin-verificaciones-' + request.id" tabindex="-1">
             <div class="request__identity">
@@ -782,9 +784,9 @@
             <th class="right">Acciones</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="lista-escalonada">
           @if (usersLoading()) {
-            <tr><td colspan="5" class="empty">Cargando usuarios…</td></tr>
+            <tr><td colspan="5"><app-esqueleto-lista [cantidad]="4" etiqueta="Cargando usuarios…" /></td></tr>
           } @else {
           @for (user of users(); track user.id) {
             <tr>
@@ -861,13 +863,13 @@
       <p class="alert alert--error" role="alert">{{ bloqueadosError() }}</p>
     }
     @if (bloqueadosCargando()) {
-      <p class="empty" role="status">Cargando usuarios bloqueados…</p>
+      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando usuarios bloqueados…" />
     } @else {
       @if (bloqueados().length) {
         <app-filtros-lista class="admin-filtros" [lista]="listaBloqueos" etiqueta="Buscar bloqueos actuales"
           placeholder="Buscar por nombre, email, motivo o administrador" />
       }
-      <div class="blocked-users">
+      <div class="blocked-users lista-escalonada">
         @for (bloqueo of listaBloqueos.visibles(); track bloqueo.detalle.id) {
           <article class="blocked-user" [id]="'admin-bloqueos-' + bloqueo.usuario.id" tabindex="-1">
             <header class="blocked-user__header">
@@ -923,13 +925,13 @@
     } @else {
       @if (historialBloqueosError()) { <p class="alert alert--error" role="alert">{{ historialBloqueosError() }}</p> }
       @if (historialBloqueosCargando()) {
-        <p class="empty" role="status">Cargando historial de bloqueos...</p>
+        <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando historial de bloqueos…" />
       } @else {
         @if (historialBloqueos().length) {
           <app-filtros-lista class="admin-filtros" [lista]="listaHistorialBloqueos" etiqueta="Buscar en el historial de bloqueos"
             placeholder="Buscar por nombre, email, motivo o administrador" />
         }
-        <div class="blocked-users">
+        <div class="blocked-users lista-escalonada">
           @for (bloqueo of listaHistorialBloqueos.visibles(); track bloqueo.usuario.id + '-' + bloqueo.detalle.id) {
             <article class="blocked-user">
               <header class="blocked-user__header">

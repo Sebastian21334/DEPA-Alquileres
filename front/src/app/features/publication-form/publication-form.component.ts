@@ -1,3 +1,5 @@
+import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
+import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { SelectorUbicacionComponent } from '../../shared/components/selector-ubicacion/selector-ubicacion.component';
 import { Component, inject, signal } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -19,7 +21,6 @@ import { PublicacionFormulario } from '../../shared/forms/publicacion-formulario
 import { AuthService } from '../../core/services/auth.service';
 import { AvailabilityCalendarComponent } from '../../shared/components/availability-calendar/availability-calendar.component';
 import { RentalDateRange } from '../../shared/utils/rental-dates';
-import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { SoloNumerosDirective } from '../../shared/directives/solo-numeros.directive';
 import {
   LocationPickerComponent,
@@ -36,7 +37,8 @@ import {
     RouterLink,
     SoloNumerosDirective,
     AvailabilityCalendarComponent,
-    SpinnerComponent,
+    EsqueletoListaComponent,
+    RevealDirective,
     LocationPickerComponent,
     SelectorUbicacionComponent,
     CargaFotosComponent,

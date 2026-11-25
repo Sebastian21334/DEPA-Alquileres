@@ -32,12 +32,12 @@
     }
 
     @if (cargando()) {
-      <p class="empty">Cargando publicaciones…</p>
+      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando publicaciones…" />
     } @else if (error()) {
       <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
     } @else {
       @if (cargandoPublicaciones()) {
-        <p class="empty">Cargando publicaciones…</p>
+        <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando publicaciones…" />
       } @else {
       @for (pub of publicaciones(); track pub.id) {
         <article class="acct-card item" [class.item--temp]="esTemporaria(pub.modalidad)" [class.is-busy]="ocupada() === pub.id">
@@ -53,13 +53,13 @@
             <div class="item__info">
               <div class="item__badges">
                 @if (pub.motivo_baja_admin) {
-                  <span class="acct-badge acct-badge--warn">Desactivada por un administrador</span>
+                  <span class="acct-badge acct-badge--warn depa-aparecer">Desactivada por un administrador</span>
                 } @else if (pub.activa) {
-                  <span class="acct-badge acct-badge--ok">Activa</span>
+                  <span class="acct-badge acct-badge--ok depa-aparecer">Activa</span>
                 } @else if (!pub.imagenes?.length) {
-                  <span class="acct-badge acct-badge--warn" title="Una publicación necesita al menos una imagen para mostrarse">No publicada · falta una imagen</span>
+                  <span class="acct-badge acct-badge--warn depa-aparecer" title="Una publicación necesita al menos una imagen para mostrarse">No publicada · falta una imagen</span>
                 } @else {
-                  <span class="acct-badge">Inactiva</span>
+                  <span class="acct-badge depa-aparecer">Inactiva</span>
                 }
                 <small>Publicada el {{ fecha(pub.fecha_publicacion) }}</small>
                 @if (pub.modalidad?.nombre) { <span class="acct-badge item__modality">{{ pub.modalidad?.nombre }}</span> }
@@ -119,7 +119,7 @@
               } @else if (liquidaciones(); as pagos) {
                 <app-historial-liquidaciones [pagos]="pagos" vacio="Todavía no hay pagos registrados para esta publicación." />
               } @else {
-                <p role="status">Cargando liquidaciones…</p>
+                <app-esqueleto-lista etiqueta="Cargando liquidaciones…" />
               }
             </section>
           }
@@ -145,7 +145,7 @@
       }
       }
 
-      <section class="trash" aria-labelledby="papelera-titulo">
+      <section class="trash lista-escalonada" aria-labelledby="papelera-titulo">
         <div class="trash__heading">
           <h2 id="papelera-titulo"><svg lucideTrash2 [size]="22" aria-hidden="true"></svg> Papelera ({{ papelera().length }})</h2>
           <p>Las publicaciones eliminadas se conservan acá. Al restaurarlas, vuelven a Mis publicaciones como inactivas.</p>

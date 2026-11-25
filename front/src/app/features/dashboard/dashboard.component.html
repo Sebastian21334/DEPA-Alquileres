@@ -13,34 +13,34 @@
     </header>
 
     @if (cargando()) {
-      <div class="dashboard-state"><app-spinner /><p>Preparando tus métricas…</p></div>
+      <app-esqueleto-lista [tarjetas]="true" [cantidad]="4" etiqueta="Preparando tus métricas…" />
     } @else if (error()) {
       <div class="acct-alert acct-alert--error" role="alert">{{ error() }}</div>
     } @else {
-      <div class="kpi-grid">
+      <div class="kpi-grid lista-escalonada">
         <article class="kpi-card">
           <span class="kpi-card__icon kpi-card__icon--orange" aria-hidden="true">◉</span>
-          <div><small>Visualizaciones</small><strong>{{ numero(totalVisualizaciones()) }}</strong><p>Aperturas de tus publicaciones</p></div>
+          <div><small>Visualizaciones</small><strong class="depa-aparecer">{{ numero(totalVisualizaciones()) }}</strong><p>Aperturas de tus publicaciones</p></div>
         </article>
         <article class="kpi-card">
           <span class="kpi-card__icon kpi-card__icon--blue" aria-hidden="true">⌂</span>
-          <div><small>Publicaciones activas</small><strong>{{ publicacionesActivas() }}</strong><p>de {{ publicaciones().length }} en total</p></div>
+          <div><small>Publicaciones activas</small><strong class="depa-aparecer">{{ publicacionesActivas() }}</strong><p>de {{ publicaciones().length }} en total</p></div>
         </article>
         <article class="kpi-card">
           <span class="kpi-card__icon kpi-card__icon--green" aria-hidden="true">✓</span>
-          <div><small>Reservas recibidas</small><strong>{{ reservasValidas().length }}</strong><p>{{ pendientes() }} pendientes o en curso</p></div>
+          <div><small>Reservas recibidas</small><strong class="depa-aparecer">{{ reservasValidas().length }}</strong><p>{{ pendientes() }} pendientes o en curso</p></div>
         </article>
         <article class="kpi-card">
           <span class="kpi-card__icon kpi-card__icon--yellow" aria-hidden="true">$</span>
-          <div><small>Ingresos por reservas</small><strong>{{ moneda(ingresos()) }}</strong><p>Sin contar cancelaciones</p></div>
+          <div><small>Ingresos por reservas</small><strong class="depa-aparecer">{{ moneda(ingresos()) }}</strong><p>Sin contar cancelaciones</p></div>
         </article>
       </div>
 
-      <div class="dashboard-grid dashboard-grid--main">
+      <div class="dashboard-grid dashboard-grid--main lista-escalonada">
         <article class="dashboard-card revenue-card">
           <div class="card-heading">
             <div><span>Evolución</span><h2>Ingresos de los últimos 6 meses</h2></div>
-            <strong>{{ moneda(ingresos()) }}</strong>
+            <strong class="depa-aparecer">{{ moneda(ingresos()) }}</strong>
           </div>
           <div class="chart" role="img" aria-label="Gráfico de ingresos mensuales">
             <svg viewBox="0 0 600 220" preserveAspectRatio="none">
@@ -55,7 +55,7 @@
               <line x1="20" y1="140" x2="580" y2="140" class="chart__grid" />
               <line x1="20" y1="190" x2="580" y2="190" class="chart__grid" />
               <path [attr.d]="areaPath()" fill="url(#dashboard-area)" />
-              <polyline [attr.points]="linePoints()" class="chart__line" />
+              <polyline [attr.points]="linePoints()" class="chart__line" pathLength="1" />
               @for (month of serieMensual(); track month.key; let index = $index) {
                 <circle [attr.cx]="20 + index * 112" [attr.cy]="linePoints().split(' ')[index].split(',')[1]" r="5" class="chart__dot"><title>{{ month.label }}: {{ moneda(month.ingresos) }}</title></circle>
               }
@@ -82,7 +82,7 @@
         </article>
       </div>
 
-      <div class="dashboard-grid dashboard-grid--bottom">
+      <div class="dashboard-grid dashboard-grid--bottom lista-escalonada">
         <article class="dashboard-card performance-card">
           <div class="card-heading">
             <div><span>Rendimiento</span><h2>Rendimiento por publicación</h2></div>

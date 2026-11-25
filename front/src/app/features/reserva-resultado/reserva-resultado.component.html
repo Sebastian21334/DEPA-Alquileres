@@ -86,13 +86,19 @@
           <app-reserva-reprogramacion [reserva]="item" (cancelar)="reprogramando.set(false)" (guardada)="guardarReprogramacion($event)" />
         }
       } @else {
+      @let aprobada = !devolucionPendiente() && item.estado_pago === 'APROBADO' && !item.cancelada;
       <header
         class="receipt-hero"
-        [class.is-approved]="!devolucionPendiente() && item.estado_pago === 'APROBADO' && !item.cancelada"
+        [class.is-approved]="aprobada"
         [class.is-pending]="devolucionPendiente() || item.estado_pago === 'PENDIENTE' || (item.cancelada && item.estado_pago === 'APROBADO' && item.estado_liquidacion === 'EN_REVISION')"
       >
         <div class="status-icon">
-          {{ devolucionPendiente() || item.estado_pago === 'PENDIENTE' ? '…' : item.estado_pago === 'APROBADO' && !item.cancelada ? '✓' : '!' }}
+          @if (aprobada) {
+            <svg class="status-icon__tilde" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+            <span class="sr-only">✓</span>
+          } @else {
+            {{ devolucionPendiente() || item.estado_pago === 'PENDIENTE' ? '…' : '!' }}
+          }
         </div>
         <div>
           <span class="eyebrow">Reserva #{{ item.id }}</span>

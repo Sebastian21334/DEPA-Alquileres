@@ -57,6 +57,22 @@
 .is-approved .status-icon {
   background: #dcfce7;
   color: #15803d;
+  animation: depa-pop var(--motion-lenta) ease backwards;
+}
+.status-icon__tilde {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: depa-trazo var(--motion-lenta) var(--ease-salida) 200ms forwards;
+}
+@keyframes depa-trazo {
+  to { stroke-dashoffset: 0; }
 }
 .is-pending .status-icon {
   background: #ffedd5;

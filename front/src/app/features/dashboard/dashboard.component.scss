@@ -94,3 +94,11 @@
   .performance-row > a { grid-column: 2; grid-row: 2 / span 2; }
   .chart svg { height: 190px; }
 }
+
+/* ---------- Animaciones ---------- */
+/* La línea de ingresos se dibuja y las barras de actividad crecen desde abajo, escalonadas. */
+.chart__line { stroke-dasharray: 1; animation: dashboard-trazo 0.9s var(--ease-salida) 150ms backwards; }
+@keyframes dashboard-trazo { from { stroke-dashoffset: 1; } }
+.bar i { transform-origin: bottom; animation: dashboard-crecer var(--motion-lenta) var(--ease-salida) backwards; }
+@for $i from 2 through 7 { .bar:nth-child(#{$i}) i { animation-delay: #{($i - 1) * 50}ms; } }
+@keyframes dashboard-crecer { from { transform: scaleY(0); } }

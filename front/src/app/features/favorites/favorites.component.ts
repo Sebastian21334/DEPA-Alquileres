@@ -1,15 +1,15 @@
+import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { ListingCardComponent } from '../../shared/components/listing-card/listing-card.component';
-import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { FavoritesService } from '../../shared/services/favorites.service';
 
 @Component({
   selector: 'app-favorites',
   standalone: true,
-  imports: [RouterLink, ListingCardComponent, SpinnerComponent],
+  imports: [RouterLink, ListingCardComponent, RevealDirective],
   templateUrl: './favorites.component.html',
   styleUrl: './favorites.component.scss',
 })

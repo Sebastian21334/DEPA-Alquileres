@@ -1,5 +1,6 @@
 @if (abierto()) {
-  <section class="asistente" aria-labelledby="asistente-depa-titulo" (keydown.escape)="cerrar(); $event.stopPropagation()">
+  <section class="asistente" animate.enter="asistente--entrar" animate.leave="asistente--salir"
+    aria-labelledby="asistente-depa-titulo" (keydown.escape)="cerrar(); $event.stopPropagation()">
     <header class="asistente__encabezado">
       <div class="asistente__marca">
         <span class="asistente__icono"><svg lucideSparkles [size]="19" aria-hidden="true"></svg></span>
@@ -15,7 +16,7 @@
 
     <div #historial class="asistente__historial" role="log" aria-label="Conversación con depa">
       @if (!intercambios().length && !consultaEnCurso() && !error()) {
-        <p class="mensaje">¡Hola! Podés pedirme que busque un alquiler o preguntarme cómo funciona DEPA.</p>
+        <p class="mensaje asistente__bienvenida">¡Hola! Podés pedirme que busque un alquiler o preguntarme cómo funciona DEPA.</p>
         <div class="asistente__sugerencias">
           <button type="button" (click)="enviar('Busco un alquiler temporario en Villa María')">Buscar un temporario</button>
           <button type="button" (click)="enviar('¿Cómo hago para reservar?')">¿Cómo hago para reservar?</button>
@@ -53,7 +54,7 @@
         </div>
       }
       @if (consultaEnCurso()) {
-        <p class="mensaje mensaje--propio">{{ consultaEnCurso() }}</p>
+        <p class="mensaje mensaje--propio mensaje--enviando">{{ consultaEnCurso() }}</p>
         <div class="mensaje asistente__escribiendo" role="status" aria-label="depa está respondiendo">
           <span></span><span></span><span></span>
         </div>
@@ -73,7 +74,8 @@
     </form>
   </section>
 } @else {
-  <button #lanzador type="button" class="asistente__lanzador" aria-label="Abrir el asistente depa" (click)="abrir()">
+  <button #lanzador type="button" class="asistente__lanzador" animate.enter="asistente__lanzador--entrar"
+    aria-label="Abrir el asistente depa" (click)="abrir()">
     <svg lucideSparkles [size]="21" aria-hidden="true"></svg>
     <span>Preguntale a depa</span>
   </button>

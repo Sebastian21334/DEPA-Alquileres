@@ -102,6 +102,10 @@ export function mensajesApelacion(detalle: {
     article.propio { flex-direction: row-reverse; text-align: right; }
     .avatar { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex: none; border-radius: 50%; background: #d3e1fb; color: #173a9e; font-size: .83rem; font-weight: 750; }
     .mensaje { min-width: 0; max-width: 85%; }
+    .hilo article { animation: mensaje-entrar var(--motion-media) var(--ease-salida) backwards; }
+    .hilo article.propio { animation-name: mensaje-entrar-propio; }
+    @keyframes mensaje-entrar { from { opacity: 0; translate: -12px 0; } }
+    @keyframes mensaje-entrar-propio { from { opacity: 0; translate: 12px 0; } }
     .autor { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 5px; font-size: .79rem; }
     .propio .autor { justify-content: flex-end; }
     .autor span, .hora { color: #52607a; }

@@ -1,6 +1,6 @@
 <section class="commission-section" aria-label="Configuración de comisión">
   @if (cargando()) {
-    <p role="status">Cargando comisión…</p>
+    <app-esqueleto-lista [tarjetas]="true" [cantidad]="1" etiqueta="Cargando comisión…" />
   } @else if (error()) {
     <p class="alert alert--error" role="alert">No se pudo cargar la comisión: {{ error() }}</p>
     <button type="button" class="button button--ghost" (click)="cargar()">Reintentar</button>
