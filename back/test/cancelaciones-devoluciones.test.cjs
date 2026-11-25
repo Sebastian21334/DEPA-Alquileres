@@ -928,7 +928,7 @@ test('el historial desglosa lo que pagó el inquilino, lo devuelto y lo pagado a
   t.mock.timers.setTime(new Date('2099-01-26T15:00:00Z').getTime());
   await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-resto' }, comprobantePdf(), 3);
   // Con devolución no hay comisión: lo devuelto y lo pagado suman lo que pagó el inquilino.
-  const esperado = { [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 40, comisionDepa: 0, pagadoAnunciante: 60 } };
+  const esperado = { [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 40, comisionDepa: 0, porcentajeComision: null, pagadoAnunciante: 60 } };
   assert.deepEqual(await desglosePorReserva(operaciones.listarPagosRegistrados()), esperado);
   assert.deepEqual(await desglosePorReserva(operaciones.listarPagosDelAnunciante(2)), esperado);
 });
@@ -944,7 +944,7 @@ test('la comisión del desglose es lo que quedó entre lo cobrado y lo transferi
   const operaciones = operacionesLiquidacion();
   await operaciones.registrarPagoAnunciante(reserva.id, { referencia: 'trf-comision' }, comprobantePdf(), 3);
   assert.deepEqual(await desglosePorReserva(operaciones.listarPagosRegistrados()), {
-    [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 0, comisionDepa: 10, pagadoAnunciante: 90 },
+    [reserva.id]: { pagoInquilino: 100, devueltoInquilino: 0, comisionDepa: 10, porcentajeComision: 10, pagadoAnunciante: 90 },
     [historica.id]: null,
   });
 });

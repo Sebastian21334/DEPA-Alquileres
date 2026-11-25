@@ -33,14 +33,14 @@
         </article>
         <article class="kpi-card">
           <span class="kpi-card__icon kpi-card__icon--yellow" aria-hidden="true"><svg lucideWallet [size]="21"></svg></span>
-          <div><small>Ingresos por reservas</small><strong class="depa-aparecer">{{ moneda(ingresos()) }}</strong><p>Sin contar cancelaciones</p></div>
+          <div><small>Ingresos brutos</small><strong class="depa-aparecer">{{ moneda(ingresos()) }}</strong><p>Menos devoluciones, antes de la comisión DEPA</p></div>
         </article>
       </div>
 
       <div class="dashboard-grid dashboard-grid--main lista-escalonada">
         <article class="dashboard-card revenue-card">
           <div class="card-heading">
-            <div><span>Evolución de reservas</span><h2>Ingresos por fecha de pago</h2><p class="chart-period">{{ tituloPeriodo() }} · {{ moneda(totalPeriodo()) }}</p></div>
+            <div><span>Evolución de reservas</span><h2>Ingresos brutos por fecha de pago</h2><p class="chart-period">{{ tituloPeriodo() }} · {{ moneda(totalPeriodo()) }}</p></div>
           </div>
           <div class="period-switch" role="group" aria-label="Agrupar evolución por">
             <button type="button" (click)="periodo.set('dias')" [attr.aria-pressed]="periodo() === 'dias'">Días</button>
@@ -198,9 +198,9 @@
           <div><span>Visualizaciones</span><strong>{{ numero(totalVisualizaciones()) }}</strong></div>
           <div><span>Publicaciones activas</span><strong>{{ publicacionesActivas() }}</strong></div>
           <div><span>Reservas recibidas</span><strong>{{ reservasValidas().length }}</strong></div>
-          <div><span>Ingresos por reservas</span><strong>{{ moneda(ingresos()) }}</strong></div>
+          <div><span>Ingresos brutos</span><strong>{{ moneda(ingresos()) }}</strong></div>
         </div>
-        <p class="report-note">Importes de reservas no canceladas, por fecha de pago. Los ingresos no representan pagos ya liquidados.</p>
+        <p class="report-note">Lo que pagaron los inquilinos menos lo que se les devolvió, por fecha de pago y antes de la comisión DEPA; de una cancelación solo suma lo retenido. Los ingresos no representan pagos ya liquidados.</p>
         <p class="report-note">Conversión de vistas a reservas: {{ porcentaje(conversion()) }} · {{ pendientes() }} estadías pendientes o en curso.</p>
         <h2>Evolución · {{ tituloPeriodo() }}</h2>
         <table><thead><tr><th>Período</th><th>Reservas</th><th>Ingresos</th></tr></thead><tbody>

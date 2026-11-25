@@ -3,6 +3,7 @@ const FORMATO_IMPORTE = new Intl.NumberFormat('es-AR', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const FORMATO_PORCENTAJE = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 });
 
 /** Formatea un entero con separadores de miles en es-AR. */
 export function formatearEntero(valor: number): string {
@@ -21,6 +22,11 @@ export function formatearMoneda(valor: number | string, moneda?: string | null, 
     currency: moneda || 'ARS',
     ...(decimalesMaximos == null ? {} : { maximumFractionDigits: decimalesMaximos }),
   });
+}
+
+/** Porcentaje con hasta dos decimales, por ejemplo «12,5 %»; acepta el decimal en texto que manda el back. */
+export function formatearPorcentaje(valor: number | string): string {
+  return `${FORMATO_PORCENTAJE.format(Number(valor))} %`;
 }
 
 /** Importe precedido por el código de moneda, por ejemplo «ARS 1.824,00». */

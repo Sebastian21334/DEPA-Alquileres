@@ -1,7 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 import { filasDesglose, type DesglosePago } from '../../utils/desglose-pago';
 
-/** Debajo del importe pagado al anunciante, explica la diferencia con lo que pagó el inquilino. Lo usan su historial y el del panel admin. */
+/** Debajo del neto transferido al anunciante, explica cómo se llega a él desde el ingreso bruto. Lo usan su historial y el del panel admin. */
 @Component({
   selector: 'app-desglose-pago',
   template: `

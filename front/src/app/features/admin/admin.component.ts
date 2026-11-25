@@ -57,7 +57,7 @@ import { FiltrosListaComponent } from '../../shared/components/filtros-lista/fil
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
-import { formatearMoneda } from '../../shared/utils/formato-numero';
+import { formatearMoneda, formatearPorcentaje } from '../../shared/utils/formato-numero';
 import { etiquetaCategoriaReclamo } from '../../shared/utils/reclamo-categorias';
 import { etiquetasEstadia } from '../../shared/utils/reservation-state';
 import {
@@ -568,6 +568,7 @@ export class AdminComponent {
   protected readonly etiquetasEstadia = etiquetasEstadia;
   protected readonly pendienteParaAnunciante = pendienteParaAnunciante;
   protected readonly tieneDevolucion = tieneDevolucion;
+  protected readonly porcentaje = formatearPorcentaje;
 
   protected abrirResolucionLiquidacion(reserva: AdminSettlement, devolver: boolean): void {
     this.resolucionLiquidacion.set({ reserva, devolver });

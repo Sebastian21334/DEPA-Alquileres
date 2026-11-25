@@ -25,7 +25,7 @@
       <table class="settlement-history__table">
         <caption class="settlement-history-caption">Pagos registrados a anunciantes</caption>
         <thead>
-          <tr><th scope="col">Fecha de registro</th><th scope="col">Reserva</th><th scope="col">Anunciante</th><th scope="col">Importe</th><th scope="col">Comprobante y observación</th><th scope="col">Registrado por</th></tr>
+          <tr><th scope="col">Fecha de registro</th><th scope="col">Reserva</th><th scope="col">Anunciante</th><th scope="col">Neto transferido</th><th scope="col">Comprobante y observación</th><th scope="col">Registrado por</th></tr>
         </thead>
         <tbody class="lista-escalonada">
           @for (pago of lista.visibles(); track pago.id) {
@@ -38,7 +38,7 @@
               </td>
               <td data-label="Reserva"><a class="settlement-history__reservation" [routerLink]="['/admin/reservas', pago.reservaId]" [queryParams]="{ desde: 'historial-liquidaciones' }" [attr.aria-label]="'Ver reserva #' + pago.reservaId">#{{ pago.reservaId }}</a><span class="settlement-history__publication">{{ pago.publicacion || 'Publicación no disponible' }}</span></td>
               <td data-label="Anunciante">{{ pago.anunciante || 'Sin datos' }}</td>
-              <td data-label="Importe" class="settlement-history__amount">
+              <td data-label="Neto transferido" class="settlement-history__amount">
                 {{ pago.importe === null ? 'Sin importe' : importeConMoneda(pago.importe, pago.moneda) }}
                 @if (pago.desglose; as desglose) { <app-desglose-pago [desglose]="desglose" [moneda]="pago.moneda" /> }
               </td>

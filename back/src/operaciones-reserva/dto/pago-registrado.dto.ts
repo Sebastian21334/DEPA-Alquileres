@@ -4,6 +4,8 @@ export interface DesglosePagoRegistradoDto {
   devueltoInquilino: number;
   /** Lo que quedó entre lo cobrado y lo transferido; 0 si no hubo comisión. */
   comisionDepa: number;
+  /** Porcentaje de la reserva con que se calculó la comisión; null si no se aplicó. */
+  porcentajeComision: number | null;
   pagadoAnunciante: number;
 }
 

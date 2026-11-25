@@ -17,7 +17,7 @@ import { formatearImporteConMoneda } from '../../utils/formato-numero';
         @for (pago of visibles(); track pago.id) {
           <li>
             <header>
-              <strong>{{ importe(pago) }}</strong>
+              <span class="liquidacion-neto">@if (pago.importe !== null) { Neto transferido } <strong>{{ importe(pago) }}</strong></span>
               <span class="acct-badge acct-badge--ok">Pago registrado</span>
             </header>
             @if (mostrarPublicacion() && pago.publicacion) {
@@ -59,6 +59,8 @@ import { formatearImporteConMoneda } from '../../utils/formato-numero';
       overflow-wrap: anywhere;
     }
     .liquidaciones-lista header { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .liquidacion-neto { color: var(--color-text-muted); font-size: .9rem; }
+    .liquidacion-neto strong { color: var(--color-text); font-size: 1rem; }
     .liquidaciones-lista p, :host > p { margin: .35rem 0 0; font-size: .9rem; }
     .liquidacion-publicacion { font-weight: 700; }
     .liquidacion-observacion { white-space: pre-wrap; }

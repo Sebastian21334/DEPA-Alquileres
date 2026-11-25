@@ -197,10 +197,14 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     const pagado = centavos(Number(cobro.amount));
     const devuelto = centavos(Number(cobro.amount_refunded ?? 0));
     const comision = (pagado - devuelto - pagadoEnCentavos) / 100;
+    const comisionDepa = comision > TOLERANCIA_MONETARIA ? comision : 0;
+    const porcentaje = cobro.reserva?.porcentaje_comision_depa;
     return {
       pagoInquilino: pagado / 100,
       devueltoInquilino: devuelto / 100,
-      comisionDepa: comision > TOLERANCIA_MONETARIA ? comision : 0,
+      comisionDepa,
+      // El porcentaje solo acompaña a una comisión cobrada: con devolución no se aplica.
+      porcentajeComision: comisionDepa > 0 && porcentaje != null ? Number(porcentaje) : null,
       pagadoAnunciante: pagadoEnCentavos / 100,
     };
   }

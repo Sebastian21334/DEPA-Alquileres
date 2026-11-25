@@ -32,6 +32,15 @@ interface RendimientoPublicacion {
   ingresos: number;
 }
 
+/** Al anunciante le queda cobrar o ya cobró: una cancelada recién suma lo retenido cuando se resolvió su devolución. */
+const LIQUIDACIONES_CON_IMPORTE = ['PENDIENTE_PAGO_PROPIETARIO', 'DEVUELTO_PARCIAL_INQUILINO', 'PAGADO_PROPIETARIO'];
+
+/** Ingreso bruto de la reserva: lo que pagó el inquilino menos lo que se le devolvió, antes de la comisión DEPA. */
+function ingresoBruto(reserva: Reserva): number {
+  if (reserva.cancelada && !LIQUIDACIONES_CON_IMPORTE.includes(reserva.estado_liquidacion)) return 0;
+  return Math.max(0, Number(reserva.monto_pago ?? 0) - Number(reserva.devolucion_inquilino?.devuelto ?? 0));
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -69,7 +78,7 @@ export class DashboardComponent {
   );
   protected readonly publicacionesActivas = computed(() => this.publicaciones().filter((item) => item.activa).length);
   protected readonly ingresos = computed(() =>
-    this.reservasValidas().reduce((total, reserva) => total + Number(reserva.monto_pago ?? 0), 0),
+    this.reservas().reduce((total, reserva) => total + ingresoBruto(reserva), 0),
   );
   protected readonly pendientes = computed(() =>
     this.reservasValidas().filter(estadiaActiva).length,
@@ -99,7 +108,8 @@ export class DashboardComponent {
       return { key, label, ingresos: 0, reservas: 0 };
     });
     const porFecha = new Map(intervalos.map((item) => [item.key, item]));
-    for (const reserva of this.reservasValidas()) {
+    // Las canceladas no cuentan como reserva, pero sí suman lo que el anunciante retuvo.
+    for (const reserva of this.reservas()) {
       if (!reserva.fecha_pago) continue;
       const fechaPago = new Date(reserva.fecha_pago);
       if (!Number.isFinite(fechaPago.getTime())) continue;
@@ -109,8 +119,8 @@ export class DashboardComponent {
       if (periodo === 'semanas') fecha.setUTCDate(fecha.getUTCDate() - (fecha.getUTCDay() + 6) % 7);
       const intervalo = porFecha.get(fecha.toISOString().slice(0, 10));
       if (!intervalo) continue;
-      intervalo.reservas += 1;
-      intervalo.ingresos += Number(reserva.monto_pago ?? 0);
+      if (!reserva.cancelada) intervalo.reservas += 1;
+      intervalo.ingresos += ingresoBruto(reserva);
     }
     return intervalos;
   });
@@ -165,12 +175,12 @@ export class DashboardComponent {
 
   protected readonly rendimientoCompleto = computed<RendimientoPublicacion[]>(() => {
     const aggregates = new Map<number, { reservas: number; ingresos: number }>();
-    for (const reserva of this.reservasValidas()) {
+    for (const reserva of this.reservas()) {
       const id = reserva.publicacion?.id;
       if (!id) continue;
       const current = aggregates.get(id) ?? { reservas: 0, ingresos: 0 };
-      current.reservas += 1;
-      current.ingresos += Number(reserva.monto_pago ?? 0);
+      if (!reserva.cancelada) current.reservas += 1;
+      current.ingresos += ingresoBruto(reserva);
       aggregates.set(id, current);
     }
     return this.publicaciones()

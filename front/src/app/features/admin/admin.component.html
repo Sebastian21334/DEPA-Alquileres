@@ -209,7 +209,7 @@
                 <p><strong>Pagó el inquilino:</strong> {{ montoPagado(settlement) }}</p>
               }
               <p><strong>A liquidar al anunciante:</strong> {{ montoLiquidacion(settlement) }}</p>
-              <p><strong>Comisión DEPA:</strong> @if (settlement.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ settlement.porcentaje_comision_depa }} % · {{ settlement.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
+              <p><strong>Comisión DEPA:</strong> @if (settlement.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else if (tieneDevolucion(settlement)) { No se aplica (hubo devolución) } @else { {{ porcentaje(settlement.porcentaje_comision_depa) }} · {{ settlement.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
               <p><strong>Neto al anunciante:</strong> {{ settlement.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</p>
               @if (settlement.cotizacion_dolar; as dolar) {
                 <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
@@ -368,7 +368,7 @@
           @if (tieneDevolucion(item)) {
             <p class="refund-help">El inquilino pagó {{ montoPagado(item) }}; ya se le devolvió la diferencia.</p>
           }
-          <p class="advertiser-payment__commission"><strong>Comisión DEPA:</strong> @if (item.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else { {{ item.porcentaje_comision_depa }} % · {{ item.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
+          <p class="advertiser-payment__commission"><strong>Comisión DEPA:</strong> @if (item.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else if (tieneDevolucion(item)) { No se aplica (hubo devolución) } @else { {{ porcentaje(item.porcentaje_comision_depa) }} · {{ item.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
           <div class="advertiser-payment__row advertiser-payment__net">
             <strong>Importe a transferir</strong>
             <app-dato-copiable [valor]="(item.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2') ?? ''"
