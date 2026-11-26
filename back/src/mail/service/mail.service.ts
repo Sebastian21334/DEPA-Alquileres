@@ -14,6 +14,9 @@ type Enlace = { texto: string; ruta: string };
 
 const abrirReserva = (id: number): Enlace => ({ texto: 'Abrir reserva', ruta: `/reserva/resultado?reserva_id=${id}` });
 
+/** Un admin que también es parte de la reserva recibe los dos correos: el asunto ya dice cuál es cuál. */
+const asuntoAdministracion = (asunto: string): string => `[Administración] ${asunto}`;
+
 /**
  * A dónde lleva el botón de cada aviso de reserva, según su tema y quién lo recibe. Todas las rutas exigen
  * iniciar sesión: sin una sesión vigente, el front pide ingresar y después vuelve a la misma ruta.
@@ -97,7 +100,7 @@ export class MailService implements IMailService {
          El calendario ya fue actualizado. Este cambio no genera cobros ni devoluciones.</p>
        ${this.plantillas.conversion(detalle.conversion)}
        <p>Si hubo otros cambios, consultá la reserva para ver las fechas vigentes.</p>
-       ${this.plantillas.boton('Ver reserva', `${this.frontendUrl}/reserva/resultado?reserva_id=${detalle.idReserva}`)}`,
+       ${this.botonA(abrirReserva(detalle.idReserva))}`,
       `El inquilino cambió las fechas de la reserva #${detalle.idReserva}.`,
     );
   }
@@ -213,9 +216,10 @@ export class MailService implements IMailService {
       destinatarios.map((email) =>
         this.enviar(
           email,
-          'Nueva solicitud de anunciante para revisar',
-          `<p><strong>${this.plantillas.escapar(nombreSolicitante)}</strong> envió su documentación para ser anunciante.</p><p>Contacto: ${this.plantillas.escapar(emailSolicitante)}.</p>${this.plantillas.boton('Revisar la solicitud', `${this.frontendUrl}/admin#verificaciones`)}`,
+          asuntoAdministracion('Nueva solicitud de anunciante para revisar'),
+          `${this.plantillas.paraAdministracion()}<p><strong>${this.plantillas.escapar(nombreSolicitante)}</strong> envió su documentación para ser anunciante.</p><p>Contacto: ${this.plantillas.escapar(emailSolicitante)}.</p>${this.plantillas.boton('Revisar la solicitud', `${this.frontendUrl}/admin#verificaciones`)}`,
           'Hay una nueva solicitud de identidad pendiente de revisión.',
+          { titulo: 'Nueva solicitud de anunciante para revisar', icono: '✉' },
         ),
       ),
     );
@@ -228,9 +232,14 @@ export class MailService implements IMailService {
     const avisoPendientes = accesoLimitado
       ? '<p>Podés iniciar sesión para resolver tus operaciones pendientes. Al terminarlas, tu acceso quedará limitado a consultar y apelar el bloqueo.</p>'
       : '';
+    // Al iniciar sesión, el front lleva a la pantalla del bloqueo o, con acceso limitado, a Mis reservas.
+    const boton = this.plantillas.boton(
+      !bloqueado ? 'Iniciar sesión' : accesoLimitado ? 'Iniciar sesión y resolver pendientes' : 'Iniciar sesión y consultar el bloqueo',
+      `${this.frontendUrl}/login`,
+    );
     const contenido = bloqueado
-      ? `<p>Tu cuenta fue bloqueada.</p>${motivoSeguro}${avisoPendientes}<p>Ingresá con tus credenciales para consultar el bloqueo o presentar una apelación.</p>`
-      : '<p>Tu cuenta fue habilitada nuevamente. Ya podés iniciar sesión.</p>';
+      ? `<p>Tu cuenta fue bloqueada.</p>${motivoSeguro}${avisoPendientes}<p>Ingresá con tus credenciales para consultar el bloqueo o presentar una apelación.</p>${boton}`
+      : `<p>Tu cuenta fue habilitada nuevamente. Ya podés iniciar sesión.</p>${boton}`;
     await this.enviar(
       destinatario,
       bloqueado
@@ -289,14 +298,21 @@ export class MailService implements IMailService {
     );
   }
 
+  /** El mismo aviso llega a las partes y a administración: cada uno dice en qué carácter lo recibe. */
   enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: DestinoAvisoReserva, tema: TemaAvisoReserva): Promise<void> {
-    const { texto, ruta } = ENLACES_AVISO[tema](idReserva)[panel];
+    const admin = panel === 'admin';
+    const reserva = admin ? `Reserva #${idReserva}` : `Reserva #${idReserva} · Te avisamos como ${panel}.`;
     return this.enviar(
       destinatario,
-      asunto,
-      `<p>${this.plantillas.escapar(mensaje)}</p><p>Reserva #${this.plantillas.escapar(String(idReserva))}</p>${this.plantillas.boton(texto, this.frontendUrl + ruta)}`,
+      admin ? asuntoAdministracion(asunto) : asunto,
+      `${admin ? this.plantillas.paraAdministracion() : ''}<p>${this.plantillas.escapar(mensaje)}</p><p>${this.plantillas.escapar(reserva)}</p>${this.botonA(ENLACES_AVISO[tema](idReserva)[panel])}`,
       mensaje,
+      { titulo: asunto, icono: '✉' },
     );
+  }
+
+  private botonA({ texto, ruta }: Enlace): string {
+    return this.plantillas.boton(texto, this.frontendUrl + ruta);
   }
 
   private enviar(destinatario: string, asunto: string, html: string, preheader = 'Tenés una novedad en tu cuenta de DEPA.', encabezado = { titulo: asunto, icono: '✉' }): Promise<void> {

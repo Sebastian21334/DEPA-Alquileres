@@ -213,6 +213,8 @@ export class AdminComponent {
   protected readonly claims = signal<Reclamo[]>([]);
   /** Reserva del reclamo al que llevó un aviso por correo (`/admin?reserva=<id>#reclamos`). */
   private reservaDelAviso = Number(this.route.snapshot.queryParamMap.get('reserva')) || null;
+  /** El reclamo al que llevó el aviso queda marcado, como en Mis reservas. */
+  protected readonly reclamoDestacado = signal<number | null>(null);
   protected readonly errorReclamos = signal('');
   protected readonly gestionReclamo = signal<{ id: number; accion: 'mensaje' | 'resolver' } | null>(null);
   protected textoReclamo = '';
@@ -433,6 +435,7 @@ export class AdminComponent {
     const reclamo = this.reservaDelAviso ? reclamoDeLaReserva(reclamos, this.reservaDelAviso) : undefined;
     this.reservaDelAviso = null;
     if (!reclamo) return;
+    this.reclamoDestacado.set(reclamo.id);
     this.openSection('reclamos', reclamo.id);
     // El router lleva a la sección (#reclamos) después del primer render; esto deja el reclamo a la vista igual.
     llevarALaVista(`admin-reclamos-${reclamo.id}`, this.injector);

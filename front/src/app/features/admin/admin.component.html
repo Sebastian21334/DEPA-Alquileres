@@ -538,7 +538,8 @@
     }
     <div class="settlement-list lista-escalonada">
       @for (claim of listaReclamos.visibles(); track claim.id) {
-        <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1">
+        <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1"
+          [class.claim-card--destacado]="reclamoDestacado() === claim.id">
           <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
             [actualizar]="activeSection() === 'reclamos'"
             (verReembolso)="verReembolsoReclamo(claim)">

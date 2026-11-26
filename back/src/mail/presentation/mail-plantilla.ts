@@ -53,6 +53,11 @@ export class MailPlantilla {
     return '<p style="margin:20px 0 0;padding-top:16px;border-top:1px solid #e5e7eb;color:#667085;font-size:12px;line-height:1.5"><strong>Consejo de seguridad:</strong> la mensajería interna mantiene la conversación dentro de DEPA. Si elegís continuar por WhatsApp, DEPA no podrá revisar esa conversación ni ayudarte a verificar acuerdos realizados fuera de la plataforma.</p>';
   }
 
+  /** Encabeza los correos que reciben los administradores, para no confundirlos con los de las partes. */
+  paraAdministracion(): string {
+    return '<p style="margin:0 0 20px;padding:12px 16px;border-radius:10px;background:#fff4e5;border:1px solid #fdba74;color:#7c2d12"><strong>Para administración</strong><br>Recibís este correo porque sos administrador de DEPA. Gestionalo desde el panel de administración.</p>';
+  }
+
   boton(texto: string, enlace: string): string {
     return `<a href="${this.escapar(enlace)}" style="display:inline-block;margin:4px 0;padding:14px 24px;border-radius:11px;background:#d93508;color:#ffffff;text-decoration:none;font-size:17px;font-weight:700;line-height:1.35">${this.escapar(texto)}</a>`;
   }
