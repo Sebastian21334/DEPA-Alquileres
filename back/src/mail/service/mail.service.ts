@@ -12,28 +12,29 @@ import { MailPlantilla } from '../presentation/mail-plantilla';
 
 type Enlace = { texto: string; ruta: string };
 
-const verReserva = (id: number): Enlace => ({ texto: 'Ver reserva', ruta: `/reserva/resultado?reserva_id=${id}` });
+const abrirReserva = (id: number): Enlace => ({ texto: 'Abrir reserva', ruta: `/reserva/resultado?reserva_id=${id}` });
 
 /**
  * A dónde lleva el botón de cada aviso de reserva, según su tema y quién lo recibe. Todas las rutas exigen
  * iniciar sesión: sin una sesión vigente, el front pide ingresar y después vuelve a la misma ruta.
  */
 const ENLACES_AVISO: Record<TemaAvisoReserva, (id: number) => Record<DestinoAvisoReserva, Enlace>> = {
-  reserva: (id) => ({ inquilino: verReserva(id), anunciante: verReserva(id), admin: { texto: 'Ver reserva', ruta: `/admin/reservas/${id}` } }),
-  reembolso: (id) => ({ inquilino: verReserva(id), anunciante: verReserva(id), admin: { texto: 'Ver reembolsos', ruta: '/admin#reembolsos' } }),
+  reserva: (id) => ({ inquilino: abrirReserva(id), anunciante: abrirReserva(id), admin: { texto: 'Abrir reserva', ruta: `/admin/reservas/${id}` } }),
+  reembolso: (id) => ({ inquilino: abrirReserva(id), anunciante: abrirReserva(id), admin: { texto: 'Abrir reembolsos', ruta: '/admin#reembolsos' } }),
+  // Las partes y el admin abren el reclamo más reciente de la reserva: `reserva` le dice al front cuál.
   reclamo: (id) => {
-    const partes = { texto: 'Ver reclamo', ruta: `/mis-reservas?vista=reclamos&reserva=${id}` };
-    return { inquilino: partes, anunciante: partes, admin: { texto: 'Ver reclamo', ruta: '/admin#reclamos' } };
+    const partes = { texto: 'Abrir reclamo', ruta: `/mis-reservas?vista=reclamos&reserva=${id}` };
+    return { inquilino: partes, anunciante: partes, admin: { texto: 'Abrir reclamo', ruta: `/admin?reserva=${id}#reclamos` } };
   },
   liquidacion: (id) => ({
-    inquilino: verReserva(id),
-    anunciante: { texto: 'Ver liquidaciones', ruta: '/dashboard#liquidaciones-pendientes' },
-    admin: { texto: 'Ver liquidaciones', ruta: '/admin#liquidaciones' },
+    inquilino: abrirReserva(id),
+    anunciante: { texto: 'Abrir liquidaciones', ruta: '/dashboard#liquidaciones-pendientes' },
+    admin: { texto: 'Abrir liquidaciones', ruta: '/admin#liquidaciones' },
   }),
   'pago-liquidacion': (id) => ({
-    inquilino: verReserva(id),
-    anunciante: { texto: 'Ver liquidaciones', ruta: '/dashboard#historial-liquidaciones' },
-    admin: { texto: 'Ver liquidaciones', ruta: '/admin#historial-liquidaciones' },
+    inquilino: abrirReserva(id),
+    anunciante: { texto: 'Abrir liquidaciones', ruta: '/dashboard#historial-liquidaciones' },
+    admin: { texto: 'Abrir liquidaciones', ruta: '/admin#historial-liquidaciones' },
   }),
 };
 

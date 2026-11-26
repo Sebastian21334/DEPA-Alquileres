@@ -57,6 +57,8 @@ import { FiltrosListaComponent } from '../../shared/components/filtros-lista/fil
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
+import { llevarALaVista } from '../../shared/utils/desplazamiento';
+import { reclamoDeLaReserva } from '../../shared/utils/reclamo-rol';
 import { formatearMoneda, formatearPorcentaje } from '../../shared/utils/formato-numero';
 import { etiquetaCategoriaReclamo } from '../../shared/utils/reclamo-categorias';
 import { etiquetasEstadia } from '../../shared/utils/reservation-state';
@@ -209,6 +211,8 @@ export class AdminComponent {
     return prioridad(a) - prioridad(b);
   }));
   protected readonly claims = signal<Reclamo[]>([]);
+  /** Reserva del reclamo al que llevó un aviso por correo (`/admin?reserva=<id>#reclamos`). */
+  private reservaDelAviso = Number(this.route.snapshot.queryParamMap.get('reserva')) || null;
   protected readonly errorReclamos = signal('');
   protected readonly gestionReclamo = signal<{ id: number; accion: 'mensaje' | 'resolver' } | null>(null);
   protected textoReclamo = '';
@@ -367,6 +371,7 @@ export class AdminComponent {
       this.cargarDatoResumen(this.api.listarReclamos(), (valor) => {
         this.claims.set(valor);
         this.errorReclamos.set('');
+        if (this.reservaDelAviso) this.mostrarReclamoDelAviso(valor);
       }, (error) => {
         this.summaryError.set(true);
         this.errorReclamos.set(error.message);
@@ -421,6 +426,16 @@ export class AdminComponent {
         if (liquidacion) this.abrirPagoAnunciante(liquidacion);
       }
     }, { injector: this.injector });
+  }
+
+  /** Abre el reclamo más reciente de la reserva del aviso, una sola vez: las recargas no vuelven a mover la vista. */
+  private mostrarReclamoDelAviso(reclamos: Reclamo[]): void {
+    const reclamo = this.reservaDelAviso ? reclamoDeLaReserva(reclamos, this.reservaDelAviso) : undefined;
+    this.reservaDelAviso = null;
+    if (!reclamo) return;
+    this.openSection('reclamos', reclamo.id);
+    // El router lleva a la sección (#reclamos) después del primer render; esto deja el reclamo a la vista igual.
+    llevarALaVista(`admin-reclamos-${reclamo.id}`, this.injector);
   }
 
   /** Lleva a la página del caso; si la búsqueda o los filtros lo ocultan, los limpia. */

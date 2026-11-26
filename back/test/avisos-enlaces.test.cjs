@@ -19,17 +19,17 @@ function correo() {
 test('cada aviso de reserva lleva a la pantalla de su tema según quién lo recibe', async () => {
   const { mail, boton } = correo();
   const casos = [
-    ['reclamo', 'inquilino', '/mis-reservas?vista=reclamos&reserva=7', 'Ver reclamo'],
-    ['reclamo', 'anunciante', '/mis-reservas?vista=reclamos&reserva=7', 'Ver reclamo'],
-    ['reclamo', 'admin', '/admin#reclamos', 'Ver reclamo'],
-    ['reserva', 'inquilino', '/reserva/resultado?reserva_id=7', 'Ver reserva'],
-    ['reserva', 'anunciante', '/reserva/resultado?reserva_id=7', 'Ver reserva'],
-    ['reserva', 'admin', '/admin/reservas/7', 'Ver reserva'],
-    ['reembolso', 'inquilino', '/reserva/resultado?reserva_id=7', 'Ver reserva'],
-    ['reembolso', 'admin', '/admin#reembolsos', 'Ver reembolsos'],
-    ['liquidacion', 'anunciante', '/dashboard#liquidaciones-pendientes', 'Ver liquidaciones'],
-    ['liquidacion', 'admin', '/admin#liquidaciones', 'Ver liquidaciones'],
-    ['pago-liquidacion', 'anunciante', '/dashboard#historial-liquidaciones', 'Ver liquidaciones'],
+    ['reclamo', 'inquilino', '/mis-reservas?vista=reclamos&reserva=7', 'Abrir reclamo'],
+    ['reclamo', 'anunciante', '/mis-reservas?vista=reclamos&reserva=7', 'Abrir reclamo'],
+    ['reclamo', 'admin', '/admin?reserva=7#reclamos', 'Abrir reclamo'],
+    ['reserva', 'inquilino', '/reserva/resultado?reserva_id=7', 'Abrir reserva'],
+    ['reserva', 'anunciante', '/reserva/resultado?reserva_id=7', 'Abrir reserva'],
+    ['reserva', 'admin', '/admin/reservas/7', 'Abrir reserva'],
+    ['reembolso', 'inquilino', '/reserva/resultado?reserva_id=7', 'Abrir reserva'],
+    ['reembolso', 'admin', '/admin#reembolsos', 'Abrir reembolsos'],
+    ['liquidacion', 'anunciante', '/dashboard#liquidaciones-pendientes', 'Abrir liquidaciones'],
+    ['liquidacion', 'admin', '/admin#liquidaciones', 'Abrir liquidaciones'],
+    ['pago-liquidacion', 'anunciante', '/dashboard#historial-liquidaciones', 'Abrir liquidaciones'],
   ];
   for (const [tema, panel, ruta, texto] of casos) {
     await mail.enviarAvisoReserva('parte@example.invalid', 7, 'Asunto', 'Mensaje', panel, tema);

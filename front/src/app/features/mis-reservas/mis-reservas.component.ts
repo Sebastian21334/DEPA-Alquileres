@@ -27,7 +27,7 @@ import { ClaimHistoryComponent } from '../../shared/components/claim-history/cla
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
 import { CargaImagenesComponent } from '../../shared/components/carga-imagenes/carga-imagenes.component';
 import { imagenesDisponibles, MAX_IMAGENES_POR_ENVIO } from '../../shared/utils/reclamo-imagenes';
-import { rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol';
+import { reclamoDeLaReserva, rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol';
 import { llevarALaVista } from '../../shared/utils/desplazamiento';
 import { normalizarTexto } from '../../shared/utils/texto';
 
@@ -650,9 +650,8 @@ export class MisReservasComponent {
 
   /** Lleva al reclamo más reciente de la reserva del aviso, en la subpestaña del rol con que participa; una sola vez. */
   private mostrarReclamoDelAviso(reclamos: Reclamo[]): void {
-    const idReserva = this.reservaDelAviso;
+    const reclamo = this.reservaDelAviso ? reclamoDeLaReserva(reclamos, this.reservaDelAviso) : undefined;
     this.reservaDelAviso = null;
-    const reclamo = reclamos.filter((item) => item.reserva?.id === idReserva).sort((a, b) => b.id - a.id)[0];
     if (!reclamo) return;
     this.vista.set('reclamos');
     this.vistaReclamos.set(rolEnReclamo(reclamo, this.idUsuario()) ?? 'inquilino');

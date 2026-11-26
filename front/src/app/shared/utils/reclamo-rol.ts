@@ -9,6 +9,11 @@ export function rolEnReclamo(reclamo: Reclamo, idUsuario: number): RolEnReclamo 
   return null;
 }
 
+/** El reclamo más reciente de una reserva: al que llevan los avisos por correo, que solo conocen la reserva. */
+export function reclamoDeLaReserva(reclamos: readonly Reclamo[], idReserva: number): Reclamo | undefined {
+  return reclamos.filter((reclamo) => reclamo.reserva?.id === idReserva).sort((a, b) => b.id - a.id)[0];
+}
+
 const ETIQUETAS_ROL: Record<RolEnReclamo, string> = { inquilino: 'Inquilino', anunciante: 'Anunciante' };
 
 /**

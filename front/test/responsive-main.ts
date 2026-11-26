@@ -180,8 +180,9 @@ if (casoFaltante && location.pathname === '/admin') reclamosFaltante.push({
   resolucion: null, importe_reembolso: null, creado_en: new Date().toISOString(), evidencias: [], mensajes: [],
 });
 // Aviso de un reclamo por correo: `/mis-reservas?vista=reclamos&reserva=1` lleva al más reciente de esa reserva,
-// el #51, en la subpestaña «Como anunciante»; queda último para que la vista tenga que desplazarse hasta él.
-if (location.pathname === '/mis-reservas' && params.has('reserva')) {
+// el #51, en la subpestaña «Como anunciante», y `/admin?reserva=1#reclamos` lo abre en la segunda página del admin.
+// Queda último para que la vista tenga que desplazarse hasta él.
+if ((location.pathname === '/mis-reservas' || location.pathname === '/admin') && params.has('reserva')) {
   const huesped = { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', rol: { id: 2, nombre: 'Inquilino' } };
   const creado = new Date().toISOString();
   const reclamo = (id: number, reserva: number, estado: string, inquilino: object, anunciante: object, mensajes: object[] = []) => ({
