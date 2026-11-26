@@ -47,9 +47,15 @@ export interface IMailCuenta {
   enviarCambioBloqueo(destinatario: string, bloqueado: boolean, motivo?: string, accesoLimitado?: boolean): Promise<void>;
 }
 
+/** Quién recibe un aviso de reserva. */
+export type DestinoAvisoReserva = 'inquilino' | 'anunciante' | 'admin';
+
+/** De qué trata un aviso de reserva: decide a qué pantalla lleva su botón. */
+export type TemaAvisoReserva = 'reserva' | 'reembolso' | 'reclamo' | 'liquidacion' | 'pago-liquidacion';
+
 /** Avisos a las partes de una reserva. */
 export interface IMailReservas {
-  enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: 'inquilino' | 'anunciante' | 'admin'): Promise<void>;
+  enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: DestinoAvisoReserva, tema: TemaAvisoReserva): Promise<void>;
   enviarReprogramacionReserva(destinatario: string, detalle: ReprogramacionEmailDetalle): Promise<void>;
   enviarReservaConfirmada(destinatario: string, detalle: ReservaEmailDetalle): Promise<void>;
   enviarNuevaReserva(destinatario: string, detalle: ReservaEmailDetalle): Promise<void>;
@@ -63,7 +69,7 @@ export interface IMailPublicaciones {
 }
 
 export interface IMailMensajes {
-  enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number): Promise<void>;
+  enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number, idRemitente: number): Promise<void>;
 }
 
 /** Avisos de la solicitud para ser anunciante y su revisión. */

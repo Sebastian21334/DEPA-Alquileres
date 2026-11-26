@@ -24,6 +24,11 @@ En `/mis-reservas?rol=Usuario&anunciante=no&cancelacion=sin-devolucion`, la rese
 Con `cancelacion=iniciada`, ingresa hoy y no ofrece solicitar la cancelación.
 Los envíos de esta vista se guardan únicamente en memoria, sin llamar a la API.
 
+Avisos por correo: `/mis-reservas?vista=reclamos&reserva=1` abre Reclamos en «Como anunciante» con
+el reclamo #51 resaltado; `/dashboard#historial-liquidaciones` baja hasta el historial y
+`/publicaciones/1?chat=8` abre la conversación con Pedro. Con `sesion=no` o `sesion=vencida`,
+esas rutas piden ingresar y conservan el destino en `returnUrl`.
+
 Para T39, usar `/mis-reservas?rol=Anunciante&cancelacion=anunciante-ingreso`
 y abrir **Reservas recibidas**. La reserva #3 permite solicitar la cancelación
 el día del ingreso, con devolución del 100 % al inquilino. Con

@@ -9,7 +9,7 @@ import { Reserva } from '../entity/reserva.entity';
 import { RESERVA_REPOSITORY } from '../repository/reserva.repository.interface';
 import type { IReservaRepository } from '../repository/reserva.repository.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
-import type { IMailReservas } from '../../mail/mail.interface';
+import type { DestinoAvisoReserva, IMailReservas, TemaAvisoReserva } from '../../mail/mail.interface';
 import { conversionContratada, nombreInquilinoReserva, normalizarFechaReserva } from './reservas.utils';
 import { AnunciantesService } from '../../anunciantes/service/anunciantes.service';
 import { PublicacionesService } from '../../publicaciones/service/publicaciones.service';
@@ -18,14 +18,13 @@ import { UsuariosService } from '../../usuarios/service/usuarios.service';
 
 import { diasInclusivos } from '../../common/utils/fechas';
 
-type DestinoAviso = 'inquilino' | 'anunciante' | 'admin';
-
 @Injectable()
 export class ReservaNotificacionesService {
   private readonly logger = new Logger(ReservaNotificacionesService.name);
   constructor(@Inject(RESERVA_REPOSITORY) private readonly reservaRepository: IReservaRepository, @Inject(MAIL_SERVICE) private readonly mailService: IMailReservas, private readonly anunciantesService: AnunciantesService, private readonly publicacionesService: PublicacionesService, private readonly catalogos: CatalogosService, private readonly usuariosService: UsuariosService) {}
 
-  async avisarCambio(reserva: Reserva, destinos: readonly DestinoAviso[], asunto: string, mensaje: string, excluirUsuario?: number): Promise<boolean> {
+  /** El tema decide a qué pantalla lleva el botón del correo de cada destinatario. */
+  async avisarCambio(reserva: Reserva, destinos: readonly DestinoAvisoReserva[], asunto: string, mensaje: string, tema: TemaAvisoReserva, excluirUsuario?: number): Promise<boolean> {
     const participantes = { inquilino: reserva.usuario, anunciante: reserva.publicacion?.anunciante?.usuario };
     const enviados = await Promise.all(destinos.map(async (destino) => {
       try {
@@ -37,7 +36,7 @@ export class ReservaNotificacionesService {
         const correos = destino === 'admin' ? await this.usuariosService.emailsAdministradores()
           : usuario?.email && !usuario.fecha_baja && usuario.id !== excluirUsuario ? [usuario.email] : [];
         const resultados = await Promise.allSettled(
-          [...new Set(correos)].map((email) => this.mailService.enviarAvisoReserva(email, reserva.id, asunto, mensaje, destino)),
+          [...new Set(correos)].map((email) => this.mailService.enviarAvisoReserva(email, reserva.id, asunto, mensaje, destino, tema)),
         );
         const completo = resultados.every((resultado) => resultado.status === 'fulfilled');
         if (!completo)
@@ -55,7 +54,7 @@ export class ReservaNotificacionesService {
     try {
       const reserva = await this.reservaRepository.buscarPorId(id);
       if (reserva && !reserva.cancelada && reserva.estado_pago === this.catalogos.codigoEstado('PAGO_RESERVA', 'PENDIENTE'))
-        await this.avisarCambio(reserva, ['inquilino'], 'Pago no aprobado', 'Mercado Pago no aprobó el intento. Consultá en DEPA si podés volver a pagar esta reserva.');
+        await this.avisarCambio(reserva, ['inquilino'], 'Pago no aprobado', 'Mercado Pago no aprobó el intento. Consultá en DEPA si podés volver a pagar esta reserva.', 'reserva');
     } catch {
       this.logger.warn(`No se pudo preparar el aviso de pago no aprobado para la reserva ${id}`);
     }

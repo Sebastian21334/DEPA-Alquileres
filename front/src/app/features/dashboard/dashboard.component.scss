@@ -26,6 +26,7 @@
 .dashboard-grid--bottom { grid-template-columns: minmax(0, 2fr) minmax(270px, .85fr); }
 .dashboard-card { padding: 1.25rem; min-width: 0; }
 .settlements-card { display: grid; gap: .75rem; }
+.settlements-card h2 { scroll-margin-top: 6rem; }
 .card-heading { min-height: 45px; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .card-heading span { color: var(--color-text-muted); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .card-heading h2 { margin: .2rem 0 0; font-size: 1.12rem; letter-spacing: -.02em; }

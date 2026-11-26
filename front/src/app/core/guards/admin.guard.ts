@@ -13,7 +13,7 @@ export const adminGuard: CanActivateFn = (_route, state) => {
 
   // No tener sesión es un problema de autenticación: se pide ingresar y se
   // conserva la ruta original para volver luego del login.
-  if (!auth.isAuthenticated) {
+  if (!auth.sesionActiva()) {
     return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
   }
 

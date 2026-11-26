@@ -19,6 +19,8 @@ import { ApiError } from '../src/app/core/interceptors/api-error';
 const params = new URLSearchParams(location.search);
 const rol = params.get('rol') || 'Administrador';
 const publico = params.get('sesion') === 'no';
+// `?sesion=vencida` simula un token que venció con la aplicación abierta: los guards piden ingresar.
+const vencida = params.get('sesion') === 'vencida';
 const user = {
   id: 7,
   nombre: 'María Alejandra',
@@ -36,9 +38,14 @@ const usuariosAdmin = [
   { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true, rol: { id: 2, nombre: 'Inquilino' } },
 ];
 const auth = {
-  currentUser: signal(publico ? null : { sub: 7, email: user.email, rol, exp: 9999999999 }),
+  currentUser: signal(publico ? null : { sub: 7, email: user.email, rol, exp: vencida ? 1 : 9999999999 }),
   get isAuthenticated() {
     return this.currentUser() !== null;
+  },
+  sesionActiva() {
+    const usuario = this.currentUser();
+    if (usuario && usuario.exp * 1000 <= Date.now()) this.logout();
+    return this.isAuthenticated;
   },
   get isAdmin() {
     return rol === 'Administrador';
@@ -172,6 +179,26 @@ if (casoFaltante && location.pathname === '/admin') reclamosFaltante.push({
   solicitud_cancelacion_id: 12, devolucion_cancelacion: saldoDevolucionFaltante,
   resolucion: null, importe_reembolso: null, creado_en: new Date().toISOString(), evidencias: [], mensajes: [],
 });
+// Aviso de un reclamo por correo: `/mis-reservas?vista=reclamos&reserva=1` lleva al más reciente de esa reserva,
+// el #51, en la subpestaña «Como anunciante»; queda último para que la vista tenga que desplazarse hasta él.
+if (location.pathname === '/mis-reservas' && params.has('reserva')) {
+  const huesped = { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', rol: { id: 2, nombre: 'Inquilino' } };
+  const creado = new Date().toISOString();
+  const reclamo = (id: number, reserva: number, estado: string, inquilino: object, anunciante: object, mensajes: object[] = []) => ({
+    id, reserva: reservas[(reserva - 1) % reservas.length], inquilino, anunciante, categoria: 'OTRO',
+    descripcion: 'Al ingresar, el alojamiento no tenía la limpieza necesaria.', estado, solicitud_cancelacion_id: null,
+    resolucion: null, importe_reembolso: null, creado_en: creado, evidencias: [], mensajes,
+  });
+  reclamosFaltante.push(
+    reclamo(52, 2, 'ABIERTO', user, huesped),
+    ...[53, 54, 55].map((id, i) => reclamo(id, i + 2, 'CERRADO', huesped, user)),
+    reclamo(50, 1, 'CERRADO', huesped, user),
+    reclamo(51, 1, 'EN_REVISION', huesped, user, [
+      { id: 1, texto: 'Adjunto fotos del baño y la cocina.', como_administracion: false, creado_en: creado, autor: huesped, evidencias: [] },
+      { id: 2, texto: 'Revisamos el caso con las dos partes.', como_administracion: true, creado_en: creado, autor: user, evidencias: [] },
+    ]),
+  );
+}
 const pendiente = location.pathname === '/mi-perfil/anunciante';
 const solicitud = {
   id: 1,

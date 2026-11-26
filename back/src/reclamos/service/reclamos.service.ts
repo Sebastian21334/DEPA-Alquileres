@@ -98,7 +98,7 @@ export class ReclamosService {
       idReclamo = reclamo.id;
     });
     const reclamo = await this.obtener(idReclamo, idUsuario, false);
-    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo por reembolso faltante', 'Se abrió un reclamo por el importe faltante de una cancelación. Consultá el expediente en DEPA.');
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], 'Reclamo por reembolso faltante', 'Se abrió un reclamo por el importe faltante de una cancelación. Consultá el expediente en DEPA.', 'reclamo');
     return reclamo;
   }
 
@@ -166,7 +166,7 @@ export class ReclamosService {
       return reclamo;
     };
     await this.reservas.conReservaParaReclamo(dto.id_reserva, crear, pedidoDeCodigo ? 'Pedido de reinicio del código en revisión' : undefined);
-    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], pedidoDeCodigo ? 'Pedido de reinicio del código de alojamiento' : 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
+    await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], pedidoDeCodigo ? 'Pedido de reinicio del código de alojamiento' : 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.', 'reclamo');
     return this.responder(reclamo);
   }
 
@@ -226,7 +226,7 @@ export class ReclamosService {
         evidencias: subidas.length ? await reclamos.guardarEvidencias(this.evidenciasDe(reclamo, subidas, guardado.autor, guardado)) : [],
       };
     });
-    await this.notificaciones?.avisarCambio(reclamo.reserva, comoAdministracion ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', idUsuario);
+    await this.notificaciones?.avisarCambio(reclamo.reserva, comoAdministracion ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', 'reclamo', idUsuario);
     return this.mensajeRespuesta(mensaje, await this.imagenesRespuesta(evidencias));
   }
 
@@ -309,14 +309,14 @@ export class ReclamosService {
     });
     if (!resultado.reembolso) {
       const [asunto, mensaje] = this.avisoSinDevolucion(dto.resolucion);
-      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], asunto, mensaje);
+      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], asunto, mensaje, 'reclamo');
       return this.responder(resultado.reclamo);
     }
     const aplicado = await this.ejecutarDevolucion(resultado.reembolso, idAdmin);
     if (aplicado)
-      await this.notificaciones?.avisarCambio(aplicado.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La devolución quedó registrada y el reclamo se resolvió. Consultá el detalle en DEPA.');
+      await this.notificaciones?.avisarCambio(aplicado.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La devolución quedó registrada y el reclamo se resolvió. Consultá el detalle en DEPA.', 'reclamo');
     else
-      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La administración resolvió el reclamo con devolución. La devolución está en gestión; consultá su estado en DEPA.');
+      await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La administración resolvió el reclamo con devolución. La devolución está en gestión; consultá su estado en DEPA.', 'reclamo');
     return this.responder(aplicado ?? await this.buscarComoParticipante(id, idAdmin, true));
   }
 

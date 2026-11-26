@@ -3,10 +3,39 @@ import {
   type ReservaEmailDetalle,
   type ReprogramacionEmailDetalle,
   type IMailService,
+  type DestinoAvisoReserva,
+  type TemaAvisoReserva,
 } from '../mail.interface';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailPlantilla } from '../presentation/mail-plantilla';
+
+type Enlace = { texto: string; ruta: string };
+
+const verReserva = (id: number): Enlace => ({ texto: 'Ver reserva', ruta: `/reserva/resultado?reserva_id=${id}` });
+
+/**
+ * A dónde lleva el botón de cada aviso de reserva, según su tema y quién lo recibe. Todas las rutas exigen
+ * iniciar sesión: sin una sesión vigente, el front pide ingresar y después vuelve a la misma ruta.
+ */
+const ENLACES_AVISO: Record<TemaAvisoReserva, (id: number) => Record<DestinoAvisoReserva, Enlace>> = {
+  reserva: (id) => ({ inquilino: verReserva(id), anunciante: verReserva(id), admin: { texto: 'Ver reserva', ruta: `/admin/reservas/${id}` } }),
+  reembolso: (id) => ({ inquilino: verReserva(id), anunciante: verReserva(id), admin: { texto: 'Ver reembolsos', ruta: '/admin#reembolsos' } }),
+  reclamo: (id) => {
+    const partes = { texto: 'Ver reclamo', ruta: `/mis-reservas?vista=reclamos&reserva=${id}` };
+    return { inquilino: partes, anunciante: partes, admin: { texto: 'Ver reclamo', ruta: '/admin#reclamos' } };
+  },
+  liquidacion: (id) => ({
+    inquilino: verReserva(id),
+    anunciante: { texto: 'Ver liquidaciones', ruta: '/dashboard#liquidaciones-pendientes' },
+    admin: { texto: 'Ver liquidaciones', ruta: '/admin#liquidaciones' },
+  }),
+  'pago-liquidacion': (id) => ({
+    inquilino: verReserva(id),
+    anunciante: { texto: 'Ver liquidaciones', ruta: '/dashboard#historial-liquidaciones' },
+    admin: { texto: 'Ver liquidaciones', ruta: '/admin#historial-liquidaciones' },
+  }),
+};
 
 @Injectable()
 export class MailService implements IMailService {
@@ -115,7 +144,7 @@ export class MailService implements IMailService {
     await this.enviar(
       destinatario,
       asunto,
-      contenido,
+      `${contenido}${this.plantillas.boton('Ir a Mi perfil', `${this.frontendUrl}/mi-perfil`)}`,
       aprobada
         ? 'Consultá el resultado en Mi perfil.'
         : 'Consultá qué datos tenés que corregir.',
@@ -157,13 +186,14 @@ export class MailService implements IMailService {
     );
   }
 
-  async enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number): Promise<void> {
+  /** El botón abre la conversación en la publicación; sin sesión, el front pide ingresar antes. */
+  async enviarMensajeNuevo(destinatario: string, nombreDestinatario: string, nombreRemitente: string, titulo: string, idPublicacion: number, idRemitente: number): Promise<void> {
     await this.enviar(
       destinatario,
       `${nombreRemitente} te envió un mensaje en DEPA`,
       `<p style="margin:0 0 16px">Hola <strong>${this.plantillas.escapar(nombreDestinatario)}</strong>, <strong>${this.plantillas.escapar(nombreRemitente)}</strong> te escribió por la publicación <strong>${this.plantillas.escapar(titulo)}</strong>.</p>
        <p style="margin:0 0 20px;color:#667085">Respondé desde la mensajería interna para que la conversación quede asociada a la publicación.</p>
-       ${this.plantillas.boton('Abrir publicación y responder', `${this.frontendUrl}/publicaciones/${idPublicacion}`)}`,
+       ${this.plantillas.boton('Abrir el chat y responder', `${this.frontendUrl}/publicaciones/${idPublicacion}?chat=${idRemitente}`)}`,
       `Tenés un nuevo mensaje relacionado con ${titulo}.`,
     );
   }
@@ -183,7 +213,7 @@ export class MailService implements IMailService {
         this.enviar(
           email,
           'Nueva solicitud de anunciante para revisar',
-          `<p><strong>${this.plantillas.escapar(nombreSolicitante)}</strong> envió su documentación para ser anunciante.</p><p>Contacto: ${this.plantillas.escapar(emailSolicitante)}.</p>${this.plantillas.boton('Abrir panel administrativo', `${this.frontendUrl}/admin`)}`,
+          `<p><strong>${this.plantillas.escapar(nombreSolicitante)}</strong> envió su documentación para ser anunciante.</p><p>Contacto: ${this.plantillas.escapar(emailSolicitante)}.</p>${this.plantillas.boton('Revisar la solicitud', `${this.frontendUrl}/admin#verificaciones`)}`,
           'Hay una nueva solicitud de identidad pendiente de revisión.',
         ),
       ),
@@ -258,12 +288,12 @@ export class MailService implements IMailService {
     );
   }
 
-  enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: 'inquilino' | 'anunciante' | 'admin'): Promise<void> {
-    const rutas = { inquilino: '/mis-reservas', anunciante: '/dashboard', admin: '/admin' };
+  enviarAvisoReserva(destinatario: string, idReserva: number, asunto: string, mensaje: string, panel: DestinoAvisoReserva, tema: TemaAvisoReserva): Promise<void> {
+    const { texto, ruta } = ENLACES_AVISO[tema](idReserva)[panel];
     return this.enviar(
       destinatario,
       asunto,
-      `<p>${this.plantillas.escapar(mensaje)}</p><p>Reserva #${this.plantillas.escapar(String(idReserva))}</p>${this.plantillas.boton('Abrir DEPA', this.frontendUrl + rutas[panel])}`,
+      `<p>${this.plantillas.escapar(mensaje)}</p><p>Reserva #${this.plantillas.escapar(String(idReserva))}</p>${this.plantillas.boton(texto, this.frontendUrl + ruta)}`,
       mensaje,
     );
   }

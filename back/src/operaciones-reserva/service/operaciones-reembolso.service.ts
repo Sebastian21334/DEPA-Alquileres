@@ -45,7 +45,7 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
       const simulada = this.reembolsos.esSimulado(reembolso);
       const asunto = simulada ? 'Cancelación con devolución simulada' : aplicada.cancelada ? 'Reserva cancelada y devolución registrada' : 'Devolución registrada';
       const mensaje = simulada ? 'La devolución con tarjeta fue simulada para pruebas; no se transfirió dinero.' : 'La devolución del pago quedó registrada. Consultá el estado de la reserva en DEPA.';
-      await this.notificaciones?.avisarCambio(aplicada, ['inquilino', 'anunciante'], asunto, mensaje);
+      await this.notificaciones?.avisarCambio(aplicada, ['inquilino', 'anunciante'], asunto, mensaje, 'reserva');
     }
     return { reembolso, reserva: aplicada ?? reembolso.reserva };
   }

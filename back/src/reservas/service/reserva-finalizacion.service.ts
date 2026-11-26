@@ -33,7 +33,7 @@ export class ReservaFinalizacionService implements OnApplicationBootstrap, OnMod
           try {
             const reserva = await this.reservas.buscarPorId(id);
             if (reserva)
-              await this.notificaciones.avisarCambio(reserva, ['inquilino', 'anunciante'], 'Estadía finalizada', 'La estadía finalizó. Podés consultar los detalles de la reserva en DEPA.');
+              await this.notificaciones.avisarCambio(reserva, ['inquilino', 'anunciante'], 'Estadía finalizada', 'La estadía finalizó. Podés consultar los detalles de la reserva en DEPA.', 'reserva');
           } catch {
             this.logger.warn(`No se pudo preparar el aviso de fin de estadía para la reserva ${id}`);
           }

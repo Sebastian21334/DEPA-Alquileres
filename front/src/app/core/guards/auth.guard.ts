@@ -10,10 +10,13 @@ import { ToastService } from '../services/toast.service';
 export const authGuard: CanActivateFn = (_route, state) => {
   // Igual que adminGuard: en SSR no hay localStorage, se decide en el navegador.
   if (!isPlatformBrowser(inject(PLATFORM_ID))) return true;
-  return inject(AuthService).isAuthenticated
+  return inject(AuthService).sesionActiva()
     ? true
     : inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 };
+
+/** El aviso por correo de un mensaje abre la publicación con `?chat=`: sin sesión, primero se pide ingresar. */
+export const chatConSesionGuard: CanActivateFn = (route, state) => route.queryParamMap.has('chat') ? authGuard(route, state) : true;
 
 /**
  * Exige ser anunciante verificado (mismo criterio que AnuncianteGuard del backend).
@@ -23,7 +26,7 @@ export const anuncianteGuard: CanActivateFn = (route, state) => {
   if (!isPlatformBrowser(inject(PLATFORM_ID))) return true;
   const router = inject(Router);
   const toast = inject(ToastService);
-  if (!inject(AuthService).isAuthenticated) {
+  if (!inject(AuthService).sesionActiva()) {
     toast.mostrar('Para publicar una propiedad necesitás iniciar sesión o registrarte.');
     return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
   }

@@ -361,7 +361,7 @@ export class ReservasService
     if (this.estaConfirmada(guardada)) {
       await this.notificacionesService.enviarConfirmacion(guardada);
     } else if (devolucionPendiente) {
-      await this.notificacionesService.avisarCambio(guardada, ['inquilino', 'admin'], 'Pago recibido para una reserva sin confirmar', 'El pago se recibió, pero la reserva no pudo confirmarse. La devolución quedó pendiente de gestión.');
+      await this.notificacionesService.avisarCambio(guardada, ['inquilino', 'admin'], 'Pago recibido para una reserva sin confirmar', 'El pago se recibió, pero la reserva no pudo confirmarse. La devolución quedó pendiente de gestión.', 'reembolso');
     }
     return this.prepararRespuesta(guardada);
   }
@@ -469,7 +469,7 @@ export class ReservasService
       },
     );
     if (resultado.cambio && causa === 'BLOQUEO_ANUNCIANTE')
-      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino'], 'Reserva cancelada por DEPA', 'La reserva pendiente de pago fue cancelada por DEPA.');
+      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino'], 'Reserva cancelada por DEPA', 'La reserva pendiente de pago fue cancelada por DEPA.', 'reserva');
     return this.prepararRespuesta(resultado.reserva);
   }
 
@@ -665,7 +665,7 @@ export class ReservasService
       },
     );
     if (resultado.cambio)
-      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino', 'anunciante'], 'Reserva cancelada', 'La reserva pendiente de pago fue cancelada.', idUsuarioQueOpera);
+      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino', 'anunciante'], 'Reserva cancelada', 'La reserva pendiente de pago fue cancelada.', 'reserva', idUsuarioQueOpera);
     return this.prepararRespuesta(resultado.reserva);
   }
 
@@ -860,7 +860,7 @@ export class ReservasService
     );
     // El intento incorrecto debe persistir aunque la respuesta sea un error.
     if (resultado instanceof BadRequestException) throw resultado;
-    await this.notificacionesService.avisarCambio(resultado, ['inquilino'], 'Ingreso confirmado', 'El anunciante validó tu ingreso al alojamiento.');
+    await this.notificacionesService.avisarCambio(resultado, ['inquilino'], 'Ingreso confirmado', 'El anunciante validó tu ingreso al alojamiento.', 'reserva');
     return this.prepararRespuesta(resultado);
   }
 

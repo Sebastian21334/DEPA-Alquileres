@@ -26,8 +26,36 @@ function signal(valor) {
   return leer;
 }
 
+// Los elementos que se llevan a la vista quedan registrados sin tocar el documento.
+const programados = [];
 const { MisReservasComponent } = cargar(path.join(__dirname, '../src/app/features/mis-reservas/mis-reservas.component.ts'), {
   '@angular/core': { Component: () => clase => clase },
+  '../../shared/utils/desplazamiento': { llevarALaVista: id => programados.push(id) },
+});
+
+test('el aviso de un reclamo abre Reclamos en la subpestaña del rol y resalta el más reciente de esa reserva', () => {
+  const componente = Object.create(MisReservasComponent.prototype);
+  for (const propiedad of ['vista', 'vistaReclamos', 'reclamoDestacado']) componente[propiedad] = signal(null);
+  componente.idUsuario = () => 2;
+  componente.reservaDelAviso = 42;
+  const anteriores = programados.length;
+  componente.mostrarReclamoDelAviso([
+    { id: 5, reserva: { id: 42 }, inquilino: { id: 1 }, anunciante: { id: 2 } },
+    { id: 9, reserva: { id: 42 }, inquilino: { id: 1 }, anunciante: { id: 2 } },
+    { id: 11, reserva: { id: 7 }, inquilino: { id: 2 }, anunciante: { id: 3 } },
+  ]);
+  assert.deepEqual([componente.vista(), componente.vistaReclamos(), componente.reclamoDestacado()], ['reclamos', 'anunciante', 9]);
+  assert.deepEqual(programados.slice(anteriores), ['reclamo-9']);
+  // Se aplica una sola vez: las recargas periódicas no vuelven a mover la vista.
+  assert.equal(componente.reservaDelAviso, null);
+});
+
+test('si la reserva del aviso ya no tiene reclamos, la vista queda como estaba', () => {
+  const componente = Object.create(MisReservasComponent.prototype);
+  for (const propiedad of ['vista', 'vistaReclamos', 'reclamoDestacado']) componente[propiedad] = signal(null);
+  componente.reservaDelAviso = 42;
+  componente.mostrarReclamoDelAviso([{ id: 11, reserva: { id: 7 }, inquilino: { id: 2 }, anunciante: { id: 3 } }]);
+  assert.deepEqual([componente.vista(), componente.reclamoDestacado(), componente.reservaDelAviso], [null, null, null]);
 });
 
 for (const caso of [

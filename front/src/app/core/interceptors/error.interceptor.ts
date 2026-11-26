@@ -34,7 +34,8 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           typeof window !== 'undefined' &&
           !window.location.pathname.startsWith('/login')
         ) {
-          const returnUrl = window.location.pathname + window.location.search;
+          // Con la sección (`#reclamos`), el admin vuelve al mismo lugar después de ingresar.
+          const returnUrl = window.location.pathname + window.location.search + window.location.hash;
           window.location.assign(codigo === 'USUARIO_BLOQUEADO'
             ? '/login?bloqueoTotal=1'
             : `/login?returnUrl=${encodeURIComponent(returnUrl)}&sesionExpirada=1`);

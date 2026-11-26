@@ -264,7 +264,7 @@
             </div>
           }
           @for (reclamo of reclamosVisibles(); track reclamo.id) {
-            <article class="acct-card reservation claim-card">
+            <article class="acct-card reservation claim-card" [id]="'reclamo-' + reclamo.id" [class.claim-card--destacado]="reclamoDestacado() === reclamo.id">
               <app-claim-history [reclamo]="reclamo" [mostrarVerReembolso]="esInquilinoDelReclamo(reclamo)"
                 (verReembolso)="verReembolsoReclamo(reclamo)">
                 @if (reclamo.estado !== 'CERRADO') {

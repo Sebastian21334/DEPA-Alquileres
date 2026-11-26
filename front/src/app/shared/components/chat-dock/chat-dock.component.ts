@@ -12,7 +12,7 @@ import { LucideMessageCircle, LucideX } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { ChatService } from '../../../core/services/chat.service';
 import { ConversacionResumen } from '../../models/mensaje.model';
-import { interlocutor, nombreInterlocutor } from '../../utils/conversaciones';
+import { chatDeConversacion } from '../../utils/conversaciones';
 import { ChatWindowComponent } from './chat-window.component';
 import { ConversationListComponent } from './conversation-list.component';
 
@@ -196,14 +196,7 @@ export class ChatDockComponent {
   }
 
   protected abrirConversacion(conversacion: ConversacionResumen): void {
-    const otro = interlocutor(conversacion);
-    this.chatService.abrir({
-      idPublicacion: conversacion.idPublicacion,
-      idOtroUsuario: conversacion.idOtroUsuario,
-      titulo: conversacion.ultimoMensaje.publicacion.titulo,
-      nombreOtro: nombreInterlocutor(conversacion),
-      fotoOtro: otro.foto_url ?? null,
-    });
+    this.chatService.abrir(chatDeConversacion(conversacion));
     this.listaAbierta.set(false);
     this.burbuja()?.nativeElement.focus();
   }

@@ -197,6 +197,10 @@ export class PublicationDetailComponent {
       this.loading.set(false);
       return;
     }
+    // El aviso por correo de un mensaje trae `?chat=<interlocutor>`; sin sesión, el guard ya pidió ingresar.
+    const idInterlocutor = Number(this.route.snapshot.queryParamMap.get('chat'));
+    if (!this.administracion && Number.isInteger(idInterlocutor) && idInterlocutor > 0 && this.auth.isAuthenticated)
+      this.chat.abrirDesdeAviso(id, idInterlocutor);
     const publicacion = this.administracion ? this.listings.getByIdForAdmin(id) : this.listings.getById(id);
     publicacion
       .pipe(finalize(() => this.loading.set(false)))

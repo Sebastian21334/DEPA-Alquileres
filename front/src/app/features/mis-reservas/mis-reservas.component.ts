@@ -3,7 +3,7 @@ import { diasDeAntelacion, esFechaCalendario, fechaCalendarioLocal, sumarDias } 
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
-import { Component, computed, DestroyRef, ElementRef, inject, linkedSignal, signal, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, ElementRef, inject, Injector, linkedSignal, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, finalize, forkJoin, of, Subscription, switchMap } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -28,6 +28,7 @@ import { ActividadReembolsosService } from '../../core/services/actividad-reembo
 import { CargaImagenesComponent } from '../../shared/components/carga-imagenes/carga-imagenes.component';
 import { imagenesDisponibles, MAX_IMAGENES_POR_ENVIO } from '../../shared/utils/reclamo-imagenes';
 import { rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol';
+import { llevarALaVista } from '../../shared/utils/desplazamiento';
 import { normalizarTexto } from '../../shared/utils/texto';
 
 @Component({
@@ -50,6 +51,7 @@ export class MisReservasComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private consultaReservas?: Subscription;
   protected readonly estadiaActiva = estadiaActiva;
   protected readonly puedeReprogramar = puedeReprogramar;
@@ -124,6 +126,11 @@ export class MisReservasComponent {
   protected readonly reclamos = signal<Reclamo[]>([]);
   /** Subpestaña de Reclamos según el rol en cada uno. */
   protected readonly vistaReclamos = signal<RolEnReclamo>('inquilino');
+  /** Reclamo al que llevó un aviso por correo (`?vista=reclamos&reserva=<id>`), resaltado en la lista. */
+  protected readonly reclamoDestacado = signal<number | null>(null);
+  private reservaDelAviso = this.route.snapshot.queryParamMap.get('vista') === 'reclamos'
+    ? Number(this.route.snapshot.queryParamMap.get('reserva')) || null
+    : null;
   protected readonly reclamosComoInquilino = computed(() => this.reclamosConRol('inquilino'));
   protected readonly reclamosComoAnunciante = computed(() => this.reclamosConRol('anunciante'));
   /** Sin subpestañas si no es anunciante, salvo que tenga reclamos de cuando lo era. */
@@ -228,6 +235,7 @@ export class MisReservasComponent {
       return;
     }
 
+    if (this.route.snapshot.queryParamMap.get('vista') === 'reclamos') this.vista.set('reclamos');
     this.cargarReservas();
     activarActualizacionReservas(() => {
       if (this.ocupada() === null) this.cargarReservas(true);
@@ -253,6 +261,7 @@ export class MisReservasComponent {
         if (reclamos) {
           this.reclamos.set(reclamos);
           this.errorHistorial.set('');
+          if (this.reservaDelAviso) this.mostrarReclamoDelAviso(reclamos);
         }
         this.codigos.update((codigos) => Object.fromEntries(
           Object.entries(codigos).filter(([id]) => propias.some((r) => r.id === +id && puedeConsultarCodigo(r))),
@@ -637,6 +646,18 @@ export class MisReservasComponent {
           this.errorAccionReclamo.set(err.message);
         },
       });
+  }
+
+  /** Lleva al reclamo más reciente de la reserva del aviso, en la subpestaña del rol con que participa; una sola vez. */
+  private mostrarReclamoDelAviso(reclamos: Reclamo[]): void {
+    const idReserva = this.reservaDelAviso;
+    this.reservaDelAviso = null;
+    const reclamo = reclamos.filter((item) => item.reserva?.id === idReserva).sort((a, b) => b.id - a.id)[0];
+    if (!reclamo) return;
+    this.vista.set('reclamos');
+    this.vistaReclamos.set(rolEnReclamo(reclamo, this.idUsuario()) ?? 'inquilino');
+    this.reclamoDestacado.set(reclamo.id);
+    llevarALaVista(`reclamo-${reclamo.id}`, this.injector);
   }
 
   private finalizarReclamo(reclamo: Reclamo, advertencia?: string): void {

@@ -117,9 +117,9 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     const asunto = 'Liquidación disponible para pago manual';
     const [admin, anunciante] = await Promise.all([
       !liquidacion.aviso_pago_admin_en && this.notificaciones.avisarCambio(reserva, ['admin'], asunto,
-        'Ya podés gestionar el pago manual de esta reserva y registrar la transferencia en el panel de Administración.'),
+        'Ya podés gestionar el pago manual de esta reserva y registrar la transferencia en el panel de Administración.', 'liquidacion'),
       !liquidacion.aviso_pago_anunciante_en && this.notificaciones.avisarCambio(reserva, ['anunciante'], asunto,
-        'Tu liquidación está disponible para pago manual. Administración ya puede gestionar el pago y podés seguir su estado en DEPA.'),
+        'Tu liquidación está disponible para pago manual. Administración ya puede gestionar el pago y podés seguir su estado en DEPA.', 'liquidacion'),
     ]);
     await this.liquidaciones.registrarAvisosPagoManual(liquidacion, { admin, anunciante }, ahora, transaccion);
   }
@@ -306,7 +306,7 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     // Recién con la transacción confirmada el comprobante queda en uso; si algo falló, quien lo subió lo borra.
     pago?.alGuardar();
     if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
-      await this.notificaciones?.avisarCambio(reserva, ['anunciante'], 'Pago al anunciante registrado', 'La administración registró el pago de tu liquidación. Podés consultar el detalle en DEPA.');
+      await this.notificaciones?.avisarCambio(reserva, ['anunciante'], 'Pago al anunciante registrado', 'La administración registró el pago de tu liquidación. Podés consultar el detalle en DEPA.', 'pago-liquidacion');
     return reserva;
   }
 

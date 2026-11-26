@@ -203,3 +203,6 @@
 .cancellation-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .75rem; margin-top: 1.3rem; }
 .cancellation-back { background: white; color: #a52e17; border: 1px solid #b83d22; }
 .cancellation-submit { background: #ae3619; color: white; border: 1px solid #ae3619; }
+/* El reclamo al que llevó un aviso por correo queda debajo de la barra fija y resaltado. */
+.claim-card { scroll-margin-top: 6rem; }
+.claim-card--destacado { outline: 2px solid var(--color-primary); outline-offset: 2px; }

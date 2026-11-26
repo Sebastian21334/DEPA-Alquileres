@@ -28,7 +28,7 @@ import { ChatService } from '../../../core/services/chat.service';
 import { ActividadReembolsosService } from '../../../core/services/actividad-reembolsos.service';
 import { ConversacionResumen } from '../../models/mensaje.model';
 import { etiquetaRol } from '../../models/perfil.model';
-import { interlocutor, nombreInterlocutor } from '../../utils/conversaciones';
+import { chatDeConversacion, nombreInterlocutor } from '../../utils/conversaciones';
 import { AvatarComponent } from '../avatar/avatar.component';
 import { ConversationListComponent } from '../chat-dock/conversation-list.component';
 
@@ -171,13 +171,7 @@ export class NavbarComponent {
   }
 
   protected abrirChat(conv: ConversacionResumen): void {
-    this.chat.abrir({
-      idPublicacion: conv.idPublicacion,
-      idOtroUsuario: conv.idOtroUsuario,
-      titulo: conv.ultimoMensaje.publicacion.titulo,
-      nombreOtro: nombreInterlocutor(conv),
-      fotoOtro: interlocutor(conv).foto_url ?? null,
-    });
+    this.chat.abrir(chatDeConversacion(conv));
     this.cerrarMenu();
   }
 

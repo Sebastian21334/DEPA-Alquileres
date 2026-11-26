@@ -122,6 +122,7 @@ export class MensajesService {
         this.usuariosService.nombreCompleto(remitente),
         publicacion.titulo,
         publicacion.id,
+        remitente.id,
       );
     } catch (error) {
       // Se registra la cuenta, no el correo: el log no debe guardar datos personales.

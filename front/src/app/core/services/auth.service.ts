@@ -77,6 +77,16 @@ export class AuthService {
     return this.currentUser() !== null;
   }
 
+  /**
+   * Sesión vigente para los guards: el token puede vencer con la aplicación ya abierta. Si venció, se cierra
+   * la sesión para que el guard pida ingresar y después vuelva a la misma ruta.
+   */
+  sesionActiva(): boolean {
+    const usuario = this.currentUser();
+    if (usuario && this.expirado(usuario)) this.logout();
+    return this.isAuthenticated;
+  }
+
   get token(): string | null {
     return this.isBrowser ? localStorage.getItem(TOKEN_KEY) : null;
   }

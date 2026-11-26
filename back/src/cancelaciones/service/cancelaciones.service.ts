@@ -87,7 +87,7 @@ export class CancelacionesService {
     if (resultado.creada)
       await this.notificaciones?.avisarCambio(resultado.solicitud.reserva, ['inquilino', 'anunciante'],
         resultado.reembolso ? 'Cancelación aceptada' : 'Reserva cancelada',
-        resultado.reembolso ? 'La devolución está en gestión.' : 'La reserva quedó cancelada sin devolución según las condiciones aceptadas.');
+        resultado.reembolso ? 'La devolución está en gestión.' : 'La reserva quedó cancelada sin devolución según las condiciones aceptadas.', 'reserva');
     return this.prepararRespuesta(resultado.solicitud);
   }
 

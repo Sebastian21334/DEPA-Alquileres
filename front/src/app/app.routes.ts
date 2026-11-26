@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 import { adminGuard } from './core/guards/admin.guard';
-import { anuncianteGuard, authGuard } from './core/guards/auth.guard';
+import { anuncianteGuard, authGuard, chatConSesionGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -135,6 +135,7 @@ export const routes: Routes = [
   },
   {
     path: 'publicaciones/:id',
+    canActivate: [chatConSesionGuard],
     loadComponent: () =>
       import('./features/publication-detail/publication-detail.component').then(
         (m) => m.PublicationDetailComponent,

@@ -1,11 +1,11 @@
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { formatearImporteConMoneda, formatearMoneda } from '../../shared/utils/formato-numero';
 import { fechaCalendarioLocal } from '../../shared/utils/rental-dates';
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { Component, computed, DestroyRef, inject, Injector, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { estadiaActiva } from '../../shared/utils/reservation-state';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { LucideEye, LucideHouse, LucideCalendarDays, LucideWallet } from '@lucide/angular';
 import { forkJoin, Subscription } from 'rxjs';
 import { ApiError } from '../../core/interceptors/api-error';
@@ -17,6 +17,7 @@ import { HistorialLiquidacionesComponent } from '../../shared/components/histori
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { SearchFieldComponent } from '../../shared/components/search-field/search-field.component';
 import { normalizarTexto } from '../../shared/utils/texto';
+import { llevarALaVista } from '../../shared/utils/desplazamiento';
 
 interface SerieEvolucion {
   key: string;
@@ -53,6 +54,8 @@ export class DashboardComponent {
   private readonly publicacionesApi = inject(GestionPublicacionesService);
   private readonly reservasApi = inject(ReservationService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+  private readonly injector = inject(Injector);
   private consultaReservas?: Subscription;
 
   protected readonly publicaciones = signal<Publicacion[]>([]);
@@ -228,6 +231,7 @@ export class DashboardComponent {
         this.publicaciones.set(publicaciones);
         this.reservas.set(reservas);
         this.cargando.set(false);
+        this.irAlAncla();
       },
       error: (error: ApiError) => {
         this.error.set(error.message);
@@ -235,6 +239,12 @@ export class DashboardComponent {
       },
     });
     this.cargarPagos();
+  }
+
+  /** Los avisos de liquidaciones abren el panel en una sección (`#historial-liquidaciones`), que aparece recién al cargar. */
+  private irAlAncla(): void {
+    const ancla = this.route.snapshot.fragment;
+    if (ancla) llevarALaVista(ancla, this.injector);
   }
 
   /** Va aparte del resto del panel: si falla, el panel se sigue mostrando. */

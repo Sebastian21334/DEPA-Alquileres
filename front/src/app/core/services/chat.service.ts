@@ -4,6 +4,7 @@ import { Injectable, PLATFORM_ID, computed, effect, inject, signal } from '@angu
 import { EMPTY, Observable, Subject, catchError, exhaustMap, merge, timer } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ConversacionResumen, Mensaje } from '../../shared/models/mensaje.model';
+import { chatDeConversacion } from '../../shared/utils/conversaciones';
 import { AuthService } from './auth.service';
 
 // Datos mínimos para abrir una ventana de chat: la conversación queda definida
@@ -81,6 +82,14 @@ export class ChatService {
       const resto = lista.filter((c) => !this.esMismo(c, chat));
       // El más reciente queda primero (a la derecha) y se descarta el más viejo.
       return [{ ...chat, minimizado: false }, ...resto].slice(0, MAX_VENTANAS);
+    });
+  }
+
+  /** Abre la conversación que indica un aviso por correo, con los datos de la bandeja; si no existe, no abre nada. */
+  abrirDesdeAviso(idPublicacion: number, idOtroUsuario: number): void {
+    this.listarConversaciones().pipe(catchError(() => EMPTY)).subscribe(conversaciones => {
+      const conversacion = conversaciones.find(item => this.esMismo(item, { idPublicacion, idOtroUsuario }));
+      if (conversacion) this.abrir(chatDeConversacion(conversacion));
     });
   }
 
