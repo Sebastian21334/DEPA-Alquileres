@@ -30,6 +30,9 @@ el reclamo #51 resaltado y `/admin?reserva=1#reclamos` lo abre en el panel admin
 `/publicaciones/1?chat=8` abre la conversación con Pedro. Con `sesion=no` o `sesion=vencida`,
 esas rutas piden ingresar y conservan el destino en `returnUrl`.
 
+El asistente responde siempre con las cuatro publicaciones de prueba. Desde `/publicaciones/1`, tocar
+un resultado tiene que mostrar esa otra publicación, no solo cambiar la URL.
+
 Para T39, usar `/mis-reservas?rol=Anunciante&cancelacion=anunciante-ingreso`
 y abrir **Reservas recibidas**. La reserva #3 permite solicitar la cancelación
 el día del ingreso, con devolución del 100 % al inquilino. Con

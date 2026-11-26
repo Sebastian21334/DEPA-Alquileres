@@ -14,6 +14,8 @@ import { delay, mergeMap, of, throwError } from 'rxjs';
 import { App } from '../src/app/app';
 import { routes } from '../src/app/app.routes';
 import { AuthService } from '../src/app/core/services/auth.service';
+import { AsistenteDepaService } from '../src/app/core/services/asistente-depa.service';
+import { proveerReutilizacionRutas } from '../src/app/core/routing/reutilizacion-rutas';
 import { rentalDays } from '../src/app/shared/utils/rental-dates';
 import { ApiError } from '../src/app/core/interceptors/api-error';
 const params = new URLSearchParams(location.search);
@@ -470,10 +472,21 @@ const interceptor: HttpInterceptorFn = (req) => {
     );
   return of(new HttpResponse({ status: 200, body }));
 };
+// El asistente usa su propio HttpClient, sin el interceptor: responde con las publicaciones de prueba.
+const asistente = {
+  consultar: () => of({
+    respuesta: 'Estas publicaciones coinciden con tu búsqueda.',
+    publicaciones: publicaciones.map(({ id, titulo, precio }) =>
+      ({ id, titulo, ciudad: 'Villa María', modalidad: 'Temporal', precio, moneda: 'Peso (ARS)', ambientes: 3 })),
+  }).pipe(delay(300)),
+};
+
 bootstrapApplication(App, {
   providers: [
     provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })),
+    proveerReutilizacionRutas,
     provideHttpClient(withInterceptors([interceptor])),
     { provide: AuthService, useValue: auth },
+    { provide: AsistenteDepaService, useValue: asistente },
   ],
 }).catch(console.error);

@@ -136,6 +136,8 @@ export const routes: Routes = [
   {
     path: 'publicaciones/:id',
     canActivate: [chatConSesionGuard],
+    // Desde el asistente o el chat se pasa de una publicación a otra: cada una carga su propia pantalla.
+    data: { recrearConOtrosParametros: true },
     loadComponent: () =>
       import('./features/publication-detail/publication-detail.component').then(
         (m) => m.PublicationDetailComponent,

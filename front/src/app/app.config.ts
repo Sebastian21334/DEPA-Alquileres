@@ -4,6 +4,7 @@ import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/
 import { routes } from './app.routes';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { proveerReutilizacionRutas } from './core/routing/reutilizacion-rutas';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -15,6 +16,7 @@ export const appConfig: ApplicationConfig = {
       // Transición animada entre páginas (estilos ::view-transition-* en styles.css).
       withViewTransitions(),
     ),
+    proveerReutilizacionRutas,
     provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
   ],
 };
