@@ -1,5 +1,4 @@
 import type { Reclamo } from '../entity/reclamo.entity';
-import type { VisibilidadMensajeReclamo } from '../entity/reclamo-mensaje.entity';
 
 /** Datos mínimos de quien escribió un mensaje o subió una imagen. */
 export interface AutorReclamo {
@@ -23,7 +22,6 @@ export interface ImagenReclamo {
 export interface MensajeReclamoRespuesta {
   id: number;
   texto: string;
-  visible_para: VisibilidadMensajeReclamo;
   /** Se escribió desde el panel de Administración: el autor se muestra como Admin y no con su rol en la reserva. */
   como_administracion: boolean;
   creado_en: Date;

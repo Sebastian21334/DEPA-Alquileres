@@ -869,6 +869,38 @@ test('la migración marca como de Administración los mensajes de quien no es pa
   }
 });
 
+test('la migración retira las notas internas y su catálogo, conserva los demás mensajes y se puede repetir', async () => {
+  const { PGlite } = require('@electric-sql/pglite');
+  const migracion = readFileSync(path.join(__dirname, '../migrations/20261126-retirar-notas-internas-reclamo.sql'), 'utf8');
+  const anterior = new PGlite();
+  try {
+    await anterior.exec(`CREATE TYPE reclamo_mensaje_visibilidad_enum AS ENUM ('TODOS', 'ADMIN');
+      CREATE TABLE ambito (codigo varchar(40) PRIMARY KEY, nombre varchar(80));
+      CREATE TABLE estado (codigo_ambito varchar(40) REFERENCES ambito (codigo), codigo varchar(40), nombre varchar(80), PRIMARY KEY (codigo_ambito, codigo));
+      INSERT INTO ambito VALUES ('RECLAMO_VISIBILIDAD', 'RECLAMO VISIBILIDAD'), ('RECLAMO', 'RECLAMO');
+      INSERT INTO estado VALUES ('RECLAMO_VISIBILIDAD', 'TODOS', 'TODOS'), ('RECLAMO_VISIBILIDAD', 'ADMIN', 'ADMIN'), ('RECLAMO', 'ABIERTO', 'ABIERTO');
+      CREATE TABLE reclamo_mensaje (id_mensaje_reclamo integer PRIMARY KEY, texto varchar(1000), visible_para varchar(40) NOT NULL DEFAULT 'TODOS',
+        ambito_visible_para varchar(40) GENERATED ALWAYS AS ('RECLAMO_VISIBILIDAD') STORED,
+        CONSTRAINT fk_reclamo_mensaje_visible_para_catalogo FOREIGN KEY (ambito_visible_para, visible_para) REFERENCES estado (codigo_ambito, codigo));
+      INSERT INTO reclamo_mensaje (id_mensaje_reclamo, texto, visible_para) VALUES (1, 'Mensaje para todos', 'TODOS'), (2, 'Nota privada', 'ADMIN');`);
+    const filas = async (consulta) => (await anterior.query(consulta)).rows.map((fila) => Object.values(fila)[0]);
+    const estado = async () => ({
+      mensajes: await filas('SELECT texto FROM reclamo_mensaje ORDER BY id_mensaje_reclamo'),
+      columnas: await filas("SELECT column_name FROM information_schema.columns WHERE table_name = 'reclamo_mensaje' ORDER BY ordinal_position"),
+      catalogo: await filas("SELECT codigo_ambito || '/' || codigo FROM estado ORDER BY 1"),
+      ambitos: await filas('SELECT codigo FROM ambito ORDER BY 1'),
+      tipos: await filas("SELECT typname FROM pg_type WHERE typname = 'reclamo_mensaje_visibilidad_enum'"),
+    });
+    const esperado = { mensajes: ['Mensaje para todos'], columnas: ['id_mensaje_reclamo', 'texto'], catalogo: ['RECLAMO/ABIERTO'], ambitos: ['RECLAMO'], tipos: [] };
+    await anterior.exec(migracion);
+    assert.deepEqual(await estado(), esperado);
+    await anterior.exec(migracion);
+    assert.deepEqual(await estado(), esperado);
+  } finally {
+    await anterior.close();
+  }
+});
+
 test('la migración repara los nombres de archivo leídos como latin1, conserva los bien guardados y se puede repetir', async () => {
   const { PGlite } = require('@electric-sql/pglite');
   const migracion = readFileSync(path.join(__dirname, '../migrations/20261124-nombres-archivos-utf8.sql'), 'utf8');
@@ -1828,24 +1860,19 @@ test('si falla la confirmación no queda una solicitud ni una devolución a medi
   assert.equal(await source.getRepository(Reembolso).count(), 1);
 });
 
-test('las notas internas de reclamos solo se entregan al administrador', async () => {
+test('las partes y el admin ven los mismos mensajes del reclamo, y cada mensaje avisa a los demás', async () => {
   const avisos = [];
   reclamos.notificaciones = { avisarCambio: async (...args) => avisos.push(args) };
   const { reserva } = await escenario();
   const reclamo = await source.getRepository(Reclamo).save({
     reserva, inquilino: { id: 1 }, anunciante: { id: 2 }, categoria: 'OTRO', descripcion: 'Reclamo de prueba',
   });
-  await source.getRepository(ReclamoMensaje).save([
-    { reclamo, autor: { id: 3 }, texto: 'Mensaje público', visible_para: 'TODOS' },
-    { reclamo, autor: { id: 3 }, texto: 'Nota interna privada', visible_para: 'ADMIN' },
-  ]);
-  assert.equal((await reclamos.obtener(reclamo.id, 1, false)).mensajes.length, 1);
-  assert.equal((await reclamos.listarMios(2))[0].mensajes.length, 1);
+  await source.getRepository(ReclamoMensaje).save({ reclamo, autor: { id: 3 }, texto: 'Mensaje anterior', como_administracion: true });
+  await reclamos.enviarMensaje(reclamo.id, { texto: 'Respuesta pública' }, 3, true);
+  assert.equal((await reclamos.obtener(reclamo.id, 1, false)).mensajes.length, 2);
+  assert.equal((await reclamos.listarMios(2))[0].mensajes.length, 2);
   assert.equal((await reclamos.obtener(reclamo.id, 3, true)).mensajes.length, 2);
   await assert.rejects(reclamos.obtener(reclamo.id, 4, false), /No formás parte/);
-  await reclamos.enviarMensaje(reclamo.id, { texto: 'Otra nota privada', visible_para: 'ADMIN' }, 3, true);
-  assert.equal(avisos.length, 0);
-  await reclamos.enviarMensaje(reclamo.id, { texto: 'Respuesta pública' }, 3, true);
   assert.equal(avisos.length, 1);
   assert.deepEqual(avisos[0][1], ['inquilino', 'anunciante']);
   assert.doesNotMatch(avisos[0][3], /Respuesta pública/);
@@ -1863,7 +1890,6 @@ test('un admin que es parte de la reserva escribe con su rol desde su chat y com
   const comoParte = await reclamos.enviarMensaje(reclamo.id, { texto: 'Escribo como inquilino' }, 3, false);
   // Desde su chat no interviene la administración: el reclamo sigue abierto y se avisa también al admin.
   assert.deepEqual([comoParte.como_administracion, await estado(), avisos[0][1]], [false, 'ABIERTO', ['inquilino', 'anunciante', 'admin']]);
-  await assert.rejects(reclamos.enviarMensaje(reclamo.id, { texto: 'Nota', visible_para: 'ADMIN' }, 3, false), /Solo el Administrador/);
   const comoAdmin = await reclamos.enviarMensaje(reclamo.id, { texto: 'Respondo desde Administración' }, 3, true);
   assert.deepEqual([comoAdmin.como_administracion, await estado()], [true, 'EN_REVISION']);
   assert.deepEqual((await reclamos.obtener(reclamo.id, 2, false)).mensajes.map(({ texto, como_administracion }) => [texto, como_administracion]), [
@@ -1917,12 +1943,11 @@ test('las imágenes de un mensaje quedan en ese mensaje, con su autor y sin dato
   await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: '   ' }, 1, false), /Escribí un mensaje o adjuntá/);
 });
 
-test('hasta 10 imágenes por envío y 30 por reclamo; una nota interna no lleva imágenes', async () => {
+test('hasta 10 imágenes por envío y 30 por reclamo', async () => {
   const { servicio, archivos } = reclamosConImagenes();
   const reclamo = await reclamoDePrueba();
   const imagen = await imagenPng();
   await assert.rejects(servicio.enviarMensaje(reclamo.id, {}, 1, false, Array(11).fill(imagen)), /hasta 10 imágenes por envío/);
-  await assert.rejects(servicio.enviarMensaje(reclamo.id, { texto: 'Nota', visible_para: 'ADMIN' }, 3, true, [imagen]), /notas internas no admiten imágenes/);
   await source.getRepository(ReclamoEvidencia).save(Array.from({ length: 26 }, (_, i) => ({
     reclamo, url: `https://privado.example/anterior-${i}.jpg`, nombre_archivo: `anterior-${i}.jpg`,
   })));
@@ -2711,20 +2736,21 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       .attach('evidencias', (await imagenPng()).buffer, 'pileta.png').expect(201);
     assert.deepEqual([conImagen.texto, conImagen.evidencias.length, Object.hasOwn(conImagen, 'reclamo')], ['', 1, false]);
     await request(http).post(rutaMensajes).set('Authorization', tenant).send({ texto: '   ' }).expect(400);
-    assert.equal(conImagen.como_administracion, false);
+    assert.deepEqual([conImagen.como_administracion, Object.hasOwn(conImagen, 'visible_para')], [false, false]);
     // El admin responde desde Administración: el chat de las partes es solo para ellas, y la ruta de Administración, solo para el admin.
     await request(http).post(rutaMensajes).set('Authorization', admin).send({ texto: 'Recibido' }).expect(403);
     await request(http).post(`${rutaMensajes}/administracion`).set('Authorization', tenant).send({ texto: 'Recibido' }).expect(403);
     const { body: soloTexto } = await request(http).post(`${rutaMensajes}/administracion`).set('Authorization', admin).send({ texto: 'Recibido' }).expect(201);
     assert.deepEqual([soloTexto.evidencias, soloTexto.como_administracion], [[], true]);
-    // Las lecturas también se separan: el admin lee por Administración, con las notas internas, y las partes, por su chat.
-    await request(http).post(`${rutaMensajes}/administracion`).set('Authorization', admin).send({ texto: 'Nota interna', visible_para: 'ADMIN' }).expect(201);
+    // Ya no hay notas internas: el campo de visibilidad se rechaza como cualquier dato desconocido.
+    await request(http).post(`${rutaMensajes}/administracion`).set('Authorization', admin).send({ texto: 'Nota interna', visible_para: 'ADMIN' }).expect(400);
+    // Las lecturas también se separan: el admin lee por Administración y las partes, por su chat, con los mismos mensajes.
     await request(http).get(rutaMensajes).set('Authorization', admin).expect(403);
     await request(http).get(`/reclamos/${abierto.id}`).set('Authorization', admin).expect(403);
     await request(http).get(`${rutaMensajes}/administracion`).set('Authorization', tenant).expect(403);
     const { body: leidosAdmin } = await request(http).get(`${rutaMensajes}/administracion`).set('Authorization', admin).expect(200);
     const { body: leidosParte } = await request(http).get(rutaMensajes).set('Authorization', tenant).expect(200);
-    assert.deepEqual([leidosAdmin.length, leidosParte.map(({ texto }) => texto)], [3, ['', 'Recibido']]);
+    assert.deepEqual([leidosAdmin.map(({ texto }) => texto), leidosParte.map(({ texto }) => texto)], [['', 'Recibido'], ['', 'Recibido']]);
     const rutaResolver = `/reclamos/${abierto.id}/resolver`;
     await request(http).patch(rutaResolver).set('Authorization', tenant)
       .send({ resolucion: 'DEVOLUCION_TOTAL', observacion: 'Pedido del inquilino' }).expect(403);

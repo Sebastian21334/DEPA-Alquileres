@@ -341,3 +341,13 @@ si el mensaje se escribió desde el panel de Administración. El chat del reclam
 esos mensajes: un administrador que es inquilino o anunciante de la reserva aparece con ese rol cuando
 escribe desde su propio chat. Los mensajes anteriores se marcan según su autor: los de quien no es parte
 de la reserva quedan como escritos desde Administración. Es reejecutable.
+
+# Retiro de las notas internas de reclamos
+
+Esta versión quita las notas internas del chat de reclamos: todos los mensajes los ven las partes y la
+Administración. Apenas se inicie esta versión del backend, ejecutar
+`npm run db:retirar-notas-internas-reclamo` desde `back` (también después de inicializar una base nueva).
+La migración `20261126-retirar-notas-internas-reclamo.sql` borra las notas internas que quedaran, para no
+mostrárselas a las partes, y retira `reclamo_mensaje.visible_para`, su clave foránea al catálogo, el tipo
+`reclamo_mensaje_visibilidad_enum` y el ámbito `RECLAMO_VISIBILIDAD`. Las versiones anteriores del backend
+no inician sin ese ámbito. Es reejecutable.

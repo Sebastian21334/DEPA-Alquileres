@@ -174,17 +174,6 @@
       }
     }
   },
-  "RECLAMO_VISIBILIDAD": {
-    "nombre": "RECLAMO VISIBILIDAD",
-    "estados": {
-      "TODOS": {
-        "nombre": "TODOS"
-      },
-      "ADMIN": {
-        "nombre": "ADMIN"
-      }
-    }
-  },
   "REEMBOLSO_TIPO": {
     "nombre": "REEMBOLSO TIPO",
     "estados": {

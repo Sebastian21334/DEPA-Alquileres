@@ -286,7 +286,7 @@ export class ClaimHistoryComponent {
     .map(mensaje => ({
       id: mensaje.id, autor: this.nombreCompleto(mensaje.autor) || 'Usuario',
       texto: mensaje.texto, fecha: mensaje.creado_en,
-      rol: etiquetaAutorReclamo(this.reclamo(), mensaje.autor, mensaje.como_administracion), interno: mensaje.visible_para === 'ADMIN',
+      rol: etiquetaAutorReclamo(this.reclamo(), mensaje.autor, mensaje.como_administracion),
       propio: mensaje.autor?.id === Number(this.auth.currentUser()?.sub),
       imagenes: (mensaje.evidencias ?? []).map((imagen) => ({ url: this.urlImagen(imagen), nombre: imagen.nombre_archivo })),
     })));

@@ -11,7 +11,6 @@ export interface MensajeConversacion {
   rol?: string;
   foto?: string | null;
   propio?: boolean;
-  interno?: boolean;
   leido?: boolean;
   imagen?: string;
   /** Imágenes adjuntas al mensaje (reclamos). */
@@ -54,9 +53,8 @@ export function mensajesApelacion(detalle: {
             <div class="mensaje">
               <div class="autor"><strong>{{ mensaje.autor }}</strong>
                 @if (mensaje.rol) { <span>· {{ mensaje.rol }}</span> }
-                @if (mensaje.interno) { <span class="nota">Nota interna</span> }
               </div>
-              @if (mensaje.texto) { <p class="burbuja" [class.interna]="mensaje.interno">{{ mensaje.texto }}</p> }
+              @if (mensaje.texto) { <p class="burbuja">{{ mensaje.texto }}</p> }
               @if (mensaje.imagen) {
                 <a class="imagen" [href]="mensaje.imagen" target="_blank" rel="noopener noreferrer" aria-label="Abrir imagen adjunta">
                   <img [src]="mensaje.imagen" alt="Imagen adjunta" loading="lazy" />
@@ -109,10 +107,8 @@ export function mensajesApelacion(detalle: {
     .autor { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 5px; font-size: .79rem; }
     .propio .autor { justify-content: flex-end; }
     .autor span, .hora { color: #52607a; }
-    .autor .nota { padding: 2px 5px; border-radius: 4px; background: #fff0cb; color: #694500; }
     .burbuja { display: inline-block; padding: 8px 11px; border-radius: 6px 11px 11px; background: #dbe8ff; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92rem; }
     .propio .burbuja { border-radius: 11px 6px 11px 11px; background: #e3eaff; }
-    .burbuja.interna { background: #fff0cb; }
     .imagen { display: block; margin-top: 6px; }
     .imagen img { display: block; max-width: min(100%, 240px); max-height: 220px; border-radius: 8px; object-fit: contain; }
     .imagenes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

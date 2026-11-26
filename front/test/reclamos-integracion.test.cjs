@@ -83,13 +83,13 @@ test('el chat conserva mensajes de texto y permite imágenes sin texto', () => {
   const { api, llamadas } = servicio();
   api.sendClaimMessage(42, 'Mensaje sin adjuntos');
   assert.equal(llamadas[0].body.texto, 'Mensaje sin adjuntos');
-  assert.equal(llamadas[0].body.visible_para, 'TODOS');
+  assert.equal(Object.hasOwn(llamadas[0].body, 'visible_para'), false);
   const imagen = new File(['foto simulada'], 'foto.png', { type: 'image/png' });
   api.sendClaimMessage(42, '', [imagen]);
   const multipart = llamadas[1].body;
   assert.equal(multipart instanceof FormData, true);
   assert.equal(multipart.has('texto'), false);
-  assert.equal(multipart.get('visible_para'), 'TODOS');
+  assert.equal(multipart.has('visible_para'), false);
   assert.equal(multipart.getAll('evidencias').length, 1);
   assert.equal(multipart.get('evidencias').name, 'foto.png');
 });

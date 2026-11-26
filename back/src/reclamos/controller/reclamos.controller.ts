@@ -67,7 +67,7 @@ export class ReclamosController {
   }
 
   // Las rutas sin `/administracion` son de las partes: quien las usa participa con su rol en la reserva,
-  // aunque su cuenta sea de administrador, y no ve las notas internas.
+  // aunque su cuenta sea de administrador.
   @PermitirAccesoLimitado()
   @Get(':id')
   obtener(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
@@ -87,7 +87,7 @@ export class ReclamosController {
     return this.reclamosService.listarMensajes(id, req.user.id, false);
   }
 
-  /** El chat completo, con las notas internas, para el panel de Administración. */
+  /** El chat del reclamo para el panel de Administración, aunque el admin no sea parte de la reserva. */
   @UseGuards(RolesGuard)
   @Roles(ROL.ADMINISTRADOR)
   @Get(':id/mensajes/administracion')

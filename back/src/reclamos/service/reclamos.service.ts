@@ -33,10 +33,7 @@ import {
 } from '../entity/reclamo.entity';
 import { MAX_INTENTOS_CODIGO } from '../../reservas-consulta/service/reserva-estado.service';
 import { ReclamoEvidencia } from '../entity/reclamo-evidencia.entity';
-import {
-  ReclamoMensaje,
-  VisibilidadMensajeReclamo,
-} from '../entity/reclamo-mensaje.entity';
+import { ReclamoMensaje } from '../entity/reclamo-mensaje.entity';
 import { CrearReclamoDto } from '../dto/crear-reclamo.dto';
 import { EnviarMensajeReclamoDto } from '../dto/enviar-mensaje-reclamo.dto';
 import { ResolverReclamoDto } from '../dto/resolver-reclamo.dto';
@@ -170,7 +167,7 @@ export class ReclamosService {
     };
     await this.reservas.conReservaParaReclamo(dto.id_reserva, crear, pedidoDeCodigo ? 'Pedido de reinicio del código en revisión' : undefined);
     await this.notificaciones?.avisarCambio(reclamo.reserva, ['inquilino', 'anunciante', 'admin'], pedidoDeCodigo ? 'Pedido de reinicio del código de alojamiento' : 'Reclamo abierto', 'Se abrió un reclamo sobre la reserva. Podés seguirlo en DEPA.');
-    return this.responder(reclamo, false);
+    return this.responder(reclamo);
   }
 
   private validarPedidoDeCodigo(reserva: Reserva, idUsuario: number): void {
@@ -184,16 +181,16 @@ export class ReclamosService {
 
   async listarMios(idUsuario: number): Promise<ReclamoRespuestaDto[]> {
     const reclamos = await this.reclamos.listarPorParticipante(idUsuario);
-    return Promise.all(reclamos.map((reclamo) => this.responder(reclamo, false)));
+    return Promise.all(reclamos.map((reclamo) => this.responder(reclamo)));
   }
 
   async listarAdministracion(): Promise<ReclamoRespuestaDto[]> {
     const reclamos = await this.reclamos.listarAdministracion();
-    return Promise.all(reclamos.map((reclamo) => this.responder(reclamo, true)));
+    return Promise.all(reclamos.map((reclamo) => this.responder(reclamo)));
   }
 
   async obtener(id: number, idUsuario: number, esAdmin: boolean): Promise<ReclamoRespuestaDto> {
-    return this.responder(await this.buscarComoParticipante(id, idUsuario, esAdmin), esAdmin);
+    return this.responder(await this.buscarComoParticipante(id, idUsuario, esAdmin));
   }
 
   /** Imágenes de la descripción: las que se suben al crear el reclamo, sin mensaje. */
@@ -215,12 +212,6 @@ export class ReclamosService {
   async enviarMensaje(id: number, dto: EnviarMensajeReclamoDto, idUsuario: number, comoAdministracion: boolean, archivos: Express.Multer.File[] = []): Promise<MensajeReclamoRespuesta> {
     const reclamo = await this.buscarComoParticipante(id, idUsuario, comoAdministracion);
     this.verificarNoCerrado(reclamo);
-    const visibilidad = dto.visible_para ?? VisibilidadMensajeReclamo.TODOS;
-    if (visibilidad === VisibilidadMensajeReclamo.ADMIN && !comoAdministracion)
-      throw new ForbiddenException('Solo el Administrador puede dejar notas internas');
-    // Las imágenes de un mensaje las ven todas las partes: una nota interna no puede llevarlas.
-    if (visibilidad === VisibilidadMensajeReclamo.ADMIN && archivos.length)
-      throw new BadRequestException('Las notas internas no admiten imágenes');
     const texto = dto.texto?.trim() ?? '';
     if (!texto && !archivos.length)
       throw new BadRequestException('Escribí un mensaje o adjuntá al menos una imagen');
@@ -229,14 +220,13 @@ export class ReclamosService {
       if (comoAdministracion && vigente.estado === this.catalogos.codigoEstado('RECLAMO', 'ABIERTO')) {
         await reclamos.guardar({ id, estado: this.catalogos.codigoEstado('RECLAMO', 'EN_REVISION') });
       }
-      const guardado = await reclamos.guardarMensaje({ reclamo, autor: referenciaUsuario(idUsuario), texto, visible_para: visibilidad, como_administracion: comoAdministracion });
+      const guardado = await reclamos.guardarMensaje({ reclamo, autor: referenciaUsuario(idUsuario), texto, como_administracion: comoAdministracion });
       return {
         mensaje: guardado,
         evidencias: subidas.length ? await reclamos.guardarEvidencias(this.evidenciasDe(reclamo, subidas, guardado.autor, guardado)) : [],
       };
     });
-    if (visibilidad === VisibilidadMensajeReclamo.TODOS)
-      await this.notificaciones?.avisarCambio(reclamo.reserva, comoAdministracion ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', idUsuario);
+    await this.notificaciones?.avisarCambio(reclamo.reserva, comoAdministracion ? ['inquilino', 'anunciante'] : ['inquilino', 'anunciante', 'admin'], 'Nuevo mensaje en un reclamo', 'Hay un nuevo mensaje en el expediente. Ingresá a DEPA para leerlo.', idUsuario);
     return this.mensajeRespuesta(mensaje, await this.imagenesRespuesta(evidencias));
   }
 
@@ -320,14 +310,14 @@ export class ReclamosService {
     if (!resultado.reembolso) {
       const [asunto, mensaje] = this.avisoSinDevolucion(dto.resolucion);
       await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], asunto, mensaje);
-      return this.responder(resultado.reclamo, true);
+      return this.responder(resultado.reclamo);
     }
     const aplicado = await this.ejecutarDevolucion(resultado.reembolso, idAdmin);
     if (aplicado)
       await this.notificaciones?.avisarCambio(aplicado.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La devolución quedó registrada y el reclamo se resolvió. Consultá el detalle en DEPA.');
     else
       await this.notificaciones?.avisarCambio(resultado.reclamo.reserva, ['inquilino', 'anunciante'], 'Reclamo resuelto con devolución', 'La administración resolvió el reclamo con devolución. La devolución está en gestión; consultá su estado en DEPA.');
-    return this.responder(aplicado ?? await this.buscarComoParticipante(id, idAdmin, true), true);
+    return this.responder(aplicado ?? await this.buscarComoParticipante(id, idAdmin, true));
   }
 
   /**
@@ -463,14 +453,12 @@ export class ReclamosService {
   }
 
   /**
-   * Respuesta de un reclamo: sin notas internas para las partes y con los datos mínimos de cada autor.
+   * Respuesta de un reclamo con los datos mínimos de cada autor; las partes y la Administración ven los mismos mensajes.
    * Cada imagen va en su mensaje o, si no tiene, en la descripción, con un enlace firmado de 15 minutos.
    */
-  private async responder(reclamo: Reclamo, esAdmin: boolean): Promise<ReclamoRespuestaDto> {
-    const mensajes = (reclamo.mensajes ?? [])
-      .filter((mensaje) => esAdmin || mensaje.visible_para === VisibilidadMensajeReclamo.TODOS)
-      .sort((a, b) => a.id - b.id);
-    const imagenes = await this.imagenesRespuesta((reclamo.evidencias ?? []).filter((evidencia) => esAdmin || this.visibleParaLasPartes(evidencia)));
+  private async responder(reclamo: Reclamo): Promise<ReclamoRespuestaDto> {
+    const mensajes = [...(reclamo.mensajes ?? [])].sort((a, b) => a.id - b.id);
+    const imagenes = await this.imagenesRespuesta(reclamo.evidencias ?? []);
     const respuesta: ReclamoRespuestaDto = Object.assign(this.prepararRespuesta(reclamo), {
       evidencias: imagenes.filter((imagen) => imagen.id_mensaje === null),
       mensajes: mensajes.map((mensaje) => this.mensajeRespuesta(mensaje, imagenes.filter((imagen) => imagen.id_mensaje === mensaje.id))),
@@ -481,7 +469,7 @@ export class ReclamosService {
   }
 
   private mensajeRespuesta(mensaje: ReclamoMensaje, evidencias: ImagenReclamo[]): MensajeReclamoRespuesta {
-    return { id: mensaje.id, texto: mensaje.texto, visible_para: mensaje.visible_para, como_administracion: mensaje.como_administracion, creado_en: mensaje.creado_en, autor: autorRespuesta(mensaje.autor), evidencias };
+    return { id: mensaje.id, texto: mensaje.texto, como_administracion: mensaje.como_administracion, creado_en: mensaje.creado_en, autor: autorRespuesta(mensaje.autor), evidencias };
   }
 
   private imagenesRespuesta(evidencias: ReclamoEvidencia[]): Promise<ImagenReclamo[]> {
@@ -493,10 +481,6 @@ export class ReclamosService {
       autor: autorRespuesta(evidencia.usuario),
       url: await this.almacenamientoService.firmarArchivo('reclamos', evidencia.url),
     })));
-  }
-
-  private visibleParaLasPartes(evidencia: ReclamoEvidencia): boolean {
-    return !evidencia.mensaje || evidencia.mensaje.visible_para === VisibilidadMensajeReclamo.TODOS;
   }
 
   /** Valida y reduce todas las imágenes antes de subir ninguna, así un archivo inválido no deja otros subidos. */

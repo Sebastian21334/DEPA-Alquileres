@@ -1,4 +1,3 @@
-import { codigosCatalogo } from '../../catalogos/codigos-catalogo';
 import type { Relation } from 'typeorm';
 import {
   Column,
@@ -12,9 +11,6 @@ import {
 import { Reclamo } from './reclamo.entity';
 import { ReclamoEvidencia } from './reclamo-evidencia.entity';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
-
-export const VisibilidadMensajeReclamo = codigosCatalogo('RECLAMO_VISIBILIDAD');
-export type VisibilidadMensajeReclamo = keyof typeof VisibilidadMensajeReclamo;
 
 @Entity('reclamo_mensaje')
 export class ReclamoMensaje {
@@ -37,13 +33,6 @@ export class ReclamoMensaje {
 
   @Column({ name: 'texto', type: 'varchar', length: 1000 })
   texto: string;
-
-  @Column({
-    name: 'visible_para',
-    type: 'varchar', length: 40,
-    default: VisibilidadMensajeReclamo.TODOS,
-  })
-  visible_para: VisibilidadMensajeReclamo;
 
   // Se escribió desde el panel de Administración; un admin que es parte de la reserva escribe como parte desde su chat.
   @Column({ name: 'como_administracion', type: 'boolean', default: false })

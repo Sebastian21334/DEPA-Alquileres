@@ -12,11 +12,10 @@ export function imagenesDisponibles(reclamo: Reclamo): number {
 }
 
 /** Sin imágenes el mensaje va como JSON; con imágenes, como multipart con el texto opcional. */
-export function cuerpoMensajeReclamo(texto: string, imagenes: readonly File[]): FormData | { texto: string; visible_para: 'TODOS' } {
-  if (!imagenes.length) return { texto, visible_para: 'TODOS' };
+export function cuerpoMensajeReclamo(texto: string, imagenes: readonly File[]): FormData | { texto: string } {
+  if (!imagenes.length) return { texto };
   const datos = new FormData();
   if (texto) datos.append('texto', texto);
-  datos.append('visible_para', 'TODOS');
   imagenes.forEach((imagen) => datos.append('evidencias', imagen));
   return datos;
 }

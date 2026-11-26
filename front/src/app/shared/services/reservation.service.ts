@@ -252,7 +252,6 @@ export interface ReclamoEvidencia {
 export interface ReclamoMensaje {
   id: number;
   texto: string;
-  visible_para: 'TODOS' | 'ADMIN';
   /** Se escribió desde el panel de Administración. */
   como_administracion: boolean;
   creado_en: string;
@@ -370,7 +369,7 @@ export class ReservationService {
     return this.http.post<ReclamoEvidencia[]>(`${environment.apiUrl}/reclamos/${id}/evidencias`, datos);
   }
 
-  /** Desde Administración, el chat completo con las notas internas; desde Mis reservas, el de las partes. */
+  /** Desde Administración, el chat de cualquier reclamo; desde Mis reservas, el de un reclamo propio. */
   claimMessages(id: number, desdeAdministracion = false): Observable<ReclamoMensaje[]> {
     return this.http.get<ReclamoMensaje[]>(`${environment.apiUrl}/reclamos/${id}/mensajes${desdeAdministracion ? '/administracion' : ''}`);
   }
