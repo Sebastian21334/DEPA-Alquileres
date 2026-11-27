@@ -37,6 +37,8 @@ export class AdvertiserProfileComponent {
   private readonly listings = inject(ListingService);
   private readonly profiles = inject(AnunciantePublicoService);
   private readonly publicationsHeading = viewChild<ElementRef<HTMLElement>>('publicationsHeading');
+  // El aviso por correo de una reseña abre el perfil con `#resenas-…`: baja hasta el panel cuando termina de cargar.
+  private scrollResenasPendiente = this.route.snapshot.fragment?.startsWith('resenas') === true;
   private readonly requestedPage = signal(1);
   protected readonly pageSize = 6;
   protected readonly publications = signal<Publicacion[]>([]);
@@ -138,6 +140,9 @@ export class AdvertiserProfileComponent {
           cantidad_resenas: resumen.cantidad,
         }
       : perfil);
+    if (!this.scrollResenasPendiente) return;
+    this.scrollResenasPendiente = false;
+    setTimeout(() => this.irAResenas());
   }
 
   protected updateSearch(text: string): void {

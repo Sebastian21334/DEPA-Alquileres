@@ -1,4 +1,5 @@
 require('reflect-metadata');
+const { AnunciantesService } = require('../../dist/anunciantes/service/anunciantes.service');
 const { ResenasService } = require('../../dist/resenas/service/resenas.service');
 const { ResenasAdministracionService } = require('../../dist/resenas/service/resenas-administracion.service');
 const { ResenasResumenService } = require('../../dist/resenas/service/resenas-resumen.service');
@@ -144,8 +145,10 @@ function servicioMock(overrides = {}) {
       verificado: true,
       cantidad_resenas: 0,
       promedio_resenas: null,
-      usuario: { nombre: 'Carlos', apellido: 'Dominguez' },
+      usuario: { nombre: 'Carlos', apellido: 'Dominguez', activa: true, bloqueado: false },
     }),
+    // La regla real: una cuenta bloqueada o dada de baja no expone su perfil.
+    cuentaHabilitada: AnunciantesService.prototype.cuentaHabilitada,
     datosContacto: () => ({ nombre: 'Carlos Dominguez' }),
     actualizarResumenResenas: async (...args) => {
       estado.resumenAnunciante = args;
@@ -164,10 +167,16 @@ function servicioMock(overrides = {}) {
     },
     ...(overrides.imagenes ?? {}),
   };
+  const mail = {
+    enviarResenaOcultada: async (...args) => {
+      estado.correos = [...(estado.correos ?? []), args];
+    },
+    ...(overrides.mail ?? {}),
+  };
   const resumen = new ResenasResumenService(repo, publicaciones, anunciantes);
   const servicio = new ResenasService(repo, publicaciones, anunciantes, reservas, imagenes, resumen);
-  const admin = new ResenasAdministracionService(repo, resumen);
-  return { servicio, admin, repo, publicaciones, anunciantes, reservas, imagenes, resumen, estado };
+  const admin = new ResenasAdministracionService(repo, resumen, mail);
+  return { servicio, admin, repo, publicaciones, anunciantes, reservas, imagenes, resumen, mail, estado };
 }
 
 function imagenServicioMock(overrides = {}) {

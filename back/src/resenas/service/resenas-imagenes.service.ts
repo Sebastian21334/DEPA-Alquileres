@@ -101,6 +101,9 @@ export class ResenasImagenesService {
     if (resena.autor.id !== idUsuario) {
       throw new ForbiddenException('No podés borrar imágenes de una reseña que no es tuya.');
     }
+    if (!resena.visible) {
+      throw new ConflictException('La reseña fue ocultada por moderación.');
+    }
     const imagen = await this.imagenesRepo.buscarPorId(idImagen);
     if (!imagen || imagen.resena.id !== idResena) {
       throw new NotFoundException('Imagen no encontrada');

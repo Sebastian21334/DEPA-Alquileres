@@ -209,7 +209,7 @@ export class AuthService {
       await this.mailService.enviarVerificacion(email, token, origen);
     } catch (error) {
       this.logger.error(
-        `No se pudo reenviar el mail de verificación a ${email}`,
+        `No se pudo reenviar el mail de verificación del usuario ${user.id}`,
         error as Error,
       );
     }

@@ -15,8 +15,9 @@ export const authGuard: CanActivateFn = (_route, state) => {
     : inject(Router).createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 };
 
-/** El aviso por correo de un mensaje abre la publicación con `?chat=`: sin sesión, primero se pide ingresar. */
-export const chatConSesionGuard: CanActivateFn = (route, state) => route.queryParamMap.has('chat') ? authGuard(route, state) : true;
+/** Los avisos por correo abren páginas públicas con `?chat=` o `?resena=`: sin sesión, primero se pide ingresar y se vuelve al enlace. */
+export const avisoConSesionGuard: CanActivateFn = (route, state) =>
+  ['chat', 'resena'].some((parametro) => route.queryParamMap.has(parametro)) ? authGuard(route, state) : true;
 
 /**
  * Exige ser anunciante verificado (mismo criterio que AnuncianteGuard del backend).

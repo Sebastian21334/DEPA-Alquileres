@@ -79,7 +79,19 @@ export interface IMailVerificacionAnunciante {
   enviarSolicitudParaRevision(destinatarios: string[], nombreSolicitante: string, emailSolicitante: string): Promise<void>;
 }
 
+/** Publicación o perfil de anunciante sobre el que se escribió una reseña. */
+export interface ObjetivoResenaEmail {
+  tipo: 'PUBLICACION' | 'ANUNCIANTE';
+  id: number;
+  titulo: string;
+}
+
+/** Avisos al autor de una reseña moderada. */
+export interface IMailResenas {
+  enviarResenaOcultada(destinatario: string, objetivo: ObjetivoResenaEmail, motivo: string): Promise<void>;
+}
+
 /** Todos los avisos; lo implementa MailService y se inyecta con MAIL_SERVICE. */
-export interface IMailService extends IMailCuenta, IMailReservas, IMailPublicaciones, IMailMensajes, IMailVerificacionAnunciante {}
+export interface IMailService extends IMailCuenta, IMailReservas, IMailPublicaciones, IMailMensajes, IMailVerificacionAnunciante, IMailResenas {}
 
 export const MAIL_SERVICE = 'MAIL_SERVICE';

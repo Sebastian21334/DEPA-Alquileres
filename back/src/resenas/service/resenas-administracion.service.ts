@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { MAIL_SERVICE, type IMailResenas, type ObjetivoResenaEmail } from '../../mail/mail.interface';
 import type { ListarResenasAdministracionDto } from '../dto/listar-resenas-administracion.dto';
 import type {
   PaginaResenasAdministracionDto,
@@ -23,13 +25,17 @@ import {
   MIN_CARACTERES_MOTIVO_MODERACION,
   type EstadoResenasAdministracion,
 } from '../resenas.constants';
+import type { Resena } from '../entity/resena.entity';
 import { ResenasResumenService } from './resenas-resumen.service';
 
 @Injectable()
 export class ResenasAdministracionService {
+  private readonly logger = new Logger(ResenasAdministracionService.name);
+
   constructor(
     @Inject(RESENA_REPOSITORY) private readonly resenasRepo: IResenaRepository,
     private readonly resumenService: ResenasResumenService,
+    @Inject(MAIL_SERVICE) private readonly mailService: IMailResenas,
   ) {}
 
   async listarAdministracion(dto: ListarResenasAdministracionDto): Promise<PaginaResenasAdministracionDto> {
@@ -74,7 +80,20 @@ export class ResenasAdministracionService {
     });
     const objetivo = objetivoDeResena(resena);
     await this.resumenService.recalcular({ tipo: objetivo.tipo, id: objetivo.id });
+    // Solo el paso de visible a oculta avisa: volver a ocultarla o restaurarla no manda otro correo.
+    if (resena.visible && !dto.visible) await this.avisarAutor(resena, objetivo, motivo);
     return prepararResenaAdministracion(await this.buscarParaRespuesta(idResena));
+  }
+
+  /** La moderación ya quedó guardada: un fallo del correo se registra y no la revierte. */
+  private async avisarAutor(resena: Resena, objetivo: ObjetivoResenaEmail, motivo: string): Promise<void> {
+    const email = resena.autor.email;
+    if (!email) return;
+    try {
+      await this.mailService.enviarResenaOcultada(email, objetivo, motivo);
+    } catch (error) {
+      this.logger.error(`No se pudo avisar al autor que se ocultó la reseña ${resena.id}`, error as Error);
+    }
   }
 
   async quitarDenuncia(idResena: number): Promise<ResenaAdministracionDto> {

@@ -128,6 +128,49 @@ test('moderar exige motivo, valida su tipo, audita y recalcula el promedio', asy
   assert.equal(moderacion.datos.idAdministrador, null);
 });
 
+/** Servicio de administración cuya reseña cambia de visibilidad al moderarla. */
+function moderable(inicial, mail) {
+  let actual = inicial;
+  return servicioMock({
+    repo: {
+      buscarPorId: async () => actual,
+      registrarModeracion: async (id, datos) => {
+        actual = { ...actual, visible: datos.visible, motivo_moderacion: datos.motivo };
+      },
+    },
+    ...(mail ? { mail } : {}),
+  });
+}
+
+test('ocultar avisa al autor por correo una sola vez, sin repetir al volver a ocultar ni al restaurar', async () => {
+  const { admin, estado } = moderable(resenaMock());
+  await admin.moderar(10, 1, { visible: false, motivo: 'Lenguaje ofensivo' });
+  assert.deepEqual(estado.correos, [[
+    'privado@example.invalid',
+    { tipo: 'PUBLICACION', id: 5, titulo: 'Depto demo' },
+    'Lenguaje ofensivo',
+  ]]);
+  await admin.moderar(10, 1, { visible: false, motivo: 'Otro motivo' });
+  await admin.moderar(10, 1, { visible: true });
+  assert.equal(estado.correos.length, 1);
+
+  // Una cuenta dada de baja no tiene correo vigente: no se intenta el envío.
+  const { admin: sinCorreo, estado: estadoSinCorreo } = moderable(resenaMock({ autor: { id: 3, nombre: 'Ana', apellido: 'Paz', email: null } }));
+  await sinCorreo.moderar(10, 1, { visible: false, motivo: 'Lenguaje ofensivo' });
+  assert.equal(estadoSinCorreo.correos, undefined);
+});
+
+test('si el correo al autor falla, la reseña igual queda oculta', async () => {
+  const { admin } = moderable(resenaMock(), {
+    enviarResenaOcultada: async () => {
+      throw new Error('Azure no respondió');
+    },
+  });
+  const oculta = await admin.moderar(10, 1, { visible: false, motivo: 'Lenguaje ofensivo' });
+  assert.equal(oculta.visible, false);
+  assert.equal(oculta.motivo_moderacion, 'Lenguaje ofensivo');
+});
+
 test('quitar denuncia limpia la auditoría y conserva la visibilidad', async () => {
   let actual = resenaMock({
     denunciada: true,

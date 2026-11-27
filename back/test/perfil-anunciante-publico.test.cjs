@@ -5,24 +5,26 @@ const { Module } = require('@nestjs/common');
 const { NestFactory } = require('@nestjs/core');
 const { JwtModule } = require('@nestjs/jwt');
 const { PassportModule } = require('@nestjs/passport');
+const { AnunciantesService } = require('../dist/anunciantes/service/anunciantes.service');
 const { PerfilAnunciantePublicoService } = require('../dist/verificacion-anunciante/service/perfil-anunciante-publico.service');
 const { VerificacionAnuncianteService } = require('../dist/verificacion-anunciante/service/verificacion-anunciante.service');
 const { PruebaVidaService } = require('../dist/verificacion-anunciante/service/prueba-vida.service');
 const { VerificacionAnuncianteController } = require('../dist/verificacion-anunciante/controller/verificacion-anunciante.controller');
 
-function escenario({ verificado = true, estado = 'aprobada', razonSocial = 'Inmobiliaria Sur', tipo = 'Inmobiliaria', sinSolicitud = false } = {}) {
+function escenario({ verificado = true, estado = 'aprobada', razonSocial = 'Inmobiliaria Sur', tipo = 'Inmobiliaria', sinSolicitud = false, activa = true, bloqueado = false } = {}) {
   const anunciante = {
     idUsuario: 7,
     verificado,
     numero_contacto: '351 400-0000',
     cantidad_resenas: 3,
     promedio_resenas: '4.50',
-    usuario: { nombre: 'Ana', apellido: 'Pérez', foto_url: 'https://example.invalid/foto.jpg' },
+    usuario: { nombre: 'Ana', apellido: 'Pérez', foto_url: 'https://example.invalid/foto.jpg', activa, bloqueado },
     tipoAnunciante: tipo ? { id: 2, nombre: tipo } : null,
   };
   const solicitud = sinSolicitud ? null : { estado, razon_social: razonSocial };
   const anunciantes = {
     buscarPorId: async (id) => (id === 7 ? anunciante : null),
+    cuentaHabilitada: AnunciantesService.prototype.cuentaHabilitada,
     datosContacto: (actual) => ({ nombre: `${actual.usuario.nombre} ${actual.usuario.apellido}`.trim(), email: 'privado@example.invalid' }),
   };
   const catalogos = { codigoEstado: (_ambito, codigo) => codigo };
@@ -73,6 +75,13 @@ test('un anunciante verificado sin solicitud usa el nombre de la persona', async
 test('un anunciante no verificado responde 404', async () => {
   const { servicio } = escenario({ verificado: false });
   await assert.rejects(servicio.buscarPerfilPublico(7), (error) => error.getStatus() === 404);
+});
+
+test('el perfil de una cuenta bloqueada o dada de baja responde 404', async () => {
+  for (const cuenta of [{ bloqueado: true }, { activa: false }]) {
+    const { servicio } = escenario(cuenta);
+    await assert.rejects(servicio.buscarPerfilPublico(7), (error) => error.getStatus() === 404);
+  }
 });
 
 test('un anunciante inexistente responde 404', async () => {

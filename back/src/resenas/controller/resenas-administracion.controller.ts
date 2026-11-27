@@ -11,6 +11,7 @@ import {
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
+import { ROL } from '../../catalogos/codigos-catalogo';
 import { Roles } from '../../seguridad/decorators/roles.decorator';
 import type { AuthenticatedRequest } from '../../seguridad/guards/jwt-auth.guard';
 import { JwtAuthGuard } from '../../seguridad/guards/jwt-auth.guard';
@@ -25,7 +26,7 @@ export class ResenasAdministracionController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   listar(
     @Query(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true })) dto: ListarResenasAdministracionDto,
   ) {
@@ -34,7 +35,7 @@ export class ResenasAdministracionController {
 
   @Patch(':id/visibilidad')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   moderar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ModerarResenaDto,
@@ -45,7 +46,7 @@ export class ResenasAdministracionController {
 
   @Delete(':id/denuncia')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('Administrador')
+  @Roles(ROL.ADMINISTRADOR)
   quitarDenuncia(@Param('id', ParseIntPipe) id: number) {
     return this.resenasService.quitarDenuncia(id);
   }

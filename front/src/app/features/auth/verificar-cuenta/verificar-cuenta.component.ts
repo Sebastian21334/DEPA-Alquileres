@@ -7,7 +7,7 @@ type Estado = 'verificando' | 'exito' | 'error';
 
 // Consume el link que el backend envía por mail al registrarse (ver
 // back/src/mail/mail.service.ts#enviarVerificacion, que arma
-// "${frontendUrl}/verificar-cuenta?token=...") y completa RN-2/el caso de
+// "${frontendUrl}/verificar-cuenta#<token>") y completa RN-2/el caso de
 // uso "Crear Usuario": sin esta pantalla, el link del mail no tendría a
 // dónde apuntar y ninguna cuenta nueva podría iniciar sesión (RF2 exige
 // email_verificado = true).
@@ -41,7 +41,9 @@ export class VerificarCuentaComponent implements OnInit {
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) return; // evita duplicar el POST durante el render SSR
 
-    const token = this.route.snapshot.queryParamMap.get('token');
+    // Los enlaces nuevos traen el token después de #, que no llega al servidor;
+    // los enviados antes del cambio lo traen como ?token= y siguen funcionando.
+    const token = this.route.snapshot.fragment || this.route.snapshot.queryParamMap.get('token');
 
     if (!token) {
       this.estado.set('error');

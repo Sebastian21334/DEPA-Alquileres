@@ -23,7 +23,8 @@ lógica de autoría, moderación y promedio aplica a los dos objetivos.
 
 - Solo una cuenta autenticada con una **estadía finalizada**:
   - para una publicación **Temporal**, una reserva pagada, no cancelada y con
-    `fecha_fin` anterior a hoy en Argentina;
+    `fecha_fin` anterior a hoy en Argentina, aunque el ingreso no se haya
+    validado con el código;
   - para un perfil, una estadía finalizada en **cualquier publicación Temporal**
     del anunciante.
 - El dueño de la publicación o del perfil no puede reseñarse a sí mismo.
@@ -33,11 +34,17 @@ lógica de autoría, moderación y promedio aplica a los dos objetivos.
 ### Autor y administración
 
 - El autor puede editar su reseña y eliminarla.
-- Una reseña oculta por moderación no se puede editar; el autor solo puede
-  eliminarla.
+- Una reseña oculta por moderación no se puede editar, eliminar ni cambiar sus
+  imágenes. Sigue ocupando el lugar del autor, que no puede escribir otra para
+  ese objetivo mientras Administración no la restaure.
 - El administrador puede ocultarla con un motivo de 5 a 300 caracteres y
-  restaurarla. La moderación queda auditada con `moderada_por` y
-  `fecha_moderacion`.
+  restaurarla. Mientras está oculta, la reseña guarda quién la ocultó, cuándo y
+  por qué (`moderada_por`, `fecha_moderacion` y `motivo_moderacion`). Al
+  restaurarla esos datos se limpian: no queda historial de moderaciones
+  anteriores.
+- Al ocultarla se avisa al autor por correo con el motivo y un botón a su
+  reseña, que exige iniciar sesión; si el correo falla, la moderación igual
+  queda registrada.
 - Las reseñas ocultas no se listan públicamente ni suman al promedio.
 - Cualquier usuario autenticado, salvo el autor, puede **denunciar** una reseña
   como inapropiada. La reseña sigue visible y sin estado público; el
@@ -45,7 +52,7 @@ lógica de autoría, moderación y promedio aplica a los dos objetivos.
   **ocultarla**.
 - La denuncia se guarda con `denunciada_por`, `motivo_denuncia` y
   `fecha_denuncia`. La primera denuncia define el estado; las siguientes son
-  idempotentes.
+  idempotentes. Quitar la denuncia limpia esos datos.
 - El DTO público incluye el booleano `denunciada` **solo** para deshabilitar la
   acción “Marcar como inapropiada” en el menú de la reseña. No se renderiza
   como estado, no muestra “En revisión” y el motivo/fecha quedan reservados a la

@@ -42,7 +42,8 @@ function base() {
       email TEXT, email_historico TEXT);
     CREATE TABLE anunciante (id_usuario INTEGER PRIMARY KEY, verificado BOOLEAN, cuit_cuil TEXT,
       cuit_cuil_historico TEXT, numero_contacto TEXT, id_tipo_anunciante INTEGER,
-      actividades_pausadas BOOLEAN DEFAULT FALSE, cbu_validado TEXT);
+      actividades_pausadas BOOLEAN DEFAULT FALSE, cbu_validado TEXT,
+      cantidad_resenas INTEGER NOT NULL DEFAULT 0, promedio_resenas NUMERIC);
     CREATE TABLE publicacion (id INTEGER PRIMARY KEY, id_anunciante INTEGER, activa BOOLEAN);
     CREATE TABLE reserva (id INTEGER PRIMARY KEY, id_usuario INTEGER, id_publicacion INTEGER,
       estado_pago TEXT, cancelada BOOLEAN, finalizada BOOLEAN, fecha_inicio TEXT, fecha_fin TEXT,

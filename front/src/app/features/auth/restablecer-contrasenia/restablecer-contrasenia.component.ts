@@ -6,7 +6,7 @@ import { contraseniasIgualesValidator, MENSAJE_CONTRASENIA_SEGURA, passwordSegur
 
 // Segundo paso de CU62 "Recuperar acceso": consume el link
 // que llega por mail (back/src/mail/mail.service.ts#enviarRecuperacion, que
-// arma "${frontendUrl}/restablecer-contrasena?token=...") y fija la nueva
+// arma "${frontendUrl}/restablecer-contrasena#<token>") y fija la nueva
 // contraseña. OJO: la ruta del link usa "restablecer-contrasena" (sin la
 // "i" de "contrasenia") — así la armó el backend, y hay que respetarla tal
 // cual en app.routes.ts o el link del mail rompería.
@@ -45,7 +45,9 @@ export class RestablecerContraseniaComponent implements OnInit {
   );
 
   ngOnInit(): void {
-    this.token = this.route.snapshot.queryParamMap.get('token');
+    // Los enlaces nuevos traen el token después de #, que no llega al servidor;
+    // los enviados antes del cambio lo traen como ?token= y siguen funcionando.
+    this.token = this.route.snapshot.fragment || this.route.snapshot.queryParamMap.get('token');
     if (!this.token) {
       this.tokenValido.set(false);
       this.error.set('El link de recuperación no es válido: falta el token.');
