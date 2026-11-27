@@ -57,8 +57,7 @@ export class ResenasService {
   }
 
   async listarAnunciante(idAnunciante: number, idUsuario: number | undefined, dto: ListarResenasDto): Promise<ResenasObjetivoDto> {
-    const anunciante = await this.anunciantesService.buscarPorId(idAnunciante);
-    if (!anunciante?.verificado) throw new NotFoundException('Anunciante no encontrado');
+    const anunciante = await this.buscarAnunciantePublico(idAnunciante);
     return this.listarObjetivo(this.objetivoDeAnunciante(anunciante), idUsuario, dto);
   }
 
@@ -70,9 +69,17 @@ export class ResenasService {
   }
 
   async crearAnunciante(idAnunciante: number, idUsuario: number, dto: CrearResenaDto): Promise<ResenaPublicaDto> {
-    const anunciante = await this.anunciantesService.buscarPorId(idAnunciante);
-    if (!anunciante?.verificado) throw new NotFoundException('Anunciante no encontrado');
+    const anunciante = await this.buscarAnunciantePublico(idAnunciante);
     return this.crear(this.objetivoDeAnunciante(anunciante), idUsuario, dto);
+  }
+
+  /** Mismo criterio que el perfil público: anunciante verificado y con la cuenta habilitada. */
+  private async buscarAnunciantePublico(idAnunciante: number): Promise<Anunciante> {
+    const anunciante = await this.anunciantesService.buscarPorId(idAnunciante);
+    if (!anunciante?.verificado || !this.anunciantesService.cuentaHabilitada(anunciante)) {
+      throw new NotFoundException('Anunciante no encontrado');
+    }
+    return anunciante;
   }
 
   async actualizar(idResena: number, idUsuario: number, dto: ActualizarResenaDto): Promise<ResenaPublicaDto> {
@@ -91,6 +98,10 @@ export class ResenasService {
 
   async eliminar(idResena: number, idUsuario: number): Promise<{ id: number }> {
     const resena = await this.buscarPropia(idResena, idUsuario);
+    // La reseña oculta conserva la moderación y el lugar del autor: borrarla permitiría publicarla de nuevo.
+    if (!resena.visible) {
+      throw new ConflictException('La reseña fue ocultada por moderación y no se puede eliminar.');
+    }
     const imagenes = resena.imagenes ?? [];
     // Primero se confirma la baja; el storage es una operación best-effort posterior.
     await this.resenasRepo.eliminar(resena);

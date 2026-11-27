@@ -1,6 +1,6 @@
 import { Routes } from '@angular/router';
 import { adminGuard } from './core/guards/admin.guard';
-import { anuncianteGuard, authGuard, chatConSesionGuard } from './core/guards/auth.guard';
+import { anuncianteGuard, authGuard, avisoConSesionGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
@@ -141,7 +141,7 @@ export const routes: Routes = [
   },
   {
     path: 'publicaciones/:id',
-    canActivate: [chatConSesionGuard],
+    canActivate: [avisoConSesionGuard],
     // Desde el asistente o el chat se pasa de una publicación a otra: cada una carga su propia pantalla.
     data: { recrearConOtrosParametros: true },
     loadComponent: () =>
@@ -152,6 +152,7 @@ export const routes: Routes = [
   },
   {
     path: 'perfil/:id',
+    canActivate: [avisoConSesionGuard],
     loadComponent: () =>
       import('./features/advertiser-profile/advertiser-profile.component').then(
         (m) => m.AdvertiserProfileComponent,

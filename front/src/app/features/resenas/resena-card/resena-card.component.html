@@ -45,13 +45,11 @@
     <p class="resena__motivo"><strong>Motivo de moderación:</strong> {{ resena().motivo_moderacion }}</p>
   }
 
-  @if (propia()) {
+  @if (puedeEditar()) {
     <footer class="resena__acciones">
-      @if (puedeEditar()) {
-        <button type="button" class="resena__accion" (click)="editar.emit()">
-          <svg lucidePencil [size]="15" aria-hidden="true"></svg> Editar
-        </button>
-      }
+      <button type="button" class="resena__accion" (click)="editar.emit()">
+        <svg lucidePencil [size]="15" aria-hidden="true"></svg> Editar
+      </button>
       <button type="button" class="resena__accion resena__accion--peligro" (click)="eliminar.emit()">
         <svg lucideTrash2 [size]="15" aria-hidden="true"></svg> Eliminar
       </button>

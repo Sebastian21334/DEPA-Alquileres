@@ -11,8 +11,8 @@
   } @else {
     @if (miResenaOculta(); as oculta) {
       <div class="resenas__aviso resenas__aviso--oculta" role="status">
-        <p>Tu reseña está oculta por moderación. Podés eliminarla si querés volver a escribir una.</p>
-        <app-resena-card [resena]="oculta" [propia]="true" (eliminar)="confirmarEliminar(oculta)" (verImagen)="verImagen($event)" />
+        <p>Tu reseña está oculta por moderación: no se muestra a otras personas ni suma al promedio.</p>
+        <app-resena-card [resena]="oculta" [propia]="true" (verImagen)="verImagen($event)" />
       </div>
     }
 

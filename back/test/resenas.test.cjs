@@ -220,6 +220,19 @@ test('listar una publicación eliminada o un anunciante inexistente devuelve 404
   );
 });
 
+test('el perfil de una cuenta bloqueada o dada de baja no lista ni recibe reseñas', async () => {
+  for (const usuario of [{ activa: true, bloqueado: true }, { activa: false, bloqueado: false }]) {
+    const { servicio, estado } = servicioMock({
+      anunciantes: {
+        buscarPorId: async () => ({ idUsuario: 2, verificado: true, usuario: { nombre: 'Carlos', apellido: 'Dominguez', ...usuario } }),
+      },
+    });
+    await assert.rejects(() => servicio.listarAnunciante(2, 3, { pagina: 1, limite: 6 }), NotFoundException);
+    await assert.rejects(() => servicio.crearAnunciante(2, 3, { puntaje: 5, comentario: 'No permitida' }), NotFoundException);
+    assert.equal(estado.guardar, null);
+  }
+});
+
 test('la regla Temporal usa el fallback de la modalidad legada', () => {
   const catalogos = new CatalogosService({});
   assert.equal(catalogos.admiteReservaPorFecha({
@@ -374,13 +387,16 @@ test('editar y borrar exige ser el autor, respeta la moderación y borra la fila
     ForbiddenException,
   );
 
-  const { servicio: oculta } = servicioMock({
+  const { servicio: oculta, estado: estadoOculta } = servicioMock({
     repo: { buscarPorId: async () => resenaMock({ visible: false }) },
   });
   await assert.rejects(
     () => oculta.actualizar(10, 3, { puntaje: 4, comentario: 'Oculta' }),
     ConflictException,
   );
+  // Borrarla permitiría volver a publicarla sin moderación: se conserva la fila oculta.
+  await assert.rejects(() => oculta.eliminar(10, 3), ConflictException);
+  assert.equal(estadoOculta.eliminar, false);
 
   await servicio.eliminar(10, 3);
   assert.deepEqual(orden, ['fila', 'storage']);
@@ -403,10 +419,12 @@ test('las imágenes se limitan a tres, exigen autoría y borran la fila antes de
   });
   await assert.rejects(() => lleno.agregar(10, 3, archivo), BadRequestException);
 
-  const { servicio: oculto } = imagenServicioMock({
+  const { servicio: oculto, llamadas: llamadasOculto } = imagenServicioMock({
     acceso: { buscarParaImagenes: async () => ({ id: 10, visible: false, autor: { id: 3 } }) },
   });
   await assert.rejects(() => oculto.agregar(10, 3, archivo), ConflictException);
+  await assert.rejects(() => oculto.eliminar(10, 2, 3), ConflictException);
+  assert.deepEqual(llamadasOculto.orden, []);
 
   await servicio.eliminar(10, 2, 3);
   assert.deepEqual(llamadas.orden, ['fila', 'storage']);

@@ -76,6 +76,7 @@ test('todos los correos tienen un botón con un texto propio', async () => {
     enviarReactivacionPublicacion: [['parte@example.invalid', 'Departamento'], 'Ver mis publicaciones'],
     enviarConfirmacionBaja: [['parte@example.invalid', 'token'], 'Revisar y confirmar la baja'],
     enviarAvisoReserva: [['parte@example.invalid', 7, 'Asunto', 'Mensaje', 'inquilino', 'reserva'], 'Abrir reserva'],
+    enviarResenaOcultada: [['parte@example.invalid', { tipo: 'PUBLICACION', id: 12, titulo: 'Departamento' }, 'Motivo'], 'Ver mi reseña'],
   };
   // Un correo nuevo sin caso acá hace fallar la prueba: así ninguno queda sin botón.
   const metodos = Object.getOwnPropertyNames(Object.getPrototypeOf(mail)).filter((nombre) => /^enviar.+/.test(nombre));
@@ -105,4 +106,34 @@ test('los demás avisos llevan a la conversación, a la revisión o a Mi perfil'
     await mail.enviarResultadoVerificacion('parte@example.invalid', aprobada, 'Falta el dorso del DNI');
     assert.deepEqual(boton(), [`${FRONT}/mi-perfil`, 'Ir a Mi perfil']);
   }
+});
+
+test('los enlaces con token de un solo uso lo llevan después de # para que no llegue al servidor', async () => {
+  const { mail, boton } = correo();
+  const casos = [
+    ['enviarVerificacion', '/verificar-cuenta', 'Verificar mi cuenta'],
+    ['enviarRecuperacion', '/restablecer-contrasena', 'Crear una contraseña nueva'],
+    ['enviarReactivacion', '/reactivar-cuenta', 'Recuperar mi cuenta'],
+    ['enviarConfirmacionBaja', '/confirmar-baja', 'Revisar y confirmar la baja'],
+  ];
+  for (const [metodo, ruta, texto] of casos) {
+    await mail[metodo]('parte@example.invalid', 'a1b2c3');
+    assert.deepEqual(boton(), [`${FRONT}${ruta}#a1b2c3`, texto], metodo);
+  }
+});
+
+test('la reseña ocultada lleva a la sección de reseñas con sesión obligatoria y dice para qué rol es', async () => {
+  const { mail, boton, enviados } = correo();
+  await mail.enviarResenaOcultada('parte@example.invalid', { tipo: 'PUBLICACION', id: 12, titulo: '<b>Depto</b>' }, 'Lenguaje <script>');
+  assert.deepEqual(boton(), [`${FRONT}/publicaciones/12?resena=mia#resenas-PUBLICACION-12`, 'Ver mi reseña']);
+  const [publicacion] = enviados;
+  assert.equal(publicacion.asunto, 'Tu reseña fue ocultada por moderación');
+  assert.ok(publicacion.html.includes('Te avisamos como inquilino.'));
+  // El título y el motivo llegan escapados al HTML.
+  assert.ok(publicacion.html.includes('&lt;b&gt;Depto&lt;/b&gt;'));
+  assert.ok(publicacion.html.includes('Lenguaje &lt;script&gt;'));
+  assert.doesNotMatch(publicacion.html, /Para administración/);
+
+  await mail.enviarResenaOcultada('parte@example.invalid', { tipo: 'ANUNCIANTE', id: 5, titulo: 'Carlos' }, 'Motivo válido');
+  assert.deepEqual(boton(), [`${FRONT}/perfil/5?resena=mia#resenas-ANUNCIANTE-5`, 'Ver mi reseña']);
 });

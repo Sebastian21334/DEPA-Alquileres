@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { Anunciante } from '../models/anunciante.model';
+import type { Modalidad } from '../models/catalogo.model';
 import { Usuario } from '../models/usuario.model';
 import { CotizacionDolar } from './cotizaciones.service';
 import type { FechaDisponible } from './availability.service';
@@ -94,7 +95,7 @@ export interface Reserva {
     direccion?: string;
     ciudad?: { id?: number; nombre: string };
     provincia?: { id?: number; nombre: string };
-    modalidad?: { id?: number; nombre: string; permite_reservas_por_fecha?: boolean };
+    modalidad?: Modalidad;
     eliminada?: boolean;
     anunciante?: Anunciante;
   } | null;

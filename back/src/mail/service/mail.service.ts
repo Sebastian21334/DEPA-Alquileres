@@ -5,6 +5,7 @@ import {
   type IMailService,
   type DestinoAvisoReserva,
   type TemaAvisoReserva,
+  type ObjetivoResenaEmail,
 } from '../mail.interface';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -59,7 +60,8 @@ export class MailService implements IMailService {
   }
 
   async enviarVerificacion(destinatario: string, token: string, origen?: string): Promise<void> {
-    const link = `${this.frontendDeSolicitud(origen)}/verificar-cuenta?token=${token}`;
+    // El token va después de #: no viaja al servidor del front ni queda en sus logs.
+    const link = `${this.frontendDeSolicitud(origen)}/verificar-cuenta#${encodeURIComponent(token)}`;
 
     await this.enviar(
       destinatario,
@@ -106,7 +108,7 @@ export class MailService implements IMailService {
   }
 
   async enviarRecuperacion(destinatario: string, token: string): Promise<void> {
-    const link = `${this.frontendUrl}/restablecer-contrasena?token=${token}`;
+    const link = `${this.frontendUrl}/restablecer-contrasena#${encodeURIComponent(token)}`;
 
     await this.enviar(
       destinatario,
@@ -283,6 +285,24 @@ export class MailService implements IMailService {
        <p>La publicación sigue inactiva: cuando quieras volver a mostrarla en el catálogo, activala desde Mis publicaciones.</p>
        ${this.plantillas.boton('Ver mis publicaciones', `${this.frontendUrl}/mis-publicaciones`)}`,
       'Ya podés volver a activar tu publicación.',
+    );
+  }
+
+  /** El botón abre la sección de reseñas con `?resena=`: sin sesión, el front pide ingresar antes. */
+  enviarResenaOcultada(destinatario: string, objetivo: ObjetivoResenaEmail, motivo: string): Promise<void> {
+    const ruta = objetivo.tipo === 'PUBLICACION'
+      ? `/publicaciones/${objetivo.id}?resena=mia#resenas-PUBLICACION-${objetivo.id}`
+      : `/perfil/${objetivo.id}?resena=mia#resenas-ANUNCIANTE-${objetivo.id}`;
+    const sobre = objetivo.tipo === 'PUBLICACION' ? 'la publicación' : 'el perfil de';
+    return this.enviar(
+      destinatario,
+      'Tu reseña fue ocultada por moderación',
+      `<p>Un administrador ocultó tu reseña sobre ${sobre} <strong>${this.plantillas.escapar(objetivo.titulo)}</strong>.</p>
+       <p><strong>Motivo:</strong> ${this.plantillas.escapar(motivo)}</p>
+       <p>La reseña ya no se muestra a otras personas ni suma al promedio. Podés verla con el motivo al ingresar.</p>
+       <p>Te avisamos como inquilino.</p>
+       ${this.botonA({ texto: 'Ver mi reseña', ruta })}`,
+      'Información sobre la moderación de tu reseña.',
     );
   }
 

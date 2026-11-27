@@ -102,7 +102,7 @@
                       [attr.maxlength]="MAX_CARACTERES_MOTIVO"
                       [disabled]="busy() !== null"
                       placeholder="Explicá por qué se oculta esta reseña"></textarea>
-                    <p>La reseña dejará de aparecer públicamente y no sumará al promedio. El autor podrá eliminarla.</p>
+                    <p>La reseña dejará de aparecer públicamente y no sumará al promedio. El autor la verá con el motivo, pero no podrá editarla, eliminarla ni escribir otra.</p>
                     <div>
                       <button type="button" class="button button--ghost" [disabled]="busy() !== null" (click)="ocultarId.set(null)">Cancelar</button>
                       <button type="submit" class="button button--danger" [disabled]="busy() !== null || motivo.trim().length < 5">

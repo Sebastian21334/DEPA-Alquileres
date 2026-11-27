@@ -18,6 +18,7 @@ import {
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { FormsModule } from '@angular/forms';
 import { ApiError } from '../../core/interceptors/api-error';
+import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, estadiaActiva, etiquetasEstadia, puedeConsultarCodigo, puedePedirReinicioCodigo, puedeReprogramar, puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { PerfilService } from '../../core/services/perfil.service';
@@ -288,12 +289,12 @@ export class MisReservasComponent {
     return terminos.every(termino => texto.includes(termino));
   }
 
-  /** Solo una estadía terminada en una publicación temporal habilita "Comentar". */
+  /** Una estadía terminada en una publicación temporal habilita "Comentar", aunque no se haya validado el código. */
   protected puedeComentar(reserva: Reserva): boolean {
     return !reserva.cancelada &&
       !reserva.publicacion?.eliminada &&
-      (reserva.finalizada || reserva.estado_estadia === 'FINALIZADA') &&
-      reserva.publicacion?.modalidad?.permite_reservas_por_fecha === true;
+      (reserva.estado_estadia === 'FINALIZADA' || reserva.estado_estadia === 'INGRESO_NO_VERIFICADO') &&
+      admiteReservasPorFecha(reserva.publicacion?.modalidad);
   }
 
   protected cambiarFiltroRecibidas(filtro: 'estado' | 'publicacion' | 'desde' | 'hasta', valor: string): void {

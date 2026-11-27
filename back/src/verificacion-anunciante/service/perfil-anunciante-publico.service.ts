@@ -17,7 +17,10 @@ export class PerfilAnunciantePublicoService {
 
   async buscarPerfilPublico(idUsuario: number): Promise<AnunciantePublicoDto> {
     const anunciante = await this.anunciantesService.buscarPorId(idUsuario);
-    if (!anunciante?.verificado) throw new NotFoundException('Anunciante no encontrado');
+    // Una cuenta bloqueada o dada de baja no expone su perfil, igual que el detalle de sus publicaciones.
+    if (!anunciante?.verificado || !this.anunciantesService.cuentaHabilitada(anunciante)) {
+      throw new NotFoundException('Anunciante no encontrado');
+    }
 
     const solicitud = await this.verificacionRepo.buscarSolicitudPorAnunciante(idUsuario);
     const aprobada = solicitud?.estado === this.catalogosService.codigoEstado('VERIFICACION_ANUNCIANTE', 'aprobada');

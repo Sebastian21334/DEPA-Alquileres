@@ -62,9 +62,8 @@ export class AzureCorreoProveedor implements IProveedorCorreo {
       }
 
       if (intento === 1) {
-        this.logger.warn(
-          `Reintentando el correo a ${correo.destinatario} después de un envío fallido`,
-        );
+        // La dirección no se registra: los logs no guardan datos personales.
+        this.logger.warn('Reintentando un correo después de un envío fallido');
       }
     }
 

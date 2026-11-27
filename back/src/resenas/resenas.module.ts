@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AlmacenamientoModule } from '../almacenamiento/almacenamiento.module';
 import { AnunciantesModule } from '../anunciantes/anunciantes.module';
+import { MailModule } from '../mail/mail.module';
 import { PublicacionesModule } from '../publicaciones/publicaciones.module';
 import { ReservasModule } from '../reservas/reservas.module';
 import { SeguridadModule } from '../seguridad/seguridad.module';
@@ -34,6 +35,7 @@ import { ResenasService } from './service/resenas.service';
     ReservasModule,
     SeguridadModule,
     AlmacenamientoModule,
+    MailModule,
   ],
   controllers: [
     ResenasObjetivoController,
