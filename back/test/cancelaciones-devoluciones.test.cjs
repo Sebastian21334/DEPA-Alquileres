@@ -2571,7 +2571,8 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
       return archivo ? pedido.attach('comprobante', Buffer.from('%PDF-1.7 pago'), { filename: archivo, contentType: 'application/pdf' }) : pedido;
     };
     const operacionesLiquidacion = app.get(OperacionesLiquidacionService);
-    const correosDeLiquidacion = () => correos.filter(({ content }) => content.subject === 'Liquidación disponible para pago manual');
+    // A administración le llega con «[Administración]» delante del asunto.
+    const correosDeLiquidacion = () => correos.filter(({ content }) => content.subject.endsWith('Liquidación disponible para pago manual'));
     const configurarFin = async (dias) => {
       const fin = new Date(`${hoy}T00:00:00Z`);
       fin.setUTCDate(fin.getUTCDate() - dias);
