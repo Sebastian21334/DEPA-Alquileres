@@ -25,6 +25,7 @@ import {
   LucideMail,
   LucideMapPin,
   LucideRuler,
+  LucideStar,
 } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
 import { AuthService } from '../../core/services/auth.service';
@@ -53,6 +54,8 @@ import { AnunciantePublicoService } from '../../shared/services/anunciante-publi
 import { RelativeTimePipe } from '../../shared/pipes/relative-time.pipe';
 import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { esInmobiliaria } from '../../shared/utils/anunciante';
+import { formatearPromedio, promedioMostrable } from '../../shared/utils/resenas';
+import { ResenasPanelComponent } from '../resenas/resenas-panel/resenas-panel.component';
 import { PaymentSummaryComponent } from './payment-summary/payment-summary.component';
 
 @Component({
@@ -67,6 +70,7 @@ import { PaymentSummaryComponent } from './payment-summary/payment-summary.compo
     AvailabilityCalendarComponent,
     ConfirmDialogComponent,
     PaymentSummaryComponent,
+    ResenasPanelComponent,
     RelativeTimePipe,
     LucideBadgeCheck,
     LucideBookmark,
@@ -80,6 +84,7 @@ import { PaymentSummaryComponent } from './payment-summary/payment-summary.compo
     LucideMail,
     LucideMapPin,
     LucideRuler,
+    LucideStar,
   ],
   templateUrl: './publication-detail.component.html',
   styleUrl: './publication-detail.component.scss',
@@ -99,6 +104,7 @@ export class PublicationDetailComponent {
   private consultaPresupuesto?: Subscription;
   private readonly confirmacionWhatsapp =
     viewChild.required<ConfirmDialogComponent>('confirmacionWhatsapp');
+  private scrollResenasPendiente = false;
 
   protected readonly publication = signal<Publicacion | null>(null);
   protected readonly descripcionExpandida = signal(false);
@@ -147,6 +153,17 @@ export class PublicationDetailComponent {
   protected readonly isFavorite = computed(() => {
     const id = this.publication()?.id;
     return id ? this.favorites.isFavorite(id) : false;
+  });
+  protected readonly formatearPromedio = formatearPromedio;
+  protected readonly promedioResenas = computed(() =>
+    promedioMostrable(this.publication()?.cantidad_resenas, this.publication()?.promedio_resenas),
+  );
+  protected readonly cantidadResenas = computed(() =>
+    Number(this.publication()?.cantidad_resenas ?? 0),
+  );
+  protected readonly anclaResenas = computed(() => {
+    const id = this.publication()?.id;
+    return id ? `resenas-PUBLICACION-${id}` : '';
   });
   protected readonly esTemporaria = computed(() =>
     admiteReservasPorFecha(this.publication()?.modalidad),
@@ -207,6 +224,7 @@ export class PublicationDetailComponent {
       .subscribe({
         next: (publication) => {
           this.publication.set(publication);
+          this.programarScrollAResenas();
           if (!this.administracion) this.registerView(publication);
           const idAnunciante = publication.anunciante?.idUsuario;
           if (idAnunciante) {
@@ -229,6 +247,37 @@ export class PublicationDetailComponent {
           ? 'No pudimos cargar la publicación de la reserva.'
           : 'Esta publicación no está disponible para consultas ni nuevas reservas. Si ya tenés una reserva, podés consultarla en Mis reservas y acudir a soporte.'),
       });
+  }
+
+  /** Baja a la sección de reseñas sin navegar ni cambiar de ruta. */
+  protected irAResenas(): void {
+    if (typeof document === 'undefined') return;
+    const id = this.anclaResenas();
+    if (!id) return;
+    const destino = document.getElementById(id);
+    if (!destino) return;
+    const reducir = typeof matchMedia !== 'undefined' &&
+      matchMedia('(prefers-reduced-motion: reduce)').matches;
+    destino.scrollIntoView({ behavior: reducir ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  private programarScrollAResenas(): void {
+    // La sección existe recién cuando el panel termina de cargar; el output
+    // `resumenCambio` confirma ese momento y evita buscar el ancla antes de tiempo.
+    this.scrollResenasPendiente = this.route.snapshot.fragment?.startsWith('resenas') === true;
+  }
+
+  protected actualizarResumenResenas(resumen: { promedio: number | null; cantidad: number }): void {
+    this.publication.update((publicacion) => publicacion
+      ? {
+          ...publicacion,
+          promedio_resenas: resumen.promedio,
+          cantidad_resenas: resumen.cantidad,
+        }
+      : publicacion);
+    if (!this.scrollResenasPendiente) return;
+    this.scrollResenasPendiente = false;
+    setTimeout(() => this.irAResenas());
   }
 
   protected cargarIngresos(idPublicacion: number): void {

@@ -9,3 +9,11 @@ export interface OpcionesImagenJpeg {
 export interface IProcesadorImagenes {
   aJpeg(buffer: Buffer, opciones: OpcionesImagenJpeg): Promise<Buffer>;
 }
+
+/** El contenido no es una imagen válida; no representa una falla de infraestructura. */
+export class ImagenInvalidaError extends Error {
+  constructor(message = 'El archivo no es una imagen válida.', cause?: unknown) {
+    super(message, { cause });
+    this.name = 'ImagenInvalidaError';
+  }
+}

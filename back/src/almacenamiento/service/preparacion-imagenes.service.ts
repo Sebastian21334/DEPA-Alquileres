@@ -6,6 +6,7 @@ const TAMAÑO_EVIDENCIA = { lado: 1600, ajuste: 'inside' } as const;
 const OPCIONES = {
   publicacion: { calidad: 75, tamaño: TAMAÑO_EVIDENCIA },
   reclamo: { calidad: 80, tamaño: TAMAÑO_EVIDENCIA },
+  resena: { calidad: 80, tamaño: TAMAÑO_EVIDENCIA, orientar: true },
   apelacion: { calidad: 80, tamaño: TAMAÑO_EVIDENCIA, orientar: true },
   avatar: { calidad: 80, tamaño: { lado: 400, ajuste: 'cover' }, orientar: true },
   verificacion: { calidad: 80 },

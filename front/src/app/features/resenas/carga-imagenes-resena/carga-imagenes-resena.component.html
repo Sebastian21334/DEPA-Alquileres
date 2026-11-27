@@ -1,0 +1,43 @@
+<span class="carga__etiqueta">Imágenes <small>(opcional, hasta {{ max() }})</small></span>
+
+@if (imagenes().length) {
+  <div class="carga__galeria">
+    @for (imagen of imagenes(); track imagen.id) {
+      <div class="carga__imagen" [class.is-marcada]="imagen.marcada">
+        <img [src]="imagen.url" [alt]="imagen.nombre" loading="lazy" decoding="async" />
+        <div class="carga__imagen-pie">
+          <span [title]="imagen.nombre">{{ imagen.nombre }}@if (imagen.tamano) { · {{ tamano(imagen.tamano) }} }</span>
+          <button type="button" (click)="quitar.emit(imagen.id)">
+            {{ imagen.marcada ? 'Deshacer' : 'Quitar' }}
+          </button>
+        </div>
+        @if (imagen.marcada) {
+          <span class="carga__imagen-aviso" aria-hidden="true">Se eliminará</span>
+        }
+      </div>
+    }
+  </div>
+}
+
+@if (puedeAgregar()) {
+  <label
+    class="carga__zona"
+    [class.carga__zona--arrastrando]="arrastrando()"
+    [class.carga__zona--deshabilitada]="deshabilitado()"
+    (dragover)="arrastrar($event)"
+    (dragleave)="arrastrando.set(false)"
+    (drop)="soltar($event)">
+    <input
+      class="carga__entrada"
+      [id]="id"
+      type="file"
+      [accept]="aceptar"
+      multiple
+      [disabled]="deshabilitado()"
+      [attr.aria-labelledby]="id + '-accion ' + id + '-ayuda'"
+      (change)="elegir($event)" />
+    <svg lucideUpload [size]="20" aria-hidden="true"></svg>
+    <span class="carga__accion" [id]="id + '-accion'">Elegí o arrastrá las imágenes</span>
+    <span class="carga__ayuda" [id]="id + '-ayuda'">JPG, PNG, WEBP o HEIC de hasta {{ maximoMb }} MB · máximo {{ max() }}</span>
+  </label>
+}

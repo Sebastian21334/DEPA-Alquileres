@@ -191,6 +191,11 @@ export class PublicacionesService {
     return usuario?.activa === true && usuario.bloqueado === false;
   }
 
+  /** ResenasResumenService es el único escritor de estas cachés derivadas. */
+  actualizarResumenResenas(id: number, cantidad: number, promedio: number | null): Promise<void> {
+    return this.publicacionesRepo.actualizarResumenResenas(id, cantidad, promedio);
+  }
+
   prepararRespuesta<T extends Publicacion>(publicacion: T): T {
     if (publicacion.modalidad) {
       publicacion.modalidad = this.catalogosService.prepararModalidad(publicacion.modalidad);
@@ -209,6 +214,8 @@ export class PublicacionesService {
         actividades_pausadas: anunciante.actividades_pausadas,
         tipoAnunciante: anunciante.tipoAnunciante,
         numero_contacto: anunciante.numero_contacto,
+        cantidad_resenas: anunciante.cantidad_resenas,
+        promedio_resenas: anunciante.promedio_resenas,
         usuario: usuario ? {
           id: usuario.id, nombre: usuario.nombre, apellido: usuario.apellido, foto_url: usuario.foto_url,
         } : null,

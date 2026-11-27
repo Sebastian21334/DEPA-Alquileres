@@ -1,0 +1,46 @@
+@if (interactivo()) {
+  <fieldset class="estrellas estrellas--interactivas"
+    [class.estrellas--sm]="tamano() === 'sm'"
+    [class.estrellas--lg]="tamano() === 'lg'"
+    [attr.aria-label]="etiqueta()">
+    <legend class="sr-only">{{ etiqueta() }}</legend>
+    @for (n of estrellas; track n) {
+      <label
+        class="estrella"
+        [class.is-active]="n <= valorVisible()"
+        (mouseenter)="previsualizar(n)"
+        (mouseleave)="limpiarPreview()"
+      >
+        <input
+          class="sr-only"
+          type="radio"
+          [name]="nombreGrupo"
+          [value]="n"
+          [checked]="valor() === n"
+          (change)="seleccionar(n)"
+        />
+        <svg lucideStar [size]="tamanoPx()" [attr.fill]="n <= valorVisible() ? 'currentColor' : 'none'" stroke-width="1.5"></svg>
+      </label>
+    }
+    <span class="estrellas__valor" aria-hidden="true">{{ valor() || '—' }}</span>
+  </fieldset>
+} @else {
+  <span
+    class="estrellas estrellas--lectura"
+    [class.estrellas--sm]="tamano() === 'sm'"
+    [class.estrellas--lg]="tamano() === 'lg'"
+    role="img"
+    [attr.aria-label]="etiqueta() + ': ' + valor() + ' de 5'"
+  >
+    <span class="estrellas__capa" aria-hidden="true">
+      @for (n of estrellas; track n) {
+        <svg lucideStar [size]="tamanoPx()" stroke-width="1.5"></svg>
+      }
+    </span>
+    <span class="estrellas__capa estrellas__capa--rellena" aria-hidden="true" [style.width.%]="porcentaje()">
+      @for (n of estrellas; track n) {
+        <svg lucideStar [size]="tamanoPx()" fill="currentColor" stroke-width="1.5"></svg>
+      }
+    </span>
+  </span>
+}

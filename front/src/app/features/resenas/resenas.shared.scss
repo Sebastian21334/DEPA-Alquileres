@@ -1,0 +1,42 @@
+.resenas__eyebrow {
+  display: block;
+  margin-bottom: .25rem;
+  color: var(--color-primary);
+  font-size: .72rem;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.resenas__boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-height: 40px;
+  padding: .6rem .9rem;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: var(--color-primary);
+  color: #fff;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter .18s ease, transform .18s ease, background .18s ease, border-color .18s ease;
+}
+.resenas__boton:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.resenas__boton--secundario {
+  border-color: #d8dee8;
+  background: #fff;
+  color: #344054;
+}
+.resenas__boton--secundario:hover { background: #f8fafc; border-color: #cbd5e1; }
+.resenas__boton:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+.resenas__boton:disabled { opacity: .55; cursor: wait; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .resenas__boton { transition: none; }
+  .resenas__boton:hover { transform: none; }
+}

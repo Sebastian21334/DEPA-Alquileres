@@ -10,6 +10,7 @@ import { ADMIN_NAVIGATION, AdminSection, seccionAdmin } from './admin-secciones'
 import { ToastService } from '../../core/services/toast.service';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
 import { PublicacionesAdminComponent } from './publicaciones-admin.component';
+import { ResenasAdminComponent } from './resenas-admin.component';
 import { ComisionAdminComponent } from './comision-admin.component';
 import { HistorialLiquidacionesAdminComponent } from './historial-liquidaciones-admin.component';
 import { CatalogosAdminComponent } from './catalogos-admin.component';
@@ -89,6 +90,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   'historial-liquidaciones': 'Consultá los pagos ya registrados a anunciantes, con su importe, fecha y referencia.',
   verificaciones: 'Revisá las solicitudes de verificación de identidad.',
   publicaciones: 'Consultá y moderá los alojamientos publicados.',
+  resenas: 'Revisá las reseñas de la comunidad, sus denuncias y la moderación.',
   usuarios: 'Buscá cuentas, administrá sus accesos y otorgá permisos de administrador.',
   bloqueos: 'Consultá las cuentas bloqueadas, sus motivos y las apelaciones.',
   catalogos: 'Administrá las opciones de anunciantes, propiedades, modalidades y monedas.',
@@ -103,6 +105,7 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   imports: [
     CotizacionesAdminComponent,
     PublicacionesAdminComponent,
+    ResenasAdminComponent,
     ComisionAdminComponent,
     HistorialLiquidacionesAdminComponent,
     CatalogosAdminComponent,
@@ -166,6 +169,7 @@ export class AdminComponent {
   private readonly destroyRef = inject(DestroyRef);
   private cargaResumen?: Subscription;
   private readonly publicacionesAdmin = viewChild(PublicacionesAdminComponent);
+  private readonly resenasAdmin = viewChild(ResenasAdminComponent);
   private readonly comisionAdmin = viewChild(ComisionAdminComponent);
   private readonly historialAdmin = viewChild(HistorialLiquidacionesAdminComponent);
   /** «Actualizar» espera también a que termine la consulta del historial. */
@@ -328,7 +332,9 @@ export class AdminComponent {
   protected readonly listaBloqueos = new ListaFiltrable(this.bloqueosOrdenados, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
   protected readonly listaHistorialBloqueos = new ListaFiltrable(this.historialBloqueos, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
   protected readonly loading = computed(() =>
-    this.otherLoading() || this.usersLoading() || (this.publicacionesAdmin()?.publicationsLoading() ?? true),
+    this.otherLoading() || this.usersLoading() ||
+    (this.publicacionesAdmin()?.publicationsLoading() ?? true) ||
+    (this.resenasAdmin()?.resenasLoading() ?? true),
   );
   protected readonly query = signal('');
   protected readonly busy = signal<string | null>(null);
@@ -370,6 +376,7 @@ export class AdminComponent {
     this.otherLoading.set(true);
     this.summaryError.set(false);
     this.publicacionesAdmin()?.recargar();
+    this.resenasAdmin()?.recargar();
     this.loadUsers(this.usersPage());
     this.cargarBloqueados();
     this.cargaResumen = merge(

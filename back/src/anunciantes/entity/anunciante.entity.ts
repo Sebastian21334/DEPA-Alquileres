@@ -27,6 +27,19 @@ export class Anunciante {
   @Column({ name: 'actividades_pausadas', type: 'boolean', default: false })
   actividades_pausadas: boolean;
 
+  // Caché derivada de resena para el perfil público del anunciante.
+  @Column({ name: 'cantidad_resenas', type: 'int', default: 0 })
+  cantidad_resenas: number;
+
+  @Column({
+    name: 'promedio_resenas',
+    type: 'numeric',
+    precision: 3,
+    scale: 2,
+    nullable: true,
+  })
+  promedio_resenas: number | null;
+
   // Único entre las cuentas activas, comparando solo los dígitos (índice
   // uq_anunciante_cuit_cuil_digitos de la migración 20261104). Al dar de baja la
   // cuenta queda en null para que la persona pueda volver a registrarlo (RN-37).

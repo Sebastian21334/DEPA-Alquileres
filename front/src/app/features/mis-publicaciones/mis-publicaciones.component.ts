@@ -4,7 +4,8 @@ import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { forkJoin, type Subscription } from 'rxjs';
-import { LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX } from '@lucide/angular';
+import { LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideStar, LucideTrash2, LucideX } from '@lucide/angular';
+import { formatearPromedio, promedioMostrable } from '../../shared/utils/resenas';
 import { GestionPublicacionesService, type PaginaMisPublicaciones, type PagoPublicacion } from '../../shared/services/gestion-publicaciones.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
@@ -17,7 +18,7 @@ import { SearchFieldComponent } from '../../shared/components/search-field/searc
 @Component({
   selector: 'app-mis-publicaciones',
   standalone: true,
-  imports: [RouterLink, EsqueletoListaComponent, HistorialLiquidacionesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideTrash2, LucideX],
+  imports: [RouterLink, EsqueletoListaComponent, HistorialLiquidacionesComponent, PaginadorComponent, SearchFieldComponent, LucideEye, LucideMapPin, LucidePencil, LucideSquarePlus, LucideStar, LucideTrash2, LucideX],
   templateUrl: './mis-publicaciones.component.html',
   styleUrl: './mis-publicaciones.component.scss',
 })
@@ -36,6 +37,13 @@ export class MisPublicacionesComponent {
   protected readonly paginasPublicaciones = signal(1);
   protected readonly activas = signal(0);
   protected readonly esTemporaria = admiteReservasPorFecha;
+  protected readonly formatearPromedio = formatearPromedio;
+  protected readonly promedioResenas = (publicacion: Publicacion): number | null =>
+    admiteReservasPorFecha(publicacion.modalidad)
+      ? promedioMostrable(publicacion.cantidad_resenas, publicacion.promedio_resenas)
+      : null;
+  protected readonly cantidadResenas = (publicacion: Publicacion): number =>
+    Number(publicacion.cantidad_resenas ?? 0);
   protected readonly cargando = signal(true);
   protected readonly cargandoPublicaciones = signal(false);
   protected readonly error = signal('');

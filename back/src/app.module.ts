@@ -20,6 +20,7 @@ import { MailModule } from './mail/mail.module';
 import { FavoritosModule } from './favoritos/favoritos.module';
 import { OperacionesReservaModule } from './operaciones-reserva/operaciones-reserva.module';
 import { ReclamosModule } from './reclamos/reclamos.module';
+import { ResenasModule } from './resenas/resenas.module';
 import { ChatbotModule } from './chatbot/chatbot.module';
 
 @Module({
@@ -63,6 +64,7 @@ import { ChatbotModule } from './chatbot/chatbot.module';
     FavoritosModule,
     OperacionesReservaModule,
     ReclamosModule,
+    ResenasModule,
     ChatbotModule,
   ],
   controllers: [AppController],

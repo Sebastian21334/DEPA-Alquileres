@@ -15,6 +15,8 @@ function escenario({ verificado = true, estado = 'aprobada', razonSocial = 'Inmo
     idUsuario: 7,
     verificado,
     numero_contacto: '351 400-0000',
+    cantidad_resenas: 3,
+    promedio_resenas: '4.50',
     usuario: { nombre: 'Ana', apellido: 'Pérez', foto_url: 'https://example.invalid/foto.jpg' },
     tipoAnunciante: tipo ? { id: 2, nombre: tipo } : null,
   };
@@ -38,6 +40,8 @@ test('una inmobiliaria verificada expone su razón social y solo datos públicos
     verificado: true,
     numero_contacto: '351 400-0000',
     foto_url: 'https://example.invalid/foto.jpg',
+    cantidad_resenas: 3,
+    promedio_resenas: 4.5,
   });
   for (const campo of [
     'cuit_cuil', 'cuit_cuil_historico', 'matricula_profesional', 'colegio_profesional',

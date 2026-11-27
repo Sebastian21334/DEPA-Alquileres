@@ -25,6 +25,13 @@
     @if (verificado) {
       <span class="badge badge--verified"><svg lucideBadgeCheck [size]="14"></svg> {{ tipoAnuncianteTexto }}</span>
     }
+    @if (esTemporaria && promedioResenas(); as promedio) {
+      <p class="card__rating" [attr.aria-label]="'Calificación ' + formatearPromedio(promedio) + ' de 5, ' + cantidadResenas() + ' reseñas'">
+        <svg lucideStar [size]="15" fill="currentColor" aria-hidden="true"></svg>
+        <strong>{{ formatearPromedio(promedio) }}</strong>
+        <span>({{ cantidadResenas() }})</span>
+      </p>
+    }
   </div>
 
   <div class="card__body">
@@ -35,7 +42,6 @@
     @if (ubicacion) {
       <p class="card__location"><svg lucideMapPin [size]="16"></svg>{{ ubicacion }}</p>
     }
-
     <ul class="card__specs">
       <li><svg lucideBed [size]="19" aria-hidden="true"></svg>{{ ambientesTexto }}</li>
       @if (esTemporaria) {

@@ -1,0 +1,31 @@
+<header class="resenas__encabezado">
+  <div class="resenas__intro">
+    <span class="resenas__eyebrow">Opiniones de la comunidad</span>
+    <h2 [id]="tituloId()">{{ titulo() }}</h2>
+    @if (mostrarResumen()) {
+      <div class="resenas__resumen" aria-live="polite">
+        <strong class="resenas__promedio">{{ formatearPromedio(promedio()!) }}</strong>
+        <div class="resenas__resumen-detalle">
+          <app-estrellas [valor]="promedio()!" tamano="md" [etiqueta]="'Promedio de ' + cantidad() + ' reseñas'" />
+          <span>{{ cantidad() }} {{ cantidad() === 1 ? 'reseña' : 'reseñas' }}</span>
+        </div>
+      </div>
+    } @else {
+      <p class="resenas__sin-promedio">Todavía no hay reseñas publicadas.</p>
+    }
+  </div>
+
+  @if (mostrarResumen()) {
+    <div class="resenas__distribucion" aria-label="Distribución de calificaciones">
+      @for (fila of distribucion(); track fila.puntaje) {
+        <div class="resenas__barra">
+          <span class="resenas__barra-etiqueta">{{ fila.puntaje }} <svg lucideStar [size]="12" fill="currentColor" aria-hidden="true"></svg></span>
+          <span class="resenas__barra-pista" aria-hidden="true">
+            <span class="resenas__barra-relleno" [style.width.%]="fila.porcentaje"></span>
+          </span>
+          <small>{{ fila.cantidad }}</small>
+        </div>
+      }
+    </div>
+  }
+</header>

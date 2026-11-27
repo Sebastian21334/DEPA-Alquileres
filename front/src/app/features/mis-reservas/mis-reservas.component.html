@@ -370,6 +370,14 @@
         </details>
       }
       <div class="booking-card__actions">
+        @if (!recibida && reserva.publicacion && puedeComentar(reserva)) {
+          <a
+            class="booking-button booking-button--comentar"
+            [routerLink]="['/publicaciones', reserva.publicacion.id]"
+            [fragment]="'resenas-PUBLICACION-' + reserva.publicacion.id">
+            <svg lucideStar [size]="15" aria-hidden="true"></svg> Comentar
+          </a>
+        }
         @if (!recibida && !devolucionPendiente && puedeConsultarCodigo(reserva)) {
           <button type="button" class="booking-button" [disabled]="ocupada() !== null" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>
         }

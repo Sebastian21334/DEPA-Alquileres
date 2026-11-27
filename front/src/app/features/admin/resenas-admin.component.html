@@ -1,0 +1,142 @@
+<section class="panel admin-module">
+  <div class="panel__title panel__title--users">
+    <div>
+      <h2>Reseñas</h2>
+      <p>Revisá las reseñas de la comunidad, sus denuncias y la moderación.</p>
+    </div>
+    <div class="resenas-admin__filters">
+      <label class="state-filter">Estado
+        <select [ngModel]="estado()" (ngModelChange)="cambiarEstado($event)">
+          @for (item of estados; track item.valor) {
+            <option [value]="item.valor">{{ item.etiqueta }}</option>
+          }
+        </select>
+      </label>
+      <label class="search">
+        <svg lucideSearch [size]="18" aria-hidden="true"></svg>
+        <input
+          type="search"
+          aria-label="Buscar reseñas por ID"
+          placeholder="Buscar por ID de reseña"
+          maxlength="20"
+          [ngModel]="query()"
+          (ngModelChange)="search($event)" />
+      </label>
+    </div>
+  </div>
+
+  @if (resenasLoading()) {
+    <app-esqueleto-lista [cantidad]="5" etiqueta="Cargando reseñas…" />
+  } @else {
+    <div class="table-wrap">
+      <table class="responsive-table" role="table">
+        <thead>
+          <tr><th>Reseña</th><th>Objetivo</th><th>Estado</th><th class="right">Acciones</th></tr>
+        </thead>
+        <tbody class="lista-escalonada">
+          @for (resena of datos(); track resena.id) {
+            <tr>
+              <td data-label="Reseña">
+                <div class="resena-admin__autor">
+                  <strong>#{{ resena.id }} · {{ resena.autor.nombre }} {{ resena.autor.apellido }}</strong>
+                  <small>{{ fechaResena(resena) }}</small>
+                </div>
+                <div class="resena-admin__rating">
+                  <app-estrellas [valor]="resena.puntaje" tamano="sm" [etiqueta]="'Calificación de ' + resena.autor.nombre" />
+                  <span>{{ resena.puntaje }}/5</span>
+                </div>
+                <p class="resena-admin__comentario">{{ resena.comentario }}</p>
+                @if (resena.imagenes.length) {
+                  <div class="resena-admin__thumbs" aria-label="Imágenes de la reseña">
+                    @for (imagen of resena.imagenes; track imagen.id) {
+                      <button type="button" (click)="verImagen(imagen.url)" [attr.aria-label]="'Ampliar imagen de la reseña ' + resena.id">
+                        <img [src]="imagen.url" alt="" loading="lazy" decoding="async" />
+                      </button>
+                    }
+                  </div>
+                }
+              </td>
+              <td data-label="Objetivo">
+                <a [routerLink]="objetivoLink(resena)">{{ resena.objetivo.titulo }}</a>
+                <small>{{ resena.objetivo.tipo === 'PUBLICACION' ? 'Publicación' : 'Perfil de anunciante' }}</small>
+              </td>
+              <td data-label="Estado">
+                @if (resena.denunciada) {
+                  <span class="status status--reported">Denunciada</span>
+                }
+                <span class="status" [class.status--blocked]="!resena.visible">{{ resena.visible ? 'Visible' : 'Oculta' }}</span>
+                @if (!resena.visible && resena.motivo_moderacion) {
+                  <small>Motivo de baja: {{ resena.motivo_moderacion }}</small>
+                }
+              </td>
+              <td data-label="Acciones" class="right">
+                <div class="row-actions">
+                  @if (resena.denunciada) {
+                    <button type="button" class="button button--success" [disabled]="busy() !== null" (click)="quitarDenuncia(resena)">
+                      {{ busy() === resena.id + '-denuncia' ? 'Quitando…' : 'Quitar denuncia' }}
+                    </button>
+                  }
+                  @if (resena.visible) {
+                    <button type="button" class="button button--danger-outline" [disabled]="busy() !== null" (click)="abrirOcultar(resena)">
+                      Ocultar
+                    </button>
+                  } @else {
+                    <button type="button" class="button button--success" [disabled]="busy() !== null" (click)="restaurar(resena)">
+                      {{ busy() === resena.id + '-restaurar' ? 'Restaurando…' : 'Restaurar' }}
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+            @if (ocultarId() === resena.id) {
+              <tr>
+                <td colspan="4">
+                  <form class="reject-box" (ngSubmit)="confirmarOcultar(resena)">
+                    <label [for]="'ocultar-resena-' + resena.id">Motivo para ocultar la reseña #{{ resena.id }}</label>
+                    <textarea
+                      [id]="'ocultar-resena-' + resena.id"
+                      name="motivoOcultar"
+                      [(ngModel)]="motivo"
+                      required
+                      [attr.minlength]="MIN_CARACTERES_MOTIVO"
+                      [attr.maxlength]="MAX_CARACTERES_MOTIVO"
+                      [disabled]="busy() !== null"
+                      placeholder="Explicá por qué se oculta esta reseña"></textarea>
+                    <p>La reseña dejará de aparecer públicamente y no sumará al promedio. El autor podrá eliminarla.</p>
+                    <div>
+                      <button type="button" class="button button--ghost" [disabled]="busy() !== null" (click)="ocultarId.set(null)">Cancelar</button>
+                      <button type="submit" class="button button--danger" [disabled]="busy() !== null || motivo.trim().length < 5">
+                        {{ busy() === resena.id + '-ocultar' ? 'Ocultando…' : 'Confirmar y ocultar' }}
+                      </button>
+                    </div>
+                  </form>
+                </td>
+              </tr>
+            }
+          } @empty {
+            <tr><td colspan="4" class="empty">No se encontraron reseñas con ese filtro.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <nav class="pagination" aria-label="Paginación de reseñas">
+    <span role="status">{{ total() }} reseñas · Página {{ pagina() }} de {{ paginas() }}</span>
+    <div class="pagination__actions">
+      <button type="button" class="button button--ghost" (click)="load(pagina() - 1)"
+        [disabled]="resenasLoading() || busy() !== null || pagina() <= 1">Anterior</button>
+      <button type="button" class="button button--ghost" (click)="load(pagina() + 1)"
+        [disabled]="resenasLoading() || busy() !== null || pagina() >= paginas()">Siguiente</button>
+    </div>
+  </nav>
+</section>
+
+@if (imagenAmpliada(); as url) {
+  <div class="resenas-admin__lightbox" role="dialog" aria-modal="true" aria-label="Imagen ampliada de la reseña" (click)="cerrarImagen()">
+    <button #cerrarImagenAdmin type="button" class="resenas-admin__lightbox-cerrar" (click)="cerrarImagen()" aria-label="Cerrar imagen">
+      <svg lucideX [size]="22" aria-hidden="true"></svg>
+    </button>
+    <img [src]="url" alt="Imagen ampliada de la reseña" (click)="$event.stopPropagation()" />
+  </div>
+}

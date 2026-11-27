@@ -65,6 +65,7 @@ Frontend:
 | Catálogo | `catalogos` | Roles, tipos, modalidades, monedas, ámbitos, estados y la comisión DEPA; solo lectura salvo la comisión. | `CatalogosService` |
 | Catálogo | `favoritos` | Favoritos del inquilino. | — |
 | Catálogo | `mensajes` | Mensajería asociada a publicaciones y reservas. | — |
+| Catálogo | `resenas` | Reseñas de publicaciones Temporales y perfiles de anunciantes, imágenes, denuncias y moderación. Mantiene las cachés `cantidad_resenas` y `promedio_resenas`. | — |
 | Reservas | `disponibilidad` | Calendario, ocupación, liberación y reprogramación de fechas. | `DisponibilidadService` |
 | Reservas | `reservas` | Ciclo de vida, cancelación de la estadía, código, coordinación de liquidaciones y efectos sobre la reserva. | `ReservasService`, `ReservaNotificacionesService` |
 | Reservas | `cancelaciones` | Solicitud de cancelación de una reserva pagada, su política de devolución y su decisión administrativa. Pide los efectos a Reservas y Reembolsos. | — |
@@ -80,6 +81,16 @@ Frontend:
 | Infraestructura | `mail` | Envío de correos por Azure Communication Services. | `MAIL_SERVICE` |
 | Infraestructura | `almacenamiento` | Subida, firma y eliminación de archivos en Azure Blob. | `AlmacenamientoService` |
 | Infraestructura | `proveedor/` | Adaptadores de dólar, Nominatim y Face API; no es un módulo Nest. | Interfaces y tokens de cada proveedor |
+
+`ResenasModule` depende de `PublicacionesModule`, `AnunciantesModule`,
+`ReservasModule`, `SeguridadModule` y `AlmacenamientoModule`; ninguno de ellos
+depende de reseñas, por lo que el grafo sigue acíclico. El objetivo se modela con
+dos FKs nullables y un `CHECK`, no con un enum persistido. Las cachés de promedio
+se actualizan desde `ResenasResumenService` y existen para que el catálogo
+muestre las estrellas sin consultar la tabla de reseñas en cada listado. Solo las
+publicaciones cuya modalidad admite reservas por fecha (Temporales) se pueden
+reseñar; las denuncias se guardan en la misma reseña y no cambian su visibilidad
+hasta que un administrador modera.
 
 ## 4. Estados
 

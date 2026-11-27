@@ -94,6 +94,8 @@ export interface Reserva {
     direccion?: string;
     ciudad?: { id?: number; nombre: string };
     provincia?: { id?: number; nombre: string };
+    modalidad?: { id?: number; nombre: string; permite_reservas_por_fecha?: boolean };
+    eliminada?: boolean;
     anunciante?: Anunciante;
   } | null;
   usuario_nombre?: string | null;

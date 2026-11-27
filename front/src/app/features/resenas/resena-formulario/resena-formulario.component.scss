@@ -1,0 +1,95 @@
+@use '../resenas.shared' as *;
+
+:host {
+  display: block;
+}
+
+.resenas__form {
+  display: grid;
+  gap: .9rem;
+  padding: 1.1rem;
+  border: 1px solid #dde5ef;
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(16, 24, 40, .07);
+  animation: depa-fade-up .4s var(--ease-salida, cubic-bezier(.22, 1, .36, 1)) both;
+  scroll-margin-top: 90px;
+}
+.resenas__form-cabecera {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.resenas__form-cabecera h3 { margin: 0; font-size: 1.05rem; font-weight: 850; }
+.resenas__cerrar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 1px solid #e3e8ef;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease, transform .18s ease;
+}
+.resenas__cerrar:hover { background: #f5f7fa; color: var(--color-text); transform: rotate(90deg); }
+.resenas__cerrar:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+
+.resenas__campo { display: grid; gap: .4rem; position: relative; }
+.resenas__campo--estrellas { gap: .3rem; }
+.resenas__label {
+  color: #344054;
+  font-size: .82rem;
+  font-weight: 800;
+}
+.resenas__label small { color: var(--color-text-muted); font-weight: 600; }
+.resenas__campo textarea {
+  width: 100%;
+  min-height: 108px;
+  padding: .7rem .8rem;
+  border: 1px solid #d8dee8;
+  border-radius: 9px;
+  background: #fbfcfe;
+  color: var(--color-text);
+  font: inherit;
+  font-size: .9rem;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.resenas__campo textarea:focus {
+  border-color: var(--color-secondary);
+  outline: none;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(14, 71, 161, .12);
+}
+.resenas__campo textarea.is-invalid { border-color: #d92d20; }
+.resenas__contador {
+  justify-self: end;
+  margin-top: -.25rem;
+  color: var(--color-text-muted);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.resenas__error-campo { color: #b42318; font-size: .75rem; font-weight: 650; }
+
+.resenas__form-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .55rem;
+  padding-top: .2rem;
+}
+
+@media (max-width: 760px) {
+  .resenas__form-acciones .resenas__boton { flex: 1 1 140px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .resenas__form { animation: none; }
+  .resenas__cerrar { transition: none; }
+  .resenas__cerrar:hover { transform: none; }
+}

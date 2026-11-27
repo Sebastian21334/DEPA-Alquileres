@@ -9,6 +9,12 @@ export const routes: Routes = [
     title: 'Términos y condiciones - DEPA',
   },
   {
+    // La moderación vive dentro del panel; el enlace viejo no debe romper.
+    path: 'admin/resenas',
+    redirectTo: '/admin',
+    pathMatch: 'full',
+  },
+  {
     path: 'admin',
     canActivate: [adminGuard],
     loadComponent: () => import('./features/admin/admin.component').then((m) => m.AdminComponent),

@@ -52,6 +52,20 @@ export class Publicacion {
   @Column({ name: 'visualizaciones', type: 'int', default: 0 })
   visualizaciones: number;
 
+  // Caché derivada de resena: la actualiza ResenasResumenService al crear,
+  // editar, ocultar o borrar una reseña. Evita consultar reseñas desde el catálogo.
+  @Column({ name: 'cantidad_resenas', type: 'int', default: 0 })
+  cantidad_resenas: number;
+
+  @Column({
+    name: 'promedio_resenas',
+    type: 'numeric',
+    precision: 3,
+    scale: 2,
+    nullable: true,
+  })
+  promedio_resenas: number | null;
+
   // Datos propios del inmueble, consolidados para consultarlos desde el anuncio.
   @Column({ name: 'direccion', type: 'varchar', length: 255 })
   direccion: string;

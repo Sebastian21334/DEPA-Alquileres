@@ -74,6 +74,7 @@ export interface IPublicacionesRepository {
   darDeBaja(id: number, motivo: string): Promise<void>;
   reactivar(id: number): Promise<boolean>;
   incrementarVisualizaciones(id: number): Promise<void>;
+  actualizarResumenResenas(id: number, cantidad: number, promedio: number | null): Promise<void>;
   buscarPorId(id: number): Promise<Publicacion | null>;
   buscarTodasActivas(): Promise<Publicacion[]>;
   buscarAdministracion(consulta: ListarPublicacionesAdministracionDto): Promise<Pagina<Publicacion>>;

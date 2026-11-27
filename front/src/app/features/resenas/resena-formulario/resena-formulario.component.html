@@ -1,0 +1,55 @@
+<form class="resenas__form" [formGroup]="formulario" (ngSubmit)="enviar()">
+  <div class="resenas__form-cabecera">
+    <div>
+      <span class="resenas__eyebrow">{{ editando() ? 'Actualizá tu opinión' : 'Nueva reseña' }}</span>
+      <h3>{{ editando() ? 'Editar tu reseña' : 'Contanos tu experiencia' }}</h3>
+    </div>
+    <button type="button" class="resenas__cerrar" (click)="cancelar.emit()" aria-label="Cerrar formulario">
+      <svg lucideX [size]="18" aria-hidden="true"></svg>
+    </button>
+  </div>
+
+  <div class="resenas__campo resenas__campo--estrellas">
+    <span class="resenas__label">Tu calificación</span>
+    <app-estrellas
+      [valor]="formulario.controls.puntaje.value ?? 0"
+      [interactivo]="true"
+      tamano="lg"
+      etiqueta="Tu calificación"
+      (seleccion)="seleccionarPuntaje($event)" />
+    @if (formulario.controls.puntaje.touched && formulario.controls.puntaje.invalid) {
+      <small class="resenas__error-campo">Elegí de 1 a 5 estrellas.</small>
+    }
+  </div>
+
+  <div class="resenas__campo">
+    <label class="resenas__label" for="resena-comentario">Comentario</label>
+    <textarea
+      id="resena-comentario"
+      formControlName="comentario"
+      rows="4"
+      [attr.maxlength]="MAX_CARACTERES"
+      placeholder="Contá cómo fue la estadía, la atención o lo que te gustaría destacar."
+      [class.is-invalid]="formulario.controls.comentario.touched && formulario.controls.comentario.invalid"
+    ></textarea>
+    <span class="resenas__contador">{{ comentarioActual().length }}/{{ MAX_CARACTERES }}</span>
+    @if (formulario.controls.comentario.touched && formulario.controls.comentario.invalid) {
+      <small class="resenas__error-campo">Escribí un comentario de hasta {{ MAX_CARACTERES }} caracteres.</small>
+    }
+  </div>
+
+  <div class="resenas__campo">
+    <app-carga-imagenes-resena
+      [imagenes]="imagenes()"
+      [max]="MAX_IMAGENES"
+      (agregar)="agregarArchivos.emit($event)"
+      (quitar)="quitarImagen.emit($event)" />
+  </div>
+
+  <div class="resenas__form-acciones">
+    <button type="button" class="resenas__boton resenas__boton--secundario" (click)="cancelar.emit()" [disabled]="enviando()">Cancelar</button>
+    <button type="submit" class="resenas__boton shine" [disabled]="enviando() || formulario.invalid">
+      {{ etiquetaGuardar() }}
+    </button>
+  </div>
+</form>

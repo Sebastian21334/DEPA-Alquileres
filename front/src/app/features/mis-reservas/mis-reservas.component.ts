@@ -2,7 +2,7 @@ import { formatearMoneda } from '../../shared/utils/formato-numero';
 import { diasDeAntelacion, esFechaCalendario, fechaCalendarioLocal, sumarDias } from '../../shared/utils/rental-dates';
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX } from '@lucide/angular';
+import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideStar, LucideTriangleAlert, LucideX } from '@lucide/angular';
 import { Component, computed, DestroyRef, ElementRef, inject, Injector, linkedSignal, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, finalize, forkJoin, of, Subscription, switchMap } from 'rxjs';
@@ -37,7 +37,7 @@ import { normalizarTexto } from '../../shared/utils/texto';
   imports: [
     RouterLink, EsqueletoListaComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, NgTemplateOutlet, DatePipe,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
-    LucideImage, LucideLockKeyhole, LucideTriangleAlert, LucideX,
+    LucideImage, LucideLockKeyhole, LucideStar, LucideTriangleAlert, LucideX,
   ],
   templateUrl: './mis-reservas.component.html',
   styleUrl: './mis-reservas.component.scss',
@@ -286,6 +286,14 @@ export class MisReservasComponent {
     const terminos = normalizarTexto(busqueda).trim().replace(/^#/, '').split(/\s+/).filter(Boolean);
     const texto = normalizarTexto([reserva.id, reserva.publicacion?.titulo, ...usuario].filter(valor => valor != null).join(' '));
     return terminos.every(termino => texto.includes(termino));
+  }
+
+  /** Solo una estadía terminada en una publicación temporal habilita "Comentar". */
+  protected puedeComentar(reserva: Reserva): boolean {
+    return !reserva.cancelada &&
+      !reserva.publicacion?.eliminada &&
+      (reserva.finalizada || reserva.estado_estadia === 'FINALIZADA') &&
+      reserva.publicacion?.modalidad?.permite_reservas_por_fecha === true;
   }
 
   protected cambiarFiltroRecibidas(filtro: 'estado' | 'publicacion' | 'desde' | 'hasta', valor: string): void {

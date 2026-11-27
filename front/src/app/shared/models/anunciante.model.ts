@@ -14,6 +14,8 @@ export interface Anunciante {
   numero_contacto: string;
   tipoAnunciante?: TipoAnunciante;
   usuario?: Usuario;
+  cantidad_resenas?: number;
+  promedio_resenas?: number | string | null;
 }
 
 /** Read model público del perfil de anunciante. No incluye CUIT, matrícula ni documentos. */
@@ -24,4 +26,6 @@ export interface AnunciantePublico {
   verificado: boolean;
   numero_contacto: string;
   foto_url: string | null;
+  cantidad_resenas: number;
+  promedio_resenas: number | null;
 }

@@ -144,6 +144,7 @@ export class ReservaRepository implements IReservaRepository {
           anunciante: { usuario: true },
           ciudad: true,
           provincia: true,
+          modalidad: true,
         },
       },
       order: { id: 'DESC', publicacion: { imagenes: { orden: 'ASC', id: 'ASC' } } },
@@ -216,6 +217,36 @@ export class ReservaRepository implements IReservaRepository {
         usuario: { id: idUsuarioInquilino },
         estado_pago: aprobado,
         cancelada: false,
+      },
+    });
+  }
+
+  /** Habilita a reseñar solo después de una estadía pagada y terminada. */
+  existeEstadiaFinalizada(idPublicacion: number, idUsuario: number, hoy: string, aprobado: string): Promise<boolean> {
+    return this.repository.exists({
+      where: {
+        publicacion: { id: idPublicacion },
+        usuario: { id: idUsuario },
+        estado_pago: aprobado,
+        cancelada: false,
+        fecha_fin: LessThan(hoy),
+      },
+    });
+  }
+
+  /** Para el perfil vale una estadía terminada en una publicación Temporal del anunciante. */
+  existeEstadiaFinalizadaConAnunciante(idAnunciante: number, idUsuario: number, hoy: string, aprobado: string, modalidadesTemporales: number[]): Promise<boolean> {
+    if (!modalidadesTemporales.length) return Promise.resolve(false);
+    return this.repository.exists({
+      where: {
+        publicacion: {
+          anunciante: { idUsuario: idAnunciante },
+          modalidad: { id: In(modalidadesTemporales) },
+        },
+        usuario: { id: idUsuario },
+        estado_pago: aprobado,
+        cancelada: false,
+        fecha_fin: LessThan(hoy),
       },
     });
   }

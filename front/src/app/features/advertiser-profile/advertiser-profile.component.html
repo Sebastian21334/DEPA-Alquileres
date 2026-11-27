@@ -15,6 +15,13 @@
           <ul class="owner-card__meta">
             <li><svg lucideBuilding2 [size]="16"></svg> {{ owner.tipoAnunciante?.nombre ?? 'Anunciante' }}</li>
           </ul>
+          @if (promedioResenas(); as promedio) {
+            <button type="button" class="owner-rating" (click)="irAResenas()" [attr.aria-label]="'Ver reseñas del anunciante, promedio ' + formatearPromedio(promedio) + ' de 5'">
+              <app-estrellas [valor]="promedio" tamano="sm" etiqueta="Calificación del anunciante" />
+              <strong>{{ formatearPromedio(promedio) }}</strong>
+              <span>({{ cantidadResenas() }})</span>
+            </button>
+          }
           <!-- Ciudades como chips, con límite y «Ver más». -->
           @if (ciudades().length) {
             <div class="owner-cities">
@@ -80,6 +87,12 @@
             </nav>
           }
         }
+
+        <app-resenas-panel
+          tipo="ANUNCIANTE"
+          [idObjetivo]="owner.idUsuario"
+          titulo="Reseñas del anunciante"
+          (resumenCambio)="actualizarResumenResenas($event)" />
       </main>
     </div>
   }

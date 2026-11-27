@@ -527,4 +527,11 @@ export class PublicacionesRepository implements IPublicacionesRepository {
     const resultado = await this.repo.update({ id, eliminada: true }, { eliminada: false, activa: false });
     return (resultado.affected ?? 0) > 0;
   }
+
+  async actualizarResumenResenas(id: number, cantidad: number, promedio: number | null): Promise<void> {
+    await this.repo.update({ id }, {
+      cantidad_resenas: cantidad,
+      promedio_resenas: promedio,
+    });
+  }
 }

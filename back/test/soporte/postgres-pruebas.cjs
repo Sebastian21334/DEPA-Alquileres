@@ -91,6 +91,7 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     await db.exec(leerMigracion('20261125-mensajes-reclamo-administracion.sql'));
     // Va después del catálogo de expedientes: una base sin ese catálogo lo aplica primero, como en producción.
     if (estadosPorAmbito) await db.exec(leerMigracion('20261126-retirar-notas-internas-reclamo.sql'));
+    await db.exec(leerMigracion('20261126-resenas.sql'));
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };
   } catch (error) {

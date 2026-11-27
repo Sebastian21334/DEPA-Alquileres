@@ -1,0 +1,128 @@
+<section class="resenas" appReveal [attr.id]="'resenas-' + tipo() + '-' + idObjetivo()" [attr.aria-labelledby]="tituloId()">
+  <app-resenas-resumen [titulo]="titulo()" [tituloId]="tituloId()" [resumen]="resumen()" />
+
+  @if (cargando()) {
+    <app-esqueleto-lista [tarjetas]="true" [cantidad]="2" etiqueta="Cargando reseñas…" />
+  } @else if (error()) {
+    <div class="resenas__estado resenas__estado--error" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" class="resenas__boton resenas__boton--secundario" (click)="recargar()">Reintentar</button>
+    </div>
+  } @else {
+    @if (miResenaOculta(); as oculta) {
+      <div class="resenas__aviso resenas__aviso--oculta" role="status">
+        <p>Tu reseña está oculta por moderación. Podés eliminarla si querés volver a escribir una.</p>
+        <app-resena-card [resena]="oculta" [propia]="true" (eliminar)="confirmarEliminar(oculta)" (verImagen)="verImagen($event)" />
+      </div>
+    }
+
+    @if (puedeEscribir() && !formAbierto()) {
+      <div class="resenas__cta">
+        <span class="resenas__cta-icono" aria-hidden="true"><svg lucideMessageSquareHeart [size]="24"></svg></span>
+        <div>
+          <h3>¿Cómo fue tu estadía?</h3>
+          <p>Tu experiencia ayuda a otras personas a elegir mejor.</p>
+        </div>
+        <button type="button" class="resenas__boton shine" (click)="abrirFormulario()">Escribir reseña</button>
+      </div>
+    }
+
+    @if (formAbierto()) {
+      <div #formularioRef class="resenas__form-host">
+        <app-resena-formulario
+          [miResena]="miResena()"
+          [editando]="editando()"
+          [enviando]="enviando()"
+          [imagenes]="imagenesCarga()"
+          (guardar)="guardarResena($event)"
+          (cancelar)="cancelarFormulario()"
+          (agregarArchivos)="agregarArchivos($event)"
+          (quitarImagen)="quitarImagen($event)" />
+      </div>
+    }
+
+    @if (!puedeEscribir() && !miResena() && motivoMensaje()) {
+      <div class="resenas__aviso">
+        <span class="resenas__aviso-icono" aria-hidden="true">
+          @if (motivoNoPuede() === 'SESION') { <svg lucideLogIn [size]="20"></svg> } @else { <svg lucideInfo [size]="20"></svg> }
+        </span>
+        <p>{{ motivoMensaje() }}</p>
+        @if (motivoNoPuede() === 'SESION') {
+          <a class="resenas__boton resenas__boton--secundario" [routerLink]="['/login']" [queryParams]="{ returnUrl: router.url }">Iniciar sesión</a>
+        }
+      </div>
+    }
+
+    @if (miResenaVisible(); as propia) {
+      <div class="resenas__propia">
+        <h3>Tu reseña</h3>
+        <app-resena-card
+          [resena]="propia"
+          [propia]="true"
+          (editar)="editarResena(propia)"
+          (eliminar)="confirmarEliminar(propia)"
+          (verImagen)="verImagen($event)" />
+      </div>
+    }
+
+    @if (resenas().length) {
+      <div class="resenas__lista">
+        @for (resena of resenas(); track resena.id; let i = $index) {
+          <app-resena-card
+            [style.--resena-delay]="(i % 6) * 70 + 'ms'"
+            [resena]="resena"
+            [propia]="esPropia(resena)"
+            [denunciada]="resena.denunciada === true || denunciadas().has(resena.id)"
+            (editar)="editarResena(resena)"
+            (eliminar)="confirmarEliminar(resena)"
+            (denunciar)="solicitarDenuncia(resena)"
+            (verImagen)="verImagen($event)" />
+        }
+      </div>
+      @if (pagina() < totalPaginas()) {
+        <button type="button" class="resenas__mas" (click)="verMas()" [disabled]="cargandoMas()">
+          {{ cargandoMas() ? 'Cargando…' : 'Ver más reseñas' }}
+        </button>
+      }
+    } @else if (!miResenaOculta() && !miResenaVisible()) {
+      <div class="resenas__vacio">
+        <span aria-hidden="true"><svg lucideMessageSquareHeart [size]="30"></svg></span>
+        <h3>Todavía no hay reseñas</h3>
+        <p>Sé la primera persona en compartir su experiencia.</p>
+      </div>
+    }
+  }
+</section>
+
+@if (imagenAmpliada(); as url) {
+  <div class="resenas__lightbox" role="dialog" aria-modal="true" aria-label="Imagen ampliada de la reseña" (click)="cerrarImagen()">
+    <button #cerrarLightbox type="button" class="resenas__lightbox-cerrar" (click)="cerrarImagen()" aria-label="Cerrar imagen">
+      <svg lucideX [size]="22" aria-hidden="true"></svg>
+    </button>
+    <img [src]="url" alt="Imagen ampliada de la reseña" (click)="$event.stopPropagation()" />
+  </div>
+}
+
+<app-confirm-dialog
+  #confirmacion
+  identificador="eliminar-resena"
+  titulo="Eliminar reseña"
+  mensaje="Tu reseña dejará de aparecer en el perfil y en el promedio. Esta acción no se puede deshacer."
+  textoConfirmar="Eliminar reseña"
+  textoCancelar="Conservarla"
+  tono="peligro"
+  [procesando]="eliminando()"
+  (confirmar)="eliminarConfirmada()"
+  (cancelar)="cerrarConfirmacion()" />
+
+<app-confirm-dialog
+  #confirmacionDenuncia
+  identificador="denunciar-resena"
+  titulo="Marcar como inapropiada"
+  mensaje="¿Querés marcar esta reseña como inapropiada? Un administrador la va a revisar."
+  textoConfirmar="Enviar denuncia"
+  textoCancelar="Cancelar"
+  tono="advertencia"
+  [procesando]="denunciando()"
+  (confirmar)="denunciarConfirmada()"
+  (cancelar)="cerrarDenuncia()" />

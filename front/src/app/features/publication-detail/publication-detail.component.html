@@ -64,16 +64,29 @@
             <p class="location"><svg lucideMapPin [size]="16"></svg> {{ location(item) }}</p>
             <p class="published-date">{{ item.fecha_publicacion | relativeTime }}</p>
           </div>
-          @if (!administracion && !esMiPublicacion() && !item.eliminada) {
-            <button
-              type="button"
-              class="favorite-button"
-              [class.is-active]="isFavorite()"
-              [disabled]="savingFavorite()"
-              [attr.aria-pressed]="isFavorite()"
-              (click)="toggleFavorite(item)"
-            ><svg lucideBookmark [size]="19" [attr.fill]="isFavorite() ? 'currentColor' : 'none'"></svg>{{ isFavorite() ? 'Guardada' : 'Guardar' }}</button>
-          }
+          <div class="intro__acciones">
+            @if (esTemporaria() && promedioResenas(); as promedio) {
+              <button
+                type="button"
+                class="resenas-rating"
+                (click)="irAResenas()"
+                [attr.aria-label]="'Ver ' + cantidadResenas() + ' reseñas, promedio ' + formatearPromedio(promedio) + ' de 5'">
+                <svg lucideStar [size]="18" fill="currentColor" aria-hidden="true"></svg>
+                <strong>{{ formatearPromedio(promedio) }}</strong>
+                <span>({{ cantidadResenas() }})</span>
+              </button>
+            }
+            @if (!administracion && !esMiPublicacion() && !item.eliminada) {
+              <button
+                type="button"
+                class="favorite-button"
+                [class.is-active]="isFavorite()"
+                [disabled]="savingFavorite()"
+                [attr.aria-pressed]="isFavorite()"
+                (click)="toggleFavorite(item)"
+              ><svg lucideBookmark [size]="19" [attr.fill]="isFavorite() ? 'currentColor' : 'none'"></svg>{{ isFavorite() ? 'Guardada' : 'Guardar' }}</button>
+            }
+          </div>
         </div>
       </div>
 
@@ -259,6 +272,14 @@
           </dl>
           <a class="button button--primary button--block shine" [routerLink]="['/perfil', advertiser.idUsuario]">Ver perfil completo</a>
         </section>
+      }
+
+      @if (!administracion && !item.eliminada && esTemporaria()) {
+        <app-resenas-panel
+          tipo="PUBLICACION"
+          [idObjetivo]="item.id"
+          titulo="Reseñas de la propiedad"
+          (resumenCambio)="actualizarResumenResenas($event)" />
       }
     </div>
 

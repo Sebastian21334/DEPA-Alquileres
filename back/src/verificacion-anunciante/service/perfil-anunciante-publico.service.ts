@@ -32,6 +32,10 @@ export class PerfilAnunciantePublicoService {
       verificado: anunciante.verificado,
       numero_contacto: anunciante.numero_contacto,
       foto_url: anunciante.usuario?.foto_url ?? null,
+      cantidad_resenas: anunciante.cantidad_resenas,
+      promedio_resenas: anunciante.promedio_resenas == null
+        ? null
+        : Number(anunciante.promedio_resenas),
     };
   }
 }

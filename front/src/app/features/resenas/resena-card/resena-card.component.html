@@ -1,0 +1,60 @@
+<article class="resena" [class.resena--propia]="propia()" [class.resena--oculta]="!visible()">
+  <header class="resena__cabecera">
+    <app-avatar class="resena__avatar" [foto]="resena().autor.foto_url" [nombre]="autorNombre()" />
+    <div class="resena__autor">
+      <strong>{{ autorNombre() }}</strong>
+      <span class="resena__fecha">
+        <time [attr.datetime]="resena().fecha">{{ resena().fecha | relativeTime }}</time>
+        @if (resena().actualizada_en) { · editada }
+      </span>
+    </div>
+    <div class="resena__puntaje">
+      <app-estrellas [valor]="resena().puntaje" tamano="sm" [etiqueta]="'Calificación de ' + autorNombre()" />
+      @if (propia()) {
+        <span class="resena__badge">Tu reseña</span>
+      }
+      @if (!visible()) {
+        <span class="resena__badge resena__badge--oculta">Oculta</span>
+      }
+      @if (puedeDenunciar()) {
+        <button type="button" class="resena__menu-boton" [attr.popovertarget]="menuId()" aria-label="Más acciones de la reseña">
+          <svg lucideEllipsis [size]="18" aria-hidden="true"></svg>
+        </button>
+        <div class="resena__menu" [id]="menuId()" popover #menu>
+          <button type="button" (click)="menu.hidePopover(); denunciar.emit()">
+            <svg lucideFlag [size]="16" aria-hidden="true"></svg> Marcar como inapropiado
+          </button>
+        </div>
+      }
+    </div>
+  </header>
+
+  <p class="resena__comentario">{{ resena().comentario }}</p>
+
+  @if (resena().imagenes.length) {
+    <div class="resena__imagenes" [attr.aria-label]="'Imágenes de la reseña de ' + autorNombre()">
+      @for (imagen of resena().imagenes; track imagen.id) {
+        <button type="button" class="resena__imagen" (click)="verImagen.emit(imagen.url)" [attr.aria-label]="'Ampliar imagen de la reseña de ' + autorNombre()">
+          <img [src]="imagen.url" [alt]="'Imagen de la reseña de ' + autorNombre()" loading="lazy" decoding="async" />
+        </button>
+      }
+    </div>
+  }
+
+  @if (!visible() && resena().motivo_moderacion) {
+    <p class="resena__motivo"><strong>Motivo de moderación:</strong> {{ resena().motivo_moderacion }}</p>
+  }
+
+  @if (propia()) {
+    <footer class="resena__acciones">
+      @if (puedeEditar()) {
+        <button type="button" class="resena__accion" (click)="editar.emit()">
+          <svg lucidePencil [size]="15" aria-hidden="true"></svg> Editar
+        </button>
+      }
+      <button type="button" class="resena__accion resena__accion--peligro" (click)="eliminar.emit()">
+        <svg lucideTrash2 [size]="15" aria-hidden="true"></svg> Eliminar
+      </button>
+    </footer>
+  }
+</article>

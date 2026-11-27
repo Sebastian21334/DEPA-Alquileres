@@ -12,6 +12,9 @@ import { ListingCardComponent } from '../../shared/components/listing-card/listi
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
+import { formatearPromedio, promedioMostrable } from '../../shared/utils/resenas';
+import { EstrellasComponent } from '../resenas/estrellas/estrellas.component';
+import { ResenasPanelComponent } from '../resenas/resenas-panel/resenas-panel.component';
 
 /** Ciudades que se ven antes de «Ver más». */
 const CIUDADES_VISIBLES = 5;
@@ -23,7 +26,7 @@ function normalizeSearchText(value: string): string {
 @Component({
   selector: 'app-advertiser-profile',
   standalone: true,
-  imports: [RouterLink, ListingCardComponent, SpinnerComponent, RevealDirective, AvatarComponent, LucideBadgeCheck, LucideBuilding2, LucideMapPin, LucideSearch],
+  imports: [RouterLink, ListingCardComponent, SpinnerComponent, RevealDirective, AvatarComponent, EstrellasComponent, ResenasPanelComponent, LucideBadgeCheck, LucideBuilding2, LucideMapPin, LucideSearch],
   templateUrl: './advertiser-profile.component.html',
   styleUrl: './advertiser-profile.component.scss',
 })
@@ -60,6 +63,13 @@ export class AdvertiserProfileComponent {
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   protected readonly name = computed(() => this.perfil()?.nombre_publico?.trim() || 'Anunciante');
+  protected readonly formatearPromedio = formatearPromedio;
+  protected readonly promedioResenas = computed(() =>
+    promedioMostrable(this.perfil()?.cantidad_resenas, this.perfil()?.promedio_resenas),
+  );
+  protected readonly cantidadResenas = computed(() =>
+    Number(this.perfil()?.cantidad_resenas ?? 0),
+  );
   protected readonly verifiedLabel = computed(() =>
     esInmobiliaria(this.perfil()?.tipoAnunciante) ? 'Inmobiliaria verificada' : 'Dueño Verificado',
   );
@@ -106,6 +116,28 @@ export class AdvertiserProfileComponent {
       next: (items) => this.publications.set(items),
       error: () => this.error.set('No pudimos cargar este perfil.'),
     });
+  }
+
+  /** Baja a las reseñas del perfil sin salir de la página. */
+  protected irAResenas(): void {
+    if (typeof document === 'undefined') return;
+    const idUsuario = this.perfil()?.idUsuario;
+    if (!idUsuario) return;
+    const destino = document.getElementById(`resenas-ANUNCIANTE-${idUsuario}`);
+    if (!destino) return;
+    const reducir = typeof matchMedia !== 'undefined' &&
+      matchMedia('(prefers-reduced-motion: reduce)').matches;
+    destino.scrollIntoView({ behavior: reducir ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  protected actualizarResumenResenas(resumen: { promedio: number | null; cantidad: number }): void {
+    this.perfil.update((perfil) => perfil
+      ? {
+          ...perfil,
+          promedio_resenas: resumen.promedio,
+          cantidad_resenas: resumen.cantidad,
+        }
+      : perfil);
   }
 
   protected updateSearch(text: string): void {

@@ -9,6 +9,7 @@ export const ADMIN_NAVIGATION = [
   { label: 'Gestión', items: [
     { id: 'verificaciones', label: 'Verificaciones' },
     { id: 'publicaciones', label: 'Publicaciones' },
+    { id: 'resenas', label: 'Reseñas' },
     { id: 'usuarios', label: 'Usuarios' },
     { id: 'bloqueos', label: 'Bloqueos y apelaciones' },
   ] },

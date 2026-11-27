@@ -48,6 +48,12 @@
               } @else {
                 <span>Sin fotos</span>
               }
+              @if (promedioResenas(pub); as promedio) {
+                <span class="item__rating" [attr.aria-label]="'Calificación ' + formatearPromedio(promedio) + ' de 5, ' + cantidadResenas(pub) + ' reseñas'">
+                  <svg lucideStar [size]="14" fill="currentColor" aria-hidden="true"></svg>
+                  {{ formatearPromedio(promedio) }} ({{ cantidadResenas(pub) }})
+                </span>
+              }
             </div>
 
             <div class="item__info">
@@ -158,6 +164,12 @@
                   <img [src]="pub.imagenes![0].url" [alt]="pub.titulo" />
                 } @else {
                   <span>Sin fotos</span>
+                }
+                @if (promedioResenas(pub); as promedio) {
+                  <span class="item__rating" [attr.aria-label]="'Calificación ' + formatearPromedio(promedio) + ' de 5, ' + cantidadResenas(pub) + ' reseñas'">
+                    <svg lucideStar [size]="14" fill="currentColor" aria-hidden="true"></svg>
+                    {{ formatearPromedio(promedio) }} ({{ cantidadResenas(pub) }})
+                  </span>
                 }
               </div>
               <div class="item__info">

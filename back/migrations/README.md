@@ -351,3 +351,31 @@ La migración `20261126-retirar-notas-internas-reclamo.sql` borra las notas inte
 mostrárselas a las partes, y retira `reclamo_mensaje.visible_para`, su clave foránea al catálogo, el tipo
 `reclamo_mensaje_visibilidad_enum` y el ámbito `RECLAMO_VISIBILIDAD`. Las versiones anteriores del backend
 no inician sin ese ámbito. Es reejecutable.
+
+# Reseñas de publicaciones y perfiles
+
+Con el backend detenido y sobre una copia o base descartable, ejecutar desde `back`:
+
+```sh
+npm run db:resenas
+```
+
+La migración `20261126-resenas.sql` crea `resena` y `resena_imagen`, agrega
+`cantidad_resenas` y `promedio_resenas` a `publicacion` y `anunciante`, agrega las
+columnas de denuncia (`denunciada`, `motivo_denuncia`, `denunciada_por`,
+`fecha_denuncia`), elimina las reseñas de publicaciones de Largo Plazo y recalcula
+las cachés desde las reseñas visibles. Es reejecutable. En Neon no hay reseñas
+activas al aplicar esta versión, por lo que el borrado de Largo Plazo no destruye
+datos reales.
+
+Para probar el flujo manual con datos precargados:
+
+```sh
+npm run db:datos-resenas
+```
+
+El script es idempotente, crea usuarios, publicaciones, estadías terminadas,
+reseñas, una denuncia y sus imágenes demo, e imprime la contraseña y los IDs de
+las cuentas. Solo permite hosts locales por defecto; para una base remota exige
+`DEPA_PERMITIR_DEMO_REMOTA=si`. No aplicarlo sobre Neon sin confirmación y
+respaldo. Los detalles funcionales están en `back/docs/resenas.md`.

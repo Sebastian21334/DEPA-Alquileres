@@ -30,6 +30,36 @@
 .card__title { overflow-wrap: anywhere; margin: 0; color: #0f1f3d; font-size: 1.06rem; font-weight: 800; line-height: 1.16; display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .card__published { margin: .34rem 0 0; color: #7a879b; font-size: .72rem; font-weight: 650; }
 .card__location { overflow-wrap: anywhere; display: flex; align-items: center; gap: .3rem; margin: .32rem 0 .7rem; color: #61708a; font-size: .76rem; }.card__location svg { color: var(--color-secondary); flex: 0 0 auto; }
+.card__rating {
+  position: absolute;
+  z-index: 2;
+  left: .7rem;
+  bottom: .7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  margin: 0;
+  padding: .3rem .55rem;
+  border: 1px solid rgba(255, 255, 255, .8);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .94);
+  color: #7a5a12;
+  font-size: .8rem;
+  font-weight: 850;
+  box-shadow: 0 4px 12px rgba(16, 24, 40, .2);
+  backdrop-filter: blur(5px);
+  pointer-events: none;
+  animation: depa-pop .5s var(--ease-rebote, cubic-bezier(.34, 1.56, .64, 1)) both;
+  transition: transform .2s var(--ease-rebote, cubic-bezier(.34, 1.56, .64, 1)), box-shadow .2s ease;
+}
+.card__rating svg { flex: 0 0 auto; color: var(--color-accent); transition: transform .2s var(--ease-rebote); }
+.card__rating span { color: #8a7a4a; font-weight: 650; }
+.card:hover .card__rating { transform: translateY(-2px) scale(1.03); box-shadow: 0 7px 16px rgba(16, 24, 40, .24); }
+.card:hover .card__rating svg { transform: rotate(-8deg) scale(1.12); }
+@media (prefers-reduced-motion: reduce) {
+  .card__rating { animation: none; transition: none; }
+  .card:hover .card__rating, .card:hover .card__rating svg { transform: none; }
+}
 .card__specs { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; margin: 0 0 .9rem; padding: 0; color: #5d6b82; list-style: none; font-size: .76rem; }.card__specs li { display: inline-flex; align-items: center; min-width: 0; gap: .35rem; overflow-wrap: anywhere; }.card__specs svg { color: #233654; flex: 0 0 auto; }.card__divider { flex: 0 0 auto; width: 1px; height: 1rem; background: #d5dbe5; }
 .card__footer { display: flex; flex-direction: column; gap: .8rem; margin-top: auto; }
 .card__price { min-width: 0; max-width: 100%; margin: 0; color: #101f3a; }

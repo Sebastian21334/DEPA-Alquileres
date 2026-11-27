@@ -523,6 +523,30 @@ export class ReservasService
     );
   }
 
+  /** Una estadía pagada y terminada habilita la reseña de la publicación. */
+  existeEstadiaFinalizadaEnPublicacion(idPublicacion: number, idUsuario: number): Promise<boolean> {
+    return this.reservaRepository.existeEstadiaFinalizada(
+      idPublicacion,
+      idUsuario,
+      fechaArgentina(),
+      this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+    );
+  }
+
+  /** Una estadía terminada en cualquier publicación Temporal habilita la reseña del perfil. */
+  async existeEstadiaFinalizadaConAnunciante(idAnunciante: number, idUsuario: number): Promise<boolean> {
+    const modalidadesTemporales = (await this.catalogos.getModalidades())
+      .filter((modalidad) => modalidad.admite_reservas_por_fecha)
+      .map((modalidad) => modalidad.id);
+    return this.reservaRepository.existeEstadiaFinalizadaConAnunciante(
+      idAnunciante,
+      idUsuario,
+      fechaArgentina(),
+      this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'),
+      modalidadesTemporales,
+    );
+  }
+
   /**
    * El detalle de una reserva solo corresponde al inquilino que la realizó o
    * al anunciante dueño de la publicación. Así no basta un JWT y un ID válido.

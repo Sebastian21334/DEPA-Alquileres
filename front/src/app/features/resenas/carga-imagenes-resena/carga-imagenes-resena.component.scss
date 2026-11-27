@@ -1,0 +1,81 @@
+@use '../../../shared/components/carga-comprobante/zona-carga';
+
+:host { display: grid; gap: .4rem; }
+
+.carga__galeria {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .55rem;
+}
+
+.carga__imagen {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #b7dcc5;
+  border-radius: .6rem;
+  background: #f6fbf8;
+  transition: border-color .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+.carga__imagen:hover { border-color: #7fc29a; box-shadow: 0 4px 12px rgba(20, 108, 67, .12); }
+.carga__imagen img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #e9eef3;
+}
+.carga__imagen-pie {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .35rem .4rem;
+  border-top: 1px solid #d8ece1;
+  background: #eef8f2;
+}
+.carga__imagen-pie span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #24523a;
+  font-size: .68rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.carga__imagen-pie button {
+  flex: 0 0 auto;
+  padding: .18rem .4rem;
+  border: 1px solid #c8d2e0;
+  border-radius: .35rem;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: .68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.carga__imagen-pie button:hover { background: #f8fafc; }
+.carga__imagen-pie button:focus-visible { outline: 2px solid #146c43; outline-offset: 2px; }
+
+.carga__imagen.is-marcada { border-style: dashed; border-color: #d92d20; opacity: .62; }
+.carga__imagen.is-marcada .carga__imagen-pie { background: #fff4f2; border-top-color: #f4c7c3; }
+.carga__imagen.is-marcada .carga__imagen-pie span { color: #8a1c13; }
+.carga__imagen-aviso {
+  position: absolute;
+  inset: 0 0 auto;
+  padding: .25rem;
+  background: rgba(217, 45, 32, .88);
+  color: #fff;
+  font-size: .66rem;
+  font-weight: 850;
+  letter-spacing: .02em;
+  text-align: center;
+}
+
+@media (max-width: 540px) {
+  .carga__galeria { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carga__imagen { transition: none; }
+}

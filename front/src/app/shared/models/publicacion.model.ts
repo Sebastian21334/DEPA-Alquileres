@@ -19,6 +19,9 @@ export interface Publicacion {
   visualizaciones?: number;
   /** Cantidad de reservas no canceladas; llega desde GET /publicaciones/destacadas. */
   cantidad_reservas?: number;
+  /** Caché derivada: 0 o null significa que no se muestran estrellas. */
+  cantidad_resenas?: number;
+  promedio_resenas?: number | string | null;
 
   // Datos del inmueble, embebidos en la publicación.
   direccion: string;

@@ -12,12 +12,14 @@ import {
   LucideHouse,
   LucideMapPin,
   LucideRuler,
+  LucideStar,
 } from '@lucide/angular';
 import { AuthService } from '../../../core/services/auth.service';
 import { FavoritesService } from '../../services/favorites.service';
 import { RelativeTimePipe } from '../../pipes/relative-time.pipe';
 import { environment } from '../../../../environments/environment';
 import { homeCardImage, HOME_CARD_IMAGE_SIZES } from '../../utils/home-card-image';
+import { formatearPromedio, promedioMostrable } from '../../utils/resenas';
 
 // Tarjeta reutilizable de una publicación (prototipo "Card"): foto con badge de
 // modalidad y tipo de anunciante, título + ubicación, columna de características
@@ -25,7 +27,7 @@ import { homeCardImage, HOME_CARD_IMAGE_SIZES } from '../../utils/home-card-imag
 @Component({
   selector: 'app-listing-card',
   standalone: true,
-  imports: [RouterLink, RelativeTimePipe, LucideArrowRight, LucideBadgeCheck, LucideBed, LucideBookmark, LucideHouse, LucideMapPin, LucideRuler],
+  imports: [RouterLink, RelativeTimePipe, LucideArrowRight, LucideBadgeCheck, LucideBed, LucideBookmark, LucideHouse, LucideMapPin, LucideRuler, LucideStar],
   templateUrl: './listing-card.component.html',
   styleUrl: './listing-card.component.scss',
 })
@@ -41,6 +43,13 @@ export class ListingCardComponent {
   protected readonly savingFavorite = signal(false);
   private readonly falloMiniatura = signal<string | null>(null);
   protected readonly imageSizes = HOME_CARD_IMAGE_SIZES;
+  protected readonly formatearPromedio = formatearPromedio;
+  protected readonly promedioResenas = computed(() =>
+    promedioMostrable(this.publicacion().cantidad_resenas, this.publicacion().promedio_resenas),
+  );
+  protected readonly cantidadResenas = computed(() =>
+    Number(this.publicacion().cantidad_resenas ?? 0),
+  );
   protected readonly imagenTarjeta = computed(() => {
     const url = this.publicacion().imagenes?.[0]?.url;
     return url ? homeCardImage(
