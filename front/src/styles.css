@@ -2,6 +2,33 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+/* Misma animación para el arranque y todos los indicadores de carga de DEPA. */
+.loading-logo {
+  display: block;
+  width: 80px;
+  height: auto;
+  object-fit: contain;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.6; }
+}
+
+.initial-loading {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-logo { animation: none; }
+}
+
 @media print {
   @page { size: A4; margin: 15mm; }
   body:has(.print-report) { visibility: hidden; }

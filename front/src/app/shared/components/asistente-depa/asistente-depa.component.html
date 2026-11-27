@@ -55,8 +55,8 @@
       }
       @if (consultaEnCurso()) {
         <p class="mensaje mensaje--propio mensaje--enviando">{{ consultaEnCurso() }}</p>
-        <div class="mensaje asistente__escribiendo" role="status" aria-label="depa está respondiendo">
-          <span></span><span></span><span></span>
+        <div class="mensaje asistente__escribiendo">
+          <app-spinner label="DEPA está respondiendo…" />
         </div>
       }
       @if (error()) {

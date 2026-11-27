@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Output, computed, effect, input, signal } from '@angular/core';
+import { SpinnerComponent } from '../spinner/spinner.component';
 import {
   FechaDisponible,
   FechaDisponibleAdministracion,
@@ -16,6 +17,7 @@ interface CalendarDay {
 @Component({
   selector: 'app-availability-calendar',
   standalone: true,
+  imports: [SpinnerComponent],
   templateUrl: './availability-calendar.component.html',
   styleUrl: './availability-calendar.component.scss',
 })

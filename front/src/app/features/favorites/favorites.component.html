@@ -7,7 +7,7 @@
     </header>
 
     @if (loading()) {
-      <div class="favorites-grid" role="status"><span class="sr-only">Cargando tus favoritos…</span>@for (n of [1, 2, 3]; track n) { <span class="esqueleto favorito-esqueleto" aria-hidden="true"></span> }</div>
+      <div class="favorites-state"><app-spinner label="Cargando tus favoritos…" /><p>Cargando tus favoritos…</p></div>
     } @else if (error()) {
       <div class="favorites-state favorites-state--error"><h2>No pudimos cargar la sección</h2><p>{{ error() }}</p></div>
     } @else if (!favorites().length) {

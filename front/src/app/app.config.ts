@@ -4,6 +4,7 @@ import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/
 import { routes } from './app.routes';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { cargaInterceptor } from './core/interceptors/carga.interceptor';
 import { proveerReutilizacionRutas } from './core/routing/reutilizacion-rutas';
 
 export const appConfig: ApplicationConfig = {
@@ -17,6 +18,6 @@ export const appConfig: ApplicationConfig = {
       withViewTransitions(),
     ),
     proveerReutilizacionRutas,
-    provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([cargaInterceptor, authInterceptor, errorInterceptor])),
   ],
 };

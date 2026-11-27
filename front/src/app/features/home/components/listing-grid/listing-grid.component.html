@@ -26,10 +26,9 @@
         <p>{{ error() }}</p>
       </div>
     } @else if (loading()) {
-      <div class="results__grid" aria-busy="true">
-        @for (s of skeletons; track $index) {
-          <div class="skeleton-card esqueleto"></div>
-        }
+      <div class="results__state" aria-busy="true">
+        <app-spinner label="Buscando propiedades…" />
+        <p>Buscando propiedades…</p>
       </div>
     } @else if (listings().length === 0) {
       <div class="results__state" appReveal="zoom">

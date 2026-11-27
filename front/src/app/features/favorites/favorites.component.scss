@@ -15,5 +15,3 @@
 .empty-bookmark { display: grid; width: 4rem; height: 4rem; place-items: center; border-radius: 50%; background: #fff0ed; color: var(--color-secondary); font-size: 2.25rem; }
 @media (max-width: 900px) { .favorites-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 580px) { .favorites-page { padding: 2rem 1rem 3rem; } .favorites-grid { grid-template-columns: 1fr; } }
-
-.favorito-esqueleto { display: block; aspect-ratio: 3 / 4; border-radius: var(--radius-md); }

@@ -1,4 +1,5 @@
 <section class="calendar" [class.calendar--reschedule]="mode() === 'reschedule'" aria-label="Calendario de disponibilidad" [attr.aria-busy]="loading()">
+  @if (loading()) { <app-spinner label="Cargando días disponibles…" /> }
   @if (mode() === 'select' || mode() === 'setup') {
     <div class="calendar__toolbar">
       <div class="calendar__switch" role="group" aria-label="Duración del alquiler">

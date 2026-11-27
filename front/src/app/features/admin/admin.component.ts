@@ -356,7 +356,7 @@ export class AdminComponent {
         if (this.activeSection() !== 'bloqueos' || this.busy() || this.bloqueadosCargando() || this.actualizandoBloqueados) return;
         const vista = this.vistaBloqueos();
         this.actualizandoBloqueados = true;
-        const consulta = vista === 'historial' ? this.api.listarHistorialBloqueos() : this.api.listarBloqueados();
+        const consulta = vista === 'historial' ? this.api.listarHistorialBloqueos(true) : this.api.listarBloqueados(true);
         consulta.pipe(takeUntilDestroyed(this.destroyRef), finalize(() => { this.actualizandoBloqueados = false; })).subscribe({
           next: usuarios => {
             if (this.busy() || this.vistaBloqueos() !== vista) return;

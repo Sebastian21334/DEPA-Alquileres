@@ -26,8 +26,6 @@ h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2;
 .camera-label { position: absolute; bottom: 9px; left: 12px; padding: 4px 8px; border-radius: 5px; background: #101828b8; color: white; font-size: .7rem; }
 .camera-placeholder { min-height: 200px; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px; border-radius: 14px; background: #f2f4f7; text-align: center; }
 .camera-placeholder p { margin: 0; max-width: 360px; color: #667085; }
-.spinner { width: 34px; height: 34px; border: 3px solid #d0d5dd; border-top-color: #e14414; border-radius: 50%; animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .photo-review { margin: 0; border-radius: 14px; overflow: hidden; background: #101820; }
 .photo-review img { display: block; width: 100%; max-height: 45dvh; object-fit: contain; }
 .photo-review figcaption { padding: 12px; background: #fff4e5; color: #92400e; text-align: center; font-weight: 700; }
@@ -92,4 +90,4 @@ h2 { margin: 4px 0 8px; font-size: clamp(1.3rem, 3vw, 1.8rem); line-height: 1.2;
 .capture-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 10px; padding: 14px 22px; border-top: 1px solid #eaecf0; background: white; }
 button:focus-visible { outline: 3px solid #175cd3; outline-offset: 3px; }
 @media (max-width: 700px) { .identity-dialog { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 14px; }.dialog-header { padding: 18px 16px 14px; }.dialog-body { padding: 16px; }.capture-progress { padding: 0 16px 14px; gap: 8px; justify-content: space-between; }.capture-progress li { font-size: .7rem; }.capture-progress span { width: 21px; height: 21px; }.capture-layout--face { grid-template-columns: 1fr; }.gesture-panel { padding: 14px; }.gesture-visual .face-guide { width: 88px; }.capture-actions { padding: 14px 16px; justify-content: center; }.capture-actions .acct-btn { flex: 1; } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; }.capture-meter span { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .capture-meter span { transition: none; } }

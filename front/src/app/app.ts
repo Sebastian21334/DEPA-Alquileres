@@ -11,11 +11,13 @@ import { AsistenteDepaComponent } from './shared/components/asistente-depa/asist
 import { ToastComponent } from './shared/components/toast/toast.component';
 import { PerfilService } from './core/services/perfil.service';
 import { AuthService } from './core/services/auth.service';
+import { CargaGlobalComponent } from './shared/components/spinner/carga-global.component';
+import { SpinnerComponent } from './shared/components/spinner/spinner.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, NavbarComponent, FooterComponent, ChatDockComponent, AsistenteDepaComponent, ToastComponent, LucideArrowRight, LucideHouse, LucideLandmark, LucideLockKeyhole],
+  imports: [RouterOutlet, RouterLink, NavbarComponent, FooterComponent, ChatDockComponent, AsistenteDepaComponent, ToastComponent, CargaGlobalComponent, SpinnerComponent, LucideArrowRight, LucideHouse, LucideLandmark, LucideLockKeyhole],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -65,7 +67,7 @@ export class App {
     effect(onCleanup => {
       if (!this.isBrowser || !this.auth.currentUser() || this.accesoLimitado() || !this.perfil.cbuEnRevision()) return;
       const actualizacion = timer(30_000, 30_000).pipe(
-        exhaustMap(() => this.perfil.cargarSolicitud(true)),
+        exhaustMap(() => this.perfil.cargarSolicitud(true, true)),
       ).subscribe();
       onCleanup(() => actualizacion.unsubscribe());
     });

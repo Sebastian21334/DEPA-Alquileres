@@ -12,6 +12,7 @@ import {
 } from '@angular/common/http';
 import { delay, mergeMap, of, throwError } from 'rxjs';
 import { App } from '../src/app/app';
+import { cargaInterceptor } from '../src/app/core/interceptors/carga.interceptor';
 import { routes } from '../src/app/app.routes';
 import { AuthService } from '../src/app/core/services/auth.service';
 import { AsistenteDepaService } from '../src/app/core/services/asistente-depa.service';
@@ -489,7 +490,7 @@ const interceptor: HttpInterceptorFn = (req) => {
     return throwError(
       () => new HttpErrorResponse({ status: 503, statusText: 'Respuesta simulada de prueba' }),
     );
-  return of(new HttpResponse({ status: 200, body }));
+  return of(new HttpResponse({ status: 200, body })).pipe(delay(Math.min(10000, Math.max(0, Number(params.get('demora')) || 0))));
 };
 // El asistente usa su propio HttpClient, sin el interceptor: responde con las publicaciones de prueba.
 const asistente = {
@@ -504,7 +505,7 @@ bootstrapApplication(App, {
   providers: [
     provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'enabled' })),
     proveerReutilizacionRutas,
-    provideHttpClient(withInterceptors([interceptor])),
+    provideHttpClient(withInterceptors([cargaInterceptor, interceptor])),
     { provide: AuthService, useValue: auth },
     { provide: AsistenteDepaService, useValue: asistente },
   ],

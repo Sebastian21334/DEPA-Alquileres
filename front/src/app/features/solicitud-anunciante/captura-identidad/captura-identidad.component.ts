@@ -1,4 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
+import { SpinnerComponent } from '../../../shared/components/spinner/spinner.component';
 import {
   AfterViewInit,
   Component,
@@ -78,7 +79,7 @@ const puntuarCamaraTrasera = (label: string): number => {
 @Component({
   selector: 'app-captura-identidad',
   standalone: true,
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, SpinnerComponent],
   templateUrl: './captura-identidad.component.html',
   styleUrl: './captura-identidad.component.scss',
 })

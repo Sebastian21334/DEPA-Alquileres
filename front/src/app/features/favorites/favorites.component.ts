@@ -5,11 +5,12 @@ import { finalize } from 'rxjs';
 import { ListingCardComponent } from '../../shared/components/listing-card/listing-card.component';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { FavoritesService } from '../../shared/services/favorites.service';
+import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 
 @Component({
   selector: 'app-favorites',
   standalone: true,
-  imports: [RouterLink, ListingCardComponent, RevealDirective],
+  imports: [RouterLink, ListingCardComponent, RevealDirective, SpinnerComponent],
   templateUrl: './favorites.component.html',
   styleUrl: './favorites.component.scss',
 })

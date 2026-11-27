@@ -1,3 +1,4 @@
+import { contextoCarga } from '../../core/interceptors/carga.interceptor';
 import { formatearMoneda } from '../../shared/utils/formato-numero';
 import { fechaCalendarioLocal, rentalDays } from '../../shared/utils/rental-dates';
 import { Component, computed, effect, inject, signal } from '@angular/core';
@@ -126,7 +127,7 @@ export class ReservaResultadoComponent {
       if (!id) return;
       const consulta = timer(0, 10000).pipe(exhaustMap(() =>
         this.http.get<ReturnType<typeof this.conversacionesReembolso>>(
-          `${environment.apiUrl}/reembolsos/reserva/${id}/conversaciones`,
+          `${environment.apiUrl}/reembolsos/reserva/${id}/conversaciones`, { context: contextoCarga(true) },
         ).pipe(catchError(() => EMPTY)),
       )).subscribe(conversaciones => this.conversacionesReembolso.set(conversaciones));
       onCleanup(() => {
@@ -452,7 +453,7 @@ export class ReservaResultadoComponent {
 
   private cargarResumen(idReserva: number, silenciosa = false): void {
     this.consultaResumen?.unsubscribe();
-    this.consultaResumen = this.reservasApi.summary(idReserva).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.consultaResumen = this.reservasApi.summary(idReserva, silenciosa).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (resumen) => {
         this.resumen.set(resumen);
         this.cargando.set(false);

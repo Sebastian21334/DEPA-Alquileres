@@ -273,7 +273,7 @@ export class ClaimHistoryComponent {
       const administracion = this.administracion();
       const consulta = timer(INTERVALO_CHAT_MS, INTERVALO_CHAT_MS).pipe(
         // Un fallo puntual no corta la actualización: se reintenta en el próximo intervalo.
-        exhaustMap(() => this.reservas.claimMessages(id, administracion).pipe(catchError(() => EMPTY))),
+        exhaustMap(() => this.reservas.claimMessages(id, administracion, true).pipe(catchError(() => EMPTY))),
       ).subscribe(mensajes => this.mensajesRecibidos.set(mensajes));
       onCleanup(() => consulta.unsubscribe());
     });

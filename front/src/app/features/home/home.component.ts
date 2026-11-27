@@ -1,3 +1,4 @@
+import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -11,7 +12,7 @@ import { ListingService } from './listing.service';
 
 interface SeccionInicio { titulo: string; categoria?: string; publicaciones: Publicacion[]; }
 
-@Component({ selector: 'app-home', standalone: true, imports: [RouterLink, HeroSearchComponent, ListingCardComponent], templateUrl: './home.component.html', styleUrl: './home.component.scss' })
+@Component({ selector: 'app-home', standalone: true, imports: [RouterLink, HeroSearchComponent, ListingCardComponent, SpinnerComponent], templateUrl: './home.component.html', styleUrl: './home.component.scss' })
 export class HomeComponent {
   private readonly listingService = inject(ListingService);
   private readonly catalogoService = inject(CatalogoService);

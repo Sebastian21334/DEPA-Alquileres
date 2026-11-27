@@ -1,3 +1,4 @@
+import { contextoCarga } from '../../core/interceptors/carga.interceptor';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -285,16 +286,16 @@ export class ReservationService {
     return this.http.post<CheckoutCreado>(`${this.paymentUrl}/reservas/${idReserva}/reintentar`, {});
   }
 
-  summary(idReserva: number): Observable<ResumenReserva> {
-    return this.http.get<ResumenReserva>(`${this.paymentUrl}/reservas/${idReserva}/resumen`);
+  summary(idReserva: number, silenciosa = false): Observable<ResumenReserva> {
+    return this.http.get<ResumenReserva>(`${this.paymentUrl}/reservas/${idReserva}/resumen`, { context: contextoCarga(silenciosa) });
   }
 
-  mine(): Observable<Reserva[]> {
-    return this.http.get<Reserva[]>(`${this.baseUrl}/mis-reservas`);
+  mine(silenciosa = false): Observable<Reserva[]> {
+    return this.http.get<Reserva[]>(`${this.baseUrl}/mis-reservas`, { context: contextoCarga(silenciosa) });
   }
 
-  received(): Observable<Reserva[]> {
-    return this.http.get<Reserva[]>(`${this.baseUrl}/recibidas`);
+  received(silenciosa = false): Observable<Reserva[]> {
+    return this.http.get<Reserva[]>(`${this.baseUrl}/recibidas`, { context: contextoCarga(silenciosa) });
   }
 
   byPublication(idPublicacion: number): Observable<Reserva[]> {
@@ -362,8 +363,8 @@ export class ReservationService {
     return this.http.post<Reclamo>(`${environment.apiUrl}/reclamos/cancelacion/${id}`, { descripcion });
   }
 
-  myClaims(): Observable<Reclamo[]> {
-    return this.http.get<Reclamo[]>(`${environment.apiUrl}/reclamos/mios`);
+  myClaims(silenciosa = false): Observable<Reclamo[]> {
+    return this.http.get<Reclamo[]>(`${environment.apiUrl}/reclamos/mios`, { context: contextoCarga(silenciosa) });
   }
 
   uploadClaimEvidence(id: number, archivos: File[]): Observable<ReclamoEvidencia[]> {
@@ -373,8 +374,8 @@ export class ReservationService {
   }
 
   /** Desde Administración, el chat de cualquier reclamo; desde Mis reservas, el de un reclamo propio. */
-  claimMessages(id: number, desdeAdministracion = false): Observable<ReclamoMensaje[]> {
-    return this.http.get<ReclamoMensaje[]>(`${environment.apiUrl}/reclamos/${id}/mensajes${desdeAdministracion ? '/administracion' : ''}`);
+  claimMessages(id: number, desdeAdministracion = false, silenciosa = false): Observable<ReclamoMensaje[]> {
+    return this.http.get<ReclamoMensaje[]>(`${environment.apiUrl}/reclamos/${id}/mensajes${desdeAdministracion ? '/administracion' : ''}`, { context: contextoCarga(silenciosa) });
   }
 
   sendClaimMessage(id: number, texto: string, imagenes: readonly File[] = []): Observable<ReclamoMensaje> {

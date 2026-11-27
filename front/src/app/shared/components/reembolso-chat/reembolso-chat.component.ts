@@ -1,3 +1,4 @@
+import { contextoCarga } from '../../../core/interceptors/carga.interceptor';
 import { ConversationPanelComponent } from '../conversation-panel/conversation-panel.component';
 import { ConversationComposerComponent } from '../conversation-panel/conversation-composer.component';
 import { HttpClient } from '@angular/common/http';
@@ -80,7 +81,7 @@ export class ReembolsoChatComponent {
   }
 
   private leer(id: number, despuesDe: number) {
-    return this.http.get<Conversacion>(`${environment.apiUrl}/reembolsos/${id}/conversacion`, { params: { despuesDe } });
+    return this.http.get<Conversacion>(`${environment.apiUrl}/reembolsos/${id}/conversacion`, { params: { despuesDe }, context: contextoCarga(this.abierta() !== null) });
   }
 
   private readonly destruir = takeUntilDestroyed();

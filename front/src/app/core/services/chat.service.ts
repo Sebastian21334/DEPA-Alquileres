@@ -1,3 +1,4 @@
+import { contextoCarga } from '../interceptors/carga.interceptor';
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, PLATFORM_ID, computed, effect, inject, signal } from '@angular/core';
@@ -43,7 +44,7 @@ export class ChatService {
       this.conversaciones.set([]);
       if (!this.navegador || usuario == null) return;
       const consulta = merge(timer(0, 5000), this.refresco).pipe(exhaustMap(() =>
-        this.listarConversaciones().pipe(catchError(() => EMPTY)),
+        this.listarConversaciones(true).pipe(catchError(() => EMPTY)),
       )).subscribe(lista => this.conversaciones.set(lista));
       onCleanup(() => consulta.unsubscribe());
     });
@@ -55,13 +56,13 @@ export class ChatService {
   }
 
   /** GET /mensajes — una fila por conversación, con el último mensaje. */
-  listarConversaciones(): Observable<ConversacionResumen[]> {
-    return this.http.get<ConversacionResumen[]>(this.baseUrl);
+  listarConversaciones(silenciosa = false): Observable<ConversacionResumen[]> {
+    return this.http.get<ConversacionResumen[]>(this.baseUrl, { context: contextoCarga(silenciosa) });
   }
 
   /** GET /mensajes/publicacion/:idPublicacion/usuario/:idOtroUsuario */
-  listarMensajes(idPublicacion: number, idOtroUsuario: number): Observable<Mensaje[]> {
-    return this.http.get<Mensaje[]>(`${this.baseUrl}/publicacion/${idPublicacion}/usuario/${idOtroUsuario}`);
+  listarMensajes(idPublicacion: number, idOtroUsuario: number, silenciosa = false): Observable<Mensaje[]> {
+    return this.http.get<Mensaje[]>(`${this.baseUrl}/publicacion/${idPublicacion}/usuario/${idOtroUsuario}`, { context: contextoCarga(silenciosa) });
   }
 
   /** POST /mensajes */
@@ -74,7 +75,7 @@ export class ChatService {
   }
 
   marcarComoLeidos(idPublicacion: number, idOtroUsuario: number): Observable<void> {
-    return this.http.patch<void>(`${this.baseUrl}/publicacion/${idPublicacion}/usuario/${idOtroUsuario}/leer`, {});
+    return this.http.patch<void>(`${this.baseUrl}/publicacion/${idPublicacion}/usuario/${idOtroUsuario}/leer`, {}, { context: contextoCarga(true) });
   }
 
   abrir(chat: Omit<ChatAbierto, 'minimizado'>): void {

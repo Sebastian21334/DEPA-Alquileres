@@ -1,3 +1,4 @@
+import { contextoCarga } from '../../core/interceptors/carga.interceptor';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
@@ -300,12 +301,12 @@ export class AdminService {
     );
   }
 
-  listarBloqueados() {
-    return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/bloqueados`);
+  listarBloqueados(silenciosa = false) {
+    return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/bloqueados`, { context: contextoCarga(silenciosa) });
   }
 
-  listarHistorialBloqueos() {
-    return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/historial-bloqueos`);
+  listarHistorialBloqueos(silenciosa = false) {
+    return this.http.get<AdminBloqueo[]>(`${this.api}/usuarios/administracion/historial-bloqueos`, { context: contextoCarga(silenciosa) });
   }
 
   responderApelacion(id: number, bloqueoId: string, texto: string, imagen?: File | null) {

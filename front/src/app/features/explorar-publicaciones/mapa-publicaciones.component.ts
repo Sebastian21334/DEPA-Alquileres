@@ -1,4 +1,6 @@
 import { isPlatformBrowser } from '@angular/common';
+import { CargaService } from '../../core/services/carga.service';
+import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
 import {
   AfterViewInit, Component, ElementRef, Injector, OnDestroy, PLATFORM_ID, ViewChild,
   afterNextRender, computed, effect, inject, input, signal, untracked,
@@ -29,13 +31,14 @@ interface PinDibujado { marcador: Marker; zBase: number; }
 
 @Component({
   selector: 'app-mapa-publicaciones',
-  imports: [RouterLink, ListingCardComponent, LucideHouse, LucideList, LucidePanelLeftClose, LucideX],
+  imports: [RouterLink, ListingCardComponent, LucideHouse, LucideList, LucidePanelLeftClose, LucideX, SpinnerComponent],
   templateUrl: './mapa-publicaciones.component.html',
   styleUrl: './mapa-publicaciones.component.scss',
 })
 export class MapaPublicacionesComponent implements AfterViewInit, OnDestroy {
   private readonly api = inject(ListingService);
   private readonly plataforma = inject(PLATFORM_ID);
+  private readonly carga = inject(CargaService);
   private readonly injector = inject(Injector);
   private readonly listo = signal(false);
   private readonly reintento = signal(0);
@@ -125,6 +128,7 @@ export class MapaPublicacionesComponent implements AfterViewInit, OnDestroy {
 
   async ngAfterViewInit(): Promise<void> {
     if (!isPlatformBrowser(this.plataforma)) return;
+    const terminarCarga = this.carga.iniciar();
     try {
       const modulo = await import('leaflet');
       if (this.destruido) return;
@@ -157,6 +161,8 @@ export class MapaPublicacionesComponent implements AfterViewInit, OnDestroy {
       this.mapa = undefined;
       this.errorMapa.set(true);
       this.listo.set(true);
+    } finally {
+      terminarCarga();
     }
   }
 

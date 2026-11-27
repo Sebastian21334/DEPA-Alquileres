@@ -9,7 +9,7 @@
     <p class="acceso-limitado-aviso">Tu cuenta tiene acceso limitado para resolver operaciones pendientes. <a routerLink="/cuenta-bloqueada">Consultar o apelar el bloqueo</a></p>
   }
   @if (!rutaPermitida()) {
-    <p class="cbu-cargando" role="status">Abriendo tus reservas…</p>
+    <div class="cbu-cargando"><app-spinner label="Abriendo tus reservas…" /><p>Abriendo tus reservas…</p></div>
   } @else if (comprobandoPerfil()) {
     @if (perfil.errorSolicitud()) {
       <div class="cbu-cargando">
@@ -17,7 +17,7 @@
         <button type="button" class="btn btn--primary cbu-accion" (click)="reintentarPerfil()">Reintentar</button>
       </div>
     } @else {
-      <p class="cbu-cargando" role="status">Cargando tu cuenta…</p>
+      <div class="cbu-cargando"><app-spinner label="Cargando tu cuenta…" /><p>Cargando tu cuenta…</p></div>
     }
   } @else if (cbuObligatorio() && !esPantallaCbu()) {
     <section class="cbu-aviso" aria-labelledby="cbu-aviso-titulo">
@@ -53,3 +53,4 @@
 }
 
 <app-toast />
+<app-carga-global />

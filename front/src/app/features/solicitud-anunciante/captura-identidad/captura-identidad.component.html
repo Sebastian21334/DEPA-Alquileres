@@ -28,10 +28,13 @@
         </div>
         @if (!cameraReady() && !fotoPendientePreview() && fase() !== 'complete' && fase() !== 'error') {
           <div class="camera-placeholder" role="status">
-            <span class="spinner" aria-hidden="true"></span>
+            <app-spinner label="Preparando verificación de identidad…" />
             <strong>{{ fase() === 'validating' ? 'Comprobando tus movimientos…' : 'Preparando la cámara…' }}</strong>
             <p>{{ fase() === 'validating' ? 'Ya tomamos las fotos. Podés relajarte.' : 'Si el navegador te lo pide, permití el acceso a la cámara.' }}</p>
           </div>
+        }
+        @if (paso() === 'liveness' && cameraReady() && (fase() === 'idle' || cambiandoDesafio())) {
+          <div class="camera-placeholder"><app-spinner label="Preparando la prueba de vida…" /><p>Preparando la prueba de vida…</p></div>
         }
         @if (fotoPendientePreview(); as preview) {
           <figure class="photo-review">
@@ -68,6 +71,7 @@
           } @else if (fase() === 'centering' || fase() === 'capturing') {
             <h3>Ahora, de frente</h3><p>Cerrá la boca y mirá a la cámara. La foto final se toma automáticamente.</p>
           } @else if (fase() === 'validating') {
+            <app-spinner label="Comprobando tus movimientos…" />
             <h3>Comprobación final</h3><p>Estamos verificando que las capturas correspondan a la misma persona y que los movimientos sean válidos.</p>
           }
           <ol class="challenge-list">

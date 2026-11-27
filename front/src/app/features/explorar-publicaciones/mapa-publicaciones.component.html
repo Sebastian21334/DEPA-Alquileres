@@ -75,7 +75,7 @@
         } @else if (error()) {
           <p class="mapa__estado">No pudimos cargar las publicaciones. <button type="button" (click)="reintentar()">Reintentar</button></p>
         } @else if (cargando()) {
-          <p class="mapa__estado">Buscando publicaciones…</p>
+          <div class="mapa__estado"><app-spinner label="Buscando publicaciones…" /><p>Buscando publicaciones…</p></div>
         } @else if (errorFondo()) {
           <p class="mapa__estado">El fondo del mapa no está disponible por el momento.</p>
         } @else if (!cantidad()) {

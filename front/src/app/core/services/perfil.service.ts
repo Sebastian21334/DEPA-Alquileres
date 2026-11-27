@@ -1,3 +1,4 @@
+import { contextoCarga } from '../interceptors/carga.interceptor';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
@@ -114,7 +115,7 @@ export class PerfilService {
   }
 
   /** Devuelve la solicitud de anunciante (null si nunca la pidió). */
-  cargarSolicitud(forzar = false): Observable<SolicitudVerificacion | null> {
+  cargarSolicitud(forzar = false, silenciosa = false): Observable<SolicitudVerificacion | null> {
     const idUsuario = this.auth.currentUser()?.sub ?? null;
     if (!this.isBrowser || idUsuario === null) {
       this.limpiar();
@@ -124,7 +125,7 @@ export class PerfilService {
 
     this.solicitudDeUsuario = idUsuario;
     this.errorSolicitud.set(false);
-    const consulta = this.http.get<SolicitudVerificacion | null>(`${this.api}/anunciantes/mi-solicitud`).pipe(
+    const consulta = this.http.get<SolicitudVerificacion | null>(`${this.api}/anunciantes/mi-solicitud`, { context: contextoCarga(silenciosa) }).pipe(
       tap((solicitud) => {
         if (this.solicitud$ !== consulta || this.auth.currentUser()?.sub !== idUsuario) return;
         this.solicitud.set(solicitud);

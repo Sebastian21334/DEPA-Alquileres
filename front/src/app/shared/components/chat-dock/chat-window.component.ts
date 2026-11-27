@@ -56,7 +56,7 @@ export class ChatWindowComponent implements OnInit {
         .pipe(
           switchMap(() => timer(0, INTERVALO_MS)),
           switchMap(() =>
-            this.chatService.listarMensajes(this.chat().idPublicacion, this.chat().idOtroUsuario).pipe(
+            this.chatService.listarMensajes(this.chat().idPublicacion, this.chat().idOtroUsuario, !this.cargando()).pipe(
               // Un fallo puntual no debe cortar el polling de la ventana.
               catchError((err: Error) => {
                 this.error.set(err.message);

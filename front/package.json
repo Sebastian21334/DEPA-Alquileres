@@ -8,6 +8,7 @@
     "test:imagenes-inicio": "node --test test/home-card-image.test.cjs",
     "test:resenas": "node --test test/resenas.test.cjs",
     "test:vitalidad": "node --test test/vitalidad.test.cjs",
+    "test:carga": "node --test test/carga.test.cjs",
     "watch": "ng build --watch --configuration development",
     "preview:responsive": "node scripts/start.cjs --configuration responsive-preview --port 4318"
   },

@@ -54,11 +54,6 @@
   color: var(--color-primary-contrast);
 }
 
-/* El brillo de carga es el global (.esqueleto en styles.css). */
-.skeleton-card {
-  aspect-ratio: 3 / 4;
-  border-radius: var(--radius-md);
-}
 .results__toolbar {
   max-width: 1216px;
   margin: 0 auto;

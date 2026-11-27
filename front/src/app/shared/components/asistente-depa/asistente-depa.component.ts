@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { SpinnerComponent } from '../spinner/spinner.component';
 import { afterNextRender, Component, DestroyRef, ElementRef, inject, Injector, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -16,7 +17,7 @@ interface BloqueRespuesta { tipo: 'texto' | 'lista' | 'titulo'; fragmentos: Frag
 
 @Component({
   selector: 'app-asistente-depa',
-  imports: [FormsModule, RouterLink, LucideArrowUpRight, LucideSend, LucideSparkles, LucideX],
+  imports: [FormsModule, RouterLink, LucideArrowUpRight, LucideSend, LucideSparkles, LucideX, SpinnerComponent],
   templateUrl: './asistente-depa.component.html',
   styleUrl: './asistente-depa.component.css',
 })

@@ -49,7 +49,7 @@ export class CuentaBloqueadaComponent {
     if (!this.accesoVigente() || this.ocupado() || this.actualizando) return;
     const version = this.version;
     this.actualizando = true;
-    this.auth.consultarBloqueo(this.auth.tokenBloqueo).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => { this.actualizando = false; })).subscribe({
+    this.auth.consultarBloqueo(this.auth.tokenBloqueo, true).pipe(takeUntilDestroyed(this.destroyRef), finalize(() => { this.actualizando = false; })).subscribe({
       next: bloqueo => { if (version === this.version && !this.ocupado()) this.bloqueo.set(bloqueo); },
       error: (error: ApiError) => {
         if (version === this.version && !this.ocupado() && (error.status === 401 || error.status === 403)) this.mostrarError(error);

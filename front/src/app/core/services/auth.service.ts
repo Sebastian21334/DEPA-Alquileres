@@ -1,3 +1,4 @@
+import { contextoCarga } from '../interceptors/carga.interceptor';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, PLATFORM_ID, inject, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
@@ -107,7 +108,7 @@ export class AuthService {
   }
 
   consultarSesion(): Observable<EstadoSesion> {
-    return this.http.get<EstadoSesion>(`${this.baseUrl}/sesion`)
+    return this.http.get<EstadoSesion>(`${this.baseUrl}/sesion`, { context: contextoCarga(true) })
       .pipe(tap((estado) => this.actualizarEstadoSesion(estado)));
   }
 
@@ -165,10 +166,10 @@ export class AuthService {
       .pipe(tap((res) => this.guardarSesion(res.access_token)));
   }
 
-  consultarBloqueo(token: string | null): Observable<VistaBloqueo> {
+  consultarBloqueo(token: string | null, silenciosa = false): Observable<VistaBloqueo> {
     return token
-      ? this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/consultar`, { token })
-      : this.http.get<VistaBloqueo>(`${this.baseUrl}/bloqueo/actual`);
+      ? this.http.post<VistaBloqueo>(`${this.baseUrl}/bloqueo/consultar`, { token }, { context: contextoCarga(silenciosa) })
+      : this.http.get<VistaBloqueo>(`${this.baseUrl}/bloqueo/actual`, { context: contextoCarga(silenciosa) });
   }
 
   apelarBloqueo(token: string | null, texto: string, imagen?: File | null): Observable<VistaBloqueo> {

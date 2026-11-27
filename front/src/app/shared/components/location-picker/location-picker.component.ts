@@ -1,5 +1,6 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, PLATFORM_ID, ViewChild, effect, inject, input, output, signal } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
+import { CargaService } from '../../../core/services/carga.service';
 import { finalize } from 'rxjs';
 import type { LeafletMouseEvent, Map as LeafletMap, Marker } from 'leaflet';
 import { ApiError } from '../../../core/interceptors/api-error';
@@ -20,6 +21,7 @@ export interface UbicacionConfirmada {
 export class LocationPickerComponent implements AfterViewInit, OnDestroy {
   private readonly ubicaciones = inject(UbicacionService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly carga = inject(CargaService);
   private leaflet: typeof import('leaflet') | null = null;
   private map: LeafletMap | null = null;
   private marker: Marker | null = null;
@@ -69,6 +71,7 @@ export class LocationPickerComponent implements AfterViewInit, OnDestroy {
 
   async ngAfterViewInit(): Promise<void> {
     if (!isPlatformBrowser(this.platformId) || !this.mapElement) return;
+    const terminarCarga = this.carga.iniciar();
     try {
       const imported = await import('leaflet');
       const moduleWithDefault = imported as unknown as { default?: typeof import('leaflet') };
@@ -84,6 +87,8 @@ export class LocationPickerComponent implements AfterViewInit, OnDestroy {
       setTimeout(() => this.map?.invalidateSize(), 0);
     } catch {
       this.mapLoadError.set(true);
+    } finally {
+      terminarCarga();
     }
   }
 

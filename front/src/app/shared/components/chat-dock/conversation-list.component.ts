@@ -1,15 +1,16 @@
 import { Component, input, output } from '@angular/core';
 import { ConversacionResumen } from '../../models/mensaje.model';
 import { AvatarComponent } from '../avatar/avatar.component';
+import { SpinnerComponent } from '../spinner/spinner.component';
 import { interlocutor, nombreInterlocutor } from '../../utils/conversaciones';
 
 @Component({
   selector: 'app-conversation-list',
   standalone: true,
-  imports: [AvatarComponent],
+  imports: [AvatarComponent, SpinnerComponent],
   template: `
     @if (cargando()) {
-      <p class="lista__estado">Cargando chats…</p>
+      <div class="lista__estado"><app-spinner label="Cargando chats…" /><p>Cargando chats…</p></div>
     } @else if (error()) {
       <p class="lista__estado lista__estado--error" role="alert">{{ error() }}</p>
     } @else {

@@ -247,11 +247,11 @@ export class MisReservasComponent {
     this.consultaReservas?.unsubscribe();
     const anunciante = this.accesoLimitado() ? of(this.esAnunciante()) : this.perfil.esAnunciante();
     this.consultaReservas = forkJoin({
-      propias: this.reservasApi.mine(),
+      propias: this.reservasApi.mine(silenciosa),
       recibidas: anunciante.pipe(
-        switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received() : of<Reserva[]>([])),
+        switchMap((esAnunciante) => esAnunciante ? this.reservasApi.received(silenciosa) : of<Reserva[]>([])),
       ),
-      reclamos: this.reservasApi.myClaims().pipe(catchError((err: ApiError) => {
+      reclamos: this.reservasApi.myClaims(silenciosa).pipe(catchError((err: ApiError) => {
         this.errorHistorial.set(err.message);
         return of(null);
       })),
