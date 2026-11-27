@@ -67,6 +67,15 @@ export class PerfilService {
     }));
   }
 
+  actualizarContactoAnunciante(numero_contacto: string): Observable<{ numero_contacto: string }> {
+    return this.http.patch<{ numero_contacto: string }>(`${this.api}/anunciantes/me/contacto`, { numero_contacto }).pipe(
+      tap((resultado) => {
+        this.solicitud.update(solicitud => solicitud && { ...solicitud, anunciante: { ...solicitud.anunciante, numero_contacto: resultado.numero_contacto } });
+        this.solicitud$ = null;
+      }),
+    );
+  }
+
   getPerfil(): Observable<PerfilUsuario> {
     return this.http
       .get<PerfilUsuario>(`${this.api}/usuarios/me`)

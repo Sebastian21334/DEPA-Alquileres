@@ -9,9 +9,25 @@ const { PublicacionesRepository } = require('../dist/publicaciones/repository/pu
 const { UsuariosRepository } = require('../dist/usuarios/repository/usuarios.repository');
 const { Publicacion } = require('../dist/publicaciones/entity/publicacion.entity');
 const { Usuario } = require('../dist/usuarios/entity/usuario.entity');
+const { UsuariosService } = require('../dist/usuarios/service/usuarios.service');
 
 const pipe = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true });
 const validar = (value) => pipe.transform(value, { type: 'query', metatype: ListarPublicacionesAdministracionDto });
+
+test('el listado distingue anunciantes verificados de solicitudes pendientes y conserva el rol administrativo', async () => {
+  const base = { nombre: 'Ana', apellido: 'Prueba', email: 'ana@example.test', activa: true };
+  const datos = [
+    { ...base, id: 1, rol: { id: 2, nombre: 'Inquilino' }, anunciante: null },
+    { ...base, id: 2, rol: { id: 2, nombre: 'Inquilino' }, anunciante: { verificado: false } },
+    { ...base, id: 3, rol: { id: 2, nombre: 'Inquilino' }, anunciante: { verificado: true } },
+    { ...base, id: 4, rol: { id: 1, nombre: 'Administrador' }, anunciante: { verificado: true } },
+  ];
+  const repo = { listarAdministracion: async () => ({ datos }), contarUsuarios: async () => datos.length };
+  const resultado = await new UsuariosService(repo).listarAdministracion({});
+  assert.deepEqual(resultado.datos.map(usuario => [usuario.rol.nombre, usuario.es_anunciante]), [
+    ['Inquilino', false], ['Inquilino', false], ['Inquilino', true], ['Administrador', true],
+  ]);
+});
 
 test('valida y convierte página, tamaño, búsqueda y estado administrativo', async () => {
   assert.deepEqual(await validar({}), new ListarPublicacionesAdministracionDto());

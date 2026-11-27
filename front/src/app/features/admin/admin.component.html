@@ -841,7 +841,16 @@
                   <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
                 }
               </td>
-              <td data-label="Rol"><span class="user-role" [class.user-role--admin]="user.rol?.nombre === 'Administrador'">@if (user.rol?.nombre === 'Administrador') { <svg lucideShieldCheck [size]="15" aria-hidden="true"></svg> }{{ user.rol?.nombre ?? 'Sin rol' }}</span></td>
+              <td data-label="Rol">
+                <span class="user-roles">
+                  @if (user.rol?.nombre === 'Administrador') {
+                    <span class="user-role user-role--admin"><svg lucideShieldCheck [size]="15" aria-hidden="true"></svg> Administrador</span>
+                  } @else if (!user.es_anunciante) {
+                    <span class="user-role">{{ user.rol?.nombre ?? 'Sin rol' }}</span>
+                  }
+                  @if (user.es_anunciante) { <span class="user-role user-role--anunciante">Anunciante</span> }
+                </span>
+              </td>
               <td data-label="Estado">
                 @if (!user.activa) {
                   <span class="status status--deleted">Dada de baja</span>

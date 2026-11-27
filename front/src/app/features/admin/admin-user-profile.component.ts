@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 import { AvatarComponent } from '../../shared/components/avatar/avatar.component';
 import { HistorialVerificacionComponent } from '../../shared/components/historial-verificacion/historial-verificacion.component';
@@ -18,7 +18,7 @@ type EstadoPerfil =
 
 @Component({
   selector: 'app-admin-user-profile',
-  imports: [AvatarComponent, DatePipe, HistorialVerificacionComponent, VolverDirective],
+  imports: [AvatarComponent, DatePipe, HistorialVerificacionComponent, RouterLink, VolverDirective],
   template: `
     <main class="acct-page">
       <div class="acct-wrap acct-wrap--narrow">
@@ -49,6 +49,9 @@ type EstadoPerfil =
                       <span class="acct-badge acct-badge--error">Cuenta bloqueada</span>
                     }
                   </div>
+                  @if (vista.historial?.esAnunciante) {
+                    <a class="acct-btn acct-btn--ghost acct-btn--sm public-profile-link" [routerLink]="['/perfil', perfil.id]">Ver perfil público</a>
+                  }
                 </div>
               </header>
               <section class="profile-section" aria-labelledby="datos-usuario">

@@ -2,7 +2,9 @@
 
 .chat {
   width: 330px;
-  height: 450px;
+  max-width: calc(100vw - 1rem);
+  height: min(450px, calc(100dvh - 6rem));
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -35,6 +37,7 @@
   place-items: center;
   width: 30px;
   height: 30px;
+  flex: none;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -71,11 +74,11 @@
 }
 .chat__link:hover { text-decoration: underline; }
 
-app-conversation-panel { flex: 1; border: 0; border-radius: 0; --conversation-height: none; }
+app-conversation-panel { flex: 1; min-width: 0; width: 100%; border: 0; border-radius: 0; --conversation-height: none; }
 .chat__error { margin: 0; padding: 0.35rem 0.9rem; font-size: 0.76rem; color: var(--color-danger); }
 
 @media (max-width: 480px) {
-  .chat { width: 100%; height: 60dvh; }
+  .chat { width: 100%; height: min(60dvh, calc(100dvh - 6rem)); }
   .chat__head { gap: .35rem; padding-inline: .5rem; }
   .chat__head button { width: 40px; height: 44px; flex-shrink: 0; }
 }

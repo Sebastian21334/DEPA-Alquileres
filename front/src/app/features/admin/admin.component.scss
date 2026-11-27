@@ -2,6 +2,8 @@
 @use './admin-shared';
 
 .user-role { display: inline-flex; align-items: center; gap: 5px; font-size: .8rem; }
+.user-roles { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.user-role--anunciante { padding: 5px 9px; border-radius: 99px; background: #fff1e5; color: #91400c; font-weight: 700; }
 .user-role--admin { padding: 5px 9px; border-radius: 99px; background: #eef2ff; color: #3e5192; font-weight: 700; }
 .user-admin-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: .4rem .65rem; border: 1px solid #eac7ac; border-radius: 8px; background: #fff7ef; color: #96470e; font: inherit; font-size: .82rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .user-admin-action:hover { background: #ffead8; border-color: #cd8b59; }

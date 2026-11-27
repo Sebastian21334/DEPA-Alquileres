@@ -51,6 +51,29 @@ const MAX_FOTO = 5 * 1024 * 1024;
   styleUrl: './mi-perfil.component.scss',
 })
 export class MiPerfilComponent {
+  protected readonly editandoContacto = signal(false);
+  protected readonly guardandoContacto = signal(false);
+  protected readonly errorContacto = signal('');
+  protected readonly contactoForm = inject(FormBuilder).nonNullable.group({ numero_contacto: ['', [Validators.required, Validators.maxLength(20), Validators.pattern(/.*\S.*/s)]] });
+
+  protected abrirContacto(): void {
+    this.contactoForm.reset({ numero_contacto: this.solicitud()?.anunciante.numero_contacto ?? '' });
+    this.errorContacto.set('');
+    this.editandoContacto.set(true);
+  }
+
+  protected guardarContacto(): void {
+    if (this.contactoForm.invalid || this.guardandoContacto()) {
+      this.contactoForm.markAllAsTouched();
+      return;
+    }
+    this.guardandoContacto.set(true);
+    this.errorContacto.set('');
+    this.perfilService.actualizarContactoAnunciante(this.contactoForm.controls.numero_contacto.value.trim()).subscribe({
+      next: () => { this.guardandoContacto.set(false); this.editandoContacto.set(false); },
+      error: (error: Error) => { this.guardandoContacto.set(false); this.errorContacto.set(error.message); },
+    });
+  }
   private readonly perfilService = inject(PerfilService);
   private readonly fb = inject(FormBuilder);
 

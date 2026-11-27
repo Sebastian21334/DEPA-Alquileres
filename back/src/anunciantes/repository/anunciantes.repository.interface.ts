@@ -5,6 +5,7 @@ import type { TipoAnunciante } from '../../catalogos/entity/tipo-anunciante.enti
 export const ANUNCIANTES_REPOSITORY = 'ANUNCIANTES_REPOSITORY';
 
 export interface IAnunciantesRepository {
+  actualizarContacto(idUsuario: number, numeroContacto: string): Promise<boolean>;
   crear(datos: Partial<Anunciante>): Anunciante;
   guardar(anunciante: Anunciante, transaccion?: EntityManager): Promise<Anunciante>;
   archivarCuit(idUsuario: number, transaccion: EntityManager): Promise<void>;

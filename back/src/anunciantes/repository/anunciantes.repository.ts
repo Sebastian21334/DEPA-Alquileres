@@ -14,6 +14,11 @@ export const RESTRICCION_CUIT_UNICO = 'uq_anunciante_cuit_cuil_digitos';
 export class AnunciantesRepository implements IAnunciantesRepository {
   constructor(@InjectRepository(Anunciante) private readonly repo: Repository<Anunciante>) {}
 
+  async actualizarContacto(idUsuario: number, numeroContacto: string): Promise<boolean> {
+    const resultado = await this.repo.update({ idUsuario, verificado: true }, { numero_contacto: numeroContacto });
+    return resultado.affected === 1;
+  }
+
   crear(datos: Partial<Anunciante>): Anunciante {
     return this.repo.create(datos);
   }

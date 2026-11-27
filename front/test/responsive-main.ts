@@ -36,9 +36,9 @@ const user = {
   foto_url: null,
 };
 const usuariosAdmin = [
-  user,
+  { ...user, es_anunciante: true },
   { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true, rol: { id: 2, nombre: 'Inquilino' } },
-  { ...user, id: 9, nombre: 'Lucía', apellido: 'González', email: 'lucia@example.test', rol: { id: 2, nombre: 'Inquilino' } },
+  { ...user, id: 9, nombre: 'Lucía', apellido: 'González', email: 'lucia@example.test', rol: { id: 2, nombre: 'Inquilino' }, es_anunciante: true },
 ];
 const auth = {
   currentUser: signal(publico ? null : { sub: 7, email: user.email, rol, exp: vencida ? 1 : 9999999999 }),

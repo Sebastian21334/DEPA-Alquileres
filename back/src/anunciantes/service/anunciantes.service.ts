@@ -18,6 +18,13 @@ export const MENSAJE_CUIT_EN_USO =
 export class AnunciantesService {
   constructor(@Inject(ANUNCIANTES_REPOSITORY) private readonly anunciantesRepo: IAnunciantesRepository) {}
 
+  async actualizarContacto(idUsuario: number, numeroContacto: string): Promise<{ numero_contacto: string }> {
+    if (!await this.anunciantesRepo.actualizarContacto(idUsuario, numeroContacto)) {
+      throw new ForbiddenException('Esta acción requiere una cuenta de anunciante verificada');
+    }
+    return { numero_contacto: numeroContacto };
+  }
+
   buscarPorUsuario(idUsuario: number, transaccion?: EntityManager): Promise<Anunciante | null> {
     return this.anunciantesRepo.buscarPorUsuario(idUsuario, transaccion);
   }

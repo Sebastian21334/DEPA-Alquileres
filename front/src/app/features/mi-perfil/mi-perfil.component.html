@@ -235,8 +235,12 @@
                     <dd>{{ s.anunciante.cuit_cuil ?? '—' }}</dd>
                   </div>
                   <div>
-                    <dt>Contacto</dt>
-                    <dd>{{ s.anunciante.numero_contacto }}</dd>
+                    <dt>Teléfono de contacto</dt>
+                    <dd>{{ s.anunciante.numero_contacto }}
+                      @if (!editandoContacto()) {
+                        <button type="button" class="acct-btn acct-btn--ghost acct-btn--sm" (click)="abrirContacto()"><svg lucidePencil [size]="15" aria-hidden="true"></svg> Editar</button>
+                      }
+                    </dd>
                   </div>
                   <div>
                     <dt>Verificado el</dt>
@@ -247,6 +251,20 @@
                     <dd>{{ p.bloqueado ? 'Bloqueada' : !p.activa ? 'Inactiva' : 'Habilitada' }}</dd>
                   </div>
                 </dl>
+                @if (editandoContacto()) {
+                  <form class="edit-form contacto-form" [formGroup]="contactoForm" (ngSubmit)="guardarContacto()">
+                    <label for="telefono-contacto">Teléfono de contacto</label>
+                    <input id="telefono-contacto" type="tel" formControlName="numero_contacto" maxlength="20" autocomplete="tel" />
+                    @if (contactoForm.controls.numero_contacto.invalid && contactoForm.controls.numero_contacto.touched) {
+                      <span class="acct-error" role="alert">Ingresá un teléfono de hasta 20 caracteres.</span>
+                    }
+                    @if (errorContacto()) { <p class="acct-alert" role="alert">{{ errorContacto() }}</p> }
+                    <div class="acct-actions">
+                      <button type="button" class="acct-btn acct-btn--ghost" [disabled]="guardandoContacto()" (click)="editandoContacto.set(false)">Cancelar</button>
+                      <button type="submit" class="acct-btn acct-btn--primary" [disabled]="guardandoContacto()">{{ guardandoContacto() ? 'Guardando…' : 'Guardar teléfono' }}</button>
+                    </div>
+                  </form>
+                }
                 <div class="cuenta-anunciante__actividad">
                   @if (s.anunciante.actividades_pausadas) {
                     <p role="status">

@@ -644,6 +644,7 @@ export class UsuariosService {
       ...(anunciante !== undefined && {
         cuit_cuil: anunciante?.cuit_cuil ?? null,
         cuit_cuil_historico: anunciante?.cuit_cuil_historico ?? null,
+        es_anunciante: anunciante?.verificado === true,
       }),
       telefono: usuario.telefono,
       bloqueado: usuario.bloqueado,

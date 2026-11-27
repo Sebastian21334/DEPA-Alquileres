@@ -24,6 +24,7 @@ export interface AdminUser {
   /** Solo si la cuenta tiene perfil de Anunciante. */
   cuit_cuil?: string | null;
   cuit_cuil_historico?: string | null;
+  es_anunciante?: boolean;
   telefono: string;
   bloqueado: boolean;
   /** Baja lógica: false cuando la cuenta fue dada de baja. */
