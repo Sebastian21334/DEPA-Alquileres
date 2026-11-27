@@ -47,6 +47,22 @@
         </button>
       </header>
 
+  <dialog #administradorDialog class="block-dialog admin-permission-dialog" aria-labelledby="admin-permission-title" (cancel)="cerrarAdministrador($event)">
+    <form class="block-form" (ngSubmit)="confirmarAdministrador()">
+      <header class="block-form__header">
+        <span class="block-form__icon" aria-hidden="true"><svg lucideShieldCheck [size]="26"></svg></span>
+        <div class="block-form__title"><h2 id="admin-permission-title">Dar permisos de administrador</h2><p>Gestión de accesos</p></div>
+      </header>
+      <div class="admin-permission-user"><strong>{{ usuarioPorPromover()?.nombre }} {{ usuarioPorPromover()?.apellido }}</strong><span>{{ usuarioPorPromover()?.email }}</span></div>
+      <p class="admin-permission-description">Esta persona podrá acceder al panel y gestionar usuarios, publicaciones, catálogos y operaciones de la plataforma.</p>
+      @if (administradorError()) { <p class="alert alert--error" role="alert">{{ administradorError() }}</p> }
+      <div class="block-actions">
+        <button type="button" class="button button--ghost" (click)="cerrarAdministrador()" [disabled]="promoviendo()">Cancelar</button>
+        <button type="submit" class="button admin-permission-confirm" [disabled]="promoviendo() || !usuarioPorPromover()"><svg lucideShieldCheck [size]="18" aria-hidden="true"></svg>{{ promoviendo() ? 'Otorgando permisos…' : 'Confirmar permisos' }}</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog #bloqueoDialog class="block-dialog" aria-labelledby="block-dialog-title" (cancel)="cerrarBloqueo($event)">
       <form class="block-form" (ngSubmit)="confirmarBloqueo()">
         <header class="block-form__header">
@@ -825,7 +841,7 @@
                   <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
                 }
               </td>
-              <td data-label="Rol">{{ user.rol?.nombre ?? 'Sin rol' }}</td>
+              <td data-label="Rol"><span class="user-role" [class.user-role--admin]="user.rol?.nombre === 'Administrador'">@if (user.rol?.nombre === 'Administrador') { <svg lucideShieldCheck [size]="15" aria-hidden="true"></svg> }{{ user.rol?.nombre ?? 'Sin rol' }}</span></td>
               <td data-label="Estado">
                 @if (!user.activa) {
                   <span class="status status--deleted">Dada de baja</span>
@@ -845,6 +861,10 @@
                     <svg lucideEye [size]="17" aria-hidden="true"></svg> Ver perfil
                   </a>
                   @if (user.activa) {
+                    @if (!user.bloqueado && user.rol?.nombre !== 'Administrador') {
+                      <button type="button" class="user-admin-action" (click)="abrirAdministrador(user)" [disabled]="busy() !== null || promoviendo()"
+                        [attr.aria-label]="'Dar permisos de administrador a ' + user.nombre + ' ' + user.apellido"><svg lucideShieldCheck [size]="17" aria-hidden="true"></svg> Dar admin</button>
+                    }
                     <button
                       type="button"
                       class="link-button"

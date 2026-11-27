@@ -92,7 +92,11 @@ export interface VerificationRequest {
 export interface AdminCatalogItem {
   id: number;
   nombre: string;
+  descripcion?: string | null;
+  permite_reservas_por_fecha?: boolean | null;
+  admite_reservas_por_fecha?: boolean;
 }
+export type AdminCatalogDatos = Pick<AdminCatalogItem, 'nombre' | 'descripcion' | 'permite_reservas_por_fecha'>;
 export interface AdminProvince extends AdminCatalogItem {}
 export interface AdminCity extends AdminCatalogItem {
   provincia?: AdminProvince;
@@ -214,6 +218,9 @@ export class AdminService {
   listarPendientes() {
     return this.http.get<VerificationRequest[]>(`${this.api}/anunciantes/pendientes`);
   }
+  otorgarAdministrador(id: number) {
+    return this.http.patch<AdminUser>(`${this.api}/usuarios/administracion/${id}/administrador`, {});
+  }
   listarLiquidaciones() {
     return this.http.get<AdminSettlement[]>(`${this.api}/reservas/liquidaciones/administracion`);
   }
@@ -315,6 +322,15 @@ export class AdminService {
   }
   listarCatalogo(key: CatalogKey) {
     return this.http.get<AdminCatalogItem[]>(`${this.api}/catalogos/${key}`);
+  }
+  crearCatalogo(key: CatalogKey, datos: AdminCatalogDatos) {
+    return this.http.post<AdminCatalogItem>(`${this.api}/catalogos/${key}`, datos);
+  }
+  actualizarCatalogo(key: CatalogKey, id: number, datos: AdminCatalogDatos) {
+    return this.http.put<AdminCatalogItem>(`${this.api}/catalogos/${key}/${id}`, datos);
+  }
+  eliminarCatalogo(key: CatalogKey, id: number) {
+    return this.http.delete<void>(`${this.api}/catalogos/${key}/${id}`);
   }
   obtenerComisionDepa() {
     return this.http.get<{ porcentaje: number }>(`${this.api}/catalogos/comision-depa`);

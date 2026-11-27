@@ -80,6 +80,14 @@ export class UsuariosController {
     return this.usuariosService.obtenerPerfil(id);
   }
 
+  @Patch('administracion/:id/administrador')
+  @Header('Cache-Control', 'no-store')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(ROL.ADMINISTRADOR)
+  otorgarAdministrador(@Param('id', ParseIntPipe) id: number) {
+    return this.usuariosService.otorgarAdministrador(id);
+  }
+
   @Post(':id/bloqueo/responder')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(ROL.ADMINISTRADOR)

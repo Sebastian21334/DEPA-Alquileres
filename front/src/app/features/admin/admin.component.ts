@@ -89,9 +89,9 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   'historial-liquidaciones': 'Consultá los pagos ya registrados a anunciantes, con su importe, fecha y referencia.',
   verificaciones: 'Revisá las solicitudes de verificación de identidad.',
   publicaciones: 'Consultá y moderá los alojamientos publicados.',
-  usuarios: 'Buscá cuentas y consultá su rol y estado.',
+  usuarios: 'Buscá cuentas, administrá sus accesos y otorgá permisos de administrador.',
   bloqueos: 'Consultá las cuentas bloqueadas, sus motivos y las apelaciones.',
-  catalogos: 'Consultá las opciones que usa el sistema. Se cargan por seed o migración.',
+  catalogos: 'Administrá las opciones de anunciantes, propiedades, modalidades y monedas.',
   ubicaciones: 'Consultá las provincias y ciudades disponibles. Se cargan por seed o migración.',
   cotizaciones: 'Consultá y administrá las cotizaciones que usa el sistema para convertir importes.',
   comision: 'Configurá la comisión aplicable a nuevas reservas.',
@@ -174,6 +174,11 @@ export class AdminComponent {
   private bloqueadosRequest?: Subscription;
   private actualizandoBloqueados = false;
   private readonly bloqueoDialog = viewChild.required<ElementRef<HTMLDialogElement>>('bloqueoDialog');
+  private readonly administradorDialog = viewChild.required<ElementRef<HTMLDialogElement>>('administradorDialog');
+  private readonly catalogosAdmin = viewChild(CatalogosAdminComponent);
+  protected readonly usuarioPorPromover = signal<AdminUser | null>(null);
+  protected readonly promoviendo = signal(false);
+  protected readonly administradorError = signal('');
   private readonly isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   protected readonly users = signal<AdminUser[]>([]);
   protected readonly bloqueados = signal<AdminBloqueo[]>([]);
@@ -358,6 +363,7 @@ export class AdminComponent {
     }
   }
   protected reload(): void {
+    if (this.activeSection() === 'catalogos') this.catalogosAdmin()?.cargar();
     if (this.activeSection() === 'historial-liquidaciones') this.historialAdmin()?.cargar();
     if (this.activeSection() === 'comision') this.comisionAdmin()?.cargar();
     this.cargaResumen?.unsubscribe();
@@ -893,6 +899,37 @@ export class AdminComponent {
 
   private ordenarHistorialBloqueos(registros: AdminBloqueo[]): AdminBloqueo[] {
     return [...registros].sort((a, b) => (b.detalle.fechaDesbloqueo ?? b.detalle.fecha ?? '').localeCompare(a.detalle.fechaDesbloqueo ?? a.detalle.fecha ?? ''));
+  }
+
+  protected abrirAdministrador(user: AdminUser): void {
+    if (!user.activa || user.bloqueado || user.rol?.nombre === 'Administrador') return;
+    this.usuarioPorPromover.set(user);
+    this.administradorError.set('');
+    this.administradorDialog().nativeElement.showModal();
+  }
+
+  protected cerrarAdministrador(event?: Event): void {
+    event?.preventDefault();
+    if (this.promoviendo()) return;
+    this.administradorDialog().nativeElement.close();
+    this.usuarioPorPromover.set(null);
+  }
+
+  protected confirmarAdministrador(): void {
+    const usuario = this.usuarioPorPromover();
+    if (!usuario || this.promoviendo()) return;
+    this.promoviendo.set(true);
+    this.administradorError.set('');
+    this.api.otorgarAdministrador(usuario.id)
+      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.promoviendo.set(false))).subscribe({
+        next: (actualizado) => {
+          this.users.update((usuarios) => usuarios.map((actual) => actual.id === usuario.id ? { ...actual, ...actualizado } : actual));
+          this.administradorDialog().nativeElement.close();
+          this.usuarioPorPromover.set(null);
+          this.toast.mostrar(`${usuario.nombre} ya tiene permisos de administrador.`, 'exito');
+        },
+        error: (e: Error) => this.administradorError.set(e.message),
+      });
   }
 
   protected toggleUser(user: AdminUser): void {

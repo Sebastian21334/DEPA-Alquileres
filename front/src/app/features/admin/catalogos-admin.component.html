@@ -1,22 +1,74 @@
 <section class="panel management">
   <div class="panel__title">
-    <div>
-      <h2>Catálogos</h2>
-      <p>Consulta de las opciones del sistema. Se cargan por seed o migración.</p>
+    <div class="catalog-heading">
+      <span class="catalog-icon"><svg lucideLayers3 [size]="23" aria-hidden="true"></svg></span>
+      <div><h2>Opciones del sistema</h2><p>Agregá, editá y organizá los valores disponibles.</p></div>
     </div>
+    <span class="catalog-count">{{ total() }} elementos</span>
   </div>
+  <div class="catalog-toolbar">
+    <label class="catalog-search"><svg lucideSearch [size]="18" aria-hidden="true"></svg>
+      <input type="search" aria-label="Buscar en los catálogos" placeholder="Buscar un elemento…" maxlength="100"
+        [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)" />
+    </label>
+    <p>Los elementos en uso se pueden editar, pero no eliminar.</p>
+  </div>
+  @if (errorCarga()) {
+    <div class="catalog-state" role="alert"><p>{{ errorCarga() }}</p><button type="button" class="button button--ghost" (click)="cargar()">Reintentar</button></div>
+  } @else if (cargando()) {
+    <p class="catalog-state" role="status">Cargando catálogos…</p>
+  } @else {
   <div class="catalog-grid">
-    @for (seccion of catalogos(); track seccion.clave) {
+    @for (seccion of visibles(); track seccion.clave) {
       <article class="catalog-card">
-        <h3>{{ seccion.etiqueta }}</h3>
-        <ul class="crud-list">
+        <header class="catalog-card__header"><div><h3>{{ seccion.etiqueta }}</h3><p>{{ seccion.descripcion }}</p></div><span class="catalog-count">{{ seccion.items.length }}</span></header>
+        <ul class="catalog-items" [attr.aria-label]="seccion.etiqueta">
           @for (item of seccion.items; track item.id) {
-            <li><span>{{ item.nombre }}</span></li>
+            <li>
+              <div class="catalog-item__text"><strong>{{ item.nombre }}</strong>
+                @if (item.descripcion) { <p>{{ item.descripcion }}</p> }
+                @if (seccion.clave === 'modalidades') { <span class="catalog-tag">{{ item.admite_reservas_por_fecha ? 'Con reservas por fecha' : 'Sin reservas por fecha' }}</span> }
+              </div>
+              <div class="catalog-item__actions">
+                <button type="button" class="catalog-action" [attr.aria-label]="'Editar ' + item.nombre" [title]="'Editar ' + item.nombre" (click)="abrir(seccion, item)"><svg lucidePencil [size]="17" aria-hidden="true"></svg></button>
+                <button type="button" class="catalog-action catalog-action--danger" [attr.aria-label]="'Eliminar ' + item.nombre" [title]="'Eliminar ' + item.nombre" (click)="abrir(seccion, item, true)"><svg lucideTrash2 [size]="17" aria-hidden="true"></svg></button>
+              </div>
+            </li>
           } @empty {
-            <li class="empty-row">Sin elementos</li>
+            <li class="catalog-empty">{{ busqueda().trim() ? 'No hay coincidencias.' : 'Todavía no hay elementos.' }}</li>
           }
         </ul>
+        <button type="button" class="catalog-add" (click)="abrir(seccion)"><svg lucidePlus [size]="18" aria-hidden="true"></svg> Agregar elemento<span class="sr-only"> a {{ seccion.etiqueta }}</span></button>
       </article>
     }
   </div>
+  }
 </section>
+
+<dialog #dialogo class="catalog-dialog" aria-labelledby="catalog-dialog-title" (cancel)="cerrar($event)">
+  @if (seleccion(); as seleccion) {
+    <form (ngSubmit)="confirmar()">
+      <header class="catalog-dialog__header">
+        <div><p>{{ seleccion.seccion.etiqueta }}</p><h2 id="catalog-dialog-title">{{ seleccion.eliminar ? 'Eliminar elemento' : seleccion.item ? 'Editar elemento' : 'Nuevo elemento' }}</h2></div>
+        <button type="button" class="catalog-action" aria-label="Cerrar" (click)="cerrar()" [disabled]="guardando()"><svg lucideX [size]="20" aria-hidden="true"></svg></button>
+      </header>
+      @if (seleccion.eliminar) {
+        <p class="catalog-delete">Vas a eliminar <strong>{{ seleccion.item?.nombre }}</strong> del catálogo.</p>
+        <p class="catalog-hint">Si está vinculado a una publicación o a un anunciante, se conservará y te avisaremos.</p>
+      } @else {
+        <label for="catalog-name">Nombre</label>
+        <input id="catalog-name" name="nombre" [(ngModel)]="nombre" maxlength="100" required autofocus [disabled]="guardando()" placeholder="Nombre del elemento" />
+        <label for="catalog-description">Descripción <span>(opcional)</span></label>
+        <textarea id="catalog-description" name="descripcion" [(ngModel)]="descripcion" maxlength="250" rows="3" [disabled]="guardando()" placeholder="Una breve descripción para identificarlo"></textarea>
+        @if (seleccion.seccion.clave === 'modalidades') {
+          <label class="catalog-toggle"><input type="checkbox" name="permiteReservas" [(ngModel)]="permiteReservas" [disabled]="guardando()" /><span>Permitir reservas por fecha<small>Habilita el calendario y la selección de estadías.</small></span></label>
+        }
+        @if (seleccion.seccion.clave === 'tipos-moneda') { <p class="catalog-hint">Las monedas admitidas son pesos y dólares. Incluí ARS o USD en el nombre, por ejemplo: Peso (ARS).</p> }
+      }
+      @if (error()) { <p class="alert alert--error" role="alert">{{ error() }}</p> }
+      <footer class="catalog-dialog__actions"><button type="button" class="button button--ghost" (click)="cerrar()" [disabled]="guardando()">Cancelar</button>
+        <button type="submit" class="button" [class.button--danger]="seleccion.eliminar" [class.catalog-primary]="!seleccion.eliminar" [disabled]="guardando() || (!seleccion.eliminar && !nombre.trim())">{{ guardando() ? 'Procesando…' : seleccion.eliminar ? 'Eliminar elemento' : 'Guardar cambios' }}</button>
+      </footer>
+    </form>
+  }
+</dialog>

@@ -38,6 +38,7 @@ const user = {
 const usuariosAdmin = [
   user,
   { ...user, id: 8, nombre: 'Juan', apellido: 'Pérez', bloqueado: true, rol: { id: 2, nombre: 'Inquilino' } },
+  { ...user, id: 9, nombre: 'Lucía', apellido: 'González', email: 'lucia@example.test', rol: { id: 2, nombre: 'Inquilino' } },
 ];
 const auth = {
   currentUser: signal(publico ? null : { sub: 7, email: user.email, rol, exp: vencida ? 1 : 9999999999 }),
@@ -243,7 +244,25 @@ const interceptor: HttpInterceptorFn = (req) => {
   const p = url.pathname.replace(/^\/api/, '');
   let body;
   if (req.method !== 'GET') {
-    if (/^\/imagenes\/publicacion\/\d+\/orden$/.test(p) && req.method === 'PATCH' && params.get('galeria') === 'animacion') {
+    if (/^\/catalogos\/(tipos-anunciante|tipos-propiedad|modalidades|tipos-moneda)(\/\d+)?$/.test(p)) {
+      const [, , clave, idTexto] = p.split('/');
+      const items: { id: number; nombre: string; descripcion?: string | null; permite_reservas_por_fecha?: boolean; admite_reservas_por_fecha?: boolean }[] = catalogos[clave as keyof typeof catalogos];
+      const id = Number(idTexto);
+      if (req.method === 'DELETE') {
+        items.splice(items.findIndex(item => item.id === id), 1);
+        body = null;
+      } else {
+        const datos = req.body as { nombre: string; descripcion?: string | null; permite_reservas_por_fecha?: boolean };
+        const item = { id: id || Math.max(0, ...items.map(item => item.id)) + 1, ...datos, ...(clave === 'modalidades' ? { admite_reservas_por_fecha: datos.permite_reservas_por_fecha } : {}) };
+        if (id) Object.assign(items.find(item => item.id === id)!, item);
+        else items.push(item);
+        body = item;
+      }
+    } else if (/^\/usuarios\/administracion\/\d+\/administrador$/.test(p) && req.method === 'PATCH') {
+      const usuario = usuariosAdmin.find(usuario => usuario.id === Number(p.split('/')[3]))!;
+      usuario.rol = { id: 1, nombre: 'Administrador' };
+      body = { ...usuario };
+    } else if (/^\/imagenes\/publicacion\/\d+\/orden$/.test(p) && req.method === 'PATCH' && params.get('galeria') === 'animacion') {
       const publicacion = publicaciones.find(item => item.id === Number(p.split('/')[3]));
       const ids = (req.body as { ids: number[] }).ids;
       if (!publicacion || ids.length !== publicacion.imagenes.length || new Set(ids).size !== ids.length || ids.some(id => !publicacion.imagenes.some(foto => foto.id === id))) {
@@ -328,7 +347,7 @@ const interceptor: HttpInterceptorFn = (req) => {
         prueba_vida_validada: true,
       },
     ];
-  else if (p.startsWith('/catalogos/')) body = catalogos[p.split('/').pop() as keyof typeof catalogos] || [];
+  else if (p.startsWith('/catalogos/')) body = (catalogos[p.split('/').pop() as keyof typeof catalogos] || []).map(item => ({ ...item }));
   else if (/^\/ubicacion\/provincias\/\d+\/ciudades$/.test(p))
     body = [{ id: 1, nombre: 'Villa María' }];
   else if (p === '/ubicacion/provincias')

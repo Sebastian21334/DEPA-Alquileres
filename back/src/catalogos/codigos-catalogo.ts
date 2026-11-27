@@ -1,5 +1,8 @@
 import estados from './estados-iniciales.json';
 
+export const CLAVES_CATALOGO = ['tipos-anunciante', 'tipos-propiedad', 'modalidades', 'tipos-moneda'] as const;
+export type ClaveCatalogo = typeof CLAVES_CATALOGO[number];
+
 /** Nombres de los roles del catálogo inicial (`rol.nombre`). */
 export const ROL = Object.freeze({ ADMINISTRADOR: 'Administrador', INQUILINO: 'Inquilino' } as const);
 export type NombreRol = (typeof ROL)[keyof typeof ROL];

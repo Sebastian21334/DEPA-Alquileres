@@ -1,6 +1,18 @@
 @use '../../shared/components/claim-history/claim-form';
 @use './admin-shared';
 
+.user-role { display: inline-flex; align-items: center; gap: 5px; font-size: .8rem; }
+.user-role--admin { padding: 5px 9px; border-radius: 99px; background: #eef2ff; color: #3e5192; font-weight: 700; }
+.user-admin-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: .4rem .65rem; border: 1px solid #eac7ac; border-radius: 8px; background: #fff7ef; color: #96470e; font: inherit; font-size: .82rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.user-admin-action:hover { background: #ffead8; border-color: #cd8b59; }
+.user-admin-action:focus-visible { outline: 2px solid #bc5c14; outline-offset: 3px; }
+.user-admin-action:disabled { opacity: .5; cursor: wait; }
+.admin-permission-user { display: grid; gap: 5px; padding: 16px; border: 1px solid #dee6ef; border-radius: 10px; background: #f6f8fc; overflow-wrap: anywhere; }
+.admin-permission-user span { color: #687991; font-size: .88rem; }
+.admin-permission-description { margin: 0; color: #52657a; font-size: .9rem; line-height: 1.6; }
+.admin-permission-confirm { background: #ad510f; color: #fff; }
+@media (max-width: 700px) { .user-admin-action { min-height: 44px; } .admin-permission-dialog .block-actions { flex-wrap: wrap; } }
+
 :host {
   display: block;
   background: #f4f6f8;

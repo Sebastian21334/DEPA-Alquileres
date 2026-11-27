@@ -585,6 +585,24 @@ export class UsuariosService {
     }
   }
 
+  async otorgarAdministrador(idUsuario: number) {
+    if (!Number.isInteger(idUsuario) || idUsuario < 1 || idUsuario > 2_147_483_647) throw new BadRequestException('El identificador de usuario no es válido');
+    const rol = await this.catalogosService.getRolPorNombre(ROL.ADMINISTRADOR);
+    if (!rol) throw new InternalServerErrorException('Falta el rol Administrador en el catálogo');
+    return this.usuariosRepo.conTransaccion(async (transaccion) => {
+      const usuario = await this.usuariosRepo.buscarBloqueado(idUsuario, transaccion, true);
+      if (!usuario) throw new NotFoundException('Usuario no encontrado');
+      if (!usuario.activa || usuario.bloqueado || usuario.fecha_baja) {
+        throw new ConflictException('Solo podés dar permisos de administrador a una cuenta activa y habilitada');
+      }
+      if (usuario.rol?.nombre !== ROL.ADMINISTRADOR) {
+        usuario.rol = rol;
+        await this.usuariosRepo.guardar(usuario, transaccion);
+      }
+      return this.usuarioSinSecretos(usuario);
+    });
+  }
+
   /** Lista usuarios para el panel administrativo sin exponer secretos de cuenta. */
   async listarTodos() {
     const usuarios = await this.usuariosRepo.listarTodos();
