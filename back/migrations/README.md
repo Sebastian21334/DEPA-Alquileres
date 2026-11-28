@@ -1,3 +1,36 @@
+# Verificar y completar las migraciones
+
+`synchronize` está apagado: la estructura de la base sale solo de `migrations/`.
+`scripts/migraciones/orden.cjs` define el orden en que se aplican sobre una base vacía,
+el mismo que usa la base de pruebas, y clasifica las migraciones anteriores al esquema
+inicial (ya incluidas en él) y las reemplazadas. Cada migración nueva se agrega a ese
+orden y a `test/soporte/postgres-pruebas.cjs`: `npm run test:migraciones` falla si un
+archivo queda sin clasificar, si la base de pruebas difiere de las migraciones o si una
+entidad necesita una tabla o una columna que ninguna migración crea.
+
+Desde `back/`, con la base de `back/.env`:
+
+```sh
+npm run db:verificar-esquema          # solo lee: informa qué falta y qué migración lo resuelve
+node scripts/migrar.cjs --verificar   # simula: aplica lo que falta y lo deshace
+npm run db:migrar                     # aplica lo que falta en una transacción y vuelve a verificar
+```
+
+La verificación arma en memoria (PGlite) el esquema de todas las migraciones y lo compara
+con la base: tablas, columnas (tipo y nulos), restricciones e índices por su definición,
+tipos enumerados y las filas de `ambito`, `estado` y `configuracion_comision`. Es un error
+lo que falta, lo que difiere y lo que una migración retira pero sigue en la base; cada error
+indica la migración que lo resuelve. Los valores por defecto y lo que no crea ninguna
+migración son advertencias. Las conversiones de tipo y los paréntesis se ignoran al
+comparar, porque cada versión de PostgreSQL escribe distinto la misma expresión. Las
+migraciones que solo cambian datos (`reconciliar-liquidaciones` y `nombres-archivos-utf8`)
+no se pueden comprobar por la estructura. No imprime la cadena de conexión.
+
+`db:migrar` aplica solo las migraciones con errores, en orden y dentro de una transacción
+con bloqueo. Si después queda alguna diferencia, deshace todo. No aplica el esquema
+inicial: una base vacía se prepara con `npm run db:inicializar`. Antes de guardar, conviene
+simular con `--verificar`.
+
 # Apelaciones de bloqueo
 
 Antes de arrancar esta versión, ejecutar `npm run db:apelaciones-bloqueo` desde
