@@ -83,15 +83,21 @@ async function crearPostgresPruebas({ estadosDisputa = false, estadosPorAmbito =
     }
     await db.exec(leerMigracion('20261113-vencimiento-pago-zona-horaria.sql'));
     await db.exec(leerMigracion('20261116-cbu-anunciantes.sql'));
+    await db.exec(leerMigracion('20261116-pausa-actividades.sql'));
     await db.exec(leerMigracion('20261122-comision-depa.sql'));
     await db.exec(leerMigracion('20261123-comprobante-reembolso.sql'));
     await db.exec(leerMigracion('20261123-imagenes-mensajes-reclamo.sql'));
     await db.exec(leerMigracion('20261123-vencimiento-verificacion.sql'));
+    await db.exec(leerMigracion('20261123-fechas-con-zona-horaria.sql'));
     await db.exec(leerMigracion('20261124-motivo-resolucion-reclamo.sql'));
+    await db.exec(leerMigracion('20261124-descripcion-publicacion-larga.sql'));
+    // Repara nombres en liquidacion: requiere el circuito de liquidaciones.
+    if (estadosPorAmbito) await db.exec(leerMigracion('20261124-nombres-archivos-utf8.sql'));
     await db.exec(leerMigracion('20261125-mensajes-reclamo-administracion.sql'));
     // Va después del catálogo de expedientes: una base sin ese catálogo lo aplica primero, como en producción.
     if (estadosPorAmbito) await db.exec(leerMigracion('20261126-retirar-notas-internas-reclamo.sql'));
     await db.exec(leerMigracion('20261126-resenas.sql'));
+    await db.exec(leerMigracion('20261127-historial-denuncias-resenas.sql'));
     await source.initialize();
     return { db, source, cerrar, cargarSeed: () => cargarDatosBase({ query }) };
   } catch (error) {
