@@ -285,8 +285,9 @@ export class PublicacionesService {
       'precio-menor',
       'precio-mayor',
       'titulo',
+      'resenas',
     ];
-    const orden = filtros.orden && ordenesValidos.includes(filtros.orden) ? filtros.orden : undefined;
+    const orden = filtros.orden && ordenesValidos.includes(filtros.orden) && (filtros.orden !== 'resenas' || categoria === 'temporales') ? filtros.orden : undefined;
     const consulta: ConsultaPublicaciones = {
       pagina: Number.isFinite(pagina) ? Math.max(1, Math.trunc(pagina)) : 1,
       limite: Number.isFinite(limite)

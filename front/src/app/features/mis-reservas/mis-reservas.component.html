@@ -370,13 +370,21 @@
         </details>
       }
       <div class="booking-card__actions">
+        @if (recibida && resenasRecibidas()[reserva.id]; as resenas) {
+          @if (resenas.publicacion) { <span class="booking-card__reviewed"><svg lucideStar [size]="15" aria-hidden="true"></svg> Publicación reseñada</span> }
+          @if (resenas.anunciante) { <span class="booking-card__reviewed"><svg lucideStar [size]="15" aria-hidden="true"></svg> Anunciante reseñado</span> }
+        }
         @if (!recibida && reserva.publicacion && puedeComentar(reserva)) {
+          @if (estadoResenas()[reserva.publicacion.id] === 'resenada') {
+            <span class="booking-card__reviewed"><svg lucideStar [size]="15" aria-hidden="true"></svg> Ya reseñada</span>
+          } @else if (estadoResenas()[reserva.publicacion.id] === 'pendiente' || estadoResenas()[reserva.publicacion.id] === 'error') {
           <a
             class="booking-button booking-button--comentar"
             [routerLink]="['/publicaciones', reserva.publicacion.id]"
             [fragment]="'resenas-PUBLICACION-' + reserva.publicacion.id">
-            <svg lucideStar [size]="15" aria-hidden="true"></svg> Comentar
+            <svg lucideStar [size]="15" aria-hidden="true"></svg> {{ estadoResenas()[reserva.publicacion.id] === 'error' ? 'Ver reseñas' : 'Comentar' }}
           </a>
+          }
         }
         @if (!recibida && !devolucionPendiente && puedeConsultarCodigo(reserva)) {
           <button type="button" class="booking-button" [disabled]="ocupada() !== null" (click)="verCodigo(reserva)">{{ codigos()[reserva.id] ? 'Volver a mostrar código' : 'Ver código de ingreso' }}</button>

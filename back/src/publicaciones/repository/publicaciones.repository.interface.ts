@@ -7,7 +7,7 @@ import type { EntityManager } from 'typeorm';
 export type CategoriaInicio =
   'recientes' | 'temporales' | 'largo-plazo' | 'villa-maria' | 'reservadas';
 export type OrdenPublicaciones =
-  'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
+  'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo' | 'resenas';
 
 export interface FiltrosPublicaciones {
   categoria?: CategoriaInicio;

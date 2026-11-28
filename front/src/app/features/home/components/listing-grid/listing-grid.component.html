@@ -16,6 +16,7 @@
           <option value="precio-menor">Menor precio</option>
           <option value="precio-mayor">Mayor precio</option>
           <option value="titulo">Nombre (A-Z)</option>
+          @if (permitirOrdenResenas()) { <option value="resenas">Mejor puntuadas</option> }
         </select>
       </label>
     </div>

@@ -58,3 +58,20 @@ test('con cotización, los precios en USD se ordenan convertidos a pesos', async
   assert.deepEqual(await ids({ orden: 'precio-menor', idsTipoMoneda: [USD], precioMax: 1500 }), [2, 4]);
   assert.deepEqual(await ids({ orden: 'precio-menor', idsTipoMoneda: [ARS], precioMax: 1500 }), [1]);
 });
+
+test('las temporales se ordenan por reseñas de publicación, luego de anunciante y finalmente sin reseñas, antes de paginar', async () => {
+  await base.db.exec(`
+    INSERT INTO usuario (id_usuario, nombre, apellido, email, telefono, contrasenia, id_rol)
+      VALUES (2, 'Dos', 'Prueba', 'dos@example.invalid', '123', 'hash', 1);
+    INSERT INTO anunciante (id_usuario, numero_contacto, verificado) VALUES (2, '123', true);
+    UPDATE anunciante SET cantidad_resenas = 2, promedio_resenas = 5 WHERE id_usuario = 1;
+    UPDATE publicacion SET cantidad_resenas = 3, promedio_resenas = 3 WHERE id_publicacion = 1;
+    UPDATE publicacion SET cantidad_resenas = 1, promedio_resenas = 4 WHERE id_publicacion = 2;
+    UPDATE publicacion SET id_anunciante = 2 WHERE id_publicacion = 4;
+  `);
+  const pagina1 = await servicio.listarActivas(1, 2, 'temporales', { orden: 'resenas' });
+  const pagina2 = await servicio.listarActivas(2, 2, 'temporales', { orden: 'resenas' });
+  assert.equal(pagina1.total, 4);
+  assert.deepEqual(pagina1.datos.map(({ id }) => id), [2, 1]);
+  assert.deepEqual(pagina2.datos.map(({ id }) => id), [3, 4]);
+});

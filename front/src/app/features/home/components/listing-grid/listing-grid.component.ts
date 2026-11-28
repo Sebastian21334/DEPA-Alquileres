@@ -22,6 +22,7 @@ export class ListingGridComponent {
   readonly error = input<string | null>(null);
   readonly hasMore = input(false);
   readonly sortOrder = input('recientes');
+  readonly permitirOrdenResenas = input(false);
 
   @Output() loadMore = new EventEmitter<void>();
   @Output() sortChange = new EventEmitter<string>();

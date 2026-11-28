@@ -14,6 +14,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { firstValueFrom, finalize, from, switchMap } from 'rxjs';
 import { LucideInfo, LucideLogIn, LucideMessageSquareHeart, LucideX } from '@lucide/angular';
 import { ApiError } from '../../../core/interceptors/api-error';
@@ -51,6 +52,7 @@ interface ArchivoResena {
   standalone: true,
   imports: [
     RouterLink,
+    FormsModule,
     RevealDirective,
     ResenaCardComponent,
     ResenaFormularioComponent,
@@ -102,6 +104,7 @@ export class ResenasPanelComponent implements OnInit, OnDestroy {
   protected readonly resenaAEliminar = signal<Resena | null>(null);
   protected readonly resenaADenunciar = signal<Resena | null>(null);
   protected readonly denunciando = signal(false);
+  protected motivoDenuncia = '';
   protected readonly denunciadas = signal<ReadonlySet<number>>(new Set());
 
   protected readonly puedeEscribir = computed(() => this.puedeResenar() && !this.miResena());
@@ -289,14 +292,20 @@ export class ResenasPanelComponent implements OnInit, OnDestroy {
       return;
     }
     this.resenaADenunciar.set(resena);
+    this.motivoDenuncia = '';
     this.confirmacionDenuncia().abrir();
   }
 
   protected denunciarConfirmada(): void {
     const resena = this.resenaADenunciar();
     if (!resena || this.denunciando()) return;
+    const motivo = this.motivoDenuncia.trim();
+    if (motivo.length < 3 || motivo.length > 300) {
+      this.toast.mostrar('Indicá un motivo de entre 3 y 300 caracteres.', 'advertencia');
+      return;
+    }
     this.denunciando.set(true);
-    this.service.denunciar(resena.id)
+    this.service.denunciar(resena.id, motivo)
       .pipe(
         finalize(() => this.denunciando.set(false)),
         takeUntilDestroyed(this.destroyRef),

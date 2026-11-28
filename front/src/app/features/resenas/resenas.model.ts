@@ -76,3 +76,16 @@ export interface PaginaResenasAdministracion {
   total: number;
   totalPaginas: number;
 }
+
+export interface ResolucionDenunciaResena {
+  id: number;
+  id_resena: number;
+  motivo_denuncia: string | null;
+  fecha_denuncia: string | null;
+  aceptada: boolean;
+  motivo_resolucion: string;
+  fecha_resolucion: string;
+  id_administrador: number | null;
+  administrador_nombre: string | null;
+  administrador_apellido: string | null;
+}

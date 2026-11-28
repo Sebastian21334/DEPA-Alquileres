@@ -220,6 +220,37 @@
             </div>
           </div>
           }
+          @if (item.publicacion; as publicacion) {
+            @if (resenasRecibidas()[item.id]; as recibidas) {
+              @if (recibidas.publicacion || recibidas.anunciante) {
+                <div class="stay-reviews" aria-label="Reseñas recibidas del huésped">
+                  @if (recibidas.publicacion) { <a class="stay-review" [routerLink]="['/publicaciones', publicacion.id]" [fragment]="'resenas-PUBLICACION-' + publicacion.id"><svg lucideStar [size]="19" aria-hidden="true"></svg> Publicación reseñada</a> }
+                  @if (recibidas.anunciante && publicacion.anunciante?.idUsuario; as anuncianteId) { <a class="stay-review" [routerLink]="['/perfil', anuncianteId]" [fragment]="'resenas-ANUNCIANTE-' + anuncianteId"><svg lucideStar [size]="19" aria-hidden="true"></svg> Anunciante reseñado</a> }
+                </div>
+              }
+            }
+            @let estadoPublicacion = resenaPublicacion();
+            @let estadoAnunciante = resenaAnunciante();
+            @if ((estadoPublicacion && estadoPublicacion !== 'error' && (estadoPublicacion.puedeResenar || estadoPublicacion.miResena)) || (estadoAnunciante && estadoAnunciante !== 'error' && (estadoAnunciante.puedeResenar || estadoAnunciante.miResena))) {
+              <div class="stay-reviews" aria-label="Reseñas de la estadía">
+                @if (estadoPublicacion && estadoPublicacion !== 'error' && (estadoPublicacion.puedeResenar || estadoPublicacion.miResena)) {
+                  <a class="stay-review stay-review--primary" [routerLink]="['/publicaciones', publicacion.id]" [fragment]="'resenas-PUBLICACION-' + publicacion.id">
+                    <svg lucideStar [size]="19" aria-hidden="true"></svg>
+                    {{ estadoPublicacion.miResena ? 'Publicación reseñada · Ver reseña' : 'Reseñar la reserva' }}
+                  </a>
+                }
+                @if (estadoAnunciante && estadoAnunciante !== 'error' && (estadoAnunciante.puedeResenar || estadoAnunciante.miResena) && publicacion.anunciante?.idUsuario; as anuncianteId) {
+                  <a class="stay-review" [routerLink]="['/perfil', anuncianteId]" [fragment]="'resenas-ANUNCIANTE-' + anuncianteId">
+                    <svg lucideStar [size]="19" aria-hidden="true"></svg>
+                    {{ estadoAnunciante.miResena ? 'Anunciante reseñado · Ver reseña' : 'Reseñar al anunciante' }}
+                  </a>
+                }
+              </div>
+            }
+            @if (estadoPublicacion === 'error' || estadoAnunciante === 'error') {
+              <p class="stay-reviews__error" role="status">No pudimos consultar tus reseñas. <button type="button" (click)="reintentarResenas()">Reintentar</button></p>
+            }
+          }
           @if (mostrarCodigo()) {
             <section class="entry-code" aria-labelledby="entry-code-title">
               <div class="entry-code__heading">
@@ -364,6 +395,9 @@
               <p>Podés comunicarte con la otra persona por el chat de DEPA.</p>
             } @else {
               <p>{{ emailContacto() }} · {{ telefonoContacto() }}</p>
+            }
+            @if (esInquilino() && !accesoLimitado() && !contactoSuspendido() && item.publicacion?.anunciante?.idUsuario; as anuncianteId) {
+              <a class="text-link contact-profile" [routerLink]="['/perfil', anuncianteId]">Ver perfil público del anunciante</a>
             }
           </div>
           <div class="contact-actions">

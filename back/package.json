@@ -65,6 +65,7 @@
     "db:mensajes-reclamo-administracion": "node scripts/mensajes-reclamo-administracion.cjs --aplicar",
     "db:retirar-notas-internas-reclamo": "node scripts/retirar-notas-internas-reclamo.cjs --aplicar",
     "db:resenas": "node scripts/resenas.cjs --aplicar",
+    "db:historial-denuncias-resenas": "node scripts/historial-denuncias-resenas.cjs --aplicar",
     "db:datos-resenas": "node scripts/datos-resenas.cjs --aplicar",
     "test:resenas": "npm run build && node --test test/resenas.test.cjs test/resenas-administracion.test.cjs"
   },

@@ -61,10 +61,16 @@
                 <small>{{ resena.objetivo.tipo === 'PUBLICACION' ? 'Publicación' : 'Perfil de anunciante' }}</small>
               </td>
               <td data-label="Estado">
+                <div class="resena-admin__estados">
+                  @if (resena.denunciada) { <span class="status status--reported">Denunciada</span> }
+                  <span class="status" [class.status--blocked]="!resena.visible">{{ resena.visible ? 'Visible' : 'Oculta' }}</span>
+                </div>
                 @if (resena.denunciada) {
-                  <span class="status status--reported">Denunciada</span>
+                  <div class="resena-admin__denuncia">
+                    <svg lucideTriangleAlert [size]="20" aria-hidden="true"></svg>
+                    <div><strong>Motivo de la denuncia</strong><p>{{ resena.motivo_denuncia || 'Sin motivo registrado' }}</p></div>
+                  </div>
                 }
-                <span class="status" [class.status--blocked]="!resena.visible">{{ resena.visible ? 'Visible' : 'Oculta' }}</span>
                 @if (!resena.visible && resena.motivo_moderacion) {
                   <small>Motivo de baja: {{ resena.motivo_moderacion }}</small>
                 }
@@ -72,13 +78,13 @@
               <td data-label="Acciones" class="right">
                 <div class="row-actions">
                   @if (resena.denunciada) {
-                    <button type="button" class="button button--success" [disabled]="busy() !== null" (click)="quitarDenuncia(resena)">
-                      {{ busy() === resena.id + '-denuncia' ? 'Quitando…' : 'Quitar denuncia' }}
+                    <button type="button" class="button button--success" [disabled]="busy() !== null" (click)="rechazoId.set(resena.id); motivoRechazo = ''">
+                      Rechazar denuncia
                     </button>
                   }
                   @if (resena.visible) {
                     <button type="button" class="button button--danger-outline" [disabled]="busy() !== null" (click)="abrirOcultar(resena)">
-                      Ocultar
+                      {{ resena.denunciada ? 'Aceptar y ocultar' : 'Ocultar' }}
                     </button>
                   } @else {
                     <button type="button" class="button button--success" [disabled]="busy() !== null" (click)="restaurar(resena)">
@@ -88,6 +94,16 @@
                 </div>
               </td>
             </tr>
+            @if (rechazoId() === resena.id) {
+              <tr><td colspan="4">
+                <form class="reject-box" (ngSubmit)="rechazarDenuncia(resena)">
+                  <label [for]="'rechazo-denuncia-' + resena.id">Motivo del rechazo</label>
+                  <textarea [id]="'rechazo-denuncia-' + resena.id" name="motivoRechazo" [(ngModel)]="motivoRechazo" minlength="5" maxlength="300" required [disabled]="busy() !== null"></textarea>
+                  <div><button type="button" class="button button--ghost" (click)="rechazoId.set(null)" [disabled]="busy() !== null">Cancelar</button>
+                  <button type="submit" class="button button--success" [disabled]="busy() !== null || motivoRechazo.trim().length < 5">Confirmar rechazo</button></div>
+                </form>
+              </td></tr>
+            }
             @if (ocultarId() === resena.id) {
               <tr>
                 <td colspan="4">
@@ -130,6 +146,35 @@
         [disabled]="resenasLoading() || busy() !== null || pagina() >= paginas()">Siguiente</button>
     </div>
   </nav>
+  <details class="historial-resenas">
+    <summary class="historial-resenas__cabecera">
+      <span class="historial-resenas__icono" aria-hidden="true">✓</span>
+      <span class="historial-resenas__titulo"><strong>Historial de denuncias</strong><small>Consultá las decisiones tomadas por administración</small></span>
+      <span class="historial-resenas__flecha" aria-hidden="true">⌄</span>
+    </summary>
+    <div class="historial-resenas__contenido">
+      @if (historialCargando()) {
+        <p class="historial-resenas__mensaje" role="status">Cargando historial...</p>
+      } @else if (historialError()) {
+        <div class="historial-resenas__aviso" role="alert">
+          <div><strong>No pudimos cargar el historial</strong><p>Verificá la conexión y volvé a intentarlo. Si el problema continúa, revisá la configuración del historial en el servidor.</p></div>
+          <button type="button" class="button button--ghost" (click)="cargarHistorial()">Reintentar</button>
+        </div>
+      } @else if (!historial().length) {
+        <div class="historial-resenas__vacio"><strong>Todavía no hay denuncias resueltas</strong><p>Cuando administración resuelva una denuncia, aparecerá acá.</p></div>
+      } @else {
+        <div class="historial-resenas__lista">
+          @for (item of historial(); track item.id) {
+            <article class="historial-resenas__item">
+              <div class="historial-resenas__item-cabecera"><strong>Reseña #{{ item.id_resena }}</strong><span class="historial-resenas__estado" [class.historial-resenas__estado--rechazada]="!item.aceptada">{{ item.aceptada ? 'Aceptada' : 'Rechazada' }}</span><time>{{ item.fecha_resolucion | date:'short' }}</time></div>
+              <div class="historial-resenas__detalle"><div><span>Motivo de la denuncia</span><p>{{ item.motivo_denuncia || 'Sin motivo registrado' }}</p></div><div><span>Resolución</span><p>{{ item.motivo_resolucion }}</p></div></div>
+              <small>Resuelto por: {{ nombreAdministrador(item) }}</small>
+            </article>
+          }
+        </div>
+      }
+    </div>
+  </details>
 </section>
 
 @if (imagenAmpliada(); as url) {

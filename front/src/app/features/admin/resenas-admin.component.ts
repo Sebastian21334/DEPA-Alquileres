@@ -10,9 +10,10 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { finalize, type Observable } from 'rxjs';
-import { LucideSearch, LucideX } from '@lucide/angular';
+import { LucideSearch, LucideTriangleAlert, LucideX } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
 import { ToastService } from '../../core/services/toast.service';
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
@@ -23,13 +24,13 @@ import {
   MIN_CARACTERES_MOTIVO_MODERACION,
   type EstadoResenasAdministracion,
 } from '../resenas/resenas.constantes';
-import type { ResenaAdministracion } from '../resenas/resenas.model';
+import type { ResenaAdministracion, ResolucionDenunciaResena } from '../resenas/resenas.model';
 import { ResenasService } from '../resenas/resenas.service';
 
 @Component({
   selector: 'app-resenas-admin',
   standalone: true,
-  imports: [FormsModule, RouterLink, EsqueletoListaComponent, EstrellasComponent, LucideSearch, LucideX],
+  imports: [DatePipe, FormsModule, RouterLink, EsqueletoListaComponent, EstrellasComponent, LucideSearch, LucideTriangleAlert, LucideX],
   templateUrl: './resenas-admin.component.html',
   styleUrl: './resenas-admin.component.scss',
 })
@@ -41,6 +42,11 @@ export class ResenasAdminComponent implements OnInit {
   private focoAnterior: HTMLElement | null = null;
 
   protected readonly datos = signal<ResenaAdministracion[]>([]);
+  protected readonly historial = signal<ResolucionDenunciaResena[]>([]);
+  protected readonly historialError = signal(false);
+  protected readonly historialCargando = signal(false);
+  protected readonly rechazoId = signal<number | null>(null);
+  protected motivoRechazo = '';
   protected readonly estado = signal<EstadoResenasAdministracion>('todas');
   protected readonly query = signal('');
   protected readonly pagina = signal(1);
@@ -55,8 +61,37 @@ export class ResenasAdminComponent implements OnInit {
   protected readonly MIN_CARACTERES_MOTIVO = MIN_CARACTERES_MOTIVO_MODERACION;
   protected readonly MAX_CARACTERES_MOTIVO = MAX_CARACTERES_MOTIVO_MODERACION;
 
+  protected nombreAdministrador(item: ResolucionDenunciaResena): string {
+    return [item.administrador_nombre, item.administrador_apellido].filter(Boolean).join(' ').trim() || 'Administrador no disponible';
+  }
+
   ngOnInit(): void {
     this.load(1);
+    this.cargarHistorial();
+  }
+
+  protected cargarHistorial(): void {
+    if (this.historialCargando()) return;
+    this.historialCargando.set(true);
+    this.historialError.set(false);
+    this.service.historialDenuncias().pipe(finalize(() => this.historialCargando.set(false)), takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (datos) => { this.historial.set(datos); this.historialError.set(false); },
+      error: () => this.historialError.set(true),
+    });
+  }
+
+  protected rechazarDenuncia(resena: ResenaAdministracion): void {
+    const motivo = this.motivoRechazo.trim();
+    if (motivo.length < 5 || motivo.length > 300) {
+      this.toast.mostrar('Escribí un motivo de entre 5 y 300 caracteres.', 'advertencia');
+      return;
+    }
+    this.ejecutar(`${resena.id}-denuncia`, this.service.resolverDenuncia(resena.id, false, motivo), () => {
+      this.rechazoId.set(null);
+      this.recargar();
+      this.cargarHistorial();
+      this.toast.mostrar('Denuncia rechazada.', 'exito');
+    });
   }
 
   recargar(): void {
@@ -121,6 +156,7 @@ export class ResenasAdminComponent implements OnInit {
       () => {
         this.ocultarId.set(null);
         this.recargar();
+        this.cargarHistorial();
         this.toast.mostrar('Reseña ocultada.', 'exito');
       },
     );

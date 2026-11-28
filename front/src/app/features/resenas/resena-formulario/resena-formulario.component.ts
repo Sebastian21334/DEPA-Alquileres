@@ -19,7 +19,7 @@ import {
   MAX_CARACTERES_COMENTARIO,
   MAX_IMAGENES_RESENA,
 } from '../resenas.constantes';
-import type { CrearResenaPayload, Resena } from '../resenas.model';
+import type { CrearResenaPayload, Resena, TipoObjetivoResena } from '../resenas.model';
 
 @Component({
   selector: 'app-resena-formulario',
@@ -35,6 +35,7 @@ import type { CrearResenaPayload, Resena } from '../resenas.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ResenaFormularioComponent {
+  readonly tipo = input.required<TipoObjetivoResena>();
   readonly miResena = input<Resena | null>(null);
   readonly editando = input(false);
   readonly enviando = input(false);

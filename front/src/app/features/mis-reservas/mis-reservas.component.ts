@@ -31,6 +31,7 @@ import { imagenesDisponibles, MAX_IMAGENES_POR_ENVIO } from '../../shared/utils/
 import { reclamoDeLaReserva, rolEnReclamo, type RolEnReclamo } from '../../shared/utils/reclamo-rol';
 import { llevarALaVista } from '../../shared/utils/desplazamiento';
 import { normalizarTexto } from '../../shared/utils/texto';
+import { ResenasService } from '../resenas/resenas.service';
 
 @Component({
   selector: 'app-mis-reservas',
@@ -45,6 +46,7 @@ import { normalizarTexto } from '../../shared/utils/texto';
 })
 export class MisReservasComponent {
   private readonly reservasApi = inject(ReservationService);
+  private readonly resenasApi = inject(ResenasService);
   protected readonly actividadReembolsos = inject(ActividadReembolsosService);
   private readonly toast = inject(ToastService);
   private readonly perfil = inject(PerfilService);
@@ -54,6 +56,9 @@ export class MisReservasComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private consultaReservas?: Subscription;
+  private consultaResenas?: Subscription;
+  protected readonly estadoResenas = signal<Record<number, 'pendiente' | 'resenada' | 'error'>>({});
+  protected readonly resenasRecibidas = signal<Record<number, { publicacion: boolean; anunciante: boolean }>>({});
   protected readonly estadiaActiva = estadiaActiva;
   protected readonly puedeReprogramar = puedeReprogramar;
   protected readonly imagenesConError = signal<Record<number, string>>({});
@@ -258,7 +263,14 @@ export class MisReservasComponent {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ propias, recibidas, reclamos }) => {
         this.propias.set(propias);
+        this.cargarEstadoResenas(propias);
         this.recibidas.set(recibidas);
+        if (recibidas.length && !this.accesoLimitado()) {
+          this.resenasApi.estadosRecibidosPorReserva().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+            next: (estados) => this.resenasRecibidas.set(estados),
+            error: () => this.resenasRecibidas.set({}),
+          });
+        }
         if (reclamos) {
           this.reclamos.set(reclamos);
           this.errorHistorial.set('');
@@ -275,6 +287,17 @@ export class MisReservasComponent {
         this.cargando.set(false);
       },
     });
+  }
+
+  private cargarEstadoResenas(reservas: Reserva[]): void {
+    this.consultaResenas?.unsubscribe();
+    const ids = [...new Set(reservas.filter((reserva) => this.puedeComentar(reserva)).map((reserva) => reserva.publicacion!.id))];
+    this.estadoResenas.set({});
+    if (!ids.length) return;
+    this.consultaResenas = forkJoin(ids.map((id) => this.resenasApi.listar('PUBLICACION', id, 1, 1).pipe(
+      switchMap((datos) => of([id, datos.miResena ? 'resenada' : 'pendiente'] as const)),
+      catchError(() => of([id, 'error'] as const)),
+    ))).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((estados) => this.estadoResenas.set(Object.fromEntries(estados)));
   }
 
   protected hoy(): string {

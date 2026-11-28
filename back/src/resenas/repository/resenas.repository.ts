@@ -10,6 +10,7 @@ import type {
   IResenaAccesoRepository,
   IResenaRepository,
   ResenaAcceso,
+  ResolucionDenunciaResena,
 } from './resena.repository.interface';
 import type {
   DatosResenaAnunciante,
@@ -26,6 +27,21 @@ const RESTRICCIONES_RESEÑA = [
 @Injectable()
 export class ResenasRepository implements IResenaRepository, IResenaAccesoRepository {
   constructor(@InjectRepository(Resena) private readonly repo: Repository<Resena>) {}
+
+  async resolverDenuncia(idResena: number, idAdministrador: number, aceptada: boolean, motivo: string): Promise<boolean> {
+    return this.repo.manager.transaction(async (manager) => {
+      const filas = await manager.query('SELECT id_resena, denunciada, motivo_denuncia, fecha_denuncia, denunciada_por FROM public.resena WHERE id_resena = $1 FOR UPDATE', [idResena]);
+      const resena = filas[0];
+      if (!resena?.denunciada) return false;
+      await manager.query('INSERT INTO public.resena_denuncia_resolucion (id_resena, id_denunciante, motivo_denuncia, fecha_denuncia, aceptada, motivo_resolucion, id_administrador) VALUES ($1, $2, $3, $4, $5, $6, $7)', [idResena, resena.denunciada_por, resena.motivo_denuncia, resena.fecha_denuncia, aceptada, motivo, idAdministrador]);
+      await manager.query('UPDATE public.resena SET denunciada = false, motivo_denuncia = NULL, fecha_denuncia = NULL, denunciada_por = NULL, visible = CASE WHEN $2 THEN false ELSE visible END, motivo_moderacion = CASE WHEN $2 THEN $3 ELSE motivo_moderacion END, fecha_moderacion = CASE WHEN $2 THEN now() ELSE fecha_moderacion END, moderada_por = CASE WHEN $2 THEN $4 ELSE moderada_por END WHERE id_resena = $1', [idResena, aceptada, motivo, idAdministrador]);
+      return true;
+    });
+  }
+
+  historialDenuncias(): Promise<ResolucionDenunciaResena[]> {
+    return this.repo.manager.query('SELECT h.id, h.id_resena, h.motivo_denuncia, h.fecha_denuncia, h.aceptada, h.motivo_resolucion, h.fecha_resolucion, h.id_administrador, u.nombre AS administrador_nombre, u.apellido AS administrador_apellido FROM public.resena_denuncia_resolucion h LEFT JOIN public.usuario u ON u.id_usuario = h.id_administrador ORDER BY h.fecha_resolucion DESC, h.id DESC LIMIT 100');
+  }
 
   crearParaPublicacion(datos: DatosResenaPublicacion): Resena {
     const { idUsuario, idPublicacion, ...resena } = datos;
@@ -89,6 +105,17 @@ export class ResenasRepository implements IResenaRepository, IResenaAccesoReposi
     return resena
       ? { id: resena.id, visible: resena.visible, autor: { id: resena.autor.id } }
       : null;
+  }
+
+  buscarVisiblesRecibidas(idAnunciante: number, autores: number[], publicaciones: number[]): Promise<{ autor: number; publicacion: number | null; anunciante: number | null }[]> {
+    if (!autores.length || !publicaciones.length) return Promise.resolve([]);
+    return this.repo.createQueryBuilder('resena')
+      .select('resena.id_usuario', 'autor')
+      .addSelect('resena.id_publicacion', 'publicacion')
+      .addSelect('resena.id_anunciante', 'anunciante')
+      .where('resena.visible = true AND resena.id_usuario IN (:...autores)', { autores })
+      .andWhere('(resena.id_publicacion IN (:...publicaciones) OR resena.id_anunciante = :idAnunciante)', { publicaciones, idAnunciante })
+      .getRawMany();
   }
 
   buscarPorObjetivoYAutor(tipo: TipoObjetivoResena, idObjetivo: number, idUsuario: number): Promise<Resena | null> {
@@ -196,14 +223,12 @@ export class ResenasRepository implements IResenaRepository, IResenaAccesoReposi
     return paginar(consulta, { pagina, limite });
   }
 
-  async registrarDenuncia(idResena: number, idUsuario: number, motivo: string, fecha: Date): Promise<void> {
-    await this.repo.save(this.repo.create({
-      id: idResena,
-      denunciada: true,
-      motivo_denuncia: motivo,
-      fecha_denuncia: fecha,
-      denunciante: { id: idUsuario },
-    }));
+  async registrarDenuncia(idResena: number, idUsuario: number, motivo: string, fecha: Date): Promise<boolean> {
+    const resultado = await this.repo.createQueryBuilder().update(Resena)
+      .set({ denunciada: true, motivo_denuncia: motivo, fecha_denuncia: fecha, denunciante: { id: idUsuario } as Resena['denunciante'] })
+      .where('id_resena = :id AND visible = true AND denunciada = false', { id: idResena })
+      .execute();
+    return (resultado.affected ?? 0) > 0;
   }
 
   async registrarModeracion(idResena: number, datos: DatosModeracionResena): Promise<void> {

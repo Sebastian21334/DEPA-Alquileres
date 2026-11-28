@@ -90,6 +90,7 @@
 .booking-button--comentar { margin-inline-end: auto; border-color: #f0dfb2; background: #fffaf0; color: #7a5a12; font-weight: 800; }
 .booking-button--comentar:hover { background: #fff3d6; }
 .booking-button--comentar svg { color: var(--color-accent); }
+.booking-card__reviewed { display: inline-flex; align-items: center; gap: .35rem; min-height: 36px; margin-inline-end: auto; padding: .35rem .85rem; border: 1px solid #d6e6dc; border-radius: .5rem; background: #f2f8f4; color: #35684a; font-size: .8rem; font-weight: 700; }
 .booking-button--more { width: 40px; padding: .2rem; }
 .booking-button:disabled, .booking-menu button:disabled { opacity: .55; cursor: default; }
 .booking-quote { min-width: 0; max-width: 15rem; color: #3d4856; font-size: .8rem; }

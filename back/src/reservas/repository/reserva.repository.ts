@@ -101,6 +101,7 @@ export class ReservaRepository implements IReservaRepository {
           anunciante: { usuario: true },
           ciudad: true,
           provincia: true,
+          modalidad: true,
           tipoMoneda: true,
           imagenes: true,
         },

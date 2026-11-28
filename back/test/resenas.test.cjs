@@ -567,6 +567,13 @@ test('el repositorio real pagina con joins, excluye al autor y traduce duplicado
     assert.equal(actualizada.visible, false);
     assert.equal(actualizada.moderador.id, 2);
 
+    await repo.guardar(repo.crearParaAnunciante({ idUsuario: 3, idAnunciante: 2, puntaje: 4, comentario: 'Buen anunciante', fecha: new Date() }));
+    const recibidas = await repo.buscarVisiblesRecibidas(2, [1, 3], [5]);
+    assert.deepEqual(recibidas.sort((a, b) => (a.publicacion ?? 0) - (b.publicacion ?? 0)), [
+      { autor: 3, publicacion: null, anunciante: 2 },
+      { autor: 3, publicacion: 5, anunciante: null },
+    ]);
+
     await assert.rejects(
       () => imagenesRepo.guardar(imagenesRepo.crear(idResena, 'https://storage.test/2.jpg', 1)),
       ValorDuplicadoError,

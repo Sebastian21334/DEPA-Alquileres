@@ -263,7 +263,16 @@
             <app-avatar class="avatar" [foto]="perfilAnunciante()?.foto_url ?? advertiser.usuario?.foto_url" [nombre]="advertiserName()" />
             <div>
               <h2>{{ advertiserName() }} @if (advertiser.verificado) { <span class="badge badge--verified"><svg lucideBadgeCheck [size]="13"></svg> {{ verifiedLabel() }}</span> }</h2>
-              @if (city(item)) { <p><svg lucideMapPin [size]="14"></svg> {{ city(item) }}</p> }
+              <div class="advertiser-card__details">
+                @if (city(item)) { <p><svg lucideMapPin [size]="14" aria-hidden="true"></svg> {{ city(item) }}</p> }
+                @if (promedioResenasAnunciante(); as promedio) {
+                  <a class="advertiser-card__rating" [class.advertiser-card__rating--separated]="!!city(item)" [routerLink]="['/perfil', advertiser.idUsuario]" [fragment]="'resenas-ANUNCIANTE-' + advertiser.idUsuario" [attr.aria-label]="'Ver reseñas del anunciante, promedio ' + formatearPromedio(promedio) + ' de 5, ' + cantidadResenasAnunciante() + (cantidadResenasAnunciante() === 1 ? ' reseña' : ' reseñas')">
+                    <app-estrellas [valor]="promedio" tamano="sm" etiqueta="Calificación del anunciante" />
+                    <strong>{{ formatearPromedio(promedio) }}</strong>
+                    <span>· {{ cantidadResenasAnunciante() }} {{ cantidadResenasAnunciante() === 1 ? 'reseña' : 'reseñas' }}</span>
+                  </a>
+                }
+              </div>
             </div>
           </div>
           <dl class="advertiser-card__stats">

@@ -2,7 +2,7 @@
   <div class="resenas__form-cabecera">
     <div>
       <span class="resenas__eyebrow">{{ editando() ? 'Actualizá tu opinión' : 'Nueva reseña' }}</span>
-      <h3>{{ editando() ? 'Editar tu reseña' : 'Contanos tu experiencia' }}</h3>
+      <h3>{{ editando() ? 'Editar tu reseña' : tipo() === 'ANUNCIANTE' ? 'Contanos tu experiencia con el anunciante' : 'Contanos tu experiencia en el alojamiento' }}</h3>
     </div>
     <button type="button" class="resenas__cerrar" (click)="cancelar.emit()" aria-label="Cerrar formulario">
       <svg lucideX [size]="18" aria-hidden="true"></svg>
@@ -29,7 +29,7 @@
       formControlName="comentario"
       rows="4"
       [attr.maxlength]="MAX_CARACTERES"
-      placeholder="Contá cómo fue la estadía, la atención o lo que te gustaría destacar."
+      [placeholder]="tipo() === 'ANUNCIANTE' ? 'Contá cómo fue la atención, la comunicación y el trato del anunciante.' : 'Contá cómo fue tu estadía y qué te gustaría destacar del alojamiento.'"
       [class.is-invalid]="formulario.controls.comentario.touched && formulario.controls.comentario.invalid"
     ></textarea>
     <span class="resenas__contador">{{ comentarioActual().length }}/{{ MAX_CARACTERES }}</span>

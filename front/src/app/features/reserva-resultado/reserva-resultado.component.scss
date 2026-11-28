@@ -176,6 +176,13 @@
   white-space: nowrap;
   font-size: 0.9rem;
 }
+.stay-reviews { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.4rem; }
+.stay-review { display: inline-flex; flex: 1 1 15rem; align-items: center; justify-content: center; gap: .5rem; min-height: 46px; padding: .65rem .9rem; border: 1px solid #c33d1d; border-radius: .55rem; background: #fff8f2; color: #a83216; font-size: .88rem; font-weight: 750; text-align: center; text-decoration: none; }
+.stay-review:hover { background: #ffede3; }
+.stay-review--primary { background: #c63b19; color: #fff; }
+.stay-review--primary:hover { background: #a93014; }
+.stay-reviews__error { margin: 1rem 0 0; color: #8d351e; font-size: .85rem; }
+.stay-reviews__error button { border: 0; padding: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
 .entry-code {
   margin-top: 1rem;
   padding: 1.2rem;
@@ -358,6 +365,7 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.contact-profile { display: inline-block; margin-top: .55rem; font-size: .88rem; }
 .whatsapp-btn {
   background: #128c4b;
   color: #fff;

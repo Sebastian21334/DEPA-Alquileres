@@ -5,7 +5,7 @@ import { environment } from '../../../environments/environment';
 import { Publicacion, PublicacionPayload } from '../../shared/models/publicacion.model';
 
 export type OrdenPublicaciones =
-  'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo';
+  'recientes' | 'antiguas' | 'precio-menor' | 'precio-mayor' | 'titulo' | 'resenas';
 
 export interface FiltrosPublicaciones {
   categoria?: string;

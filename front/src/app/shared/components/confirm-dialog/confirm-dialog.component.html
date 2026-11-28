@@ -23,6 +23,7 @@
   </div>
   <h2 [id]="tituloId()">{{ titulo() }}</h2>
   <p [id]="mensajeId()">{{ mensaje() }}</p>
+  <ng-content />
   <div class="confirm-dialog__actions">
     <button
       type="button"

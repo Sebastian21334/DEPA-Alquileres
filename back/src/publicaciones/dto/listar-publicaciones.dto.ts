@@ -93,6 +93,6 @@ export class ListarPublicacionesDto extends FiltrosPublicacionesDto {
   limite = 12;
 
   @IsOptional()
-  @IsIn(['recientes', 'antiguas', 'precio-menor', 'precio-mayor', 'titulo'])
+  @IsIn(['recientes', 'antiguas', 'precio-menor', 'precio-mayor', 'titulo', 'resenas'])
   orden?: OrdenPublicaciones;
 }

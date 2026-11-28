@@ -31,6 +31,7 @@ import {
   type IResenaRepository,
 } from '../repository/resena.repository.interface';
 import type { ObjetivoResena } from '../resenas.types';
+import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
 import { ResenasImagenesService } from './resenas-imagenes.service';
 import { ResenasResumenService } from './resenas-resumen.service';
 
@@ -49,6 +50,19 @@ export class ResenasService {
     private readonly resenasImagenesService: ResenasImagenesService,
     private readonly resumenService: ResenasResumenService,
   ) {}
+
+  async estadosRecibidosPorReserva(idAnunciante: number): Promise<Record<number, { publicacion: boolean; anunciante: boolean }>> {
+    const reservas = (await this.reservasService.listarRecibidasPorAnunciante(idAnunciante))
+      .filter((reserva) => !reserva.cancelada && reserva.usuario?.id && reserva.publicacion?.id &&
+        ['FINALIZADA', 'INGRESO_NO_VERIFICADO'].includes((reserva as ReservaRespuestaDto).estado_estadia));
+    const autores = [...new Set(reservas.map((reserva) => reserva.usuario!.id))];
+    const publicaciones = [...new Set(reservas.map((reserva) => reserva.publicacion!.id))];
+    const resenas = await this.resenasRepo.buscarVisiblesRecibidas(idAnunciante, autores, publicaciones);
+    return Object.fromEntries(reservas.map((reserva) => [reserva.id, {
+      publicacion: resenas.some((resena) => resena.autor === reserva.usuario!.id && resena.publicacion === reserva.publicacion!.id),
+      anunciante: resenas.some((resena) => resena.autor === reserva.usuario!.id && resena.anunciante === idAnunciante),
+    }]));
+  }
 
   async listarPublicacion(idPublicacion: number, idUsuario: number | undefined, dto: ListarResenasDto): Promise<ResenasObjetivoDto> {
     const publicacion = await this.publicacionesService.buscarPublicaPorId(idPublicacion, idUsuario);
@@ -122,12 +136,17 @@ export class ResenasService {
     }
     // La primera denuncia define el estado; las siguientes son idempotentes.
     if (resena.denunciada) return { id: idResena, denunciada: true };
-    await this.resenasRepo.registrarDenuncia(
+    const registrada = await this.resenasRepo.registrarDenuncia(
       idResena,
       idUsuario,
       dto.motivo?.trim() || 'Marcada como inapropiada por un usuario',
       new Date(),
     );
+    if (registrada === false) {
+      const actual = await this.resenasRepo.buscarPorId(idResena);
+      if (!actual?.visible) throw new ConflictException('La reseña ya no está disponible para denunciar.');
+      if (!actual.denunciada) throw new ConflictException('No se pudo registrar la denuncia. Intentá de nuevo.');
+    }
     return { id: idResena, denunciada: true };
   }
 

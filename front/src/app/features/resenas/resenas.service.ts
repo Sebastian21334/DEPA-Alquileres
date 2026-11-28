@@ -11,12 +11,17 @@ import {
   ResenaImagen,
   ResenasObjetivo,
   TipoObjetivoResena,
+  ResolucionDenunciaResena,
 } from './resenas.model';
 
 @Injectable({ providedIn: 'root' })
 export class ResenasService {
   private readonly http = inject(HttpClient);
   private readonly api = environment.apiUrl;
+
+  estadosRecibidosPorReserva(): Observable<Record<number, { publicacion: boolean; anunciante: boolean }>> {
+    return this.http.get<Record<number, { publicacion: boolean; anunciante: boolean }>>(`${this.api}/resenas/recibidas-por-reserva`);
+  }
 
   listar(tipo: TipoObjetivoResena, idObjetivo: number, pagina = 1, limite = 6): Observable<ResenasObjetivo> {
     const params = new HttpParams().set('pagina', pagina).set('limite', limite);
@@ -65,6 +70,14 @@ export class ResenasService {
     return this.http.delete<ResenaAdministracion>(
       `${this.api}/administracion/resenas/${idResena}/denuncia`,
     );
+  }
+
+  resolverDenuncia(idResena: number, aceptada: boolean, motivo: string): Observable<ResenaAdministracion> {
+    return this.http.patch<ResenaAdministracion>(`${this.api}/administracion/resenas/${idResena}/denuncia/resolucion`, { aceptada, motivo });
+  }
+
+  historialDenuncias(): Observable<ResolucionDenunciaResena[]> {
+    return this.http.get<ResolucionDenunciaResena[]>(`${this.api}/administracion/resenas/denuncias/historial`);
   }
 
   denunciar(idResena: number, motivo?: string): Observable<{ id: number; denunciada: boolean }> {

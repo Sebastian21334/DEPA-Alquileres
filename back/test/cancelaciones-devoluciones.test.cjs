@@ -140,6 +140,18 @@ function consultarPagoDelInquilino(idReserva) {
   return operaciones.consultarResumen(idReserva, 1);
 }
 
+test('el resumen de una reserva entrega la modalidad para habilitar reseñas en el detalle', async () => {
+  await db.exec("INSERT INTO modalidad (id_modalidad, nombre, permite_reservas_por_fecha) VALUES (999, 'Temporal de prueba', true); UPDATE publicacion SET id_modalidad = 999 WHERE id_publicacion = 1");
+  try {
+    const { reserva } = await escenario('2020-01-10');
+    const resumen = await consultarPagoDelInquilino(reserva.id);
+    assert.equal(resumen.reserva.publicacion.modalidad.admite_reservas_por_fecha, true);
+    await assert.rejects(() => reservas.buscarPorId(reserva.id, 4), { status: 403 });
+  } finally {
+    await db.exec('UPDATE publicacion SET id_modalidad = NULL WHERE id_publicacion = 1; DELETE FROM modalidad WHERE id_modalidad = 999');
+  }
+});
+
 async function cancelacionConFaltante(recibido = 30) {
   // A dos días del ingreso, la cancelación del inquilino devuelve el 50 %.
   const { reserva, pago } = await escenario(fechaEnDias(2));

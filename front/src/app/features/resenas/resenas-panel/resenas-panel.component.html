@@ -20,8 +20,8 @@
       <div class="resenas__cta">
         <span class="resenas__cta-icono" aria-hidden="true"><svg lucideMessageSquareHeart [size]="24"></svg></span>
         <div>
-          <h3>¿Cómo fue tu estadía?</h3>
-          <p>Tu experiencia ayuda a otras personas a elegir mejor.</p>
+          <h3>{{ tipo() === 'ANUNCIANTE' ? '¿Cómo fue tu experiencia con el anunciante?' : '¿Cómo fue tu estadía?' }}</h3>
+          <p>{{ tipo() === 'ANUNCIANTE' ? 'Compartí cómo fue la atención y la comunicación.' : 'Tu experiencia ayuda a otras personas a elegir mejor.' }}</p>
         </div>
         <button type="button" class="resenas__boton shine" (click)="abrirFormulario()">Escribir reseña</button>
       </div>
@@ -30,6 +30,7 @@
     @if (formAbierto()) {
       <div #formularioRef class="resenas__form-host">
         <app-resena-formulario
+          [tipo]="tipo()"
           [miResena]="miResena()"
           [editando]="editando()"
           [enviando]="enviando()"
@@ -125,4 +126,7 @@
   tono="advertencia"
   [procesando]="denunciando()"
   (confirmar)="denunciarConfirmada()"
-  (cancelar)="cerrarDenuncia()" />
+  (cancelar)="cerrarDenuncia()">
+  <label for="motivo-denuncia-resena">Motivo de la denuncia</label>
+  <textarea id="motivo-denuncia-resena" [(ngModel)]="motivoDenuncia" maxlength="300" rows="4" placeholder="Contanos por qué considerás inapropiada esta reseña" [disabled]="denunciando()"></textarea>
+</app-confirm-dialog>

@@ -41,6 +41,7 @@ export class ExplorarPublicacionesComponent {
     'precio-menor',
     'precio-mayor',
     'titulo',
+    'resenas',
   ];
   private readonly api = inject(ListingService);
   private readonly catalogos = inject(CatalogoService);
@@ -93,7 +94,7 @@ export class ExplorarPublicacionesComponent {
       this.busqueda.setValue(params.get('q') ?? '', { emitEvent: false });
       this.vistaMapa.set(params.get('vista') === 'mapa');
       this.categoria.set(categoria);
-      this.orden.set(this.esOrdenValido(orden) ? orden : 'recientes');
+      this.orden.set(this.esOrdenValido(orden) && (orden !== 'resenas' || categoria === 'temporales') ? orden : 'recientes');
       this.sincronizarModalidad(categoria);
       this.cargar(pagina);
     });
@@ -109,7 +110,7 @@ export class ExplorarPublicacionesComponent {
     this.router.navigate([], {
       relativeTo: this.route,
       queryParamsHandling: 'merge',
-      queryParams: { categoria, q: this.terminoBusqueda() || null, orden: this.orden(), pagina: 1 },
+      queryParams: { categoria, q: this.terminoBusqueda() || null, orden: categoria !== 'temporales' && this.orden() === 'resenas' ? 'recientes' : this.orden(), pagina: 1 },
     });
   }
 

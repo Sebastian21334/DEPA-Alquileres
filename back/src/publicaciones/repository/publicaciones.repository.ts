@@ -253,6 +253,7 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       'precio-menor': { columna: '"precioOrden"', direccion: 'ASC' },
       'precio-mayor': { columna: '"precioOrden"', direccion: 'DESC' },
       titulo: { columna: 'LOWER(publicacion.titulo)', direccion: 'ASC' },
+      resenas: { columna: '"prioridadResenas"', direccion: 'ASC' },
     } as const;
     const ordenSeleccionado = orden
       ? ordenes[orden]
@@ -262,13 +263,15 @@ export class PublicacionesRepository implements IPublicacionesRepository {
             direccion: 'DESC' as const,
           }
         : ordenes.recientes;
-    const filas = await base
+    const consultaFilas = base
       .clone()
       .select('publicacion.id', 'id')
       .addSelect('COALESCE(reservas.cantidad, 0)', 'cantidadReservas')
       .addSelect('publicacion.fecha_publicacion', 'fechaPublicacion')
       .addSelect(precioOrden, 'precioOrden')
       .addSelect('LOWER(publicacion.titulo)', 'tituloOrden')
+      .addSelect('CASE WHEN publicacion.cantidad_resenas > 0 AND publicacion.promedio_resenas IS NOT NULL THEN 0 WHEN anunciante.cantidad_resenas > 0 AND anunciante.promedio_resenas IS NOT NULL THEN 1 ELSE 2 END', 'prioridadResenas')
+      .addSelect('CASE WHEN publicacion.cantidad_resenas > 0 AND publicacion.promedio_resenas IS NOT NULL THEN publicacion.promedio_resenas WHEN anunciante.cantidad_resenas > 0 THEN anunciante.promedio_resenas ELSE NULL END', 'promedioOrden')
       .leftJoin(
         `(${reservas.getQuery()})`,
         'reservas',
@@ -276,8 +279,9 @@ export class PublicacionesRepository implements IPublicacionesRepository {
       )
       .setParameters(reservas.getParameters())
       .setParameters(conversionUsd ? { idsMonedaUsd: conversionUsd.idsMoneda, ventaUsd: conversionUsd.venta } : {})
-      .orderBy(ordenSeleccionado.columna, ordenSeleccionado.direccion)
-      .addOrderBy('publicacion.id', 'DESC')
+      .orderBy(ordenSeleccionado.columna, ordenSeleccionado.direccion);
+    if (orden === 'resenas') consultaFilas.addOrderBy('"promedioOrden"', 'DESC', 'NULLS LAST');
+    const filas = await consultaFilas.addOrderBy('publicacion.id', 'DESC')
       .offset((pagina - 1) * limite)
       .limit(limite)
       .getRawMany<{ id: string; cantidadReservas: string }>();

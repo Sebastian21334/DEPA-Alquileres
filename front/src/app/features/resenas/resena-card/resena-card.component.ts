@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { LucideEllipsis, LucideFlag, LucidePencil, LucideTrash2 } from '@lucide/angular';
 import { AvatarComponent } from '../../../shared/components/avatar/avatar.component';
 import { RelativeTimePipe } from '../../../shared/pipes/relative-time.pipe';
 import { Resena } from '../resenas.model';
 import { EstrellasComponent } from '../estrellas/estrellas.component';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-resena-card',
@@ -14,6 +15,7 @@ import { EstrellasComponent } from '../estrellas/estrellas.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ResenaCardComponent {
+  private readonly auth = inject(AuthService);
   readonly resena = input.required<Resena>();
   readonly propia = input(false);
   readonly denunciada = input(false);
@@ -30,7 +32,7 @@ export class ResenaCardComponent {
   protected readonly visible = computed(() => this.resena().visible !== false);
   protected readonly puedeEditar = computed(() => this.propia() && this.visible());
   protected readonly puedeDenunciar = computed(() =>
-    !this.propia() && this.visible() && !this.denunciada(),
+    this.auth.isAuthenticated && !this.propia() && this.visible() && !this.denunciada(),
   );
   protected readonly menuId = computed(() => `acciones-resena-${this.resena().id}`);
 }

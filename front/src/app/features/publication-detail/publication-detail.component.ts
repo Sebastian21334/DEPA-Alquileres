@@ -56,6 +56,7 @@ import { puedeValidarCodigo } from '../../shared/utils/reservation-state';
 import { esInmobiliaria } from '../../shared/utils/anunciante';
 import { formatearPromedio, promedioMostrable } from '../../shared/utils/resenas';
 import { ResenasPanelComponent } from '../resenas/resenas-panel/resenas-panel.component';
+import { EstrellasComponent } from '../resenas/estrellas/estrellas.component';
 import { PaymentSummaryComponent } from './payment-summary/payment-summary.component';
 
 @Component({
@@ -71,6 +72,7 @@ import { PaymentSummaryComponent } from './payment-summary/payment-summary.compo
     ConfirmDialogComponent,
     PaymentSummaryComponent,
     ResenasPanelComponent,
+    EstrellasComponent,
     RelativeTimePipe,
     LucideBadgeCheck,
     LucideBookmark,
@@ -161,6 +163,8 @@ export class PublicationDetailComponent {
   protected readonly cantidadResenas = computed(() =>
     Number(this.publication()?.cantidad_resenas ?? 0),
   );
+  protected readonly cantidadResenasAnunciante = computed(() => Number(this.perfilAnunciante()?.cantidad_resenas ?? this.publication()?.anunciante?.cantidad_resenas ?? 0));
+  protected readonly promedioResenasAnunciante = computed(() => promedioMostrable(this.cantidadResenasAnunciante(), this.perfilAnunciante()?.promedio_resenas ?? this.publication()?.anunciante?.promedio_resenas));
   protected readonly anclaResenas = computed(() => {
     const id = this.publication()?.id;
     return id ? `resenas-PUBLICACION-${id}` : '';

@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   Logger,
@@ -12,6 +13,7 @@ import type {
   ResenaAdministracionDto,
 } from '../dto/resena-respuesta.dto';
 import type { ModerarResenaDto } from '../dto/moderar-resena.dto';
+import type { ResolverDenunciaDto } from '../dto/resolver-denuncia.dto';
 import {
   objetivoDeResena,
   prepararResenaAdministracion,
@@ -37,6 +39,26 @@ export class ResenasAdministracionService {
     private readonly resumenService: ResenasResumenService,
     @Inject(MAIL_SERVICE) private readonly mailService: IMailResenas,
   ) {}
+
+  historialDenuncias() {
+    return this.resenasRepo.historialDenuncias();
+  }
+
+  async resolverDenuncia(idResena: number, idAdministrador: number, dto: ResolverDenunciaDto): Promise<ResenaAdministracionDto> {
+    const resena = await this.resenasRepo.buscarPorId(idResena);
+    if (!resena) throw new NotFoundException('Reseña no encontrada');
+    const motivo = dto.motivo.trim();
+    if (motivo.length < 5 || motivo.length > 300) throw new BadRequestException('Indicá un motivo de entre 5 y 300 caracteres.');
+    if (!await this.resenasRepo.resolverDenuncia(idResena, idAdministrador, dto.aceptada, motivo)) {
+      throw new ConflictException('La denuncia ya fue resuelta o no existe.');
+    }
+    if (dto.aceptada) {
+      const objetivo = objetivoDeResena(resena);
+      await this.resumenService.recalcular(objetivo);
+      if (resena.visible) await this.avisarAutor(resena, objetivo, motivo);
+    }
+    return prepararResenaAdministracion(await this.buscarParaRespuesta(idResena));
+  }
 
   async listarAdministracion(dto: ListarResenasAdministracionDto): Promise<PaginaResenasAdministracionDto> {
     const texto = dto.q?.trim() ?? '';
@@ -71,6 +93,9 @@ export class ResenasAdministracionService {
       throw new BadRequestException(
         `Indicá un motivo de al menos ${MIN_CARACTERES_MOTIVO_MODERACION} caracteres para ocultar la reseña.`,
       );
+    }
+    if (!dto.visible && resena.denunciada) {
+      return this.resolverDenuncia(idResena, idAdministrador, { aceptada: true, motivo });
     }
     await this.resenasRepo.registrarModeracion(idResena, {
       visible: dto.visible,

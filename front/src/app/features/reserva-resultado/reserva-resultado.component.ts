@@ -13,13 +13,16 @@ import { ActividadReembolsosService } from '../../core/services/actividad-reembo
 import { activarActualizacionReservas } from '../../shared/utils/reservation-refresh';
 import { devolucionRegistrada, etiquetasEstadia, puedeConsultarCodigo, puedeReprogramar } from '../../shared/utils/reservation-state';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LucideCalendar, LucideCheck, LucideChevronDown, LucideCopy, LucideDownload, LucideKeyRound, LucideLandmark } from '@lucide/angular';
+import { LucideCalendar, LucideCheck, LucideChevronDown, LucideCopy, LucideDownload, LucideKeyRound, LucideLandmark, LucideStar } from '@lucide/angular';
 import { ApiError } from '../../core/interceptors/api-error';
 import { ChatService } from '../../core/services/chat.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ReservaReprogramacionComponent } from './reserva-reprogramacion.component';
 import { etiquetaSeccionAdmin, seccionAdmin } from '../admin/admin-secciones';
 import { SpinnerComponent } from '../../shared/components/spinner/spinner.component';
+import { ResenasService } from '../resenas/resenas.service';
+import { admiteReservasPorFecha } from '../../shared/models/catalogo.model';
+import type { ResenasObjetivo, TipoObjetivoResena } from '../resenas/resenas.model';
 import {
   CodigoAlojamiento,
   Reserva,
@@ -30,13 +33,14 @@ import {
 @Component({
   selector: 'app-reserva-resultado',
   standalone: true,
-  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, LucideDownload, ReservaReprogramacionComponent, ReembolsoChatComponent, VerComprobanteComponent],
+  imports: [RouterLink, SpinnerComponent, LucideKeyRound, LucideCopy, LucideCheck, LucideCalendar, LucideChevronDown, LucideLandmark, LucideDownload, LucideStar, ReservaReprogramacionComponent, ReembolsoChatComponent, VerComprobanteComponent],
   templateUrl: './reserva-resultado.component.html',
   styleUrl: './reserva-resultado.component.scss',
 })
 export class ReservaResultadoComponent {
   private readonly route = inject(ActivatedRoute);
   private readonly reservasApi = inject(ReservationService);
+  private readonly resenasApi = inject(ResenasService);
   private readonly auth = inject(AuthService);
   private readonly chat = inject(ChatService);
   private readonly destroyRef = inject(DestroyRef);
@@ -79,6 +83,18 @@ export class ReservaResultadoComponent {
   protected readonly esInquilino = computed(
     () => this.reserva()?.usuario?.id === Number(this.auth.currentUser()?.sub),
   );
+  protected readonly resenaPublicacion = signal<ResenasObjetivo | 'error' | null>(null);
+  protected readonly resenaAnunciante = signal<ResenasObjetivo | 'error' | null>(null);
+  protected readonly resenasRecibidas = signal<Record<number, { publicacion: boolean; anunciante: boolean }>>({});
+  protected readonly reintentoResenas = signal(0);
+  protected reintentarResenas(): void { this.reintentoResenas.update((valor) => valor + 1); }
+  private readonly objetivosResena = computed(() => {
+    const reserva = this.reserva();
+    if (this.administracion || this.accesoLimitado() || !this.esInquilino() || !reserva || reserva.cancelada ||
+        !['FINALIZADA', 'INGRESO_NO_VERIFICADO'].includes(reserva.estado_estadia) ||
+        !admiteReservasPorFecha(reserva.publicacion?.modalidad)) return null;
+    return { publicacion: reserva.publicacion?.eliminada ? null : reserva.publicacion?.id, anunciante: reserva.publicacion?.anunciante?.idUsuario };
+  }, { equal: (a, b) => a?.publicacion === b?.publicacion && a?.anunciante === b?.anunciante });
   private readonly reservaConversacionId = computed(() => this.esInquilino() ? this.reserva()?.id : undefined);
   protected readonly devolucionPendiente = computed(() => {
     const id = this.reservaConversacionId();
@@ -122,6 +138,37 @@ export class ReservaResultadoComponent {
   });
 
   constructor() {
+    effect((onCleanup) => {
+      const reserva = this.reserva();
+      if (!reserva || this.esInquilino() || this.administracion || this.accesoLimitado()) {
+        this.resenasRecibidas.set({});
+        return;
+      }
+      const consulta = this.resenasApi.estadosRecibidosPorReserva().subscribe({
+        next: (estados) => this.resenasRecibidas.set(estados),
+        error: () => this.resenasRecibidas.set({}),
+      });
+      onCleanup(() => consulta.unsubscribe());
+    });
+    effect((onCleanup) => {
+      const objetivos = this.objetivosResena();
+      this.reintentoResenas();
+      this.resenaPublicacion.set(null);
+      this.resenaAnunciante.set(null);
+      if (!objetivos) return;
+      const consultas = new Subscription();
+      const consultar = (tipo: TipoObjetivoResena, id: number | null | undefined): void => {
+        if (!id) return;
+        const estado = tipo === 'PUBLICACION' ? this.resenaPublicacion : this.resenaAnunciante;
+        consultas.add(this.resenasApi.listar(tipo, id, 1, 1).subscribe({
+          next: (datos) => estado.set(datos),
+          error: () => estado.set('error'),
+        }));
+      };
+      consultar('PUBLICACION', objetivos.publicacion);
+      consultar('ANUNCIANTE', objetivos.anunciante);
+      onCleanup(() => consultas.unsubscribe());
+    });
     effect(onCleanup => {
       const id = this.reservaConversacionId();
       if (!id) return;

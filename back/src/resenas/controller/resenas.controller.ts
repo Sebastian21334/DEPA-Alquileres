@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Param,
   ParseIntPipe,
   Patch,
@@ -31,6 +32,12 @@ export class ResenasController {
     private readonly resenasService: ResenasService,
     private readonly resenasImagenesService: ResenasImagenesService,
   ) {}
+
+  @Get('recibidas-por-reserva')
+  @UseGuards(JwtAuthGuard)
+  estadosRecibidosPorReserva(@Req() req: AuthenticatedRequest) {
+    return this.resenasService.estadosRecibidosPorReserva(req.user.id);
+  }
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)

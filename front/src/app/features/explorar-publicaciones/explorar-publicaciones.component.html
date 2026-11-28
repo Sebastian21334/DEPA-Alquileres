@@ -75,8 +75,8 @@
     <app-mapa-publicaciones [filtros]="filtrosMapa()" />
   } @else {
     <div class="explore-view-row">
-      <a class="explore-view explore-view--map" [routerLink]="[]"
-        [queryParams]="{ vista: 'mapa', pagina: null }" queryParamsHandling="merge">
+      <a class="explore-view explore-view--map" [class.explore-view--temporal]="categoria() === 'temporales'" [class.explore-view--largo-plazo]="categoria() === 'largo-plazo'" [routerLink]="[]"
+        [queryParams]="{ vista: 'mapa', pagina: null, categoria: categoria() }" queryParamsHandling="merge">
         <svg lucideMap [size]="19" aria-hidden="true"></svg> Ver mapa
       </a>
     </div>
@@ -86,6 +86,7 @@
       [loading]="cargando()"
       [error]="error()"
       [sortOrder]="orden()"
+      [permitirOrdenResenas]="categoria() === 'temporales'"
       (sortChange)="cambiarOrden($event)"
     />
     @if (!cargando() && !error() && resultado().totalPaginas > 1) {
