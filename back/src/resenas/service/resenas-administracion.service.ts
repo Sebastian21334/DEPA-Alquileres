@@ -3,10 +3,10 @@ import {
   ConflictException,
   Inject,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { MAIL_SERVICE, type IMailResenas, type ObjetivoResenaEmail } from '../../mail/mail.interface';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import {
   ESTADOS_RESENAS_ADMINISTRACION,
   type EstadoResenasAdministracion,
@@ -46,8 +46,6 @@ const FILTROS_ADMINISTRACION = {
 
 @Injectable()
 export class ResenasAdministracionService {
-  private readonly logger = new Logger(ResenasAdministracionService.name);
-
   constructor(
     @Inject(RESENA_REPOSITORY) private readonly resenasRepo: IResenaRepository,
     private readonly resumenService: ResenasResumenService,
@@ -148,18 +146,17 @@ export class ResenasAdministracionService {
         aviso: objetivo && resena.visible && !visible ? { resena, objetivo } : null,
       };
     });
-    if (aviso) await this.avisarAutor(aviso.resena, aviso.objetivo, motivo);
+    if (aviso) this.avisarAutor(aviso.resena, aviso.objetivo, motivo);
     return respuesta;
   }
 
   /** La moderación ya quedó guardada: un fallo del correo se registra y no la revierte. */
-  private async avisarAutor(resena: Resena, objetivo: ObjetivoResenaEmail, motivo: string): Promise<void> {
+  private avisarAutor(resena: Resena, objetivo: ObjetivoResenaEmail, motivo: string): void {
     const email = resena.autor.email;
     if (!email) return;
-    try {
-      await this.mailService.enviarResenaOcultada(email, objetivo, motivo);
-    } catch (error) {
-      this.logger.error(`No se pudo avisar al autor que se ocultó la reseña ${resena.id}`, error as Error);
-    }
+    ejecutarEnSegundoPlano(
+      () => this.mailService.enviarResenaOcultada(email, objetivo, motivo),
+      `No se pudo avisar al autor que se ocultó la reseña ${resena.id}`,
+    );
   }
 }

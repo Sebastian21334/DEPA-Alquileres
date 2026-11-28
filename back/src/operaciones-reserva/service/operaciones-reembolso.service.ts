@@ -4,6 +4,7 @@ import { ReservasService } from '../../reservas/service/reservas.service';
 import { ReservaNotificacionesService } from '../../reservas/service/reserva-notificaciones.service';
 import { ReclamosService } from '../../reclamos/service/reclamos.service';
 import { OrigenReembolso, type Reembolso } from '../../reembolsos/entity/reembolso.entity';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 
 @Injectable()
 export class OperacionesReembolsoService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -41,11 +42,15 @@ export class OperacionesReembolsoService implements OnApplicationBootstrap, OnMo
       return this.reservas.aplicarEfectoReembolso(reembolso, transaccion);
     });
     const reembolso = await this.reembolsos.buscar(id);
-    if (aplicada) {
+    if (aplicada && this.notificaciones) {
+      const notificaciones = this.notificaciones;
       const simulada = this.reembolsos.esSimulado(reembolso);
       const asunto = simulada ? 'Cancelación con devolución simulada' : aplicada.cancelada ? 'Reserva cancelada y devolución registrada' : 'Devolución registrada';
       const mensaje = simulada ? 'La devolución con tarjeta fue simulada para pruebas; no se transfirió dinero.' : 'La devolución del pago quedó registrada. Consultá el estado de la reserva en DEPA.';
-      await this.notificaciones?.avisarCambio(aplicada, ['inquilino', 'anunciante'], asunto, mensaje, 'reserva');
+      ejecutarEnSegundoPlano(
+        () => notificaciones.avisarCambio(aplicada, ['inquilino', 'anunciante'], asunto, mensaje, 'reserva'),
+        `No se pudo notificar la aplicación del reembolso ${id}`,
+      );
     }
     return { reembolso, reserva: aplicada ?? reembolso.reserva };
   }

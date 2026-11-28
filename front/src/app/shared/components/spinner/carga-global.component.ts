@@ -1,54 +1,57 @@
-import { Component, ElementRef, afterRenderEffect, computed, inject, viewChild } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { Component, computed, inject } from '@angular/core';
+import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { NavigationCancel, NavigationEnd, NavigationError, NavigationSkipped, NavigationStart, Router } from '@angular/router';
-import { filter, map } from 'rxjs';
+import { filter, map, of, switchMap, timer } from 'rxjs';
 import { CargaService } from '../../../core/services/carga.service';
-import { SpinnerComponent } from './spinner.component';
 
 @Component({
   selector: 'app-carga-global',
-  imports: [SpinnerComponent],
   template: `
-    <div #indicador popover="manual" class="carga-global" [class.carga-global--activa]="activa()">
-      <app-spinner [local]="false" [label]="navegando() ? 'Abriendo página…' : 'Cargando…'" />
-      <span aria-hidden="true">{{ navegando() ? 'Abriendo página…' : 'Cargando…' }}</span>
-    </div>
+    <div class="sr-only" role="status">{{ mostrando() ? (navegando() ? 'Abriendo página…' : 'Cargando…') : '' }}</div>
+    @if (mostrando()) {
+      <div class="carga-global" aria-hidden="true"></div>
+    }
   `,
   styles: `
     .carga-global {
-      display: none; position: fixed; inset: 50% auto auto 50%; margin: 0;
-      transform: translate(-50%, -50%); width: max-content;
-      z-index: 10000; max-width: calc(100vw - 2rem); padding: .5rem 1.25rem .9rem;
-      border: 1px solid var(--color-border); border-radius: 16px;
-      background: var(--color-surface); color: var(--color-text);
-      box-shadow: 0 8px 32px rgb(16 24 40 / 18%); pointer-events: none;
-      text-align: center; font-size: .85rem;
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 10000;
+      height: 3px;
+      overflow: hidden;
+      pointer-events: none;
+      background: var(--color-border);
     }
-    .carga-global--activa { display: grid; justify-items: center; animation: depa-fade-in .15s ease .15s both; }
-    .carga-global::backdrop { pointer-events: none; }
+    .carga-global::before {
+      content: '';
+      display: block;
+      width: 35%;
+      height: 100%;
+      background: var(--color-primary, #f47818);
+      animation: avanzando 1.3s ease-in-out infinite;
+    }
+    @keyframes avanzando {
+      from { transform: translateX(-100%); }
+      to { transform: translateX(286%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .carga-global::before { animation: none; }
+    }
   `,
 })
 export class CargaGlobalComponent {
-  protected readonly carga = inject(CargaService);
+  private readonly carga = inject(CargaService);
   private readonly router = inject(Router);
-  private readonly indicador = viewChild<ElementRef<HTMLElement>>('indicador');
   protected readonly navegando = toSignal(this.router.events.pipe(
     filter(event => event instanceof NavigationStart || event instanceof NavigationEnd ||
       event instanceof NavigationCancel || event instanceof NavigationError || event instanceof NavigationSkipped),
     map(event => event instanceof NavigationStart),
   ), { initialValue: !!this.router.currentNavigation() });
-  protected readonly activa = computed(() => this.navegando() ||
-    (this.carga.activa() && !this.carga.indicadorLocalVisible()));
+  private readonly activa = computed(() => !this.carga.indicadorLocalVisible() &&
+    (this.navegando() || this.carga.activa()));
 
-  constructor() {
-    // La capa superior permite ver la carga también al guardar desde un <dialog>.
-    // Es no modal: conserva el foco y permite seguir usando la página.
-    afterRenderEffect(() => {
-      const activo = this.activa();
-      const elemento = this.indicador()?.nativeElement;
-      if (!elemento?.showPopover) return;
-      if (activo && !elemento.matches(':popover-open')) elemento.showPopover();
-      else if (!activo && elemento.matches(':popover-open')) elemento.hidePopover();
-    });
-  }
+  private readonly transcurrioDemora = toSignal(toObservable(this.activa).pipe(
+    switchMap(activa => activa ? timer(450).pipe(map(() => true)) : of(false)),
+  ), { initialValue: false });
+  protected readonly mostrando = computed(() => this.activa() && this.transcurrioDemora());
 }

@@ -8,7 +8,6 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PUBLICACIONES_REPOSITORY } from '../repository/publicaciones.repository.interface';
@@ -34,12 +33,12 @@ import type { IMailPublicaciones } from '../../mail/mail.interface';
 import type { EntityManager } from 'typeorm';
 import { decimalEntero, importeTexto, monedaPublicacion } from '../../common/utils/importes';
 import { fechaArgentina } from '../../common/utils/fechas';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 
 type EtapaReserva = 'cotizacion' | 'reserva';
 
 @Injectable()
 export class PublicacionesService {
-  private readonly logger = new Logger(PublicacionesService.name);
   constructor(@Inject(PUBLICACIONES_REPOSITORY) private readonly publicacionesRepo: IPublicacionesRepository, private readonly catalogosService: CatalogosService, private readonly ubicacionService: UbicacionService, @Inject(MAIL_SERVICE) private readonly mailService: IMailPublicaciones, private readonly anunciantesService: AnunciantesService, private readonly reservasLectura: ReservasLecturaService, private readonly cotizacionesLectura: CotizacionesLecturaService) {}
 
   /** Crea una publicacion y resuelve todas sus relaciones antes de guardarla. */
@@ -274,7 +273,7 @@ export class PublicacionesService {
     const activada = await this.publicacionesRepo.marcarActiva(publicacion.id);
     publicacion.activa = true;
     // Dos primeras fotos simultáneas activan una sola vez: el aviso no se duplica.
-    if (activada) await this.avisarAlAnunciante(publicacion, 'la publicación', email => this.mailService.enviarPublicacionActiva(email, publicacion.titulo, publicacion.id));
+    if (activada) this.avisarAlAnunciante(publicacion, 'la publicación', email => this.mailService.enviarPublicacionActiva(email, publicacion.titulo, publicacion.id));
   }
 
   /** Lista pública paginada; el límite se acota para proteger la base de datos. */
@@ -453,8 +452,8 @@ export class PublicacionesService {
     await this.publicacionesRepo.darDeBaja(id, razon);
     publicacion.activa = false;
     publicacion.motivo_baja_admin = razon;
-    const correoEnviado = await this.avisarAlAnunciante(publicacion, 'la baja', email => this.mailService.enviarBajaPublicacion(email, publicacion.titulo, razon));
-    return { publicacion, correoEnviado };
+    this.avisarAlAnunciante(publicacion, 'la baja', email => this.mailService.enviarBajaPublicacion(email, publicacion.titulo, razon));
+    return { publicacion, correoEnviado: null };
   }
 
   /** Levanta una baja administrativa; el controller restringe esta operación al rol Administrador. */
@@ -466,21 +465,20 @@ export class PublicacionesService {
     if (!await this.publicacionesRepo.reactivar(id)) throw new ConflictException('La publicación cambió. Recargá e intentá nuevamente');
     publicacion.motivo_baja_admin = null;
     publicacion.activa = false;
-    await this.avisarAlAnunciante(publicacion, 'la reactivación', email => this.mailService.enviarReactivacionPublicacion(email, publicacion.titulo));
+    this.avisarAlAnunciante(publicacion, 'la reactivación', email => this.mailService.enviarReactivacionPublicacion(email, publicacion.titulo));
     return this.prepararRespuesta(publicacion);
   }
 
   /** La operación ya quedó confirmada: un fallo del correo se registra y no la revierte. */
-  private async avisarAlAnunciante(publicacion: Publicacion, aviso: string, enviar: (email: string) => Promise<void>): Promise<boolean> {
-    try {
-      const { email } = this.anunciantesService.datosContacto(publicacion.anunciante);
-      if (!email) throw new Error('El anunciante no tiene un correo registrado');
-      await enviar(email);
-      return true;
-    } catch (error) {
-      this.logger.error(`No se pudo notificar ${aviso} de la publicación ${publicacion.id}`, error as Error);
-      return false;
-    }
+  private avisarAlAnunciante(publicacion: Publicacion, aviso: string, enviar: (email: string) => Promise<void>): void {
+    ejecutarEnSegundoPlano(
+      async () => {
+        const { email } = this.anunciantesService.datosContacto(publicacion.anunciante);
+        if (!email) throw new Error('El anunciante no tiene un correo registrado');
+        await enviar(email);
+      },
+      `No se pudo notificar ${aviso} de la publicación ${publicacion.id}`,
+    );
   }
 
   /** Elimina solo publicaciones pertenecientes al anunciante autenticado. */

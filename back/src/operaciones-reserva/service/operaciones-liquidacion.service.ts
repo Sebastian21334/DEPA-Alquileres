@@ -17,6 +17,7 @@ import {
   TipoReembolso,
 } from '../../reembolsos/entity/reembolso.entity';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { decimalEntero } from '../../common/utils/importes';
 import { fechaArgentina } from '../../common/utils/fechas';
 import { MAX_INTENTOS_CODIGO } from '../../reservas-consulta/service/reserva-estado.service';
@@ -306,7 +307,10 @@ export class OperacionesLiquidacionService implements OnApplicationBootstrap, On
     // Recién con la transacción confirmada el comprobante queda en uso; si algo falló, quien lo subió lo borra.
     pago?.alGuardar();
     if (dto.estado === this.catalogos.codigoEstado('LIQUIDACION_RESERVA', 'PAGADO_PROPIETARIO'))
-      await this.notificaciones?.avisarCambio(reserva, ['anunciante'], 'Pago al anunciante registrado', 'La administración registró el pago de tu liquidación. Podés consultar el detalle en DEPA.', 'pago-liquidacion');
+      ejecutarEnSegundoPlano(
+        () => this.notificaciones?.avisarCambio(reserva, ['anunciante'], 'Pago al anunciante registrado', 'La administración registró el pago de tu liquidación. Podés consultar el detalle en DEPA.', 'pago-liquidacion'),
+        `No se pudo avisar el pago al anunciante de la reserva ${reserva.id}`,
+      );
     return reserva;
   }
 

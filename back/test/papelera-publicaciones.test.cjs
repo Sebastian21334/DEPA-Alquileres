@@ -211,7 +211,7 @@ test('HTTP y PostgreSQL: papelera privada, restauración y actividad de publicac
     for (const id of [40, 50, 60, 70]) {
       const respuesta = await request(`/administracion/${id}/baja`, 9, 'PATCH', { motivo: 'Moderación' });
       assert.equal(respuesta.status, 200);
-      assert.equal((await respuesta.json()).correoEnviado, true);
+      assert.equal((await respuesta.json()).correoEnviado, null);
     }
     assert.equal(correos.length, 4);
     assert.ok(!(await feed()).includes(40));

@@ -91,6 +91,16 @@ export class ReservaRepository implements IReservaRepository {
 
   async buscarPorId(id: number, modoBloqueo?: 'pessimistic_write' | 'for_no_key_update'): Promise<Reserva | null> {
     await this.bloquear(id, modoBloqueo);
+    return this.buscarDetallePorId(id);
+  }
+
+  async buscarParaNotificarConfirmacion(id: number): Promise<Reserva | null> {
+    // Serializa envíos del mismo pago sin bloquear las operaciones sobre la fila de la reserva.
+    await this.repository.manager.query('SELECT pg_advisory_xact_lock(hashtext($1), $2)', ['depa:confirmacion-reserva', id]);
+    return this.buscarDetallePorId(id);
+  }
+
+  private buscarDetallePorId(id: number): Promise<Reserva | null> {
     return this.repository.findOne({
       where: { id },
       relations: {

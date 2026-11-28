@@ -19,6 +19,7 @@ import type { RestablecerContraseniaDto } from '../dto/restablecer-contrasenia.d
 import type { SolicitarReactivacionDto } from '../dto/solicitar-reactivacion.dto';
 import type { IMailCuenta } from '../../mail/mail.interface';
 import { MAIL_SERVICE } from '../../mail/mail.interface';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 
 const AUDIENCIA_BLOQUEO = 'depa:apelacion-bloqueo';
 const AUDIENCIA_REACTIVACION = 'depa:solicitar-reactivacion';
@@ -47,17 +48,10 @@ export class AuthService {
       });
     }
 
-    // El alta de la cuenta ya quedó confirmada en la base (usuario + token de
-    // verificación). Si el proveedor de mail falla o rate-limitea (Azure
-    // Communication Services devuelve 429 con bastante facilidad), no
-    // queremos que el cliente reciba un error creyendo que el registro no se
-    // hizo: solo el mail no salió, y el usuario puede pedir uno nuevo más
-    // tarde. Se loguea para que quede auditado sin romper la respuesta.
-    try {
-      await this.mailService.enviarVerificacion(email, token, origen);
-    } catch {
-      this.logger.error('No se pudo enviar el mail de verificación del alta');
-    }
+    ejecutarEnSegundoPlano(
+      () => this.mailService.enviarVerificacion(email, token, origen),
+      'No se pudo enviar el mail de verificación del alta',
+    );
 
     return {
       mensaje:
@@ -73,16 +67,19 @@ export class AuthService {
     const token = await this.usuariosService.generarTokenReactivacion(correo);
     if (!token) {
       if (constanciaReactivacion) throw new ConflictException('La cuenta ya no está disponible para recuperar. Volvé al formulario.');
-    } else {
+    } else if (constanciaReactivacion) {
       try {
         await this.mailService.enviarReactivacion(correo, token, origen);
-        if (constanciaReactivacion) return { mensaje: 'Mail enviado' };
+        return { mensaje: 'Mail enviado' };
       } catch {
         this.logger.error('No se pudo enviar el enlace de reactivación');
-        if (constanciaReactivacion) {
-          throw new ServiceUnavailableException('No pudimos enviar el mail de recuperación. Volvé a intentarlo.');
-        }
+        throw new ServiceUnavailableException('No pudimos enviar el mail de recuperación. Volvé a intentarlo.');
       }
+    } else {
+      ejecutarEnSegundoPlano(
+        () => this.mailService.enviarReactivacion(correo, token, origen),
+        'No se pudo enviar el enlace de reactivación',
+      );
     }
     return { mensaje: 'Si la cuenta se puede recuperar, vas a recibir un enlace por email.' };
   }
@@ -205,18 +202,14 @@ export class AuthService {
 
     const token = await this.credencialesService.generarTokenVerificacion(user.id, email);
     if (!token) return { mensaje: 'Si tu cuenta necesita verificación, vas a recibir un nuevo email' };
-    try {
-      await this.mailService.enviarVerificacion(email, token, origen);
-    } catch (error) {
-      this.logger.error(
-        `No se pudo reenviar el mail de verificación del usuario ${user.id}`,
-        error as Error,
-      );
-    }
+    ejecutarEnSegundoPlano(
+      () => this.mailService.enviarVerificacion(email, token, origen),
+      `No se pudo reenviar el mail de verificación del usuario ${user.id}`,
+    );
 
     return {
       mensaje:
-        'Te enviamos un nuevo email de verificación. Revisá tu bandeja de entrada y spam',
+        'Vas a recibir un nuevo email de verificación. Revisá tu bandeja de entrada y spam',
     };
   }
 
@@ -232,21 +225,12 @@ export class AuthService {
 
     // Si no existe el usuario, igual devolvemos éxito (evita enumeración de emails)
     // Las cuentas dadas de baja no tienen email vigente y no llegan hasta acá (RN-37).
-    if (resultado?.usuario.email) {
-      // Mismo criterio que en register(): el token ya quedó persistido, así
-      // que una falla del proveedor de mail no debe convertirse en un error
-      // para el cliente (ver nota en register()).
-      try {
-        await this.mailService.enviarRecuperacion(
-          resultado.usuario.email,
-          resultado.token,
-        );
-      } catch (error) {
-        this.logger.error(
-          `No se pudo enviar el mail de recuperación a ${resultado.usuario.email}`,
-          error as Error,
-        );
-      }
+    const destinatario = resultado?.usuario.email;
+    if (destinatario) {
+      ejecutarEnSegundoPlano(
+        () => this.mailService.enviarRecuperacion(destinatario, resultado.token),
+        `No se pudo enviar el mail de recuperación del usuario ${resultado.usuario.id}`,
+      );
     }
 
     return {
@@ -264,7 +248,7 @@ export class AuthService {
       dto.token,
       dto.nuevaContrasenia,
     );
-    await this.notificarCambioContrasenia(usuario.email);
+    this.notificarCambioContrasenia(usuario.email);
     return { mensaje: 'Contraseña restablecida correctamente' };
   }
 
@@ -278,7 +262,7 @@ export class AuthService {
       dto.contraseniaActual,
       dto.nuevaContrasenia,
     );
-    await this.notificarCambioContrasenia(usuario.email);
+    this.notificarCambioContrasenia(usuario.email);
     return { mensaje: 'Contraseña actualizada correctamente' };
   }
 
@@ -288,13 +272,11 @@ export class AuthService {
     }
   }
 
-  private async notificarCambioContrasenia(email: string | null): Promise<void> {
+  private notificarCambioContrasenia(email: string | null): void {
     if (!email) return;
-    try {
-      await this.mailService.enviarCambioContrasenia(email);
-    } catch {
-      // La contraseña ya se guardó. No revertirla ni registrar datos sensibles del envío.
-      this.logger.error('No se pudo enviar la notificación de cambio de contraseña');
-    }
+    ejecutarEnSegundoPlano(
+      () => this.mailService.enviarCambioContrasenia(email),
+      'No se pudo enviar la notificación de cambio de contraseña',
+    );
   }
 }

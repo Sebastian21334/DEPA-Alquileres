@@ -198,7 +198,7 @@ export class AdminService {
     return this.http.get<AdminPage<Publicacion>>(`${this.api}/publicaciones/administracion`, { params });
   }
   darDeBajaPublicacion(id: number, motivo: string) {
-    return this.http.patch<{ publicacion: Publicacion; correoEnviado: boolean }>(
+    return this.http.patch<{ publicacion: Publicacion; correoEnviado: boolean | null }>(
       `${this.api}/publicaciones/administracion/${id}/baja`, { motivo },
     );
   }

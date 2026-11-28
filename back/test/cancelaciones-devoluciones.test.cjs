@@ -21,6 +21,7 @@ const { AlmacenamientoService } = require('../dist/almacenamiento/service/almace
 const { comprobantePdf, almacenamientoDePrueba, imagenPng } = require('./soporte/comprobantes-pruebas.cjs');
 const { ReembolsosRepository } = require('../dist/reembolsos/repository/reembolsos.repository');
 const { ReservasService } = require('../dist/reservas/service/reservas.service');
+const { ReservaNotificacionesService } = require('../dist/reservas/service/reserva-notificaciones.service');
 const { OperacionesReembolsoService } = require('../dist/operaciones-reserva/service/operaciones-reembolso.service');
 const { OperacionesPagoService } = require('../dist/operaciones-reserva/service/operaciones-pago.service');
 const { OperacionesLiquidacionService } = require('../dist/operaciones-reserva/service/operaciones-liquidacion.service');
@@ -2971,9 +2972,18 @@ test('la API integra pagos, firma del webhook, permisos, cancelación y devoluci
     await request(http).patch(rutaManual).set('Authorization', tenant).expect(403);
     const habilitada = await request(http).patch(rutaManual).set('Authorization', admin).expect(200);
     assert.deepEqual([habilitada.body.estado, habilitada.body.transferencia_manual], ['PENDIENTE', true]);
-    const devueltaManual = await request(http).patch(`/reservas/reembolsos/${fallido.id}/transferencia`).set('Authorization', admin)
-      .attach('comprobante', comprobantePdf().buffer, 'reembolso.pdf').expect(200);
-    assert.equal(devueltaManual.body.reembolso.estado, 'APROBADO');
+    const correoPendiente = Promise.withResolvers();
+    const avisarReembolso = t.mock.method(app.get(ReservaNotificacionesService), 'avisarCambio', () => correoPendiente.promise);
+    try {
+      const devueltaManual = await request(http).patch(`/reservas/reembolsos/${fallido.id}/transferencia`).set('Authorization', admin)
+        .attach('comprobante', comprobantePdf().buffer, 'reembolso.pdf').timeout({ deadline: 3000 }).expect(200);
+      assert.equal(devueltaManual.body.reembolso.estado, 'APROBADO');
+      assert.ok(devueltaManual.body.reembolso.aplicado_en);
+      assert.equal(avisarReembolso.mock.callCount(), 1);
+    } finally {
+      correoPendiente.resolve(true);
+      avisarReembolso.mock.restore();
+    }
     await db.exec('TRUNCATE reserva RESTART IDENTITY CASCADE');
     // El reclamo por demora administrativa ya no se ofrece ni se puede crear.
     const { reserva: iniciadaSinDemora } = await escenario(fechaEnDias(-1));

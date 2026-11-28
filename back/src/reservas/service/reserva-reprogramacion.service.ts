@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { conversionContratada, nombreInquilinoReserva } from './reservas.utils';
 import { TOLERANCIA_MONETARIA } from '../../common/utils/dinero';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { diasInclusivos, diasDeAntelacion, esFechaCalendarioValida, fechaArgentina } from '../../common/utils/fechas';
 import { ActualizarFechasReservaDto } from '../dto/actualizar-fechas-reserva.dto';
 import { Reserva } from '../entity/reserva.entity';
@@ -109,7 +110,10 @@ export class ReservaReprogramacionService {
     );
     // El correo usa su propia transacción y nunca mantiene bloqueado el calendario.
     if (idCambio)
-      await this.notificacionesService.enviarReprogramacion(idCambio, id);
+      ejecutarEnSegundoPlano(
+        () => this.notificacionesService.enviarReprogramacion(idCambio, id),
+        `No se pudo avisar la reprogramación ${idCambio}`,
+      );
     const actualizada = await this.reservaRepository.buscarPorId(id);
     if (!actualizada)
       throw new NotFoundException(`No se encontró la reserva ${id}`);

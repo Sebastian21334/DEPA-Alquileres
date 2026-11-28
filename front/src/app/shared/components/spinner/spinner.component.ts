@@ -10,14 +10,13 @@ import { CargaService } from '../../../core/services/carga.service';
 })
 export class SpinnerComponent {
   readonly label = input('Cargando…');
-  readonly local = input(true);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly carga = inject(CargaService);
 
   constructor() {
-    // Si ya se ve un logo en el contenido, evita duplicarlo en el panel global.
+    // El indicador global se oculta mientras haya feedback de carga visible en el contenido.
     afterRenderEffect(onCleanup => {
-      if (!this.local() || typeof IntersectionObserver === 'undefined') return;
+      if (typeof IntersectionObserver === 'undefined') return;
       const actualizar = this.carga.registrarIndicadorLocal();
       const observador = new IntersectionObserver(([entrada]) => actualizar(entrada.isIntersecting));
       observador.observe(this.host.nativeElement);

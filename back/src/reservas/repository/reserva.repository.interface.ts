@@ -24,6 +24,7 @@ export interface IReservaRepository {
   guardarReprogramacion(datos: Partial<ReprogramacionReserva>): Promise<ReprogramacionReserva>;
   buscarReprogramacion(id: number, idReserva: number): Promise<ReprogramacionReserva | null>;
   marcarReprogramacionNotificada(id: number): Promise<void>;
+  buscarParaNotificarConfirmacion(id: number): Promise<Reserva | null>;
   registrarNotificaciones(id: number, datos: Partial<Pick<Reserva, | 'email_confirmacion_inquilino_enviado' | 'email_nueva_reserva_anunciante_enviado'>>): Promise<void>;
   crear(datos: Partial<Reserva>): Reserva;
   guardar(reserva: Reserva): Promise<Reserva>;

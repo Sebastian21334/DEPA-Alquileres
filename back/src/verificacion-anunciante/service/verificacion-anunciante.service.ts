@@ -21,6 +21,7 @@ import { SolicitarAnuncianteDto } from '../dto/solicitar-anunciante.dto';
 import { ActualizarDatosSolicitanteDto } from '../dto/actualizar-datos-solicitante.dto';
 import { MENSAJE_CUIT_EN_USO } from '../../anunciantes/service/anunciantes.service';
 import { digitosCuit } from '../../common/utils/cuit';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { Anunciante } from '../../anunciantes/entity/anunciante.entity';
@@ -96,17 +97,12 @@ export class VerificacionAnuncianteService {
       this.logger.error('No se pudo guardar la solicitud de anunciante');
       throw new InternalServerErrorException('No se pudo iniciar la solicitud. Intentá nuevamente.');
     }
-    const { usuario } = anunciante;
-    if (usuario.email) {
-      try {
-        await this.mailService.enviarSolicitudAnunciante(usuario.email);
-      } catch (error) {
-        this.logger.error(
-          `No se pudo confirmar la solicitud de anunciante a ${usuario.email}`,
-          error as Error,
-        );
-      }
-    }
+    const { email } = anunciante.usuario;
+    if (email)
+      ejecutarEnSegundoPlano(
+        () => this.mailService.enviarSolicitudAnunciante(email),
+        `No se pudo confirmar la solicitud del anunciante ${anunciante.idUsuario}`,
+      );
     return anunciante;
   }
 
@@ -241,7 +237,10 @@ export class VerificacionAnuncianteService {
       reenvio,
       comprobarAutorizacion,
     );
-    await this.avisarSolicitudParaRevision(solicitud);
+    ejecutarEnSegundoPlano(
+      () => this.avisarSolicitudParaRevision(solicitud),
+      `No se pudo avisar la solicitud de verificación ${solicitud.id}`,
+    );
     return this.respuestaSolicitud(guardada);
   }
 
@@ -420,7 +419,10 @@ export class VerificacionAnuncianteService {
       dto,
     );
     if (revisarIdentidad) await this.eliminacionDocumentos.ejecutar();
-    await this.notificarResolucion(solicitud, true);
+    ejecutarEnSegundoPlano(
+      () => this.notificarResolucion(solicitud, true),
+      `No se pudo avisar la aprobación de la solicitud ${solicitud.id}`,
+    );
     return solicitud.anunciante;
   }
 
@@ -435,7 +437,10 @@ export class VerificacionAnuncianteService {
     if (!rechazo.identidad && !rechazo.cbu) throw new BadRequestException('Elegí qué parte rechazar');
     const { solicitud, revisarIdentidad } = await this.resolverRevision(idAnunciante, idAdministrador, dto, rechazo);
     if (revisarIdentidad) await this.eliminacionDocumentos.ejecutar();
-    await this.notificarResolucion(solicitud, false, motivo);
+    ejecutarEnSegundoPlano(
+      () => this.notificarResolucion(solicitud, false, motivo),
+      `No se pudo avisar el rechazo de la solicitud ${solicitud.id}`,
+    );
     return { mensaje: 'Solicitud de verificación rechazada' };
   }
 

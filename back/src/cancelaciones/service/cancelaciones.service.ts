@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
 import { diasDeAntelacion, fechaArgentina } from '../../common/utils/fechas';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { decimalEntero, importeTexto } from '../../common/utils/importes';
 import type { Pago } from '../../pagos/entity/pago.entity';
 import {
@@ -85,9 +86,12 @@ export class CancelacionesService {
       return { solicitud, creada: true, reembolso };
     });
     if (resultado.creada)
-      await this.notificaciones?.avisarCambio(resultado.solicitud.reserva, ['inquilino', 'anunciante'],
-        resultado.reembolso ? 'Cancelación aceptada' : 'Reserva cancelada',
-        resultado.reembolso ? 'La devolución está en gestión.' : 'La reserva quedó cancelada sin devolución según las condiciones aceptadas.', 'reserva');
+      ejecutarEnSegundoPlano(
+        () => this.notificaciones?.avisarCambio(resultado.solicitud.reserva, ['inquilino', 'anunciante'],
+          resultado.reembolso ? 'Cancelación aceptada' : 'Reserva cancelada',
+          resultado.reembolso ? 'La devolución está en gestión.' : 'La reserva quedó cancelada sin devolución según las condiciones aceptadas.', 'reserva'),
+        `No se pudo avisar la cancelación de la reserva ${resultado.solicitud.reserva.id}`,
+      );
     return this.prepararRespuesta(resultado.solicitud);
   }
 

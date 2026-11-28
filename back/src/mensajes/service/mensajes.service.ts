@@ -6,9 +6,9 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
-  Logger,
 } from '@nestjs/common';
 import { Usuario } from '../../usuarios/entity/usuario.entity';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { Mensaje } from '../entity/mensaje.entity';
 import { EnviarMensajeDto } from '../dto/enviar-mensaje.dto';
 import type { IMensajeRepository } from '../repository/mensaje.repository.interface';
@@ -24,7 +24,6 @@ import type { EntityManager } from 'typeorm';
 
 @Injectable()
 export class MensajesService {
-  private readonly logger = new Logger(MensajesService.name);
   // Se comunica con el service de Publicaciones, nunca con su repositorio directo
   constructor(@Inject(MENSAJE_REPOSITORY) private readonly mensajeRepository: IMensajeRepository, private readonly publicacionesService: PublicacionesService, private readonly usuariosService: UsuariosService, private readonly reservasService: ReservasService, @Inject(MAIL_SERVICE) private readonly mailService: IMailMensajes) {}
 
@@ -50,7 +49,7 @@ export class MensajesService {
     const { guardado, destinatario, remitente } = await this.mensajeRepository.conTransaccion((mensajes, transaccion) =>
       this.guardarMensaje(dto, idUsuarioOrigen, publicacion, mensajes, transaccion),
     );
-    await this.avisarMensajeNuevo(destinatario, remitente, publicacion);
+    this.avisarMensajeNuevo(destinatario, remitente, publicacion);
     return this.prepararRespuesta({ ...guardado, origenUsuario: remitente, destinoUsuario: destinatario });
   }
 
@@ -112,25 +111,20 @@ export class MensajesService {
   }
 
   /** El aviso por correo no deshace un mensaje ya guardado. */
-  private async avisarMensajeNuevo(destinatario: Usuario, remitente: Usuario, publicacion: Publicacion): Promise<void> {
-    // El destinatario está activo (se validó al guardar), así que tiene email vigente.
-    if (!destinatario.email) return;
-    try {
-      await this.mailService.enviarMensajeNuevo(
-        destinatario.email,
+  private avisarMensajeNuevo(destinatario: Usuario, remitente: Usuario, publicacion: Publicacion): void {
+    const { email } = destinatario;
+    if (!email) return;
+    ejecutarEnSegundoPlano(
+      () => this.mailService.enviarMensajeNuevo(
+        email,
         this.usuariosService.nombreCompleto(destinatario),
         this.usuariosService.nombreCompleto(remitente),
         publicacion.titulo,
         publicacion.id,
         remitente.id,
-      );
-    } catch (error) {
-      // Se registra la cuenta, no el correo: el log no debe guardar datos personales.
-      this.logger.error(
-        `No se pudo enviar el aviso de chat al usuario ${destinatario.id}`,
-        error as Error,
-      );
-    }
+      ),
+      `No se pudo enviar el aviso de chat al usuario ${destinatario.id}`,
+    );
   }
 
   /**

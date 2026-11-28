@@ -20,6 +20,7 @@ function escenario({ estado = 'borrador', inmobiliaria = false, autorizaciones =
     domicilio_comercial: 'Calle 1', dni_corredor: '30123456',
   };
   const registro = { subidos: [], eliminados: [], guardados: 0, avisos: 0, comprobaciones: 0 };
+  const aviso = Promise.withResolvers();
   const repositorio = {
     buscarSolicitudPorAnunciante: async () => solicitud,
     conSolicitudBloqueada: async (_id, operacion) => operacion(solicitud, {
@@ -42,6 +43,7 @@ function escenario({ estado = 'borrador', inmobiliaria = false, autorizaciones =
   };
   const mail = {
     enviarSolicitudParaRevision: async () => {
+      aviso.resolve();
       if (avisoFalla) throw new Error('Correo no disponible');
       registro.avisos++;
     },
@@ -53,7 +55,7 @@ function escenario({ estado = 'borrador', inmobiliaria = false, autorizaciones =
     { preparar: async (buffer) => buffer },
   );
   servicio.logger = { error: () => {} };
-  return { servicio, solicitud, registro };
+  return { servicio, solicitud, registro, aviso: aviso.promise };
 }
 
 test('rechaza presentaciones que no corresponden al estado o al tipo de anunciante, sin subir archivos', async () => {
@@ -72,8 +74,8 @@ test('rechaza presentaciones que no corresponden al estado o al tipo de anuncian
   }
 });
 
-test('un particular presenta sus tres capturas, consume la autorización y se avisa a administración', async () => {
-  const { servicio, solicitud, registro } = escenario();
+test('un particular presenta sus tres capturas, consume la autorización y se avisa a administración', { timeout: 2000 }, async () => {
+  const { servicio, solicitud, registro, aviso } = escenario();
   const respuesta = await servicio.subirDocumentos(7, capturas(), 'token');
   assert.equal(registro.subidos.length, 3);
   assert.deepEqual([respuesta.dni_frente_url, respuesta.dni_dorso_url, respuesta.rostro_url], registro.subidos);
@@ -81,6 +83,7 @@ test('un particular presenta sus tres capturas, consume la autorización y se av
   // La marca de consumo queda guardada, pero no viaja en la respuesta.
   assert.ok(solicitud.prueba_vida_consumida_en instanceof Date);
   assert.equal(Object.hasOwn(respuesta, 'prueba_vida_consumida_en'), false);
+  await aviso;
   assert.deepEqual([registro.guardados, registro.avisos, registro.comprobaciones], [1, 1, 2]);
 });
 
@@ -105,9 +108,10 @@ test('si la autorización deja de valer antes de confirmar, se borran los archiv
   assert.equal(registro.guardados, 0);
 });
 
-test('si falla el aviso a administración, la presentación queda guardada', async () => {
-  const { servicio, registro } = escenario({ avisoFalla: true });
+test('si falla el aviso a administración, la presentación queda guardada', { timeout: 2000 }, async () => {
+  const { servicio, registro, aviso } = escenario({ avisoFalla: true });
   const respuesta = await servicio.subirDocumentos(7, capturas(), 'token');
   assert.equal(respuesta.estado, 'pendiente');
+  await aviso;
   assert.deepEqual([registro.guardados, registro.eliminados], [1, []]);
 });

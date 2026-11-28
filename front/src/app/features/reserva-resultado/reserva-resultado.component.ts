@@ -277,7 +277,7 @@ export class ReservaResultadoComponent {
       (mayor, cambio) => !mayor || cambio.id > mayor.id ? cambio : mayor, undefined,
     );
     this.avisoReprogramacion.set(ultimo && !ultimo.notificada_en
-      ? 'Fechas actualizadas. El aviso al anunciante está pendiente. Podés reintentarlo en Mis reservas.'
+      ? 'Fechas actualizadas. El aviso al anunciante se procesa por correo.'
       : 'Fechas actualizadas. Se mantuvieron la duración y el total pagado.');
   }
 

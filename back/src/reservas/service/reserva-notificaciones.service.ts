@@ -89,7 +89,7 @@ export class ReservaNotificacionesService {
   async enviarConfirmacion(reserva: Reserva): Promise<void> {
     if (reserva.email_confirmacion_inquilino_enviado && reserva.email_nueva_reserva_anunciante_enviado) return;
     const huboErrores = await this.reservaRepository.conTransaccion(async (reservas) => {
-      const actual = await reservas.buscarPorId(reserva.id, 'for_no_key_update');
+      const actual = await reservas.buscarParaNotificarConfirmacion(reserva.id);
       if (!actual || (actual.cancelada || actual.estado_pago !== this.catalogos.codigoEstado('PAGO_RESERVA', 'APROBADO'))) return false;
       return this.enviarConfirmacionesPendientes(actual, reservas);
     });
@@ -174,8 +174,7 @@ export class ReservaNotificacionesService {
       if (resultado.status === 'rejected') {
         huboErrores = true;
         this.logger.error(
-          `No se pudo enviar la notificación de reserva al ${notificaciones[indice].tipo}`,
-          resultado.reason,
+          `No se pudo enviar la notificación de la reserva ${reserva.id} al ${notificaciones[indice].tipo}`,
         );
         return;
       }

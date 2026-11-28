@@ -1,10 +1,10 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { MAIL_SERVICE, type IMailCuenta } from '../../mail/mail.interface';
 import { UsuariosService } from '../../usuarios/service/usuarios.service';
 
 @Injectable()
 export class BloqueoAnuncianteService {
-  private readonly logger = new Logger(BloqueoAnuncianteService.name);
   constructor(private readonly usuarios: UsuariosService, @Inject(MAIL_SERVICE) private readonly mail: IMailCuenta) {}
 
   async cambiarBloqueo(idUsuario: number, bloqueado: boolean, idOperador: number, motivo?: string) {
@@ -12,12 +12,12 @@ export class BloqueoAnuncianteService {
     const { usuario, cambio } = await this.usuarios.cambiarBloqueoAdministrativo(idUsuario, bloqueado, idOperador, motivoNormalizado);
     const accesoLimitado = bloqueado && usuario.bloqueoDetalle?.accesoLimitado === true;
 
-    if (cambio && usuario.email) {
-      try {
-        await this.mail.enviarCambioBloqueo(usuario.email, bloqueado, motivoNormalizado, accesoLimitado);
-      } catch (error) {
-        this.logger.error(`No se pudo notificar el cambio de acceso del usuario ${idUsuario}`, error as Error);
-      }
+    const { email } = usuario;
+    if (cambio && email) {
+      ejecutarEnSegundoPlano(
+        () => this.mail.enviarCambioBloqueo(email, bloqueado, motivoNormalizado, accesoLimitado),
+        `No se pudo notificar el cambio de acceso del usuario ${idUsuario}`,
+      );
     }
 
     return {

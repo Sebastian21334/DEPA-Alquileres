@@ -1,4 +1,5 @@
 import { CatalogosService } from '../../catalogos/service/catalogos.service';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { PresupuestosService } from './presupuestos.service';
 import { OperacionesReembolsoService } from './operaciones-reembolso.service';
 import {
@@ -87,7 +88,7 @@ export class OperacionesPagoService {
 
     this.pasarela.validarWebhook(entrada);
     const payment = await this.pasarela.consultarPago(entrada.dataId);
-    await this.aplicarPago(payment);
+    await this.aplicarPago(payment, true);
 
     return { received: true };
   }
@@ -130,7 +131,7 @@ export class OperacionesPagoService {
     };
   }
 
-  private async aplicarPago(payment: PagoExterno): Promise<Pago> {
+  private async aplicarPago(payment: PagoExterno, esperarNotificacion = false): Promise<Pago> {
     const externalReference = payment.external_reference;
     if (!externalReference?.startsWith('reserva:')) {
       throw new BadRequestException('El pago no corresponde a una reserva');
@@ -152,12 +153,15 @@ export class OperacionesPagoService {
       const ids = await this.reembolsosService.registrarMovimientosExternos(pago, movimientos);
       for (const id of ids) await this.operacionesReembolso.aplicarReembolsoConfirmado(id);
       if (payment.status === 'approved' && !movimientos.some(movimiento => movimiento.status === 'approved')) {
-        await this.reservasService.confirmarPago(pago.reserva.id, pago.approved_at ?? new Date());
+        await this.reservasService.confirmarPago(pago.reserva.id, pago.approved_at ?? new Date(), esperarNotificacion);
       }
     } else if (payment.status === 'approved') {
-      await this.reservasService.confirmarPago(pago.reserva.id, pago.approved_at ?? new Date());
+      await this.reservasService.confirmarPago(pago.reserva.id, pago.approved_at ?? new Date(), esperarNotificacion);
     } else if (actualizado && (payment.status === 'rejected' || payment.status === 'cancelled')) {
-      await this.notificaciones?.avisarPagoNoAprobado(pago.reserva.id);
+      ejecutarEnSegundoPlano(
+        () => this.notificaciones?.avisarPagoNoAprobado(pago.reserva.id),
+        `No se pudo avisar el pago rechazado de la reserva ${pago.reserva.id}`,
+      );
     }
 
     return pago;

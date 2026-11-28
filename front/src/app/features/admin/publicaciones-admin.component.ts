@@ -113,14 +113,18 @@ export class PublicacionesAdminComponent {
       ({ correoEnviado }) => {
         this.loadPublications(this.publicationsPage());
         this.bajaId.set(null);
-        if (!correoEnviado) {
+        if (correoEnviado === false) {
           this.toast.mostrar(
             'La publicación fue desactivada, pero no se pudo enviar el correo. Podés reenviar el aviso con «Actualizar baja / reenviar aviso».',
             'advertencia',
           );
           return;
         }
-        this.toast.mostrar('Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.', 'exito');
+        this.toast.mostrar(
+          correoEnviado === null ? 'Baja registrada. Se solicitó el aviso al anunciante.'
+            : 'Publicación desactivada. El motivo quedó guardado en la cuenta del dueño.',
+          'exito',
+        );
       },
     );
   }

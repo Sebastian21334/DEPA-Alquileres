@@ -5,6 +5,7 @@ import {
   RESERVA_REPOSITORY,
 } from '../repository/reserva.repository.interface';
 import { importeTexto } from '../../common/utils/importes';
+import { ejecutarEnSegundoPlano } from '../../common/utils/segundo-plano';
 import { CotizacionDolar } from '../../cotizaciones/entity/cotizacion-dolar.entity';
 import { ConfigService } from '@nestjs/config';
 import { ReservaNotificacionesService } from './reserva-notificaciones.service';
@@ -351,17 +352,23 @@ export class ReservasService
     };
   }
 
-  async confirmarPago(id: number, fechaPago: Date): Promise<Reserva> {
+  async confirmarPago(id: number, fechaPago: Date, esperarNotificacion = false): Promise<Reserva> {
     const { reserva: guardada, devolucionPendiente } = await this.reservaRepository.conTransaccion(
       (reservaRepository, transaccion) => this.aplicarPagoAprobado(id, fechaPago, reservaRepository, transaccion),
     );
 
-    // Se reintentan únicamente los correos pendientes; los pagos en revisión
-    // no se presentan como una reserva confirmada.
     if (this.estaConfirmada(guardada)) {
-      await this.notificacionesService.enviarConfirmacion(guardada);
+      // El webhook puede reintentar un envío fallido. La conciliación del navegador confirma al guardar.
+      if (esperarNotificacion) await this.notificacionesService.enviarConfirmacion(guardada);
+      else ejecutarEnSegundoPlano(
+        () => this.notificacionesService.enviarConfirmacion(guardada),
+        `Quedó pendiente el correo de confirmación de la reserva ${id}`,
+      );
     } else if (devolucionPendiente) {
-      await this.notificacionesService.avisarCambio(guardada, ['inquilino', 'admin'], 'Pago recibido para una reserva sin confirmar', 'El pago se recibió, pero la reserva no pudo confirmarse. La devolución quedó pendiente de gestión.', 'reembolso');
+      ejecutarEnSegundoPlano(
+        () => this.notificacionesService.avisarCambio(guardada, ['inquilino', 'admin'], 'Pago recibido para una reserva sin confirmar', 'El pago se recibió, pero la reserva no pudo confirmarse. La devolución quedó pendiente de gestión.', 'reembolso'),
+        `No se pudo avisar el pago pendiente de devolución de la reserva ${id}`,
+      );
     }
     return this.prepararRespuesta(guardada);
   }
@@ -469,7 +476,10 @@ export class ReservasService
       },
     );
     if (resultado.cambio && causa === 'BLOQUEO_ANUNCIANTE')
-      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino'], 'Reserva cancelada por DEPA', 'La reserva pendiente de pago fue cancelada por DEPA.', 'reserva');
+      ejecutarEnSegundoPlano(
+        () => this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino'], 'Reserva cancelada por DEPA', 'La reserva pendiente de pago fue cancelada por DEPA.', 'reserva'),
+        `No se pudo avisar la cancelación por bloqueo de la reserva ${id}`,
+      );
     return this.prepararRespuesta(resultado.reserva);
   }
 
@@ -689,7 +699,10 @@ export class ReservasService
       },
     );
     if (resultado.cambio)
-      await this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino', 'anunciante'], 'Reserva cancelada', 'La reserva pendiente de pago fue cancelada.', 'reserva', idUsuarioQueOpera);
+      ejecutarEnSegundoPlano(
+        () => this.notificacionesService.avisarCambio(resultado.reserva, ['inquilino', 'anunciante'], 'Reserva cancelada', 'La reserva pendiente de pago fue cancelada.', 'reserva', idUsuarioQueOpera),
+        `No se pudo avisar la cancelación de la reserva ${id}`,
+      );
     return this.prepararRespuesta(resultado.reserva);
   }
 
@@ -884,7 +897,10 @@ export class ReservasService
     );
     // El intento incorrecto debe persistir aunque la respuesta sea un error.
     if (resultado instanceof BadRequestException) throw resultado;
-    await this.notificacionesService.avisarCambio(resultado, ['inquilino'], 'Ingreso confirmado', 'El anunciante validó tu ingreso al alojamiento.', 'reserva');
+    ejecutarEnSegundoPlano(
+      () => this.notificacionesService.avisarCambio(resultado, ['inquilino'], 'Ingreso confirmado', 'El anunciante validó tu ingreso al alojamiento.', 'reserva'),
+      `No se pudo avisar el ingreso confirmado de la reserva ${id}`,
+    );
     return this.prepararRespuesta(resultado);
   }
 
