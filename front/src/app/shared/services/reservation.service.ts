@@ -17,6 +17,15 @@ export interface CrearReservaPayload {
   fecha_fin: string;
 }
 
+export interface PoliticaCancelacion {
+  vigenteDesde: string;
+  diasDevolucionTotal: number;
+  diasDevolucionParcial: number;
+  porcentajeTotal: number;
+  porcentajeParcial: number;
+  porcentajeFueraDePlazo: number;
+}
+
 export interface PresupuestoReserva {
   token: string;
   precio_unitario_origen: string;
@@ -269,6 +278,10 @@ export class ReservationService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/reservas`;
   private readonly paymentUrl = `${environment.apiUrl}/pagos`;
+
+  politicaCancelacionVigente(): Observable<PoliticaCancelacion> {
+    return this.http.get<PoliticaCancelacion>(`${this.baseUrl}/politica-cancelacion/vigente`);
+  }
 
   quote(payload: CrearReservaPayload): Observable<PresupuestoReserva> {
     return this.http.post<PresupuestoReserva>(`${this.paymentUrl}/presupuesto`, payload);

@@ -40,7 +40,7 @@ interface PaginaMapaPublicaciones {
 /**
  * Consume el módulo `publicaciones` del backend (back/src/publicaciones).
  *
- * Endpoint usado por esta página: GET /publicaciones (método `listarActivas`).
+ * GET /publicaciones devuelve el catálogo activo.
  * Devuelve únicamente publicaciones con `activa = true` (RN-10 / RN-21), con las
  * relaciones necesarias para la tarjeta (imágenes, anunciante, catálogos, ubicación).
  *

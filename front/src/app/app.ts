@@ -40,6 +40,7 @@ export class App {
   protected readonly esPantallaAuth = computed(() => ['/login', '/registro', '/confirmar-baja', '/reactivar-cuenta', '/verificar-cuenta'].includes(this.ruta()));
   protected readonly esPantallaCbu = computed(() => this.ruta() === '/mi-perfil/validar-cbu');
   protected readonly accesoLimitado = computed(() => this.auth.currentUser()?.accesoLimitado === true);
+  protected readonly conSesion = computed(() => this.auth.isAuthenticated);
   private readonly idUsuario = computed(() => this.auth.currentUser()?.sub);
   protected readonly rutaPermitida = computed(() => !this.accesoLimitado() ||
     ['/mis-reservas', '/reserva/resultado', '/cuenta-bloqueada', '/login'].includes(this.ruta()));

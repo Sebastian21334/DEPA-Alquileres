@@ -1,25 +1,10 @@
-import { contextoCarga } from '../../../core/interceptors/carga.interceptor';
 import { ConversationPanelComponent } from '../conversation-panel/conversation-panel.component';
 import { ConversationComposerComponent } from '../conversation-panel/conversation-composer.component';
-import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subject, catchError, exhaustMap, expand, finalize, merge, timer } from 'rxjs';
-import { environment } from '../../../../environments/environment';
 import { ActividadReembolsosService } from '../../../core/services/actividad-reembolsos.service';
-
-interface Mensaje {
-  id: number;
-  autor: string;
-  administracion: boolean;
-  texto: string;
-  creado_en: string;
-}
-
-interface Conversacion {
-  abierta: boolean;
-  mensajes: Mensaje[];
-}
+import { ReembolsosService, type MensajeReembolso } from '../../services/reembolsos.service';
 
 @Component({
   selector: 'app-reembolso-chat',
@@ -41,11 +26,11 @@ interface Conversacion {
 export class ReembolsoChatComponent {
   readonly reembolsoId = input.required<number>();
   readonly vistaInquilino = input(false);
-  private readonly http = inject(HttpClient);
+  private readonly reembolsos = inject(ReembolsosService);
   private readonly actividad = inject(ActividadReembolsosService);
   private readonly actualizar = new Subject<void>();
   protected readonly abierta = signal<boolean | null>(null);
-  protected readonly mensajes = signal<Mensaje[]>([]);
+  protected readonly mensajes = signal<MensajeReembolso[]>([]);
   protected readonly hilo = computed(() => this.mensajes().map(mensaje => ({
     id: mensaje.id, autor: mensaje.autor, texto: mensaje.texto, fecha: mensaje.creado_en,
     rol: mensaje.administracion ? 'Administración' : 'Inquilino',
@@ -81,7 +66,7 @@ export class ReembolsoChatComponent {
   }
 
   private leer(id: number, despuesDe: number) {
-    return this.http.get<Conversacion>(`${environment.apiUrl}/reembolsos/${id}/conversacion`, { params: { despuesDe }, context: contextoCarga(this.abierta() !== null) });
+    return this.reembolsos.leerConversacion(id, despuesDe, this.abierta() !== null);
   }
 
   private readonly destruir = takeUntilDestroyed();
@@ -91,7 +76,7 @@ export class ReembolsoChatComponent {
     if (!texto || this.enviando() || !this.abierta()) return;
     this.enviando.set(true);
     this.error.set('');
-    this.http.post(`${environment.apiUrl}/reembolsos/${this.reembolsoId()}/conversacion`, { texto }).pipe(
+    this.reembolsos.enviarMensaje(this.reembolsoId(), texto).pipe(
       this.destruir,
       finalize(() => this.enviando.set(false)),
     ).subscribe({

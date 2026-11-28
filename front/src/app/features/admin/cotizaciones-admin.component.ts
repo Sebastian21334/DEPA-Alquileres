@@ -17,14 +17,14 @@ export class CotizacionesAdminComponent {
   private readonly api = inject(CotizacionesService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly datos = signal<HistorialDolar | null>(null);
-  protected readonly cargando = signal(false);
+  readonly cargando = signal(false);
   protected readonly error = signal('');
   protected desde = '';
   protected hasta = '';
   constructor() {
     if (isPlatformBrowser(inject(PLATFORM_ID))) this.cargar();
   }
-  protected cargar(pagina = 1, verificar = false): void {
+  cargar(pagina = 1, verificar = false): void {
     if (this.cargando()) return;
     if (this.desde && this.hasta && this.desde > this.hasta) {
       this.error.set('La fecha desde no puede ser posterior a hasta.');

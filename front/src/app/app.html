@@ -47,9 +47,15 @@
 @if (!esPantallaAuth() && !esPantallaCbu() && !accesoRestringido()) {
   @if (!accesoLimitado()) {
     <app-footer />
-    <app-asistente-depa />
+    @defer (on idle) {
+      <app-asistente-depa />
+    }
   }
-  <app-chat-dock />
+  @if (conSesion()) {
+    @defer (on idle) {
+      <app-chat-dock />
+    }
+  }
 }
 
 <app-toast />

@@ -1,8 +1,10 @@
+import { DOCUMENT } from '@angular/common';
 import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { ApiError } from './api-error';
 import { AuthService } from '../services/auth.service';
+import { esSolicitudDeApi, SOLICITUD_ANONIMA } from './auth.interceptor';
 
 // Interceptor funcional (Angular standalone): centraliza el manejo de errores HTTP
 // para no repetir catchError en cada service. Traduce el error del backend (que
@@ -10,6 +12,7 @@ import { AuthService } from '../services/auth.service';
 // legible y el código HTTP. Los componentes solo leen `err.message` y `err.status`.
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
+  const esApi = esSolicitudDeApi(req.url, inject(DOCUMENT).baseURI);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -20,14 +23,17 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       // válido. Se limpia la sesión y se vuelve al login en lugar de dejar
       // que el flujo facial interprete el 401 como un fallo de vitalidad.
       const codigo = error.error?.codigo;
-      if (error.status === 403 && codigo === 'ACCESO_LIMITADO') {
+      const tokenVigente = auth.token;
+      const sesionVigente = esApi && !req.context.get(SOLICITUD_ANONIMA) && !!tokenVigente &&
+        req.headers.get('Authorization') === `Bearer ${tokenVigente}`;
+      if (sesionVigente && error.status === 403 && codigo === 'ACCESO_LIMITADO') {
         auth.actualizarEstadoSesion({
           accesoLimitado: true,
           anuncianteVerificado: error.error?.anuncianteVerificado === true,
           rol: null,
         });
       }
-      if (error.status === 401 && (!req.url.includes('/auth/') || req.url.endsWith('/auth/sesion') ||
+      if (sesionVigente && error.status === 401 && (!req.url.includes('/auth/') || req.url.endsWith('/auth/sesion') ||
           codigo === 'USUARIO_BLOQUEADO')) {
         auth.logout();
         if (
@@ -42,9 +48,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         }
       }
 
-      const tokenBloqueo = req.url.endsWith('/auth/login') && codigo === 'USUARIO_BLOQUEADO' &&
+      const tokenBloqueo = esApi && req.url.endsWith('/auth/login') && codigo === 'USUARIO_BLOQUEADO' &&
         typeof error.error?.tokenBloqueo === 'string' ? error.error.tokenBloqueo : undefined;
-      const constanciaReactivacion = req.url.endsWith('/auth/register') && codigo === 'CUENTA_RECUPERABLE' &&
+      const constanciaReactivacion = esApi && req.url.endsWith('/auth/register') && codigo === 'CUENTA_RECUPERABLE' &&
         typeof error.error?.constanciaReactivacion === 'string' ? error.error.constanciaReactivacion : undefined;
       return throwError(() => new ApiError(error.status, mensaje, typeof codigo === 'string' ? codigo : undefined, tokenBloqueo, constanciaReactivacion));
     }),

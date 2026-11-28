@@ -278,10 +278,6 @@ export class AdminService {
     return formulario;
   }
 
-  urlComprobanteReembolso(id: number) {
-    return this.http.get<{ url: string }>(`${this.api}/reembolsos/${id}/comprobante`);
-  }
-
   listarReclamos() {
     return this.http.get<Reclamo[]>(`${this.api}/reclamos/administracion`);
   }

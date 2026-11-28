@@ -10,7 +10,7 @@ import { LucideHouse, LucideList, LucidePanelLeftClose, LucideX } from '@lucide/
 import type { FeatureGroup, LatLngExpression, Map as MapaLeaflet, Marker } from 'leaflet';
 import {
   FiltrosPublicaciones, ListingService, PuntoPublicacion,
-} from '../home/listing.service';
+} from '../publicaciones/listing.service';
 import { ListingCardComponent } from '../../shared/components/listing-card/listing-card.component';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { crearCapaMapaBase } from '../../shared/utils/mapa-base';

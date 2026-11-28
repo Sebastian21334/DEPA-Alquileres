@@ -337,7 +337,7 @@ export class ResenasPanelComponent implements OnInit, OnDestroy {
     const resena = this.resenaAEliminar();
     if (!resena || this.eliminando()) return;
     this.eliminando.set(true);
-    this.service.eliminar(resena.id)
+    this.service.eliminar(resena.id, this.tipo(), this.idObjetivo())
       .pipe(
         finalize(() => this.eliminando.set(false)),
         takeUntilDestroyed(this.destroyRef),

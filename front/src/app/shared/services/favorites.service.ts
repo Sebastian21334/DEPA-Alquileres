@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, effect, inject, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { EMPTY, Observable, defer, filter, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../../core/services/auth.service';
 import { Publicacion } from '../models/publicacion.model';
@@ -10,45 +10,66 @@ export class FavoritesService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly baseUrl = `${environment.apiUrl}/favoritos`;
-  private readonly ids = signal<ReadonlySet<number>>(new Set());
-  private loadedForUser: number | null = null;
+  private readonly tokenActual = computed(() => this.auth.currentUser() ? this.auth.token : null);
+  private readonly estado = signal<{ token: string; ids: ReadonlySet<number> } | null>(null);
+  private revision = 0;
 
   constructor() {
-    effect(() => {
-      const idUsuario = this.auth.currentUser()?.sub ?? null;
-      if (idUsuario === null) {
-        this.loadedForUser = null;
-        this.ids.set(new Set());
-        return;
-      }
-      if (this.loadedForUser === idUsuario) return;
-      this.loadedForUser = idUsuario;
-      this.list().subscribe({ error: () => this.ids.set(new Set()) });
+    effect((onCleanup) => {
+      const token = this.tokenActual();
+      this.estado.set(null);
+      if (!token) return;
+      const consulta = this.list().subscribe({ error: () => {} });
+      onCleanup(() => consulta.unsubscribe());
     });
   }
 
   isFavorite(idPublicacion: number): boolean {
-    return this.ids().has(idPublicacion);
+    return this.idsVigentes()?.has(idPublicacion) ?? false;
   }
 
   list(): Observable<Publicacion[]> {
-    return this.http.get<Publicacion[]>(this.baseUrl).pipe(
-      tap((items) => this.ids.set(new Set(items.map((item) => item.id)))),
-    );
+    return defer(() => {
+      const token = this.auth.token;
+      if (!token || !this.auth.currentUser()) return EMPTY;
+      const revision = this.revision;
+      return this.http.get<Publicacion[]>(this.baseUrl).pipe(
+        filter(() => this.perteneceALaSesion(token)),
+        tap((items) => {
+          if (this.revision === revision) this.estado.set({ token, ids: new Set(items.map(({ id }) => id)) });
+        }),
+      );
+    });
   }
 
   toggle(idPublicacion: number): Observable<{ idPublicacion: number; favorito: boolean }> {
-    const favorito = this.isFavorite(idPublicacion);
-    const request = favorito
-      ? this.http.delete<{ idPublicacion: number; favorito: boolean }>(`${this.baseUrl}/${idPublicacion}`)
-      : this.http.post<{ idPublicacion: number; favorito: boolean }>(`${this.baseUrl}/${idPublicacion}`, {});
+    return defer(() => {
+      const token = this.auth.token;
+      if (!token || !this.auth.currentUser()) return EMPTY;
+      const url = `${this.baseUrl}/${idPublicacion}`;
+      const request = this.isFavorite(idPublicacion)
+        ? this.http.delete<{ idPublicacion: number; favorito: boolean }>(url)
+        : this.http.post<{ idPublicacion: number; favorito: boolean }>(url, {});
 
-    return request.pipe(
-      tap((result) => {
-        const next = new Set(this.ids());
-        result.favorito ? next.add(idPublicacion) : next.delete(idPublicacion);
-        this.ids.set(next);
-      }),
-    );
+      return request.pipe(
+        filter(() => this.perteneceALaSesion(token)),
+        tap(({ favorito }) => {
+          const ids = new Set(this.idsVigentes());
+          if (favorito) ids.add(idPublicacion);
+          else ids.delete(idPublicacion);
+          this.revision++;
+          this.estado.set({ token, ids });
+        }),
+      );
+    });
+  }
+
+  private idsVigentes(): ReadonlySet<number> | undefined {
+    const estado = this.estado();
+    return estado && this.perteneceALaSesion(estado.token) ? estado.ids : undefined;
+  }
+
+  private perteneceALaSesion(token: string): boolean {
+    return !!this.auth.currentUser() && token === this.auth.token;
   }
 }

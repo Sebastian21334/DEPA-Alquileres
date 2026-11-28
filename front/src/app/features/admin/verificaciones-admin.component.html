@@ -1,0 +1,158 @@
+<section class="panel admin-module">
+  <div class="panel__title">
+    <div>
+      <h2>Solicitudes de verificación</h2>
+      <p>Identidad y cuentas bancarias pendientes de revisión.</p>
+    </div>
+    <span class="counter">{{ requests().length }}</span>
+  </div>
+  @if (errorCarga()) {
+    <p class="empty" role="alert">{{ errorCarga() }}</p>
+  }
+  @if (cargando()) {
+    <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando solicitudes…" />
+  } @else if (!requests().length) {
+    <p class="empty">No hay solicitudes pendientes.</p>
+  } @else {
+    <app-filtros-lista class="admin-filtros" [lista]="listaVerificaciones" etiqueta="Buscar solicitudes de verificación"
+      placeholder="Buscar por nombre, email, CUIT/CUIL, razón social o solicitud" />
+    @if (!listaVerificaciones.filtrados().length) {
+      <p class="empty">No hay solicitudes que coincidan. <button type="button" class="link-button" (click)="listaVerificaciones.limpiar()">Limpiar filtros</button></p>
+    }
+    <div class="requests lista-escalonada">
+      @for (request of listaVerificaciones.visibles(); track request.id) {
+        <article class="request" [id]="'admin-verificaciones-' + request.id" tabindex="-1">
+          <div class="request__identity">
+            <span class="avatar">{{
+              (request.anunciante.usuario?.nombre || 'A').charAt(0)
+            }}</span>
+            <div>
+              <h3>
+                {{ request.anunciante.usuario?.nombre || 'Anunciante' }}
+                {{ request.anunciante.usuario?.apellido }}
+              </h3>
+              <p>{{ request.anunciante.usuario?.email || request.anunciante.numero_contacto }}</p>
+            </div>
+          </div>
+          <dl>
+            <div>
+              <dt>CUIT/CUIL</dt>
+              <dd>{{ request.anunciante.cuit_cuil || 'Sin informar' }}</dd>
+            </div>
+            <div>
+              <dt>Revisión</dt>
+              <dd>#{{ request.numero_revision }}</dd>
+            </div>
+            @if (request.revisar_identidad) {
+              <div>
+                <dt>Prueba de vida</dt>
+                <dd>{{ request.prueba_vida_validada_en ? 'Completada' : 'Requiere una nueva captura' }}</dd>
+              </div>
+            }
+            @if (request.cbu_pendiente) {
+              <div><dt>CBU a revisar</dt><dd><code>{{ request.cbu_pendiente }}</code></dd></div>
+            }
+          </dl>
+          @if (request.cbu_pendiente) {
+            <label>
+              <input #titular type="checkbox" [checked]="titularCbuConfirmado === request.id"
+                (change)="titularCbuConfirmado = titular.checked ? request.id : null" />
+              Verifiqué en el banco que el CBU pertenece al mismo titular de la cuenta en DEPA.
+            </label>
+          }
+          @if (request.revisar_identidad && (request.razon_social || request.matricula_profesional)) {
+            <h4>Inmobiliaria y corredor responsable</h4>
+            <dl>
+              <div><dt>Nombre o razón social</dt><dd>{{ request.razon_social || 'Sin informar' }}</dd></div>
+              <div><dt>Matrícula del corredor responsable</dt><dd>{{ request.matricula_profesional || 'Sin informar' }}</dd></div>
+              <div><dt>Colegio profesional y jurisdicción</dt><dd>{{ request.colegio_profesional || 'Sin informar' }}</dd></div>
+              <div><dt>Domicilio comercial</dt><dd>{{ request.domicilio_comercial || 'Sin informar' }}</dd></div>
+              <div><dt>DNI del corredor responsable</dt><dd>{{ request.dni_corredor || 'Sin informar' }}</dd></div>
+            </dl>
+            <p>Compará el DNI y la captura del titular de la cuenta. Revisá matrícula, colegio/jurisdicción, domicilio comercial y constancia de CUIT antes de aprobar.</p>
+          }
+          <div class="documents">
+            @if (request.dni_frente_url) {
+              <a class="document-preview" [href]="request.dni_frente_url" target="_blank" rel="noopener">
+                <img [src]="request.dni_frente_url" alt="Vista previa DNI frente" />
+                <span>DNI frente</span>
+              </a>
+            }
+            @if (request.dni_dorso_url) {
+              <a class="document-preview" [href]="request.dni_dorso_url" target="_blank" rel="noopener">
+                <img [src]="request.dni_dorso_url" alt="Vista previa DNI dorso" />
+                <span>DNI dorso</span>
+              </a>
+            }
+            @if (request.rostro_url) {
+              <a class="document-preview" [href]="request.rostro_url" target="_blank" rel="noopener">
+                @if (esVideo(request.rostro_url)) {
+                  <video [src]="request.rostro_url" muted></video>
+                } @else {
+                  <img [src]="request.rostro_url" alt="Vista previa del rostro" />
+                }
+                <span>Rostro</span>
+              </a>
+            }
+          </div>
+          @if (request.matricula_url) { <a [href]="request.matricula_url" target="_blank" rel="noopener">Ver constancia de matrícula</a> }
+          @if (request.constancia_cuit_url) { <a [href]="request.constancia_cuit_url" target="_blank" rel="noopener">Ver constancia de CUIT</a> }
+          @if (rejectId() === request.id) {
+            <div class="reject-box">
+              @if (request.revisar_identidad) {
+                <label><input type="checkbox" [(ngModel)]="rechazarIdentidad" /> Rechazar prueba de vida y documentación de identidad</label>
+              }
+              @if (request.cbu_pendiente) {
+                <label><input type="checkbox" [(ngModel)]="rechazarCbu" /> Rechazar CBU</label>
+              }
+              @if (request.revisar_identidad && request.cbu_pendiente) {
+                <p>Se aprobará la parte que dejes sin marcar.</p>
+              }
+              <label [for]="'reason-' + request.id">Motivo del rechazo</label
+              ><textarea
+                [id]="'reason-' + request.id"
+                [(ngModel)]="rejectReason"
+                maxlength="500"
+                placeholder="Explicá qué documentación debe corregir"
+              ></textarea>
+              <div>
+                <button type="button" class="button button--ghost" (click)="cancelReject()">
+                  Cancelar</button
+                ><button
+                  type="button"
+                  class="button button--danger"
+                  (click)="confirmReject(request)"
+                  [disabled]="rejectReason.trim().length < 5 || (!rechazarIdentidad && !rechazarCbu) || !puedeResolverVerificacion(request, rechazarIdentidad, rechazarCbu)"
+                >
+                  Confirmar rechazo
+                </button>
+              </div>
+            </div>
+          } @else {
+            <div class="actions">
+              <button
+                type="button"
+                class="button button--danger-outline"
+                (click)="openReject(request)"
+              >
+                <svg lucideX [size]="17"></svg> Rechazar</button
+              ><button
+                type="button"
+                class="button button--success"
+                (click)="approve(request)"
+                [disabled]="!puedeResolverVerificacion(request, false, false)"
+              >
+                <svg lucideCheck [size]="17"></svg> Aprobar
+              </button>
+            </div>
+          }
+        </article>
+      }
+    </div>
+    @if (listaVerificaciones.filtrados().length) {
+      <app-paginador class="admin-paginador" [pagina]="listaVerificaciones.pagina()" [paginas]="listaVerificaciones.paginas()"
+        [total]="listaVerificaciones.filtrados().length" etiqueta="solicitudes" ariaLabel="Paginación de solicitudes de verificación"
+        (paginaCambia)="listaVerificaciones.irAPagina($event)" />
+    }
+  }
+</section>

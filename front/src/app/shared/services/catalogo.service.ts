@@ -11,6 +11,10 @@ export class CatalogoService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = `${environment.apiUrl}/catalogos`;
 
+  comisionVigente(): Observable<{ porcentaje: number }> {
+    return this.http.get<{ porcentaje: number }>(`${this.baseUrl}/comision-vigente`);
+  }
+
   /** GET /catalogos/tipos-propiedad */
   getTiposPropiedad(): Observable<TipoPropiedad[]> {
     return this.http.get<TipoPropiedad[]>(`${this.baseUrl}/tipos-propiedad`);

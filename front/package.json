@@ -5,6 +5,8 @@
     "ng": "ng",
     "start": "node scripts/start.cjs",
     "build": "ng build",
+    "test": "node --test test/*.test.cjs",
+    "test:despliegue": "node scripts/verificar-despliegue.cjs",
     "test:imagenes-inicio": "node --test test/home-card-image.test.cjs",
     "test:resenas": "node --test test/resenas.test.cjs",
     "test:vitalidad": "node --test test/vitalidad.test.cjs",

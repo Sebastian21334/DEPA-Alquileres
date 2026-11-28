@@ -1,0 +1,104 @@
+<section class="panel admin-module" id="reclamos">
+  <div class="panel__title">
+    <div>
+      <h2>Reclamos de reservas</h2>
+      <p>Evidencia, mensajes con las partes y resolución administrativa.</p>
+    </div>
+    <span class="counter">{{ claims().length }}</span>
+  </div>
+  @if (errorReclamos()) {
+    <p class="alert alert--error" role="alert">{{ errorReclamos() }}</p>
+  }
+  @if (!claims().length && !errorReclamos()) {
+    @if (cargando()) { <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando reclamos…" /> } @else { <p class="empty">No hay reclamos registrados.</p> }
+  } @else if (claims().length) {
+    @if (claims().length >= maxReclamosAdmin) {
+      <p class="refund-note" role="status">Se muestran los {{ maxReclamosAdmin }} reclamos más recientes.</p>
+    }
+    <app-filtros-lista class="admin-filtros" [lista]="listaReclamos" etiqueta="Buscar reclamos"
+      placeholder="Buscar por reclamo, reserva, publicación, inquilino, anunciante o descripción" />
+  }
+  <div class="settlement-list lista-escalonada">
+    @for (claim of listaReclamos.visibles(); track claim.id) {
+      <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1"
+        [class.claim-card--destacado]="reclamoDestacado() === claim.id">
+        <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
+          [actualizar]="activa()"
+          (verReembolso)="verReembolsoReclamo(claim)">
+          @if (gestionReclamo()?.id === claim.id && gestionReclamo()?.accion === 'mensaje') {
+            <app-conversation-composer [(texto)]="textoReclamo" [(imagenes)]="imagenesReclamo" [adjuntos]="imagenesDisponibles(claim)"
+              etiqueta="Mensaje para el inquilino y el anunciante" [deshabilitado]="!!busy()" (enviar)="responderReclamo(claim)" />
+            <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
+          }
+        </app-claim-history>
+        @if (claim.estado !== 'CERRADO') {
+          <div class="actions">
+            <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'mensaje')">Escribir mensaje</button>
+            @if (claim.estado === 'ABIERTO' || claim.estado === 'EN_REVISION') {
+              <button type="button" class="button button--resolve-claim" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'resolver')">Resolver reclamo</button>
+            }
+          </div>
+        }
+        @if (gestionReclamo(); as gestion) {
+          @if (gestion.id === claim.id && gestion.accion === 'resolver') {
+            <form class="claim-form" (ngSubmit)="resolverReclamoReserva(claim)">
+              <label>Resultado de la revisión
+                <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
+                  @if (claim.categoria === 'CODIGO_BLOQUEADO') {
+                    <!-- El pedido de reinicio del código tiene sus propias salidas; terminada la estadía ya no se carga el código. -->
+                    @if (claim.reserva?.estado_estadia === 'PENDIENTE_INGRESO') {
+                      <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
+                    }
+                    <option value="CONFIRMAR_INGRESO">Confirmar el ingreso sin código (a favor del anunciante)</option>
+                    <option value="DEVOLUCION_PARCIAL">Devolver una parte al inquilino</option>
+                    <option value="DEVOLUCION_TOTAL">Devolver el 100 % al inquilino</option>
+                  } @else {
+                    <option value="SIN_DEVOLUCION">Sin devolución</option>
+                    <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
+                    <option value="DEVOLUCION_TOTAL">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}</option>
+                  }
+                </select>
+              </label>
+              @if (claim.categoria === 'CODIGO_BLOQUEADO' && resolucionReclamo === 'CONFIRMAR_INGRESO') {
+                <p class="refund-help">El pago al anunciante se habilita en la fecha habitual, a los 5 días del fin de la estadía.</p>
+              }
+              @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
+                <label>Importe a devolver ({{ claim.devolucion_cancelacion?.moneda || claim.reserva?.moneda_contratada || 'ARS' }})
+                  <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required
+                    [attr.max]="totalPagadoReclamo(claim)" [attr.aria-invalid]="parcialCubreElTotal(claim)" [disabled]="!!busy()" />
+                </label>
+                @if (totalPagadoReclamo(claim); as total) {
+                  <p class="refund-help">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Faltante disponible:' : 'Pagó el inquilino' }} {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
+                }
+                @if (claim.categoria === 'CODIGO_BLOQUEADO') {
+                  <p class="refund-help">El ingreso sigue sin verificar. El resto se le paga al anunciante en la fecha habitual, a los 5 días del fin de la estadía.</p>
+                }
+                @if (parcialCubreElTotal(claim)) {
+                  <p class="refund-error" role="alert">Para devolver todo elegí «{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}».</p>
+                }
+              }
+              <label>Motivo de la resolución
+                <textarea name="observacionReclamo" [(ngModel)]="observacionReclamo" rows="3" maxlength="500" required
+                  aria-describedby="motivo-resolucion-ayuda" [disabled]="!!busy()"></textarea>
+              </label>
+              <p id="motivo-resolucion-ayuda" class="refund-help">Lo ven el inquilino y el anunciante.</p>
+              <div class="actions">
+                <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
+                <button type="submit" class="button button--light" [disabled]="!!busy() || !observacionReclamo.trim() || (resolucionReclamo === 'DEVOLUCION_PARCIAL' && (!(importeReclamo && importeReclamo > 0) || parcialCubreElTotal(claim)))">Confirmar resolución</button>
+              </div>
+            </form>
+          }
+        }
+      </article>
+    } @empty {
+      @if (claims().length) {
+        <p class="empty">No hay reclamos que coincidan. <button type="button" class="link-button" (click)="listaReclamos.limpiar()">Limpiar filtros</button></p>
+      }
+    }
+  </div>
+  @if (listaReclamos.filtrados().length) {
+    <app-paginador class="admin-paginador" [pagina]="listaReclamos.pagina()" [paginas]="listaReclamos.paginas()"
+      [total]="listaReclamos.filtrados().length" etiqueta="reclamos" ariaLabel="Paginación de reclamos"
+      (paginaCambia)="listaReclamos.irAPagina($event)" />
+  }
+</section>

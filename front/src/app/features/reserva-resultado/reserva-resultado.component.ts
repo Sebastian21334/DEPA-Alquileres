@@ -1,12 +1,9 @@
-import { contextoCarga } from '../../core/interceptors/carga.interceptor';
 import { formatearMoneda } from '../../shared/utils/formato-numero';
 import { fechaCalendarioLocal, rentalDays } from '../../shared/utils/rental-dates';
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { EMPTY, Subscription, catchError, exhaustMap, timer } from 'rxjs';
-import { HttpClient } from '@angular/common/http';
-import { environment } from '../../../environments/environment';
 import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
 import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
 import { ActividadReembolsosService } from '../../core/services/actividad-reembolsos.service';
@@ -29,6 +26,7 @@ import {
   ReservationService,
   ResumenReserva,
 } from '../../shared/services/reservation.service';
+import { ReembolsosService, type ConversacionReembolsoResumen } from '../../shared/services/reembolsos.service';
 
 @Component({
   selector: 'app-reserva-resultado',
@@ -44,12 +42,12 @@ export class ReservaResultadoComponent {
   private readonly auth = inject(AuthService);
   private readonly chat = inject(ChatService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly http = inject(HttpClient);
+  private readonly reembolsos = inject(ReembolsosService);
   private readonly actividadReembolsos = inject(ActividadReembolsosService);
-  protected readonly conversacionesReembolso = signal<{ id: number; importe: number; moneda: string; estado: string; comprobante_nombre?: string | null; referencia_externa?: string | null; observacion_transferencia?: string | null }[]>([]);
+  protected readonly conversacionesReembolso = signal<ConversacionReembolsoResumen[]>([]);
   /** Enlace firmado del comprobante de la transferencia del reembolso. */
   protected readonly urlComprobanteReembolso = (id: number) => () =>
-    this.http.get<{ url: string }>(`${environment.apiUrl}/reembolsos/${id}/comprobante`);
+    this.reembolsos.comprobante(id);
   protected readonly conversacionAbierta = signal<number | null>(null);
   private consultaResumen?: Subscription;
 
@@ -173,9 +171,7 @@ export class ReservaResultadoComponent {
       const id = this.reservaConversacionId();
       if (!id) return;
       const consulta = timer(0, 10000).pipe(exhaustMap(() =>
-        this.http.get<ReturnType<typeof this.conversacionesReembolso>>(
-          `${environment.apiUrl}/reembolsos/reserva/${id}/conversaciones`, { context: contextoCarga(true) },
-        ).pipe(catchError(() => EMPTY)),
+        this.reembolsos.conversacionesDeReserva(id).pipe(catchError(() => EMPTY)),
       )).subscribe(conversaciones => this.conversacionesReembolso.set(conversaciones));
       onCleanup(() => {
         consulta.unsubscribe();

@@ -1,0 +1,35 @@
+@use './admin-shared';
+
+@use './admin-tarjetas';
+@use './admin-dialog';
+
+.refund-action {
+  margin: 0 24px;
+  padding: 10px 14px;
+  border-radius: 9px;
+  color: #9e2020;
+  background: #ffeded;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.refund-note {
+  margin: 0 24px;
+  color: #71818a;
+  font-size: 0.85rem;
+}
+.refund-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; }
+.refund-amount { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .85rem; border-radius: 10px; background: #edf5f1; }
+.refund-amount__value { font-size: 1.25rem; font-weight: 700; }
+.refund-amount .status { margin-left: auto; }
+/* El detalle del reembolso sigue la estructura del pago al anunciante. */
+.refund-heading .advertiser-payment__header { margin-bottom: 0; }
+.refund-help--accent { margin: 0; padding-left: 12px; border-left: 3px solid var(--color-primary, #f47818); font-size: .88rem; line-height: 1.45; }
+.refund-chat { border: 1px solid #dfe5e8; border-radius: 8px; padding: 0 12px; }
+.refund-chat[open] { padding-bottom: 12px; }
+.refund-chat summary { padding: 10px 0; color: #172b45; font-weight: 650; cursor: pointer; }
+.refund-dialog label .muted { font-weight: 400; }
+.refund-data { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem 1rem; margin: 0; }
+.refund-data dt { font-size: .85rem; }
+.refund-data dd { margin: .2rem 0 0; font-weight: 650; }
+.refund-reason { grid-column: 1 / -1; padding: .75rem; border-radius: 8px; background: #f4f6f8; }
+.refund-reason dd { white-space: pre-wrap; }

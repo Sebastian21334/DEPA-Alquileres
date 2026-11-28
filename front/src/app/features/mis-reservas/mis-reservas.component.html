@@ -173,7 +173,7 @@
         <section class="reservation-section lista-escalonada" role="tabpanel">
           <div class="reservation-filters">
             <label>Estado
-              <select [ngModel]="filtroEstadoRealizadas()" (ngModelChange)="filtroEstadoRealizadas.set($event)">
+              <select [ngModel]="filtroEstadoRealizadas()" (ngModelChange)="cambiarFiltroRealizadas('estado', $event)">
                 <option value="todos">Todos</option>
                 <option value="PENDIENTE_PAGO">Pendiente de pago</option>
                 <option value="CONFIRMADA">Confirmada</option>
@@ -189,12 +189,12 @@
               </select>
             </label>
             <label>Buscar
-              <input type="search" maxlength="200" placeholder="ID, publicación o anunciante" [ngModel]="filtroBusquedaRealizadas()" (ngModelChange)="filtroBusquedaRealizadas.set($event)" />
+              <input type="search" maxlength="200" placeholder="ID, publicación o anunciante" [ngModel]="filtroBusquedaRealizadas()" (ngModelChange)="cambiarFiltroRealizadas('busqueda', $event)" />
             </label>
-            <label>Ingreso desde <input type="date" [ngModel]="filtroDesdeRealizadas()" (ngModelChange)="filtroDesdeRealizadas.set($event)" /></label>
-            <label>Ingreso hasta <input type="date" [ngModel]="filtroHastaRealizadas()" (ngModelChange)="filtroHastaRealizadas.set($event)" /></label>
+            <label>Ingreso desde <input type="date" [ngModel]="filtroDesdeRealizadas()" (ngModelChange)="cambiarFiltroRealizadas('desde', $event)" /></label>
+            <label>Ingreso hasta <input type="date" [ngModel]="filtroHastaRealizadas()" (ngModelChange)="cambiarFiltroRealizadas('hasta', $event)" /></label>
           </div>
-          @for (reserva of propiasFiltradas(); track reserva.id) {
+          @for (reserva of propiasPagina(); track reserva.id) {
             <article class="acct-card booking-card">
               <ng-container *ngTemplateOutlet="tarjetaReserva; context: { $implicit: reserva, recibida: false }" />
               @if (reclamoAbierto()?.id === reserva.id) {
@@ -203,6 +203,10 @@
             </article>
           } @empty {
             <div class="acct-card empty">{{ propias().length ? 'No hay reservas que coincidan con los filtros.' : 'Todavía no realizaste reservas.' }}</div>
+          }
+          @if (paginasRealizadas() > 1) {
+            <app-paginador [pagina]="paginaRealizadas()" [paginas]="paginasRealizadas()" [total]="propiasFiltradas().length"
+              etiqueta="reservas" ariaLabel="Paginación de reservas realizadas" (paginaCambia)="paginaRealizadas.set($event)" />
           }
         </section>
       } @else if (vista() === 'recibidas' && esAnunciante()) {

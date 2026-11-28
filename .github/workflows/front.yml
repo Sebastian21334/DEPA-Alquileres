@@ -1,0 +1,35 @@
+name: Verificar frontend
+
+on:
+  pull_request:
+    paths:
+      - 'front/**'
+      - 'vercel.json'
+      - '.github/workflows/front.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'front/**'
+      - 'vercel.json'
+      - '.github/workflows/front.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: front
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run test:despliegue

@@ -8,7 +8,7 @@ import { ListingCardComponent } from '../../shared/components/listing-card/listi
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import { Modalidad } from '../../shared/models/catalogo.model';
 import { Publicacion } from '../../shared/models/publicacion.model';
-import { ListingService } from './listing.service';
+import { ListingService } from '../publicaciones/listing.service';
 
 interface SeccionInicio { titulo: string; categoria?: string; publicaciones: Publicacion[]; }
 

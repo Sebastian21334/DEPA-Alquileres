@@ -42,7 +42,7 @@
           <h1 id="admin-section-title" tabindex="-1">{{ activeSection() === 'resumen' ? 'Panel de control' : sectionLabel() }}</h1>
           <p class="admin-section-description">{{ sectionDescription() }}</p>
         </div>
-        <button class="button dashboard-button" type="button" (click)="reload()" [disabled]="loading() || historialCargando()">
+        <button class="button dashboard-button" type="button" (click)="reload()" [disabled]="cargandoSeccion()">
           <svg lucideRefreshCw [size]="17" aria-hidden="true"></svg> Actualizar
         </button>
       </header>
@@ -163,178 +163,137 @@
     </div>
   }
 
-  <app-cotizaciones-admin [hidden]="activeSection() !== 'cotizaciones'" />
+  @defer (when activeSection() === 'cotizaciones') {
+    <app-cotizaciones-admin #cotizacionesAdmin [hidden]="activeSection() !== 'cotizaciones'" />
+  }
 
-  <app-publicaciones-admin [hidden]="activeSection() !== 'publicaciones'" />
-  <app-resenas-admin [hidden]="activeSection() !== 'resenas'" />
+  @defer (when activeSection() === 'publicaciones') {
+    <app-publicaciones-admin #publicacionesAdmin [hidden]="activeSection() !== 'publicaciones'" />
+  }
+  @defer (when activeSection() === 'resenas') {
+    <app-resenas-admin #resenasAdmin [hidden]="activeSection() !== 'resenas'" />
+  }
 
-  <section class="panel admin-module" [hidden]="activeSection() !== 'liquidaciones'">
-    <div class="panel__title">
-      <div>
-        <h2>Reservas por liquidar</h2>
-        <p>Registrá el pago al anunciante de lo que no se le devolvió al inquilino, cuando la liquidación esté habilitada. Las devoluciones en curso se resuelven antes en Reembolsos.</p>
+  @if (activeSection() === 'liquidaciones') {
+    <section class="panel admin-module">
+      <div class="panel__title">
+        <div>
+          <h2>Reservas por liquidar</h2>
+          <p>Registrá el pago al anunciante de lo que no se le devolvió al inquilino, cuando la liquidación esté habilitada. Las devoluciones en curso se resuelven antes en Reembolsos.</p>
+        </div>
+        <span class="counter">{{ settlements().length }}</span>
       </div>
-      <span class="counter">{{ settlements().length }}</span>
-    </div>
-    @if (otherLoading()) {
-      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando liquidaciones…" />
-    } @else if (!settlements().length) {
-      <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
-    } @else {
-      <app-filtros-lista class="admin-filtros" [lista]="listaLiquidaciones" etiqueta="Buscar liquidaciones"
-        placeholder="Buscar por reserva, publicación, inquilino o anunciante" />
-      <div class="settlement-list lista-escalonada">
-        @for (settlement of listaLiquidaciones.visibles(); track settlement.id) {
-          <article class="settlement-card" [id]="'admin-liquidaciones-' + settlement.id" tabindex="-1">
-            <div>
-              <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
-                {{ etiquetaLiquidacion(settlement) }}
-              </span>
-              @if (settlement.estado_liquidacion !== 'EN_REVISION') {
-                @let dias = diasEsperaLiquidacion(settlement);
-                @if (dias === null) {
-                  <p class="settlement-note">Fecha de habilitación pendiente de revisión.</p>
-                } @else if (dias > 0) {
-                  <p class="settlement-note">Lapso de espera · {{ dias === 1 ? 'Falta 1 día' : 'Faltan ' + dias + ' días' }} para habilitar el pago.</p>
+      @if (errorLiquidaciones()) {
+        <p class="empty" role="alert">{{ errorLiquidaciones() }}</p>
+      }
+      @if (liquidacionesCargando()) {
+        <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando liquidaciones…" />
+      } @else if (!settlements().length) {
+        <p class="empty">No hay liquidaciones ni reclamos pendientes.</p>
+      } @else {
+        <app-filtros-lista class="admin-filtros" [lista]="listaLiquidaciones" etiqueta="Buscar liquidaciones"
+          placeholder="Buscar por reserva, publicación, inquilino o anunciante" />
+        <div class="settlement-list lista-escalonada">
+          @for (settlement of listaLiquidaciones.visibles(); track settlement.id) {
+            <article class="settlement-card" [id]="'admin-liquidaciones-' + settlement.id" tabindex="-1">
+              <div>
+                <span class="status" [class.status--blocked]="settlement.estado_liquidacion === 'EN_REVISION'">
+                  {{ etiquetaLiquidacion(settlement) }}
+                </span>
+                @if (settlement.estado_liquidacion !== 'EN_REVISION') {
+                  @let dias = diasEsperaLiquidacion(settlement);
+                  @if (dias === null) {
+                    <p class="settlement-note">Fecha de habilitación pendiente de revisión.</p>
+                  } @else if (dias > 0) {
+                    <p class="settlement-note">Lapso de espera · {{ dias === 1 ? 'Falta 1 día' : 'Faltan ' + dias + ' días' }} para habilitar el pago.</p>
+                  }
                 }
-              }
-              <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
-              <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
-              <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
-              <section class="settlement-context" [attr.aria-label]="'Situación de la reserva ' + settlement.id">
-                <h4>Situación de la reserva</h4>
-                <p><strong>Estadía:</strong> {{ etiquetasEstadia[settlement.estado_estadia] || settlement.estado_estadia }}</p>
-                @if (settlement.fecha_inicio && settlement.fecha_fin) {
-                  <p><strong>Fechas:</strong> {{ settlement.fecha_inicio | date:'dd/MM/yyyy':'UTC' }} al {{ settlement.fecha_fin | date:'dd/MM/yyyy':'UTC' }}</p>
+                <h3>Reserva #{{ settlement.id }} · {{ settlement.publicacion?.titulo ?? 'Publicación eliminada' }}</h3>
+                <p><strong>Inquilino:</strong> {{ nombreInquilino(settlement) }}</p>
+                <p><strong>Anunciante:</strong> {{ settlement.publicacion?.anunciante?.usuario?.nombre }} {{ settlement.publicacion?.anunciante?.usuario?.apellido }}</p>
+                <section class="settlement-context" [attr.aria-label]="'Situación de la reserva ' + settlement.id">
+                  <h4>Situación de la reserva</h4>
+                  <p><strong>Estadía:</strong> {{ etiquetasEstadia[settlement.estado_estadia] || settlement.estado_estadia }}</p>
+                  @if (settlement.fecha_inicio && settlement.fecha_fin) {
+                    <p><strong>Fechas:</strong> {{ settlement.fecha_inicio | date:'dd/MM/yyyy':'UTC' }} al {{ settlement.fecha_fin | date:'dd/MM/yyyy':'UTC' }}</p>
+                  }
+                  @for (cancelacion of settlement.cancelaciones ?? []; track cancelacion.id) {
+                    <div class="settlement-context__item">
+                      <p><strong>Cancelación #{{ cancelacion.id }}:</strong> {{ estadoCancelacionLiquidacion(cancelacion.estado) }}</p>
+                      <p><strong>Motivo:</strong> {{ cancelacion.motivo }}</p>
+                      @if (cancelacion.observacion) { <p><strong>Decisión:</strong> {{ cancelacion.observacion }}</p> }
+                    </div>
+                  }
+                  @for (reclamo of settlement.reclamos ?? []; track reclamo.id) {
+                    <div class="settlement-context__item">
+                      <p><strong>Reclamo #{{ reclamo.id }}:</strong> {{ etiquetaCategoriaReclamo(reclamo) }} · {{ estadoReclamoLiquidacion(reclamo.estado) }}</p>
+                      @if (reclamo.resolucion) { <p><strong>Resolución:</strong> {{ etiquetaResolucionReclamo(reclamo.resolucion) }}</p> }
+                      @if (reclamo.motivo_resolucion) { <p><strong>Motivo de la resolución:</strong> {{ reclamo.motivo_resolucion }}</p> }
+                    </div>
+                  }
+                </section>
+                @if (tieneDevolucion(settlement)) {
+                  <p><strong>Pagó el inquilino:</strong> {{ montoPagado(settlement) }}</p>
                 }
-                @for (cancelacion of settlement.cancelaciones ?? []; track cancelacion.id) {
-                  <div class="settlement-context__item">
-                    <p><strong>Cancelación #{{ cancelacion.id }}:</strong> {{ estadoCancelacionLiquidacion(cancelacion.estado) }}</p>
-                    <p><strong>Motivo:</strong> {{ cancelacion.motivo }}</p>
-                    @if (cancelacion.observacion) { <p><strong>Decisión:</strong> {{ cancelacion.observacion }}</p> }
-                  </div>
+                <p><strong>A liquidar al anunciante:</strong> {{ montoLiquidacion(settlement) }}</p>
+                <p><strong>Comisión DEPA:</strong> @if (settlement.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else if (tieneDevolucion(settlement)) { No se aplica (hubo devolución) } @else { {{ porcentaje(settlement.porcentaje_comision_depa) }} · {{ settlement.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
+                <p><strong>Neto al anunciante:</strong> {{ settlement.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</p>
+                @if (settlement.cotizacion_dolar; as dolar) {
+                  <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
+                  <p>Cotización #{{ dolar.id }} · {{ dolar.proveedor }} · Publicada: {{ dolar.actualizada_fuente_en }} · Aceptada: {{ settlement.cotizacion_aceptada_en }}.</p>
                 }
-                @for (reclamo of settlement.reclamos ?? []; track reclamo.id) {
-                  <div class="settlement-context__item">
-                    <p><strong>Reclamo #{{ reclamo.id }}:</strong> {{ etiquetaCategoriaReclamo(reclamo) }} · {{ estadoReclamoLiquidacion(reclamo.estado) }}</p>
-                    @if (reclamo.resolucion) { <p><strong>Resolución:</strong> {{ etiquetaResolucionReclamo(reclamo.resolucion) }}</p> }
-                    @if (reclamo.motivo_resolucion) { <p><strong>Motivo de la resolución:</strong> {{ reclamo.motivo_resolucion }}</p> }
-                  </div>
+                @if (settlement.observacion_liquidacion) {
+                  <p class="settlement-note">{{ settlement.observacion_liquidacion }}</p>
                 }
-              </section>
-              @if (tieneDevolucion(settlement)) {
-                <p><strong>Pagó el inquilino:</strong> {{ montoPagado(settlement) }}</p>
-              }
-              <p><strong>A liquidar al anunciante:</strong> {{ montoLiquidacion(settlement) }}</p>
-              <p><strong>Comisión DEPA:</strong> @if (settlement.porcentaje_comision_depa == null) { Sin comisión asignada (reserva anterior) } @else if (tieneDevolucion(settlement)) { No se aplica (hubo devolución) } @else { {{ porcentaje(settlement.porcentaje_comision_depa) }} · {{ settlement.importe_comision_depa | currency:'ARS':'symbol':'1.2-2' }} }</p>
-              <p><strong>Neto al anunciante:</strong> {{ settlement.importe_neto_anunciante | currency:'ARS':'symbol':'1.2-2' }}</p>
-              @if (settlement.cotizacion_dolar; as dolar) {
-                <p>Precio original: {{ settlement.moneda_origen }} {{ settlement.importe_origen }} · Dólar blue venta: ARS {{ dolar.venta }} por USD.</p>
-                <p>Cotización #{{ dolar.id }} · {{ dolar.proveedor }} · Publicada: {{ dolar.actualizada_fuente_en }} · Aceptada: {{ settlement.cotizacion_aceptada_en }}.</p>
-              }
-              @if (settlement.observacion_liquidacion) {
-                <p class="settlement-note">{{ settlement.observacion_liquidacion }}</p>
-              }
-            </div>
-            <div class="actions">
-              <a class="button button--ghost" [routerLink]="['/admin/reservas', settlement.id]" [queryParams]="{ desde: 'liquidaciones' }">Ver reserva</a>
-              @if (settlement.estado_liquidacion === 'EN_REVISION') {
-                <button type="button" class="button button--ghost" (click)="abrirResolucionLiquidacion(settlement, false)">Cerrar revisión del pago</button>
-              }
-              <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
-              @if (pendienteParaAnunciante(settlement)) {
-                @let diasPago = diasEsperaLiquidacion(settlement);
-                @if (settlement.habilitada_para_pago) {
-                  <button type="button" class="button button--success" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
-                } @else {
-                  <span class="settlement-payment-unavailable" tabindex="0" [attr.aria-describedby]="'payment-wait-' + settlement.id">
-                    <button type="button" class="button button--success" disabled>Registrar pago al anunciante</button>
-                    <span class="settlement-payment-unavailable__tooltip" role="tooltip" [id]="'payment-wait-' + settlement.id">
-                      @if (diasPago === null) {
-                        No se puede registrar el pago: la fecha de habilitación está pendiente de revisión.
-                      } @else if (diasPago === 0) {
-                        El pago todavía no está habilitado. Revisá el estado de la reserva y su liquidación.
-                      } @else {
-                        No se puede registrar el pago todavía. {{ diasPago === 1 ? 'Falta 1 día' : 'Faltan ' + diasPago + ' días' }} para habilitarlo.
-                      }
+              </div>
+              <div class="actions">
+                <a class="button button--ghost" [routerLink]="['/admin/reservas', settlement.id]" [queryParams]="{ desde: 'liquidaciones' }">Ver reserva</a>
+                @if (settlement.estado_liquidacion === 'EN_REVISION') {
+                  <button type="button" class="button button--ghost" (click)="abrirResolucionLiquidacion(settlement, false)">Cerrar revisión del pago</button>
+                }
+                <button type="button" class="button button--danger-outline" (click)="abrirResolucionLiquidacion(settlement, true)">Devolver al inquilino</button>
+                @if (pendienteParaAnunciante(settlement)) {
+                  @let diasPago = diasEsperaLiquidacion(settlement);
+                  @if (settlement.habilitada_para_pago) {
+                    <button type="button" class="button button--success" (click)="abrirPagoAnunciante(settlement)">Registrar pago al anunciante</button>
+                  } @else {
+                    <span class="settlement-payment-unavailable" tabindex="0" [attr.aria-describedby]="'payment-wait-' + settlement.id">
+                      <button type="button" class="button button--success" disabled>Registrar pago al anunciante</button>
+                      <span class="settlement-payment-unavailable__tooltip" role="tooltip" [id]="'payment-wait-' + settlement.id">
+                        @if (diasPago === null) {
+                          No se puede registrar el pago: la fecha de habilitación está pendiente de revisión.
+                        } @else if (diasPago === 0) {
+                          El pago todavía no está habilitado. Revisá el estado de la reserva y su liquidación.
+                        } @else {
+                          No se puede registrar el pago todavía. {{ diasPago === 1 ? 'Falta 1 día' : 'Faltan ' + diasPago + ' días' }} para habilitarlo.
+                        }
+                      </span>
                     </span>
-                  </span>
+                  }
                 }
-              }
-            </div>
-          </article>
-        } @empty {
-          <p class="empty">No hay liquidaciones que coincidan. <button type="button" class="link-button" (click)="listaLiquidaciones.limpiar()">Limpiar filtros</button></p>
+              </div>
+            </article>
+          } @empty {
+            <p class="empty">No hay liquidaciones que coincidan. <button type="button" class="link-button" (click)="listaLiquidaciones.limpiar()">Limpiar filtros</button></p>
+          }
+        </div>
+        @if (listaLiquidaciones.filtrados().length) {
+          <app-paginador class="admin-paginador" [pagina]="listaLiquidaciones.pagina()" [paginas]="listaLiquidaciones.paginas()"
+            [total]="listaLiquidaciones.filtrados().length" etiqueta="liquidaciones" ariaLabel="Paginación de liquidaciones"
+            (paginaCambia)="listaLiquidaciones.irAPagina($event)" />
         }
-      </div>
-      @if (listaLiquidaciones.filtrados().length) {
-        <app-paginador class="admin-paginador" [pagina]="listaLiquidaciones.pagina()" [paginas]="listaLiquidaciones.paginas()"
-          [total]="listaLiquidaciones.filtrados().length" etiqueta="liquidaciones" ariaLabel="Paginación de liquidaciones"
-          (paginaCambia)="listaLiquidaciones.irAPagina($event)" />
       }
-    }
-  </section>
+    </section>
+  }
 
-  <section class="panel admin-module" [hidden]="activeSection() !== 'reembolsos'">
-    <div class="panel__title">
-      <div>
-        <h2>Reembolsos</h2>
-        <p>Devoluciones creadas por cancelaciones o reclamos.</p>
-      </div>
-      <span class="counter">{{ conteoPendientes() }} pendientes</span>
-    </div>
-    @if (conteoFallidos() > 0) {
-      <p class="refund-action" role="alert">Hay {{ conteoFallidos() }} reembolso(s) fallido(s) que requieren acción manual.</p>
-    }
-    @if (totalReembolsos() > refunds().length) {
-      <p class="refund-note" role="status">Mostrando los últimos {{ refunds().length }} de {{ totalReembolsos() }}.</p>
-    }
-    @if (otherLoading() && !refunds().length) {
-      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando reembolsos…" />
-    } @else if (!refunds().length) {
-      <p class="empty">No hay reembolsos registrados.</p>
-    } @else {
-      <app-filtros-lista class="admin-filtros" [lista]="listaReembolsos" etiqueta="Buscar reembolsos"
-        placeholder="Buscar por reembolso, reserva, publicación, inquilino, motivo u operación" />
-      <div class="settlement-list lista-escalonada">
-        @for (reembolso of listaReembolsos.visibles(); track reembolso.id) {
-          <article class="settlement-card" [id]="'admin-reembolsos-' + reembolso.id" tabindex="-1">
-            <div>
-              <span class="status" [class.status--blocked]="reembolso.estado === 'PENDIENTE' || reembolso.estado === 'FALLIDO'">
-                {{ reembolso.referencia_externa?.startsWith('SIMULADO:tarjeta:') ? 'Simulado' : estadosReembolso[reembolso.estado] }}
-              </span>
-              <h3>Reembolso #{{ reembolso.id }} · Reserva #{{ reembolso.reserva?.id ?? '—' }}</h3>
-              <p><strong>{{ reembolso.tipo }}</strong> · {{ reembolso.importe | currency: reembolso.moneda }}</p>
-              <p class="muted">{{ origenesReembolso[reembolso.origen] || reembolso.origen }} · {{ reembolso.motivo }}</p>
-              @if (reembolso.creado_en) {
-                <p class="muted">Creado el <time [attr.datetime]="reembolso.creado_en">{{ reembolso.creado_en | date:'dd/MM/yyyy HH:mm':'-0300' }}</time></p>
-              }
-              @if (puedeRegistrarTransferencia(reembolso)) {
-                <p>Transferencia bancaria pendiente · Chat disponible</p>
-              }
-            </div>
-            <div class="actions">
-              @if (reembolso.reserva?.id; as idReserva) {
-                <a class="button button--ghost" [routerLink]="['/admin/reservas', idReserva]" [queryParams]="{ desde: 'reembolsos' }">Ver reserva</a>
-              }
-              <button type="button" class="button button--ghost" (click)="abrirReembolso(reembolso)">
-                {{ puedeRegistrarTransferencia(reembolso) ? 'Ver detalle y chat' : 'Ver detalle' }}
-              </button>
-            </div>
-          </article>
-        } @empty {
-          <p class="empty">No hay reembolsos que coincidan. <button type="button" class="link-button" (click)="listaReembolsos.limpiar()">Limpiar filtros</button></p>
-        }
-      </div>
-      @if (listaReembolsos.filtrados().length) {
-        <app-paginador class="admin-paginador" [pagina]="listaReembolsos.pagina()" [paginas]="listaReembolsos.paginas()"
-          [total]="listaReembolsos.filtrados().length" etiqueta="reembolsos" ariaLabel="Paginación de reembolsos"
-          (paginaCambia)="listaReembolsos.irAPagina($event)" />
-      }
-    }
-  </section>
-
-  <app-historial-liquidaciones-admin [hidden]="activeSection() !== 'historial-liquidaciones'" [activa]="activeSection() === 'historial-liquidaciones'" />
+  @defer (when activeSection() === 'reembolsos') {
+    <app-reembolsos-admin #reembolsosAdmin [hidden]="activeSection() !== 'reembolsos'"
+      [activa]="activeSection() === 'reembolsos'" [enfoque]="enfoqueDe('reembolsos')" />
+  }
+  @defer (when activeSection() === 'historial-liquidaciones') {
+    <app-historial-liquidaciones-admin #historialAdmin [hidden]="activeSection() !== 'historial-liquidaciones'"
+      [activa]="activeSection() === 'historial-liquidaciones'" />
+  }
 
   <dialog #dialogoResolucion class="block-dialog refund-dialog cancellation-approval-dialog" aria-labelledby="settlement-decision-title"
     (cancel)="cerrarResolucionLiquidacion($event)">
@@ -423,613 +382,262 @@
     </form>
   </dialog>
 
-  <dialog #dialogoReembolso class="block-dialog refund-dialog" aria-labelledby="refund-title"
-    (cancel)="cerrarReembolso($event)" (close)="reembolsoSeleccionado.set(null)">
-    @if (reembolsoSeleccionado(); as item) {
-      <form class="block-form" (ngSubmit)="procesarReembolso(item)" [attr.aria-busy]="guardandoReembolso()">
-        <header class="refund-heading">
-          <div class="advertiser-payment__header">
-            <div class="cancellation-approval-icon" aria-hidden="true"><svg lucideReceiptText [size]="26"></svg></div>
-            <div>
-              <h2 id="refund-title">{{ puedeRegistrarTransferencia(item) ? 'Registrar transferencia del reembolso' : 'Detalle del reembolso' }}</h2>
-              <p class="refund-meta">Reembolso #{{ item.id }} · Reserva #{{ item.reserva?.id ?? '—' }}</p>
-            </div>
-          </div>
-          <button type="button" class="button button--ghost" aria-label="Cerrar"
-            [disabled]="guardandoReembolso()" (click)="cerrarReembolso()"><svg lucideX [size]="20" aria-hidden="true"></svg></button>
-        </header>
-        <div class="refund-amount">
-          <span>{{ item.tipo === 'TOTAL' ? 'Devolución total' : item.tipo === 'PARCIAL' ? 'Devolución parcial' : 'Contracargo' }}</span>
-          @if (puedeRegistrarTransferencia(item)) {
-            <app-dato-copiable class="refund-amount__value" [valor]="(item.importe | currency: item.moneda) ?? ''"
-              [copia]="importeParaCopiar(item.importe)" descripcion="importe a devolver" />
-          } @else {
-            <strong class="refund-amount__value">{{ item.importe | currency: item.moneda }}</strong>
-          }
-          <span class="status" [class.status--blocked]="item.estado === 'PENDIENTE' || puedeConciliarReembolso(item)">{{ estadosReembolso[item.estado] }}</span>
-        </div>
-        <dl class="refund-data">
-          <div><dt>Publicación</dt><dd>{{ item.reserva?.publicacion?.titulo || 'Sin datos' }}</dd></div>
-          <div><dt>Inquilino</dt><dd>{{ item.reserva?.usuario?.nombre || 'Sin datos' }} {{ item.reserva?.usuario?.apellido }}</dd></div>
-          <div><dt>Origen</dt><dd>{{ origenesReembolso[item.origen] || item.origen }}</dd></div>
-          <div><dt>Creado</dt><dd>{{ item.creado_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
-          @if (item.reserva?.fecha_inicio && item.reserva?.fecha_fin) {
-            <div><dt>Estadía</dt><dd>{{ item.reserva?.fecha_inicio | date:'dd/MM/yyyy':'UTC' }} – {{ item.reserva?.fecha_fin | date:'dd/MM/yyyy':'UTC' }}</dd></div>
-          }
-          @if (item.pago; as pago) {
-            <div><dt>Pago original</dt><dd>{{ pago.payment_id ? 'Mercado Pago #' + pago.payment_id : 'Pago #' + pago.id }}</dd></div>
-          }
-          @if (item.referencia_externa?.startsWith('SIMULADO:tarjeta:')) {
-            <div><dt>Devolución de prueba</dt><dd>Simulada. No se transfirió dinero.</dd></div>
-          } @else if (item.referencia_externa) {
-            <div><dt>{{ item.transferencia_manual ? 'Número de operación' : 'Referencia de devolución' }}</dt><dd>{{ item.referencia_externa }}</dd></div>
-          }
-          @if (item.comprobante_nombre) {
-            <div><dt>Comprobante</dt><dd><app-ver-comprobante [obtenerUrl]="urlComprobanteReembolso(item.id)" [etiqueta]="'Ver ' + item.comprobante_nombre" /></dd></div>
-          }
-          @if (item.resuelto_en) {
-            <div><dt>Resuelto</dt><dd>{{ item.resuelto_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
-          }
-          @if (item.resuelto_por; as administrador) {
-            <div><dt>Registrado por</dt><dd>{{ administrador.nombre }} {{ administrador.apellido }}</dd></div>
-          }
-          @if (item.aplicado_en) {
-            <div><dt>Aplicado a la reserva</dt><dd>{{ item.aplicado_en | date:'dd/MM/yyyy, HH:mm' }}</dd></div>
-          }
-          <div class="refund-reason"><dt>Motivo</dt><dd>{{ item.motivo }}</dd></div>
-          @if (item.observacion_transferencia) {
-            <div class="refund-reason"><dt>Observación de la transferencia</dt><dd>{{ item.observacion_transferencia }}</dd></div>
-          }
-        </dl>
-        @if (item.revision_aplicacion) {
-          <p class="refund-help">Reembolso histórico pendiente de revisión administrativa.</p>
-        } @else if (item.estado === 'APROBADO' && !item.aplicado_en) {
-          <p class="refund-help">El reembolso está aprobado y pendiente de aplicar a la reserva.</p>
-        }
-        @if (puedeRegistrarTransferencia(item)) {
-          <p class="refund-help refund-help--accent" id="refund-transfer-help">Pedile al inquilino su CBU o alias por el chat, transferí el importe y adjuntá el comprobante. El inquilino va a poder ver el comprobante, el número de operación y la observación.</p>
-        }
-        @if (item.transferencia_manual) {
-          <details class="refund-chat" [open]="puedeRegistrarTransferencia(item)">
-            <summary>Conversación con el inquilino</summary>
-            <app-reembolso-chat [reembolsoId]="item.id" />
-          </details>
-        }
-        @if (puedeRegistrarTransferencia(item)) {
-          <app-carga-comprobante [(archivo)]="comprobanteReembolso" [deshabilitado]="guardandoReembolso()" />
-          <label for="refund-bank-reference">Número de operación <span class="muted">(opcional)</span></label>
-          <input id="refund-bank-reference" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
-            maxlength="150" aria-describedby="refund-transfer-help" [disabled]="guardandoReembolso()" />
-          <label for="refund-transfer-note">Observación <span class="muted">(opcional)</span></label>
-          <textarea id="refund-transfer-note" name="observacionReembolso" [(ngModel)]="observacionReembolso"
-            rows="3" maxlength="500" [disabled]="guardandoReembolso()"></textarea>
-        } @else if (puedeConciliarReembolso(item)) {
-          <label for="refund-external-id">ID del reembolso en Mercado Pago</label>
-          <input id="refund-external-id" name="referenciaReembolso" [(ngModel)]="referenciaReembolso"
-            required maxlength="100" inputmode="numeric" pattern="[0-9]+" [disabled]="guardandoReembolso()" />
-          <p class="refund-help">Se verifica una devolución ya realizada en Mercado Pago.</p>
-        } @else if (puedeSolicitarReembolso(item)) {
-          <p class="refund-help">Al confirmar, se solicitará la devolución a Mercado Pago por el importe indicado.</p>
-        } @else if (item.estado === 'PENDIENTE') {
-          <p class="refund-help">{{ item.referencia_interna?.startsWith('auto-can:') ? 'La devolución está en gestión automática.' : 'El pago original no tiene un identificador de Mercado Pago.' }}</p>
-        }
-        @if (puedeHabilitarTransferencia(item)) {
-          <p class="refund-help">Para devolver por transferencia, DEPA verifica en Mercado Pago que no haya una devolución pendiente o sin conciliar.</p>
-        }
-        @if (errorReembolso()) { <p class="refund-error" role="alert">{{ errorReembolso() }}</p> }
-        <div class="block-actions">
-          <button type="button" class="button button--ghost" [disabled]="guardandoReembolso()" (click)="cerrarReembolso()">Volver</button>
-          @if (puedeHabilitarTransferencia(item)) {
-            <button type="button" class="button button--ghost" [disabled]="guardandoReembolso()" (click)="habilitarTransferenciaReembolso(item)">Habilitar transferencia</button>
-          }
-          @if (puedeRegistrarTransferencia(item) || puedeSolicitarReembolso(item) || puedeConciliarReembolso(item)) {
-            <button type="submit" class="button button--success"
-              [disabled]="guardandoReembolso() || !referenciaReembolsoValida(item)">
-              {{ guardandoReembolso() ? 'Procesando…' : puedeRegistrarTransferencia(item) ? 'Registrar transferencia' : puedeConciliarReembolso(item) ? 'Conciliar devolución' : 'Solicitar devolución' }}
-            </button>
+  @defer (when activeSection() === 'reclamos') {
+    <app-reclamos-admin #reclamosAdmin [hidden]="activeSection() !== 'reclamos'"
+      [activa]="activeSection() === 'reclamos'" [enfoque]="enfoqueDe('reclamos')" (verReembolso)="verReembolsoReclamo($event)" />
+  }
+  @defer (when activeSection() === 'verificaciones') {
+    <app-verificaciones-admin #verificacionesAdmin [hidden]="activeSection() !== 'verificaciones'"
+      [activa]="activeSection() === 'verificaciones'" [enfoque]="enfoqueDe('verificaciones')" />
+  }
+  @if (activeSection() === 'usuarios') {
+    <section class="panel admin-module">
+      <div class="panel__title panel__title--users">
+        <div>
+          <h2>Usuarios</h2>
+          <p>Administrá el acceso y los roles del sistema.</p>
+          @if (!usersLoading()) {
+            <p>{{ registeredUsers() }} usuarios registrados</p>
           }
         </div>
-      </form>
-    }
-  </dialog>
-
-  <section class="panel admin-module" id="reclamos" [hidden]="activeSection() !== 'reclamos'">
-    <div class="panel__title">
-      <div>
-        <h2>Reclamos de reservas</h2>
-        <p>Evidencia, mensajes con las partes y resolución administrativa.</p>
+        <label class="search"
+          ><svg lucideSearch [size]="18"></svg
+          ><input
+            type="search"
+            aria-label="Buscar usuarios"
+            maxlength="200"
+            placeholder="Buscar por nombre, email o CUIT/CUIL"
+            [ngModel]="query()"
+            (ngModelChange)="searchUsers($event)"
+        /></label>
       </div>
-      <span class="counter">{{ claims().length }}</span>
-    </div>
-    @if (errorReclamos()) {
-      <p class="alert alert--error" role="alert">{{ errorReclamos() }}</p>
-    }
-    @if (!claims().length && !errorReclamos()) {
-      @if (loading()) { <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando reclamos…" /> } @else { <p class="empty">No hay reclamos registrados.</p> }
-    } @else if (claims().length) {
-      @if (claims().length >= maxReclamosAdmin) {
-        <p class="refund-note" role="status">Se muestran los {{ maxReclamosAdmin }} reclamos más recientes.</p>
-      }
-      <app-filtros-lista class="admin-filtros" [lista]="listaReclamos" etiqueta="Buscar reclamos"
-        placeholder="Buscar por reclamo, reserva, publicación, inquilino, anunciante o descripción" />
-    }
-    <div class="settlement-list lista-escalonada">
-      @for (claim of listaReclamos.visibles(); track claim.id) {
-        <article class="settlement-card claim-card" [id]="'admin-reclamos-' + claim.id" tabindex="-1"
-          [class.claim-card--destacado]="reclamoDestacado() === claim.id">
-          <app-claim-history [reclamo]="claim" [administracion]="true" [mostrarVerReembolso]="true"
-            [actualizar]="activeSection() === 'reclamos'"
-            (verReembolso)="verReembolsoReclamo(claim)">
-            @if (gestionReclamo()?.id === claim.id && gestionReclamo()?.accion === 'mensaje') {
-              <app-conversation-composer [(texto)]="textoReclamo" [(imagenes)]="imagenesReclamo" [adjuntos]="imagenesDisponibles(claim)"
-                etiqueta="Mensaje para el inquilino y el anunciante" [deshabilitado]="!!busy()" (enviar)="responderReclamo(claim)" />
-              <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
-            }
-          </app-claim-history>
-          @if (claim.estado !== 'CERRADO') {
-            <div class="actions">
-              <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'mensaje')">Escribir mensaje</button>
-              @if (claim.estado === 'ABIERTO' || claim.estado === 'EN_REVISION') {
-                <button type="button" class="button button--resolve-claim" [disabled]="!!busy()" (click)="abrirGestionReclamo(claim.id, 'resolver')">Resolver reclamo</button>
-              }
-            </div>
-          }
-          @if (gestionReclamo(); as gestion) {
-            @if (gestion.id === claim.id && gestion.accion === 'resolver') {
-              <form class="claim-form" (ngSubmit)="resolverReclamoReserva(claim)">
-                <label>Resultado de la revisión
-                  <select name="resolucionReclamo" [(ngModel)]="resolucionReclamo" [disabled]="!!busy()">
-                    @if (claim.categoria === 'CODIGO_BLOQUEADO') {
-                      <!-- El pedido de reinicio del código tiene sus propias salidas; terminada la estadía ya no se carga el código. -->
-                      @if (claim.reserva?.estado_estadia === 'PENDIENTE_INGRESO') {
-                        <option value="REINICIAR_CODIGO">Habilitar 5 intentos más</option>
-                      }
-                      <option value="CONFIRMAR_INGRESO">Confirmar el ingreso sin código (a favor del anunciante)</option>
-                      <option value="DEVOLUCION_PARCIAL">Devolver una parte al inquilino</option>
-                      <option value="DEVOLUCION_TOTAL">Devolver el 100 % al inquilino</option>
-                    } @else {
-                      <option value="SIN_DEVOLUCION">Sin devolución</option>
-                      <option value="DEVOLUCION_PARCIAL">Devolución parcial</option>
-                      <option value="DEVOLUCION_TOTAL">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}</option>
-                    }
-                  </select>
-                </label>
-                @if (claim.categoria === 'CODIGO_BLOQUEADO' && resolucionReclamo === 'CONFIRMAR_INGRESO') {
-                  <p class="refund-help">El pago al anunciante se habilita en la fecha habitual, a los 5 días del fin de la estadía.</p>
-                }
-                @if (resolucionReclamo === 'DEVOLUCION_PARCIAL') {
-                  <label>Importe a devolver ({{ claim.devolucion_cancelacion?.moneda || claim.reserva?.moneda_contratada || 'ARS' }})
-                    <input type="number" name="importeReclamo" [(ngModel)]="importeReclamo" min="0.01" step="0.01" required
-                      [attr.max]="totalPagadoReclamo(claim)" [attr.aria-invalid]="parcialCubreElTotal(claim)" [disabled]="!!busy()" />
-                  </label>
-                  @if (totalPagadoReclamo(claim); as total) {
-                    <p class="refund-help">{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Faltante disponible:' : 'Pagó el inquilino' }} {{ montoReclamo(claim, total) }}. La devolución parcial tiene que ser menor.</p>
-                  }
-                  @if (claim.categoria === 'CODIGO_BLOQUEADO') {
-                    <p class="refund-help">El ingreso sigue sin verificar. El resto se le paga al anunciante en la fecha habitual, a los 5 días del fin de la estadía.</p>
-                  }
-                  @if (parcialCubreElTotal(claim)) {
-                    <p class="refund-error" role="alert">Para devolver todo elegí «{{ (claim.solicitud_cancelacion_id && claim.categoria !== 'DEMORA_ADMINISTRATIVA') ? 'Completar faltante' : 'Devolución total' }}».</p>
-                  }
-                }
-                <label>Motivo de la resolución
-                  <textarea name="observacionReclamo" [(ngModel)]="observacionReclamo" rows="3" maxlength="500" required
-                    aria-describedby="motivo-resolucion-ayuda" [disabled]="!!busy()"></textarea>
-                </label>
-                <p id="motivo-resolucion-ayuda" class="refund-help">Lo ven el inquilino y el anunciante.</p>
-                <div class="actions">
-                  <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="gestionReclamo.set(null)">Cancelar</button>
-                  <button type="submit" class="button button--light" [disabled]="!!busy() || !observacionReclamo.trim() || (resolucionReclamo === 'DEVOLUCION_PARCIAL' && (!(importeReclamo && importeReclamo > 0) || parcialCubreElTotal(claim)))">Confirmar resolución</button>
-                </div>
-              </form>
-            }
-          }
-        </article>
-      } @empty {
-        @if (claims().length) {
-          <p class="empty">No hay reclamos que coincidan. <button type="button" class="link-button" (click)="listaReclamos.limpiar()">Limpiar filtros</button></p>
-        }
-      }
-    </div>
-    @if (listaReclamos.filtrados().length) {
-      <app-paginador class="admin-paginador" [pagina]="listaReclamos.pagina()" [paginas]="listaReclamos.paginas()"
-        [total]="listaReclamos.filtrados().length" etiqueta="reclamos" ariaLabel="Paginación de reclamos"
-        (paginaCambia)="listaReclamos.irAPagina($event)" />
-    }
-  </section>
-
-  <section class="panel admin-module" [hidden]="activeSection() !== 'verificaciones'">
-    <div class="panel__title">
-      <div>
-        <h2>Solicitudes de verificación</h2>
-        <p>Identidad y cuentas bancarias pendientes de revisión.</p>
-      </div>
-      <span class="counter">{{ requests().length }}</span>
-    </div>
-    @if (otherLoading()) {
-      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando solicitudes…" />
-    } @else if (!requests().length) {
-      <p class="empty">No hay solicitudes pendientes.</p>
-    } @else {
-      <app-filtros-lista class="admin-filtros" [lista]="listaVerificaciones" etiqueta="Buscar solicitudes de verificación"
-        placeholder="Buscar por nombre, email, CUIT/CUIL, razón social o solicitud" />
-      @if (!listaVerificaciones.filtrados().length) {
-        <p class="empty">No hay solicitudes que coincidan. <button type="button" class="link-button" (click)="listaVerificaciones.limpiar()">Limpiar filtros</button></p>
-      }
-      <div class="requests lista-escalonada">
-        @for (request of listaVerificaciones.visibles(); track request.id) {
-          <article class="request" [id]="'admin-verificaciones-' + request.id" tabindex="-1">
-            <div class="request__identity">
-              <span class="avatar">{{
-                (request.anunciante.usuario?.nombre || 'A').charAt(0)
-              }}</span>
-              <div>
-                <h3>
-                  {{ request.anunciante.usuario?.nombre || 'Anunciante' }}
-                  {{ request.anunciante.usuario?.apellido }}
-                </h3>
-                <p>{{ request.anunciante.usuario?.email || request.anunciante.numero_contacto }}</p>
-              </div>
-            </div>
-            <dl>
-              <div>
-                <dt>CUIT/CUIL</dt>
-                <dd>{{ request.anunciante.cuit_cuil || 'Sin informar' }}</dd>
-              </div>
-              <div>
-                <dt>Revisión</dt>
-                <dd>#{{ request.numero_revision }}</dd>
-              </div>
-              @if (request.revisar_identidad) {
-                <div>
-                  <dt>Prueba de vida</dt>
-                  <dd>{{ request.prueba_vida_validada_en ? 'Completada' : 'Requiere una nueva captura' }}</dd>
-                </div>
-              }
-              @if (request.cbu_pendiente) {
-                <div><dt>CBU a revisar</dt><dd><code>{{ request.cbu_pendiente }}</code></dd></div>
-              }
-            </dl>
-            @if (request.cbu_pendiente) {
-              <label>
-                <input #titular type="checkbox" [checked]="titularCbuConfirmado === request.id"
-                  (change)="titularCbuConfirmado = titular.checked ? request.id : null" />
-                Verifiqué en el banco que el CBU pertenece al mismo titular de la cuenta en DEPA.
-              </label>
-            }
-            @if (request.revisar_identidad && (request.razon_social || request.matricula_profesional)) {
-              <h4>Inmobiliaria y corredor responsable</h4>
-              <dl>
-                <div><dt>Nombre o razón social</dt><dd>{{ request.razon_social || 'Sin informar' }}</dd></div>
-                <div><dt>Matrícula del corredor responsable</dt><dd>{{ request.matricula_profesional || 'Sin informar' }}</dd></div>
-                <div><dt>Colegio profesional y jurisdicción</dt><dd>{{ request.colegio_profesional || 'Sin informar' }}</dd></div>
-                <div><dt>Domicilio comercial</dt><dd>{{ request.domicilio_comercial || 'Sin informar' }}</dd></div>
-                <div><dt>DNI del corredor responsable</dt><dd>{{ request.dni_corredor || 'Sin informar' }}</dd></div>
-              </dl>
-              <p>Compará el DNI y la captura del titular de la cuenta. Revisá matrícula, colegio/jurisdicción, domicilio comercial y constancia de CUIT antes de aprobar.</p>
-            }
-            <div class="documents">
-              @if (request.dni_frente_url) {
-                <a class="document-preview" [href]="request.dni_frente_url" target="_blank" rel="noopener">
-                  <img [src]="request.dni_frente_url" alt="Vista previa DNI frente" />
-                  <span>DNI frente</span>
-                </a>
-              }
-              @if (request.dni_dorso_url) {
-                <a class="document-preview" [href]="request.dni_dorso_url" target="_blank" rel="noopener">
-                  <img [src]="request.dni_dorso_url" alt="Vista previa DNI dorso" />
-                  <span>DNI dorso</span>
-                </a>
-              }
-              @if (request.rostro_url) {
-                <a class="document-preview" [href]="request.rostro_url" target="_blank" rel="noopener">
-                  @if (esVideo(request.rostro_url)) {
-                    <video [src]="request.rostro_url" muted></video>
-                  } @else {
-                    <img [src]="request.rostro_url" alt="Vista previa del rostro" />
-                  }
-                  <span>Rostro</span>
-                </a>
-              }
-            </div>
-            @if (request.matricula_url) { <a [href]="request.matricula_url" target="_blank" rel="noopener">Ver constancia de matrícula</a> }
-            @if (request.constancia_cuit_url) { <a [href]="request.constancia_cuit_url" target="_blank" rel="noopener">Ver constancia de CUIT</a> }
-            @if (rejectId() === request.id) {
-              <div class="reject-box">
-                @if (request.revisar_identidad) {
-                  <label><input type="checkbox" [(ngModel)]="rechazarIdentidad" /> Rechazar prueba de vida y documentación de identidad</label>
-                }
-                @if (request.cbu_pendiente) {
-                  <label><input type="checkbox" [(ngModel)]="rechazarCbu" /> Rechazar CBU</label>
-                }
-                @if (request.revisar_identidad && request.cbu_pendiente) {
-                  <p>Se aprobará la parte que dejes sin marcar.</p>
-                }
-                <label [for]="'reason-' + request.id">Motivo del rechazo</label
-                ><textarea
-                  [id]="'reason-' + request.id"
-                  [(ngModel)]="rejectReason"
-                  maxlength="500"
-                  placeholder="Explicá qué documentación debe corregir"
-                ></textarea>
-                <div>
-                  <button type="button" class="button button--ghost" (click)="cancelReject()">
-                    Cancelar</button
-                  ><button
-                    type="button"
-                    class="button button--danger"
-                    (click)="confirmReject(request)"
-                    [disabled]="rejectReason.trim().length < 5 || (!rechazarIdentidad && !rechazarCbu) || !puedeResolverVerificacion(request, rechazarIdentidad, rechazarCbu)"
-                  >
-                    Confirmar rechazo
-                  </button>
-                </div>
-              </div>
+      <div class="table-wrap">
+        <table class="responsive-table" role="table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Contacto</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th class="right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="lista-escalonada">
+            @if (usersLoading()) {
+              <tr><td colspan="5"><app-esqueleto-lista [cantidad]="4" etiqueta="Cargando usuarios…" /></td></tr>
             } @else {
-              <div class="actions">
-                <button
-                  type="button"
-                  class="button button--danger-outline"
-                  (click)="openReject(request)"
-                >
-                  <svg lucideX [size]="17"></svg> Rechazar</button
-                ><button
-                  type="button"
-                  class="button button--success"
-                  (click)="approve(request)"
-                  [disabled]="!puedeResolverVerificacion(request, false, false)"
-                >
-                  <svg lucideCheck [size]="17"></svg> Aprobar
-                </button>
-              </div>
-            }
-          </article>
-        }
-      </div>
-      @if (listaVerificaciones.filtrados().length) {
-        <app-paginador class="admin-paginador" [pagina]="listaVerificaciones.pagina()" [paginas]="listaVerificaciones.paginas()"
-          [total]="listaVerificaciones.filtrados().length" etiqueta="solicitudes" ariaLabel="Paginación de solicitudes de verificación"
-          (paginaCambia)="listaVerificaciones.irAPagina($event)" />
-      }
-    }
-  </section>
-
-  <section class="panel admin-module" [hidden]="activeSection() !== 'usuarios'">
-    <div class="panel__title panel__title--users">
-      <div>
-        <h2>Usuarios</h2>
-        <p>Administrá el acceso y los roles del sistema.</p>
-        @if (!usersLoading()) {
-          <p>{{ registeredUsers() }} usuarios registrados</p>
-        }
-      </div>
-      <label class="search"
-        ><svg lucideSearch [size]="18"></svg
-        ><input
-          type="search"
-          aria-label="Buscar usuarios"
-          maxlength="200"
-          placeholder="Buscar por nombre, email o CUIT/CUIL"
-          [ngModel]="query()"
-          (ngModelChange)="searchUsers($event)"
-      /></label>
-    </div>
-    <div class="table-wrap">
-      <table class="responsive-table" role="table">
-        <thead>
-          <tr>
-            <th>Usuario</th>
-            <th>Contacto</th>
-            <th>Rol</th>
-            <th>Estado</th>
-            <th class="right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody class="lista-escalonada">
-          @if (usersLoading()) {
-            <tr><td colspan="5"><app-esqueleto-lista [cantidad]="4" etiqueta="Cargando usuarios…" /></td></tr>
-          } @else {
-          @for (user of users(); track user.id) {
-            <tr>
-              <td data-label="Usuario">
-                <strong>{{ user.nombre }} {{ user.apellido }}</strong
-                ><small>{{ user.email_verificado ? 'Email verificado' : 'Email pendiente' }}</small>
-              </td>
-              <td data-label="Contacto">
-                <!-- RN-37: una cuenta dada de baja conserva su email y CUIT/CUIL como históricos. -->
-                {{ user.email ?? user.email_historico }}<small>{{ user.telefono }}</small>
-                @if (user.cuit_cuil ?? user.cuit_cuil_historico; as cuit) {
-                  <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
-                }
-              </td>
-              <td data-label="Rol">
-                <span class="user-roles">
-                  @if (user.rol?.nombre === 'Administrador') {
-                    <span class="user-role user-role--admin"><svg lucideShieldCheck [size]="15" aria-hidden="true"></svg> Administrador</span>
-                  } @else if (!user.es_anunciante) {
-                    <span class="user-role">{{ user.rol?.nombre ?? 'Sin rol' }}</span>
+            @for (user of users(); track user.id) {
+              <tr>
+                <td data-label="Usuario">
+                  <strong>{{ user.nombre }} {{ user.apellido }}</strong
+                  ><small>{{ user.email_verificado ? 'Email verificado' : 'Email pendiente' }}</small>
+                </td>
+                <td data-label="Contacto">
+                  <!-- RN-37: una cuenta dada de baja conserva su email y CUIT/CUIL como históricos. -->
+                  {{ user.email ?? user.email_historico }}<small>{{ user.telefono }}</small>
+                  @if (user.cuit_cuil ?? user.cuit_cuil_historico; as cuit) {
+                    <small>CUIT/CUIL {{ cuit }}{{ user.cuit_cuil ? '' : ' (histórico)' }}</small>
                   }
-                  @if (user.es_anunciante) { <span class="user-role user-role--anunciante">Anunciante</span> }
-                </span>
-              </td>
-              <td data-label="Estado">
-                @if (!user.activa) {
-                  <span class="status status--deleted">Dada de baja</span>
-                  @if (user.fecha_baja) {
-                    <small>{{ user.fecha_baja | date: 'dd/MM/yyyy' }}</small>
-                  }
-                } @else if (user.bloqueado) {
-                  <span class="status status--blocked">Bloqueada</span>
-                } @else {
-                  <span class="status">Activa</span>
-                }
-              </td>
-              <td data-label="Acciones" class="right">
-                <div class="user-actions">
-                  <a class="user-profile-link" [routerLink]="['/admin/usuarios', user.id]" [queryParams]="{ desde: 'usuarios' }"
-                    [attr.aria-label]="'Ver perfil de ' + user.nombre + ' ' + user.apellido">
-                    <svg lucideEye [size]="17" aria-hidden="true"></svg> Ver perfil
-                  </a>
-                  @if (user.activa) {
-                    @if (!user.bloqueado && user.rol?.nombre !== 'Administrador') {
-                      <button type="button" class="user-admin-action" (click)="abrirAdministrador(user)" [disabled]="busy() !== null || promoviendo()"
-                        [attr.aria-label]="'Dar permisos de administrador a ' + user.nombre + ' ' + user.apellido"><svg lucideShieldCheck [size]="17" aria-hidden="true"></svg> Dar admin</button>
+                </td>
+                <td data-label="Rol">
+                  <span class="user-roles">
+                    @if (user.rol?.nombre === 'Administrador') {
+                      <span class="user-role user-role--admin"><svg lucideShieldCheck [size]="15" aria-hidden="true"></svg> Administrador</span>
+                    } @else if (!user.es_anunciante) {
+                      <span class="user-role">{{ user.rol?.nombre ?? 'Sin rol' }}</span>
                     }
-                    <button
-                      type="button"
-                      class="link-button"
-                      (click)="toggleUser(user)"
-                      [disabled]="busy() === 'user-' + user.id"
-                    >
-                      {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
-                    </button>
+                    @if (user.es_anunciante) { <span class="user-role user-role--anunciante">Anunciante</span> }
+                  </span>
+                </td>
+                <td data-label="Estado">
+                  @if (!user.activa) {
+                    <span class="status status--deleted">Dada de baja</span>
+                    @if (user.fecha_baja) {
+                      <small>{{ user.fecha_baja | date: 'dd/MM/yyyy' }}</small>
+                    }
+                  } @else if (user.bloqueado) {
+                    <span class="status status--blocked">Bloqueada</span>
+                  } @else {
+                    <span class="status">Activa</span>
                   }
-                </div>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="5" class="empty">No se encontraron usuarios.</td>
-            </tr>
-          }
-          }
-        </tbody>
-      </table>
-    </div>
-    <nav class="pagination" aria-label="Paginación de usuarios">
-      <span role="status">{{ usersTotal() }} usuarios · Página {{ usersPage() }} de {{ usersPages() }}</span>
-      <div class="pagination__actions">
-        <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() - 1)"
-          [disabled]="usersLoading() || busy() !== null || usersPage() <= 1">Anterior</button>
-        <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() + 1)"
-          [disabled]="usersLoading() || busy() !== null || usersPage() >= usersPages()">Siguiente</button>
-      </div>
-    </nav>
-  </section>
-  <section class="panel admin-module appeals-panel" aria-labelledby="blocked-users-title" [hidden]="activeSection() !== 'bloqueos'">
-    <div class="panel__title appeals-panel__title">
-      <div>
-        <h2 id="blocked-users-title">Usuarios bloqueados</h2>
-        <p>Consultá los bloqueos vigentes y respondé las apelaciones.</p>
-      </div>
-    </div>
-    <nav class="appeals-tabs" aria-label="Vistas de bloqueos">
-      <button type="button" [class.active]="vistaBloqueos() === 'actuales'" [attr.aria-pressed]="vistaBloqueos() === 'actuales'" (click)="cambiarVistaBloqueos('actuales')">Bloqueos actuales</button>
-      <button type="button" [class.active]="vistaBloqueos() === 'historial'" [attr.aria-pressed]="vistaBloqueos() === 'historial'" (click)="cambiarVistaBloqueos('historial')">Historial</button>
-    </nav>
-    @if (vistaBloqueos() === 'actuales') {
-    @if (bloqueadosError()) {
-      <p class="alert alert--error" role="alert">{{ bloqueadosError() }}</p>
-    }
-    @if (bloqueadosCargando()) {
-      <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando usuarios bloqueados…" />
-    } @else {
-      @if (bloqueados().length) {
-        <app-filtros-lista class="admin-filtros" [lista]="listaBloqueos" etiqueta="Buscar bloqueos actuales"
-          placeholder="Buscar por nombre, email, motivo o administrador" />
-      }
-      <div class="blocked-users lista-escalonada">
-        @for (bloqueo of listaBloqueos.visibles(); track bloqueo.detalle.id) {
-          <article class="blocked-user" [id]="'admin-bloqueos-' + bloqueo.usuario.id" tabindex="-1">
-            <header class="blocked-user__header">
-              <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
-              <div class="blocked-user__identity">
-                <h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3>
-                <p>{{ bloqueo.usuario.email }}</p>
-              </div>
-              <span class="blocked-user__status">
-                @if (tieneApelacion(bloqueo.detalle)) {
-                  <svg lucideMessageCircle [size]="15" aria-hidden="true"></svg> {{ apelacionSinResponder(bloqueo.detalle) ? 'Apelación en curso' : 'Respondida' }}
-                } @else {
-                  <svg lucideClock3 [size]="15" aria-hidden="true"></svg> Sin apelación
-                }
-              </span>
-              <button type="button" class="blocked-user__unblock" [disabled]="!!busy()" (click)="desbloquearDesdeApelaciones(bloqueo)">
-                {{ busy() === 'user-' + bloqueo.usuario.id ? 'Desbloqueando...' : 'Desbloquear usuario' }}
-              </button>
-            </header>
-            <div class="blocked-user__details">
-              <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
-              <div><svg lucideCalendarDays [size]="20" aria-hidden="true"></svg><p><strong>Fecha del bloqueo</strong>{{ bloqueo.detalle.fecha ? (bloqueo.detalle.fecha | date: 'dd/MM/yyyy') : 'Sin registro' }}</p></div>
-              <div><svg lucideMessageCircle [size]="20" aria-hidden="true"></svg><p><strong>Motivo</strong>{{ bloqueo.detalle.motivo || 'Sin registro' }}</p></div>
-            </div>
-            @if (bloqueo.detalle.accesoLimitado) {
-              <p class="blocked-user__notice">Acceso limitado a operaciones pendientes y apelación.</p>
+                </td>
+                <td data-label="Acciones" class="right">
+                  <div class="user-actions">
+                    <a class="user-profile-link" [routerLink]="['/admin/usuarios', user.id]" [queryParams]="{ desde: 'usuarios' }"
+                      [attr.aria-label]="'Ver perfil de ' + user.nombre + ' ' + user.apellido">
+                      <svg lucideEye [size]="17" aria-hidden="true"></svg> Ver perfil
+                    </a>
+                    @if (user.activa) {
+                      @if (!user.bloqueado && user.rol?.nombre !== 'Administrador') {
+                        <button type="button" class="user-admin-action" (click)="abrirAdministrador(user)" [disabled]="busy() !== null || promoviendo()"
+                          [attr.aria-label]="'Dar permisos de administrador a ' + user.nombre + ' ' + user.apellido"><svg lucideShieldCheck [size]="17" aria-hidden="true"></svg> Dar admin</button>
+                      }
+                      <button
+                        type="button"
+                        class="link-button"
+                        (click)="toggleUser(user)"
+                        [disabled]="busy() === 'user-' + user.id"
+                      >
+                        {{ user.bloqueado ? 'Habilitar' : 'Bloquear' }}
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="empty">No se encontraron usuarios.</td>
+              </tr>
             }
-            @if (bloqueo.detalle.apelacion) {
-              <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true"
-                [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">
-                  <app-conversation-composer [texto]="respuestasApelacion[bloqueo.detalle.id] ?? ''" (textoChange)="respuestasApelacion[bloqueo.detalle.id] = $event"
-                    [imagenes]="imagenesApelacion[bloqueo.detalle.id] ?? sinImagenes" (imagenesChange)="imagenesApelacion[bloqueo.detalle.id] = $event"
-                    [adjuntos]="1" [textoObligatorio]="true" [limite]="2000" etiqueta="Respuesta de Administración"
-                    [deshabilitado]="!!busy()" (enviar)="responderApelacion(bloqueo)" />
-                  <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="cancelarRespuesta(bloqueo)">Cancelar</button>
-              </app-conversation-panel>
             }
-          </article>
-        } @empty {
-          @if (bloqueados().length) {
-            <p class="empty">No hay bloqueos que coincidan. <button type="button" class="link-button" (click)="listaBloqueos.limpiar()">Limpiar filtros</button></p>
-          } @else if (!bloqueadosError()) {
-            <p class="empty">No hay usuarios bloqueados.</p>
-          }
-        }
+          </tbody>
+        </table>
       </div>
-      @if (listaBloqueos.filtrados().length) {
-        <app-paginador class="admin-paginador" [pagina]="listaBloqueos.pagina()" [paginas]="listaBloqueos.paginas()"
-          [total]="listaBloqueos.filtrados().length" etiqueta="bloqueos" ariaLabel="Paginación de bloqueos actuales"
-          (paginaCambia)="listaBloqueos.irAPagina($event)" />
+      <nav class="pagination" aria-label="Paginación de usuarios">
+        <span role="status">{{ usersTotal() }} usuarios · Página {{ usersPage() }} de {{ usersPages() }}</span>
+        <div class="pagination__actions">
+          <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() - 1)"
+            [disabled]="usersLoading() || busy() !== null || usersPage() <= 1">Anterior</button>
+          <button type="button" class="button button--ghost" (click)="loadUsers(usersPage() + 1)"
+            [disabled]="usersLoading() || busy() !== null || usersPage() >= usersPages()">Siguiente</button>
+        </div>
+      </nav>
+    </section>
+  }
+
+  @if (activeSection() === 'bloqueos') {
+    <section class="panel admin-module appeals-panel" aria-labelledby="blocked-users-title">
+      <div class="panel__title appeals-panel__title">
+        <div>
+          <h2 id="blocked-users-title">Usuarios bloqueados</h2>
+          <p>Consultá los bloqueos vigentes y respondé las apelaciones.</p>
+        </div>
+      </div>
+      <nav class="appeals-tabs" aria-label="Vistas de bloqueos">
+        <button type="button" [class.active]="vistaBloqueos() === 'actuales'" [attr.aria-pressed]="vistaBloqueos() === 'actuales'" (click)="cambiarVistaBloqueos('actuales')">Bloqueos actuales</button>
+        <button type="button" [class.active]="vistaBloqueos() === 'historial'" [attr.aria-pressed]="vistaBloqueos() === 'historial'" (click)="cambiarVistaBloqueos('historial')">Historial</button>
+      </nav>
+      @if (vistaBloqueos() === 'actuales') {
+      @if (bloqueadosError()) {
+        <p class="alert alert--error" role="alert">{{ bloqueadosError() }}</p>
       }
-    }
-    } @else {
-      @if (historialBloqueosError()) { <p class="alert alert--error" role="alert">{{ historialBloqueosError() }}</p> }
-      @if (historialBloqueosCargando()) {
-        <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando historial de bloqueos…" />
+      @if (bloqueadosCargando()) {
+        <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando usuarios bloqueados…" />
       } @else {
-        @if (historialBloqueos().length) {
-          <app-filtros-lista class="admin-filtros" [lista]="listaHistorialBloqueos" etiqueta="Buscar en el historial de bloqueos"
+        @if (bloqueados().length) {
+          <app-filtros-lista class="admin-filtros" [lista]="listaBloqueos" etiqueta="Buscar bloqueos actuales"
             placeholder="Buscar por nombre, email, motivo o administrador" />
         }
         <div class="blocked-users lista-escalonada">
-          @for (bloqueo of listaHistorialBloqueos.visibles(); track bloqueo.usuario.id + '-' + bloqueo.detalle.id) {
-            <article class="blocked-user">
+          @for (bloqueo of listaBloqueos.visibles(); track bloqueo.detalle.id) {
+            <article class="blocked-user" [id]="'admin-bloqueos-' + bloqueo.usuario.id" tabindex="-1">
               <header class="blocked-user__header">
                 <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
-                <div class="blocked-user__identity"><h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3><p>{{ bloqueo.usuario.email }}</p></div>
-                <span class="blocked-user__status blocked-user__status--closed">Desbloqueado</span>
+                <div class="blocked-user__identity">
+                  <h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3>
+                  <p>{{ bloqueo.usuario.email }}</p>
+                </div>
+                <span class="blocked-user__status">
+                  @if (tieneApelacion(bloqueo.detalle)) {
+                    <svg lucideMessageCircle [size]="15" aria-hidden="true"></svg> {{ apelacionSinResponder(bloqueo.detalle) ? 'Apelación en curso' : 'Respondida' }}
+                  } @else {
+                    <svg lucideClock3 [size]="15" aria-hidden="true"></svg> Sin apelación
+                  }
+                </span>
+                <button type="button" class="blocked-user__unblock" [disabled]="!!busy()" (click)="desbloquearDesdeApelaciones(bloqueo)">
+                  {{ busy() === 'user-' + bloqueo.usuario.id ? 'Desbloqueando...' : 'Desbloquear usuario' }}
+                </button>
               </header>
               <div class="blocked-user__details">
                 <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
                 <div><svg lucideCalendarDays [size]="20" aria-hidden="true"></svg><p><strong>Fecha del bloqueo</strong>{{ bloqueo.detalle.fecha ? (bloqueo.detalle.fecha | date: 'dd/MM/yyyy') : 'Sin registro' }}</p></div>
                 <div><svg lucideMessageCircle [size]="20" aria-hidden="true"></svg><p><strong>Motivo</strong>{{ bloqueo.detalle.motivo || 'Sin registro' }}</p></div>
               </div>
-              <p class="blocked-user__history-date">Desbloqueado: {{ bloqueo.detalle.fechaDesbloqueo ? (bloqueo.detalle.fechaDesbloqueo | date: 'dd/MM/yyyy HH:mm') : 'fecha no registrada' }}</p>
+              @if (bloqueo.detalle.accesoLimitado) {
+                <p class="blocked-user__notice">Acceso limitado a operaciones pendientes y apelación.</p>
+              }
               @if (bloqueo.detalle.apelacion) {
-                <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true" [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)" />
+                <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true"
+                  [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)">
+                    <app-conversation-composer [texto]="respuestasApelacion[bloqueo.detalle.id] ?? ''" (textoChange)="respuestasApelacion[bloqueo.detalle.id] = $event"
+                      [imagenes]="imagenesApelacion[bloqueo.detalle.id] ?? sinImagenes" (imagenesChange)="imagenesApelacion[bloqueo.detalle.id] = $event"
+                      [adjuntos]="1" [textoObligatorio]="true" [limite]="2000" etiqueta="Respuesta de Administración"
+                      [deshabilitado]="!!busy()" (enviar)="responderApelacion(bloqueo)" />
+                    <button type="button" class="button button--ghost" [disabled]="!!busy()" (click)="cancelarRespuesta(bloqueo)">Cancelar</button>
+                </app-conversation-panel>
               }
             </article>
           } @empty {
-            @if (historialBloqueos().length) {
-              <p class="empty">No hay bloqueos que coincidan. <button type="button" class="link-button" (click)="listaHistorialBloqueos.limpiar()">Limpiar filtros</button></p>
-            } @else if (!historialBloqueosError()) {
-              <p class="empty">No hay bloqueos anteriores registrados.</p>
+            @if (bloqueados().length) {
+              <p class="empty">No hay bloqueos que coincidan. <button type="button" class="link-button" (click)="listaBloqueos.limpiar()">Limpiar filtros</button></p>
+            } @else if (!bloqueadosError()) {
+              <p class="empty">No hay usuarios bloqueados.</p>
             }
           }
         </div>
-        @if (listaHistorialBloqueos.filtrados().length) {
-          <app-paginador class="admin-paginador" [pagina]="listaHistorialBloqueos.pagina()" [paginas]="listaHistorialBloqueos.paginas()"
-            [total]="listaHistorialBloqueos.filtrados().length" etiqueta="bloqueos" ariaLabel="Paginación del historial de bloqueos"
-            (paginaCambia)="listaHistorialBloqueos.irAPagina($event)" />
+        @if (listaBloqueos.filtrados().length) {
+          <app-paginador class="admin-paginador" [pagina]="listaBloqueos.pagina()" [paginas]="listaBloqueos.paginas()"
+            [total]="listaBloqueos.filtrados().length" etiqueta="bloqueos" ariaLabel="Paginación de bloqueos actuales"
+            (paginaCambia)="listaBloqueos.irAPagina($event)" />
         }
       }
-    }
-  </section>
+      } @else {
+        @if (historialBloqueosError()) { <p class="alert alert--error" role="alert">{{ historialBloqueosError() }}</p> }
+        @if (historialBloqueosCargando()) {
+          <app-esqueleto-lista [tarjetas]="true" etiqueta="Cargando historial de bloqueos…" />
+        } @else {
+          @if (historialBloqueos().length) {
+            <app-filtros-lista class="admin-filtros" [lista]="listaHistorialBloqueos" etiqueta="Buscar en el historial de bloqueos"
+              placeholder="Buscar por nombre, email, motivo o administrador" />
+          }
+          <div class="blocked-users lista-escalonada">
+            @for (bloqueo of listaHistorialBloqueos.visibles(); track bloqueo.usuario.id + '-' + bloqueo.detalle.id) {
+              <article class="blocked-user">
+                <header class="blocked-user__header">
+                  <span class="blocked-user__avatar"><svg lucideUserRound [size]="24" aria-hidden="true"></svg></span>
+                  <div class="blocked-user__identity"><h3>{{ bloqueo.usuario.nombre }} {{ bloqueo.usuario.apellido }}</h3><p>{{ bloqueo.usuario.email }}</p></div>
+                  <span class="blocked-user__status blocked-user__status--closed">Desbloqueado</span>
+                </header>
+                <div class="blocked-user__details">
+                  <div><svg lucideUserRound [size]="20" aria-hidden="true"></svg><p><strong>Bloqueado por</strong>{{ bloqueo.administrador ? bloqueo.administrador.nombre + ' ' + bloqueo.administrador.apellido : 'Sin registro' }}</p></div>
+                  <div><svg lucideCalendarDays [size]="20" aria-hidden="true"></svg><p><strong>Fecha del bloqueo</strong>{{ bloqueo.detalle.fecha ? (bloqueo.detalle.fecha | date: 'dd/MM/yyyy') : 'Sin registro' }}</p></div>
+                  <div><svg lucideMessageCircle [size]="20" aria-hidden="true"></svg><p><strong>Motivo</strong>{{ bloqueo.detalle.motivo || 'Sin registro' }}</p></div>
+                </div>
+                <p class="blocked-user__history-date">Desbloqueado: {{ bloqueo.detalle.fechaDesbloqueo ? (bloqueo.detalle.fechaDesbloqueo | date: 'dd/MM/yyyy HH:mm') : 'fecha no registrada' }}</p>
+                @if (bloqueo.detalle.apelacion) {
+                  <app-conversation-panel class="blocked-user__conversation" titulo="Apelación del bloqueo" [permitirAmpliar]="true" [mensajes]="mensajesApelacion(bloqueo.detalle, bloqueo.usuario.nombre + ' ' + bloqueo.usuario.apellido, false)" />
+                }
+              </article>
+            } @empty {
+              @if (historialBloqueos().length) {
+                <p class="empty">No hay bloqueos que coincidan. <button type="button" class="link-button" (click)="listaHistorialBloqueos.limpiar()">Limpiar filtros</button></p>
+              } @else if (!historialBloqueosError()) {
+                <p class="empty">No hay bloqueos anteriores registrados.</p>
+              }
+            }
+          </div>
+          @if (listaHistorialBloqueos.filtrados().length) {
+            <app-paginador class="admin-paginador" [pagina]="listaHistorialBloqueos.pagina()" [paginas]="listaHistorialBloqueos.paginas()"
+              [total]="listaHistorialBloqueos.filtrados().length" etiqueta="bloqueos" ariaLabel="Paginación del historial de bloqueos"
+              (paginaCambia)="listaHistorialBloqueos.irAPagina($event)" />
+          }
+        }
+      }
+    </section>
+  }
 
-  <app-comision-admin [hidden]="activeSection() !== 'comision'" [activa]="activeSection() === 'comision'" />
+  @defer (when activeSection() === 'comision') {
+    <app-comision-admin #comisionAdmin [hidden]="activeSection() !== 'comision'"
+      [activa]="activeSection() === 'comision'" />
+  }
 
-  <app-catalogos-admin [hidden]="activeSection() !== 'catalogos'" />
+  @defer (when activeSection() === 'catalogos') {
+    <app-catalogos-admin #catalogosAdmin [hidden]="activeSection() !== 'catalogos'" />
+  }
 
-  <app-ubicaciones-admin [hidden]="activeSection() !== 'ubicaciones'" />
+  @defer (when activeSection() === 'ubicaciones') {
+    <app-ubicaciones-admin #ubicacionesAdmin [hidden]="activeSection() !== 'ubicaciones'" />
+  }
     </div>
   </div>
 </section>

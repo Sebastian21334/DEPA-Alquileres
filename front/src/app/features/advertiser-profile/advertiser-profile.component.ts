@@ -1,9 +1,9 @@
 import { Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { catchError, finalize, of, switchMap } from 'rxjs';
+import { EMPTY, catchError, distinctUntilChanged, finalize, map, of, switchMap } from 'rxjs';
 import { LucideBadgeCheck, LucideBuilding2, LucideMapPin, LucideSearch } from '@lucide/angular';
-import { ListingService } from '../home/listing.service';
+import { ListingService } from '../publicaciones/listing.service';
 import { Publicacion } from '../../shared/models/publicacion.model';
 import { AnunciantePublico } from '../../shared/models/anunciante.model';
 import { AnunciantePublicoService } from '../../shared/services/anunciante-publico.service';
@@ -92,32 +92,46 @@ export class AdvertiserProfileComponent {
   protected readonly ciudadesOcultas = computed(() => Math.max(0, this.ciudades().length - CIUDADES_VISIBLES));
 
   constructor() {
-    const id = Number(this.route.snapshot.paramMap.get('id'));
-    if (!Number.isInteger(id) || id < 1) {
-      this.error.set('El perfil solicitado no es válido.');
-      this.loading.set(false);
-      return;
-    }
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const page = Number(params.get('pagina'));
       this.requestedPage.set(Number.isSafeInteger(page) && page > 0 ? page : 1);
     });
-    this.profiles.getPublicProfile(id).pipe(
-      switchMap((perfil) => {
-        this.perfil.set(perfil);
-        return this.listings.getByAdvertiser(id).pipe(
-          catchError(() => {
-            this.publicationsError.set(true);
-            return of([]);
+    this.route.paramMap.pipe(
+      map((params) => params.get('id')),
+      distinctUntilChanged(),
+      switchMap((parametro) => {
+        this.perfil.set(null);
+        this.publications.set([]);
+        this.publicationsError.set(false);
+        this.error.set('');
+        this.searchText.set('');
+        this.verTodasLasCiudades.set(false);
+        this.scrollResenasPendiente = this.route.snapshot.fragment?.startsWith('resenas') === true;
+
+        const id = Number(parametro);
+        if (!Number.isSafeInteger(id) || id < 1) {
+          this.error.set('El perfil solicitado no es válido.');
+          this.loading.set(false);
+          return EMPTY;
+        }
+        this.loading.set(true);
+        return this.profiles.getPublicProfile(id).pipe(
+          switchMap((perfil) => {
+            this.perfil.set(perfil);
+            return this.listings.getByAdvertiser(id).pipe(catchError(() => {
+              this.publicationsError.set(true);
+              return of([]);
+            }));
           }),
+          catchError(() => {
+            this.error.set('No pudimos cargar este perfil.');
+            return EMPTY;
+          }),
+          finalize(() => this.loading.set(false)),
         );
       }),
-      finalize(() => this.loading.set(false)),
       takeUntilDestroyed(this.destroyRef),
-    ).subscribe({
-      next: (items) => this.publications.set(items),
-      error: () => this.error.set('No pudimos cargar este perfil.'),
-    });
+    ).subscribe((items) => this.publications.set(items));
   }
 
   /** Baja a las reseñas del perfil sin salir de la página. */

@@ -23,6 +23,8 @@ export const ADMIN_NAVIGATION = [
 
 export type AdminSection = 'resumen' | typeof ADMIN_NAVIGATION[number]['items'][number]['id'];
 
+export type EnfoqueSeccionAdmin = { tipo: 'pendientes' } | { tipo: 'caso' | 'reserva' | 'reclamo'; id: number };
+
 type SeccionNavegacion = { readonly id: Exclude<AdminSection, 'resumen'>; readonly label: string };
 
 const SECCIONES = ADMIN_NAVIGATION.flatMap<SeccionNavegacion>((grupo) => grupo.items);

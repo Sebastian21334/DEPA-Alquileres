@@ -108,8 +108,11 @@ export class AuthService {
   }
 
   consultarSesion(): Observable<EstadoSesion> {
+    const token = this.token;
     return this.http.get<EstadoSesion>(`${this.baseUrl}/sesion`, { context: contextoCarga(true) })
-      .pipe(tap((estado) => this.actualizarEstadoSesion(estado)));
+      .pipe(tap((estado) => {
+        if (token && this.token === token) this.actualizarEstadoSesion(estado);
+      }));
   }
 
   /** Registra la cuenta y envía el correo de verificación. */

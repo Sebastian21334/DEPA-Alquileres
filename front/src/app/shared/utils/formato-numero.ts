@@ -33,3 +33,8 @@ export function formatearPorcentaje(valor: number | string): string {
 export function formatearImporteConMoneda(valor: number, moneda: string | null): string {
   return [moneda, formatearImporte(valor)].filter(Boolean).join(' ');
 }
+
+/** Importe compatible con un campo bancario decimal, sin separador de miles. */
+export function importeParaCopiar(importe: number | string | null | undefined): string {
+  return Number(importe ?? 0).toFixed(2).replace('.', ',');
+}

@@ -1,0 +1,16 @@
+@use './admin-shared';
+
+@use './admin-tarjetas';
+@use '../../shared/components/claim-history/claim-form';
+
+.claim-card {
+  border-color: #dce4ef;
+  color: #101d36;
+}
+.claim-card--destacado { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.claim-card > .actions { margin-top: 0; }
+.claim-card .button--ghost { border: 1px solid #10233f; color: #10233f; }
+.button--resolve-claim { background: #081b38; color: #fff; }
+
+
+.claim-card { scroll-margin-top: 6rem; }

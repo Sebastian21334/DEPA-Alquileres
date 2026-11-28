@@ -7,7 +7,7 @@ import { debounceTime, Subscription } from 'rxjs';
 import { LucideMap, LucideSearch } from '@lucide/angular';
 import { AdvancedFiltersComponent } from '../home/components/advanced-filters/advanced-filters.component';
 import { ListingGridComponent } from '../home/components/listing-grid/listing-grid.component';
-import { FiltrosPublicaciones, ListingService, OrdenPublicaciones, PaginaPublicaciones } from '../home/listing.service';
+import { FiltrosPublicaciones, ListingService, OrdenPublicaciones, PaginaPublicaciones } from '../publicaciones/listing.service';
 import { MapaPublicacionesComponent } from './mapa-publicaciones.component';
 import { CatalogoService } from '../../shared/services/catalogo.service';
 import {

@@ -1,6 +1,8 @@
-import { HttpBackend, HttpClient } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../../environments/environment';
+import { SOLICITUD_ANONIMA } from '../interceptors/auth.interceptor';
+import { contextoCarga } from '../interceptors/carga.interceptor';
 
 export interface MensajeAsistente {
   rol: 'user' | 'assistant';
@@ -24,10 +26,12 @@ export interface RespuestaAsistente {
 
 @Injectable({ providedIn: 'root' })
 export class AsistenteDepaService {
-  // La consulta pública viaja sin el token de sesión.
-  private readonly http = new HttpClient(inject(HttpBackend));
+  private readonly http = inject(HttpClient);
 
   consultar(mensajes: MensajeAsistente[]) {
-    return this.http.post<RespuestaAsistente>(`${environment.apiUrl}/chatbot`, { mensajes }, { timeout: 25_000 });
+    return this.http.post<RespuestaAsistente>(`${environment.apiUrl}/chatbot`, { mensajes }, {
+      timeout: 25_000,
+      context: contextoCarga(true).set(SOLICITUD_ANONIMA, true),
+    });
   }
 }

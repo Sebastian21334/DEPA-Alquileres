@@ -1,4 +1,4 @@
-import { HttpErrorResponse } from '@angular/common/http';
+import { ApiError } from '../../../core/interceptors/api-error';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { afterNextRender, Component, DestroyRef, ElementRef, inject, Injector, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -84,7 +84,7 @@ export class AsistenteDepaComponent {
       error: (error: unknown) => {
         this.consultaEnCurso.set('');
         this.borrador = pregunta;
-        this.error.set(error instanceof HttpErrorResponse && error.status === 429
+        this.error.set(error instanceof ApiError && error.status === 429
           ? 'Hiciste varias consultas seguidas. Probá de nuevo en un minuto.'
           : 'No pudimos responderte en este momento. Probá de nuevo en unos instantes.');
         this.programarDesplazamiento();

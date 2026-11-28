@@ -12,7 +12,7 @@ import { CargaFotosComponent } from '../../shared/components/carga-fotos/carga-f
 import { moverImagen } from '../../shared/utils/orden-imagenes';
 import { filtrarImagenesPublicacion } from '../../shared/utils/imagenes-publicacion';
 import { ApiError } from '../../core/interceptors/api-error';
-import { ListingService } from '../home/listing.service';
+import { ListingService } from '../publicaciones/listing.service';
 import {
   AvailabilityService,
   FechaDisponibleAdministracion,

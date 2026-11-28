@@ -157,3 +157,22 @@ export const FILTROS_BLOQUEO: FiltroLista<AdminBloqueo>[] = [{
     { valor: 'sin', etiqueta: 'Sin apelación', aplica: (bloqueo) => !tieneApelacion(bloqueo.detalle) },
   ],
 }];
+
+const ORDEN_ESTADO_REEMBOLSO: Record<AdminReembolso['estado'], number> = {
+  PENDIENTE: 0,
+  EN_PROCESO: 0,
+  FALLIDO: 0,
+  APROBADO: 1,
+  RECHAZADO: 2,
+  CANCELADO: 2,
+};
+
+export const ESTADOS_REEMBOLSO = {
+  PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', APROBADO: 'Aprobado',
+  RECHAZADO: 'Rechazado', FALLIDO: 'Fallido', CANCELADO: 'Cancelado',
+};
+
+export function ordenarReembolsos(items: readonly AdminReembolso[]): AdminReembolso[] {
+  return [...items].sort((a, b) => ORDEN_ESTADO_REEMBOLSO[a.estado] - ORDEN_ESTADO_REEMBOLSO[b.estado] ||
+    Date.parse(b.creado_en) - Date.parse(a.creado_en) || b.id - a.id);
+}

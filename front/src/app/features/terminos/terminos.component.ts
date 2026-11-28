@@ -1,17 +1,8 @@
-import { HttpClient } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { environment } from '../../../environments/environment';
-
-interface PoliticaCancelacion {
-  vigenteDesde: string;
-  diasDevolucionTotal: number;
-  diasDevolucionParcial: number;
-  porcentajeTotal: number;
-  porcentajeParcial: number;
-  porcentajeFueraDePlazo: number;
-}
+import { CatalogoService } from '../../shared/services/catalogo.service';
+import { PoliticaCancelacion, ReservationService } from '../../shared/services/reservation.service';
 
 @Component({
   selector: 'app-terminos',
@@ -21,7 +12,8 @@ interface PoliticaCancelacion {
   styleUrl: './terminos.component.scss',
 })
 export class TerminosComponent {
-  private readonly http = inject(HttpClient);
+  private readonly reservas = inject(ReservationService);
+  private readonly catalogos = inject(CatalogoService);
   private readonly parametros = toSignal(inject(ActivatedRoute).paramMap);
   protected readonly anunciante = computed(() => this.parametros()?.get('tipo') === 'anunciantes');
   protected readonly politica = signal<PoliticaCancelacion | null>(null);
@@ -30,11 +22,11 @@ export class TerminosComponent {
   protected readonly errorComision = signal(false);
 
   constructor() {
-    this.http.get<PoliticaCancelacion>(`${environment.apiUrl}/reservas/politica-cancelacion/vigente`).subscribe({
+    this.reservas.politicaCancelacionVigente().pipe(takeUntilDestroyed()).subscribe({
       next: (politica) => this.politica.set(politica),
       error: () => this.errorPolitica.set(true),
     });
-    this.http.get<{ porcentaje: number }>(`${environment.apiUrl}/catalogos/comision-vigente`).subscribe({
+    this.catalogos.comisionVigente().pipe(takeUntilDestroyed()).subscribe({
       next: ({ porcentaje }) => this.comision.set(porcentaje),
       error: () => this.errorComision.set(true),
     });

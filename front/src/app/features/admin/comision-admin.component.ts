@@ -19,7 +19,7 @@ export class ComisionAdminComponent {
   private readonly destroyRef = inject(DestroyRef);
   protected actual: number | null = null;
   protected nueva: number | null = null;
-  protected readonly cargando = signal(false);
+  readonly cargando = signal(false);
   protected readonly error = signal('');
   /** Si la sección está a la vista: se abre desde el menú o directamente con `/admin#comision`. */
   readonly activa = input(false);

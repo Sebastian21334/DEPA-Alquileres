@@ -29,7 +29,7 @@ export const routes: Routes = [
   {
     path: 'admin/publicaciones/:id',
     canActivate: [adminGuard],
-    data: { administracion: true },
+    data: { administracion: true, recrearConOtrosParametros: true },
     loadComponent: () => import('./features/publication-detail/publication-detail.component').then((m) => m.PublicationDetailComponent),
     title: 'Publicación de la reserva - DEPA',
   },
@@ -37,7 +37,7 @@ export const routes: Routes = [
     // El admin ve el resumen de cualquier reserva en solo lectura.
     path: 'admin/reservas/:id',
     canActivate: [adminGuard],
-    data: { administracion: true },
+    data: { administracion: true, recrearConOtrosParametros: true },
     loadComponent: () => import('./features/reserva-resultado/reserva-resultado.component').then((m) => m.ReservaResultadoComponent),
     title: 'Detalle de la reserva - DEPA',
   },
@@ -133,6 +133,8 @@ export const routes: Routes = [
   {
     path: 'publicaciones/:id/editar',
     canActivate: [anuncianteGuard],
+    // El formulario y sus escrituras pertenecen al aviso para el que se abrió.
+    data: { recrearConOtrosParametros: true },
     loadComponent: () =>
       import('./features/publication-form/publication-form.component').then(
         (m) => m.PublicationFormComponent,

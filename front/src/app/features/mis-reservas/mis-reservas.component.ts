@@ -3,9 +3,9 @@ import { diasDeAntelacion, esFechaCalendario, fechaCalendarioLocal, sumarDias } 
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink, LucideImage, LucideLockKeyhole, LucideStar, LucideTriangleAlert, LucideX } from '@lucide/angular';
-import { Component, computed, DestroyRef, ElementRef, inject, Injector, linkedSignal, signal, viewChild } from '@angular/core';
+import { Component, computed, DestroyRef, effect, ElementRef, inject, Injector, linkedSignal, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { catchError, finalize, forkJoin, of, Subscription, switchMap } from 'rxjs';
+import { catchError, EMPTY, finalize, forkJoin, merge, of, Subscription, switchMap } from 'rxjs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
   ReservationService,
@@ -32,12 +32,15 @@ import { reclamoDeLaReserva, rolEnReclamo, type RolEnReclamo } from '../../share
 import { llevarALaVista } from '../../shared/utils/desplazamiento';
 import { normalizarTexto } from '../../shared/utils/texto';
 import { ResenasService } from '../resenas/resenas.service';
+import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
+
+const RESERVAS_POR_PAGINA = 10;
 
 @Component({
   selector: 'app-mis-reservas',
   standalone: true,
   imports: [
-    RouterLink, EsqueletoListaComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, NgTemplateOutlet, DatePipe,
+    RouterLink, EsqueletoListaComponent, FormsModule, ClaimHistoryComponent, ConversationComposerComponent, CargaImagenesComponent, PaginadorComponent, NgTemplateOutlet, DatePipe,
     LucideCalendar, LucideCalendarX, LucideInfo, LucideChevronRight, LucideEllipsis, LucideExternalLink,
     LucideImage, LucideLockKeyhole, LucideStar, LucideTriangleAlert, LucideX,
   ],
@@ -56,8 +59,7 @@ export class MisReservasComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private consultaReservas?: Subscription;
-  private consultaResenas?: Subscription;
-  protected readonly estadoResenas = signal<Record<number, 'pendiente' | 'resenada' | 'error'>>({});
+  private readonly erroresResenas = signal<ReadonlySet<number>>(new Set());
   protected readonly resenasRecibidas = signal<Record<number, { publicacion: boolean; anunciante: boolean }>>({});
   protected readonly estadiaActiva = estadiaActiva;
   protected readonly puedeReprogramar = puedeReprogramar;
@@ -89,6 +91,15 @@ export class MisReservasComponent {
         this.coincideBusqueda(reserva, busqueda, [anunciante?.usuario?.nombre, anunciante?.usuario?.apellido, anunciante?.idUsuario]) &&
         (!desde || (!!fecha && fecha >= desde)) && (!hasta || (!!fecha && fecha <= hasta));
     });
+  });
+  protected readonly paginasRealizadas = computed(() => Math.max(1, Math.ceil(this.propiasFiltradas().length / RESERVAS_POR_PAGINA)));
+  protected readonly paginaRealizadas = linkedSignal<number, number>({
+    source: this.paginasRealizadas,
+    computation: (paginas, anterior) => Math.min(anterior?.value ?? 1, paginas),
+  });
+  protected readonly propiasPagina = computed(() => {
+    const inicio = (this.paginaRealizadas() - 1) * RESERVAS_POR_PAGINA;
+    return this.propiasFiltradas().slice(inicio, inicio + RESERVAS_POR_PAGINA);
   });
   protected readonly filtroEstadoRecibidas = signal('todos');
   protected readonly filtroPublicacionRecibidas = signal('');
@@ -129,6 +140,16 @@ export class MisReservasComponent {
   protected readonly error = signal('');
   protected readonly ocupada = signal<number | null>(null);
   protected readonly vista = signal<'realizadas' | 'recibidas' | 'reclamos'>('realizadas');
+  private readonly publicacionesParaResenar = computed(() => this.vista() === 'realizadas' && !this.accesoLimitado()
+    ? [...new Set(this.propiasPagina().filter((reserva) => this.puedeComentar(reserva)).map((reserva) => reserva.publicacion!.id))]
+    : [], { equal: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]) });
+  protected readonly estadoResenas = computed(() => {
+    const estados = this.resenasApi.estadoPublicaciones();
+    const errores = this.erroresResenas();
+    return Object.fromEntries(this.publicacionesParaResenar().map(id => [
+      id, estados[id] === true ? 'resenada' : estados[id] === false ? 'pendiente' : errores.has(id) ? 'error' : undefined,
+    ]));
+  });
   protected readonly reclamos = signal<Reclamo[]>([]);
   /** Subpestaña de Reclamos según el rol en cada uno. */
   protected readonly vistaReclamos = signal<RolEnReclamo>('inquilino');
@@ -243,6 +264,19 @@ export class MisReservasComponent {
 
     if (this.route.snapshot.queryParamMap.get('vista') === 'reclamos') this.vista.set('reclamos');
     this.cargarReservas();
+    effect((onCleanup) => {
+      const ids = this.publicacionesParaResenar();
+      const usuario = this.auth.currentUser()?.sub;
+      this.erroresResenas.set(new Set());
+      if (!usuario || !ids.length) return;
+      const consulta = untracked(() => merge(...ids.map((id) => this.resenasApi.consultarEstadoPublicacion(id).pipe(
+        catchError(() => {
+          this.erroresResenas.update((errores) => new Set([...errores, id]));
+          return EMPTY;
+        }),
+      ))).subscribe());
+      onCleanup(() => consulta.unsubscribe());
+    });
     activarActualizacionReservas(() => {
       if (this.ocupada() === null) this.cargarReservas(true);
     });
@@ -263,7 +297,6 @@ export class MisReservasComponent {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: ({ propias, recibidas, reclamos }) => {
         this.propias.set(propias);
-        this.cargarEstadoResenas(propias);
         this.recibidas.set(recibidas);
         if (recibidas.length && !this.accesoLimitado()) {
           this.resenasApi.estadosRecibidosPorReserva().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -287,17 +320,6 @@ export class MisReservasComponent {
         this.cargando.set(false);
       },
     });
-  }
-
-  private cargarEstadoResenas(reservas: Reserva[]): void {
-    this.consultaResenas?.unsubscribe();
-    const ids = [...new Set(reservas.filter((reserva) => this.puedeComentar(reserva)).map((reserva) => reserva.publicacion!.id))];
-    this.estadoResenas.set({});
-    if (!ids.length) return;
-    this.consultaResenas = forkJoin(ids.map((id) => this.resenasApi.listar('PUBLICACION', id, 1, 1).pipe(
-      switchMap((datos) => of([id, datos.miResena ? 'resenada' : 'pendiente'] as const)),
-      catchError(() => of([id, 'error'] as const)),
-    ))).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((estados) => this.estadoResenas.set(Object.fromEntries(estados)));
   }
 
   protected hoy(): string {
@@ -325,6 +347,13 @@ export class MisReservasComponent {
       desde: this.filtroDesdeRecibidas, hasta: this.filtroHastaRecibidas };
     filtros[filtro].set(valor);
     this.paginaRecibidas.set(1);
+  }
+
+  protected cambiarFiltroRealizadas(filtro: 'estado' | 'busqueda' | 'desde' | 'hasta', valor: string): void {
+    const filtros = { estado: this.filtroEstadoRealizadas, busqueda: this.filtroBusquedaRealizadas,
+      desde: this.filtroDesdeRealizadas, hasta: this.filtroHastaRealizadas };
+    filtros[filtro].set(valor);
+    this.paginaRealizadas.set(1);
   }
 
   protected categoriaRecibida(reserva: Reserva): string {

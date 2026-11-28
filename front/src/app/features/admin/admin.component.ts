@@ -1,12 +1,12 @@
 import { ConversationPanelComponent, mensajesApelacion } from '../../shared/components/conversation-panel/conversation-panel.component';
 import { ConversationComposerComponent } from '../../shared/components/conversation-panel/conversation-composer.component';
 import { CurrencyPipe, DatePipe, isPlatformBrowser } from '@angular/common';
-import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, PLATFORM_ID, signal, viewChild } from '@angular/core';
+import { afterNextRender, Component, computed, DestroyRef, effect, ElementRef, inject, Injector, PLATFORM_ID, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { catchError, EMPTY, finalize, merge, type Observable, Subscription, tap, timer } from 'rxjs';
-import { ADMIN_NAVIGATION, AdminSection, seccionAdmin } from './admin-secciones';
+import { catchError, distinctUntilChanged, EMPTY, finalize, map, merge, type Observable, Subscription, tap, timer } from 'rxjs';
+import { ADMIN_NAVIGATION, AdminSection, seccionAdmin, type EnfoqueSeccionAdmin } from './admin-secciones';
 import { ToastService } from '../../core/services/toast.service';
 import { CotizacionesAdminComponent } from './cotizaciones-admin.component';
 import { PublicacionesAdminComponent } from './publicaciones-admin.component';
@@ -15,14 +15,16 @@ import { ComisionAdminComponent } from './comision-admin.component';
 import { HistorialLiquidacionesAdminComponent } from './historial-liquidaciones-admin.component';
 import { CatalogosAdminComponent } from './catalogos-admin.component';
 import { UbicacionesAdminComponent } from './ubicaciones-admin.component';
+import { ReclamosAdminComponent } from './reclamos-admin.component';
+import { ReembolsosAdminComponent } from './reembolsos-admin.component';
+import { VerificacionesAdminComponent } from './verificaciones-admin.component';
+import { ConsultaSeccionAdmin } from './consulta-seccion-admin';
 import {
   LucideUsers,
   LucideShieldCheck,
   LucideRefreshCw,
   LucideSearch,
   LucideEye,
-  LucideCheck,
-  LucideX,
   LucideMessageCircle,
   LucideChevronRight,
   LucideHouse,
@@ -30,7 +32,6 @@ import {
   LucideUserRound,
   LucideCalendarDays,
   LucideClock3,
-  LucideReceiptText,
   LucideLockKeyhole,
   LucideInfo,
   LucideLayers3,
@@ -47,41 +48,25 @@ import {
   VerificationRequest,
 } from './admin.service';
 import { Reclamo } from '../../shared/services/reservation.service';
-import { imagenesDisponibles } from '../../shared/utils/reclamo-imagenes';
-import { ClaimHistoryComponent } from '../../shared/components/claim-history/claim-history.component';
-import { ReembolsoChatComponent } from '../../shared/components/reembolso-chat/reembolso-chat.component';
 import { CargaComprobanteComponent } from '../../shared/components/carga-comprobante/carga-comprobante.component';
-import { VerComprobanteComponent } from '../../shared/components/ver-comprobante/ver-comprobante.component';
 import { DatoCopiableComponent } from '../../shared/components/dato-copiable/dato-copiable.component';
 import { formatearCbu, formatearCuit, tipoCuentaBancaria } from '../../shared/utils/cuenta-bancaria';
 import { FiltrosListaComponent } from '../../shared/components/filtros-lista/filtros-lista.component';
 import { PaginadorComponent } from '../../shared/components/paginador/paginador.component';
 import { EsqueletoListaComponent } from '../../shared/components/esqueleto-lista/esqueleto-lista.component';
 import { ListaFiltrable } from '../../shared/utils/lista-filtrable';
-import { llevarALaVista } from '../../shared/utils/desplazamiento';
-import { reclamoDeLaReserva } from '../../shared/utils/reclamo-rol';
-import { formatearMoneda, formatearPorcentaje } from '../../shared/utils/formato-numero';
+import { formatearMoneda, formatearPorcentaje, importeParaCopiar } from '../../shared/utils/formato-numero';
 import { etiquetaCategoriaReclamo } from '../../shared/utils/reclamo-categorias';
 import { etiquetasEstadia } from '../../shared/utils/reservation-state';
 import {
-  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, estadoReclamoLiquidacion, resolucionLiquidacion, estadoCancelacionLiquidacion, FILTROS_BLOQUEO, FILTROS_LIQUIDACION, FILTROS_RECLAMO,
-  FILTROS_REEMBOLSO, FILTROS_VERIFICACION, nombreInquilino, ORIGENES_REEMBOLSO, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
-  textosBloqueo, textosLiquidacion, textosReclamo, textosReembolso, textosVerificacion, tieneApelacion,
+  apelacionSinResponder, diasEsperaLiquidacion, etiquetaLiquidacion, estadoReclamoLiquidacion, resolucionLiquidacion, estadoCancelacionLiquidacion, FILTROS_BLOQUEO, FILTROS_LIQUIDACION, ESTADOS_REEMBOLSO, ordenarReembolsos, nombreInquilino, pagoHabilitado, pendienteParaAnunciante, reclamoAbierto, reembolsoPendiente,
+  textosBloqueo, textosLiquidacion, tieneApelacion,
   tieneDevolucion,
 } from './admin-listas';
 
 /** Pendientes del resumen: se muestran 5 y cada «Ver más» suma 10. */
 const PENDIENTES_INICIALES = 5;
 const PENDIENTES_POR_VEZ = 10;
-const ORDEN_ESTADO_REEMBOLSO: Record<AdminReembolso['estado'], number> = {
-  PENDIENTE: 0,
-  EN_PROCESO: 0,
-  FALLIDO: 0,
-  APROBADO: 1,
-  RECHAZADO: 2,
-  CANCELADO: 2,
-};
-
 const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
   resumen: 'Consultá los casos que requieren atención y accedé a cada operación.',
   reclamos: 'Consultá los problemas reportados sobre reservas, su evidencia y el historial del caso.',
@@ -110,12 +95,12 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     HistorialLiquidacionesAdminComponent,
     CatalogosAdminComponent,
     UbicacionesAdminComponent,
-    ClaimHistoryComponent,
+    ReclamosAdminComponent,
+    ReembolsosAdminComponent,
+    VerificacionesAdminComponent,
     ConversationComposerComponent,
     ConversationPanelComponent,
-    ReembolsoChatComponent,
     CargaComprobanteComponent,
-    VerComprobanteComponent,
     DatoCopiableComponent,
     FiltrosListaComponent,
     PaginadorComponent,
@@ -129,8 +114,6 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideRefreshCw,
     LucideSearch,
     LucideEye,
-    LucideCheck,
-    LucideX,
     LucideLockKeyhole,
     LucideInfo,
     LucideLayers3,
@@ -141,7 +124,6 @@ const SECTION_DESCRIPTIONS: Record<AdminSection, string> = {
     LucideUserRound,
     LucideCalendarDays,
     LucideClock3,
-    LucideReceiptText,
     LucideCircleDollarSign,
     LucideGavel,
   ],
@@ -154,7 +136,9 @@ export class AdminComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   protected readonly navigation = ADMIN_NAVIGATION;
-  protected readonly activeSection = signal<AdminSection>('resumen');
+  private readonly avisoInicial = this.idReservaDeAviso(this.route.snapshot.queryParamMap.get('reserva'));
+  protected readonly activeSection = signal<AdminSection>(seccionAdmin(this.route.snapshot.fragment) ?? (this.avisoInicial ? 'reclamos' : 'resumen'));
+  private readonly enfoque = signal<{ seccion: AdminSection; destino: EnfoqueSeccionAdmin } | null>(null);
   protected readonly sectionDescription = computed(() => SECTION_DESCRIPTIONS[this.activeSection()]);
   private readonly dialogoResolucion = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoResolucion');
   protected readonly resolucionLiquidacion = signal<{ reserva: AdminSettlement; devolver: boolean } | null>(null);
@@ -168,18 +152,21 @@ export class AdminComponent {
   private readonly toast = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
   private cargaResumen?: Subscription;
-  private readonly publicacionesAdmin = viewChild(PublicacionesAdminComponent);
-  private readonly resenasAdmin = viewChild(ResenasAdminComponent);
-  private readonly comisionAdmin = viewChild(ComisionAdminComponent);
-  private readonly historialAdmin = viewChild(HistorialLiquidacionesAdminComponent);
-  /** «Actualizar» espera también a que termine la consulta del historial. */
-  protected readonly historialCargando = computed(() => this.historialAdmin()?.cargando() ?? false);
+  private readonly publicacionesAdmin = viewChild<PublicacionesAdminComponent>('publicacionesAdmin');
+  private readonly resenasAdmin = viewChild<ResenasAdminComponent>('resenasAdmin');
+  private readonly comisionAdmin = viewChild<ComisionAdminComponent>('comisionAdmin');
+  private readonly historialAdmin = viewChild<HistorialLiquidacionesAdminComponent>('historialAdmin');
+  private readonly reclamosAdmin = viewChild<ReclamosAdminComponent>('reclamosAdmin');
+  private readonly verificacionesAdmin = viewChild<VerificacionesAdminComponent>('verificacionesAdmin');
+  private readonly reembolsosAdmin = viewChild<ReembolsosAdminComponent>('reembolsosAdmin');
+  private readonly cotizacionesAdmin = viewChild<CotizacionesAdminComponent>('cotizacionesAdmin');
+  private readonly ubicacionesAdmin = viewChild<UbicacionesAdminComponent>('ubicacionesAdmin');
   private usersRequest?: Subscription;
   private bloqueadosRequest?: Subscription;
   private actualizandoBloqueados = false;
   private readonly bloqueoDialog = viewChild.required<ElementRef<HTMLDialogElement>>('bloqueoDialog');
   private readonly administradorDialog = viewChild.required<ElementRef<HTMLDialogElement>>('administradorDialog');
-  private readonly catalogosAdmin = viewChild(CatalogosAdminComponent);
+  private readonly catalogosAdmin = viewChild<CatalogosAdminComponent>('catalogosAdmin');
   protected readonly usuarioPorPromover = signal<AdminUser | null>(null);
   protected readonly promoviendo = signal(false);
   protected readonly administradorError = signal('');
@@ -210,7 +197,11 @@ export class AdminComponent {
   protected readonly usersLoading = signal(true);
   protected readonly registeredUsers = signal(0);
   protected readonly requests = signal<VerificationRequest[]>([]);
-  protected readonly settlements = signal<AdminSettlement[]>([]);
+  private readonly consultaLiquidaciones = new ConsultaSeccionAdmin<AdminSettlement[]>([]);
+  protected readonly settlements = this.consultaLiquidaciones.datos;
+  protected readonly liquidacionesCargando = this.consultaLiquidaciones.cargando;
+  protected readonly errorLiquidaciones = this.consultaLiquidaciones.error;
+  private liquidacionEnfocada: EnfoqueSeccionAdmin | null = null;
   protected readonly liquidacionesOrdenadas = computed(() => [...this.settlements()].sort((a, b) => {
     const prioridad = (item: AdminSettlement): number => {
       if (item.estado_liquidacion !== 'PENDIENTE_PAGO_PROPIETARIO') return 3;
@@ -220,30 +211,8 @@ export class AdminComponent {
     return prioridad(a) - prioridad(b);
   }));
   protected readonly claims = signal<Reclamo[]>([]);
-  /** Reserva del reclamo al que llevó un aviso por correo (`/admin?reserva=<id>#reclamos`). */
-  private reservaDelAviso = Number(this.route.snapshot.queryParamMap.get('reserva')) || null;
-  /** El reclamo al que llevó el aviso queda marcado, como en Mis reservas. */
-  protected readonly reclamoDestacado = signal<number | null>(null);
-  protected readonly errorReclamos = signal('');
-  protected readonly gestionReclamo = signal<{ id: number; accion: 'mensaje' | 'resolver' } | null>(null);
-  protected textoReclamo = '';
-  /** Imágenes del próximo mensaje del reclamo. */
-  protected readonly imagenesReclamo = signal<File[]>([]);
-  protected readonly imagenesDisponibles = imagenesDisponibles;
-  protected resolucionReclamo: NonNullable<Reclamo['resolucion']> = 'SIN_DEVOLUCION';
-  protected importeReclamo: number | null = null;
-  protected observacionReclamo = '';
   protected readonly refunds = signal<AdminReembolso[]>([]);
-  private readonly orderedRefunds = computed(() => [...this.refunds()].sort((a, b) =>
-    ORDEN_ESTADO_REEMBOLSO[a.estado] - ORDEN_ESTADO_REEMBOLSO[b.estado] ||
-    Date.parse(b.creado_en) - Date.parse(a.creado_en) ||
-    b.id - a.id,
-  ));
-  private readonly dialogoReembolso = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoReembolso');
-  protected readonly reembolsoSeleccionado = signal<AdminReembolso | null>(null);
-  protected readonly guardandoReembolso = signal(false);
-  protected readonly errorReembolso = signal('');
-  protected referenciaReembolso = '';
+  private readonly orderedRefunds = computed(() => ordenarReembolsos(this.refunds()));
   private readonly dialogoPagoAnunciante = viewChild.required<ElementRef<HTMLDialogElement>>('dialogoPagoAnunciante');
   protected readonly pagoAnuncianteSeleccionado = signal<AdminSettlement | null>(null);
   protected readonly registrandoPagoAnunciante = signal(false);
@@ -261,15 +230,8 @@ export class AdminComponent {
   protected readonly formatearCuit = formatearCuit;
   protected readonly tipoCuentaBancaria = tipoCuentaBancaria;
 
-  /** Importe para pegar en el home banking, con coma decimal y sin separador de miles. */
-  protected importeParaCopiar(importe: number | string | null | undefined): string {
-    return Number(importe ?? 0).toFixed(2).replace('.', ',');
-  }
-  protected readonly estadosReembolso = {
-    PENDIENTE: 'Pendiente', EN_PROCESO: 'En proceso', APROBADO: 'Aprobado',
-    RECHAZADO: 'Rechazado', FALLIDO: 'Fallido', CANCELADO: 'Cancelado',
-  };
-  protected readonly origenesReembolso = ORIGENES_REEMBOLSO;
+  protected readonly importeParaCopiar = importeParaCopiar;
+  protected readonly estadosReembolso = ESTADOS_REEMBOLSO;
   protected readonly otherLoading = signal(true);
   protected readonly summaryError = signal(false);
   protected readonly openClaims = computed(() => this.claims().filter(reclamoAbierto));
@@ -277,18 +239,7 @@ export class AdminComponent {
   protected readonly pendingRefunds = computed(() => this.orderedRefunds().filter(reembolsoPendiente));
   protected readonly liquidacionesAPagar = computed(() => this.settlements().filter(pagoHabilitado));
   protected readonly apelacionesAResponder = computed(() => this.bloqueados().filter(({ detalle }) => apelacionSinResponder(detalle)));
-  protected readonly failedRefunds = computed(() => this.refunds().filter(({ estado }) =>
-    estado === 'FALLIDO',
-  ));
-  protected readonly conteoPendientes = computed(() =>
-    this.resumenReembolsos()?.pendientes ?? this.pendingRefunds().length,
-  );
-  protected readonly conteoFallidos = computed(() =>
-    this.resumenReembolsos()?.fallidos ?? this.failedRefunds().length,
-  );
-  protected readonly totalReembolsos = computed(() =>
-    this.resumenReembolsos()?.total ?? this.refunds().length,
-  );
+  protected readonly conteoPendientes = computed(() => this.resumenReembolsos()?.pendientes ?? this.pendingRefunds().length);
   /** Todos los casos que esperan una acción, del más antiguo al más nuevo. */
   protected readonly pendingCases = computed(() => [
     ...this.openClaims().map((item) => ({
@@ -321,36 +272,56 @@ export class AdminComponent {
   protected readonly pendientesVisibles = signal(PENDIENTES_INICIALES);
   protected readonly pendientesMostrados = computed(() => this.pendingCases().slice(0, this.pendientesVisibles()));
   protected readonly pendientesIniciales = PENDIENTES_INICIALES;
-  /** Mismo tope que ReclamosRepository.listarAdministracion en el back. */
-  protected readonly maxReclamosAdmin = 200;
 
   // Búsqueda, filtros y paginación de cada lista (definidos en admin-listas.ts).
-  protected readonly listaReclamos = new ListaFiltrable(this.claims, { porPagina: 5, textos: textosReclamo, filtros: FILTROS_RECLAMO });
-  protected readonly listaReembolsos = new ListaFiltrable(this.orderedRefunds, { porPagina: 10, textos: textosReembolso, filtros: FILTROS_REEMBOLSO });
   protected readonly listaLiquidaciones = new ListaFiltrable(this.liquidacionesOrdenadas, { porPagina: 10, textos: textosLiquidacion, filtros: FILTROS_LIQUIDACION });
-  protected readonly listaVerificaciones = new ListaFiltrable(this.requests, { porPagina: 10, textos: textosVerificacion, filtros: FILTROS_VERIFICACION });
   protected readonly listaBloqueos = new ListaFiltrable(this.bloqueosOrdenados, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
   protected readonly listaHistorialBloqueos = new ListaFiltrable(this.historialBloqueos, { porPagina: 5, textos: textosBloqueo, filtros: FILTROS_BLOQUEO });
-  protected readonly loading = computed(() =>
-    this.otherLoading() || this.usersLoading() ||
-    (this.publicacionesAdmin()?.publicationsLoading() ?? true) ||
-    (this.resenasAdmin()?.resenasLoading() ?? true),
-  );
   protected readonly query = signal('');
   protected readonly busy = signal<string | null>(null);
-  protected readonly rejectId = signal<number | null>(null);
-  protected rejectReason = '';
-  protected rechazarIdentidad = false;
-  protected rechazarCbu = false;
-  protected titularCbuConfirmado: number | null = null;
+  protected readonly cargandoSeccion = computed(() => {
+    switch (this.activeSection()) {
+      case 'resumen': return this.otherLoading() || this.bloqueadosCargando();
+      case 'usuarios': return this.usersLoading();
+      case 'bloqueos': return this.vistaBloqueos() === 'historial' ? this.historialBloqueosCargando() : this.bloqueadosCargando();
+      case 'liquidaciones': return this.liquidacionesCargando();
+      case 'reclamos': return this.reclamosAdmin()?.cargando() ?? true;
+      case 'verificaciones': return this.verificacionesAdmin()?.cargando() ?? true;
+      case 'reembolsos': return this.reembolsosAdmin()?.cargando() ?? true;
+      case 'publicaciones': return this.publicacionesAdmin()?.publicationsLoading() ?? true;
+      case 'resenas': return this.resenasAdmin()?.resenasLoading() ?? true;
+      case 'historial-liquidaciones': return this.historialAdmin()?.cargando() ?? true;
+      case 'catalogos': return this.catalogosAdmin()?.cargando() ?? true;
+      case 'comision': return this.comisionAdmin()?.cargando() ?? true;
+      case 'cotizaciones': return this.cotizacionesAdmin()?.cargando() ?? true;
+      case 'ubicaciones': return this.ubicacionesAdmin()?.cargando() ?? true;
+    }
+  });
 
   constructor() {
     if (this.isBrowser) {
       this.reload();
-      // Abre la sección que indica la URL, por ejemplo al volver del detalle de una reserva.
       this.route.fragment.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((fragmento) => {
         const seccion = seccionAdmin(fragmento);
         if (seccion && seccion !== this.activeSection()) this.openSection(seccion);
+      });
+      this.route.queryParamMap.pipe(
+        map((params) => this.idReservaDeAviso(params.get('reserva'))),
+        distinctUntilChanged(),
+        takeUntilDestroyed(this.destroyRef),
+      ).subscribe((id) => {
+        const fragmento = this.route.snapshot.fragment;
+        if (!id || (fragmento && fragmento !== 'reclamos')) return;
+        const destino = { tipo: 'reserva', id } as const;
+        if (this.activeSection() === 'reclamos') this.enfoque.set({ seccion: 'reclamos', destino });
+        else this.openSection('reclamos', undefined, destino);
+      });
+      effect(() => {
+        const enfoque = this.enfoqueDe('liquidaciones');
+        if (this.activeSection() !== 'liquidaciones' || this.liquidacionesCargando() || this.errorLiquidaciones() ||
+            enfoque?.tipo !== 'caso' || enfoque === this.liquidacionEnfocada) return;
+        this.liquidacionEnfocada = enfoque;
+        untracked(() => this.mostrarLiquidacion(enfoque.id));
       });
       timer(15_000, 15_000).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
         if (this.activeSection() !== 'bloqueos' || this.busy() || this.bloqueadosCargando() || this.actualizandoBloqueados) return;
@@ -368,29 +339,38 @@ export class AdminComponent {
       });
     }
   }
+
   protected reload(): void {
-    if (this.activeSection() === 'catalogos') this.catalogosAdmin()?.cargar();
-    if (this.activeSection() === 'historial-liquidaciones') this.historialAdmin()?.cargar();
-    if (this.activeSection() === 'comision') this.comisionAdmin()?.cargar();
+    switch (this.activeSection()) {
+      case 'resumen': this.cargarResumen(); break;
+      case 'usuarios': this.loadUsers(this.usersPage()); break;
+      case 'bloqueos':
+        if (this.vistaBloqueos() === 'historial') this.cargarHistorialBloqueos();
+        else this.cargarBloqueados();
+        break;
+      case 'liquidaciones': this.consultaLiquidaciones.cargar(this.api.listarLiquidaciones()); break;
+      case 'reclamos': this.reclamosAdmin()?.cargar(); break;
+      case 'verificaciones': this.verificacionesAdmin()?.cargar(); break;
+      case 'reembolsos': this.reembolsosAdmin()?.cargar(); break;
+      case 'publicaciones': this.publicacionesAdmin()?.recargar(); break;
+      case 'resenas': this.resenasAdmin()?.recargar(); break;
+      case 'historial-liquidaciones': this.historialAdmin()?.cargar(); break;
+      case 'catalogos': this.catalogosAdmin()?.cargar(); break;
+      case 'comision': this.comisionAdmin()?.cargar(); break;
+      case 'cotizaciones': this.cotizacionesAdmin()?.cargar(); break;
+      case 'ubicaciones': this.ubicacionesAdmin()?.cargar(); break;
+    }
+  }
+
+  private cargarResumen(): void {
     this.cargaResumen?.unsubscribe();
     this.otherLoading.set(true);
     this.summaryError.set(false);
-    this.publicacionesAdmin()?.recargar();
-    this.resenasAdmin()?.recargar();
-    this.loadUsers(this.usersPage());
     this.cargarBloqueados();
     this.cargaResumen = merge(
       this.cargarDatoResumen(this.api.listarPendientes(), (valor) => this.requests.set(valor)),
-      this.cargarDatoResumen(this.api.listarLiquidaciones(), (valor) => this.settlements.set(valor),
-        (error) => this.toast.mostrar(error.message, 'error')),
-      this.cargarDatoResumen(this.api.listarReclamos(), (valor) => {
-        this.claims.set(valor);
-        this.errorReclamos.set('');
-        if (this.reservaDelAviso) this.mostrarReclamoDelAviso(valor);
-      }, (error) => {
-        this.summaryError.set(true);
-        this.errorReclamos.set(error.message);
-      }),
+      this.cargarDatoResumen(this.api.listarLiquidaciones(), (valor) => this.settlements.set(valor)),
+      this.cargarDatoResumen(this.api.listarReclamos(), (valor) => this.claims.set(valor)),
       this.cargarDatoResumen(this.api.listarReembolsos(), (valor) => this.refunds.set(valor)),
       this.cargarDatoResumen(this.api.resumenReembolsos(), (valor) => this.resumenReembolsos.set(valor),
         (error) => {
@@ -418,12 +398,19 @@ export class AdminComponent {
     this.toast.mostrar(error.message, 'error');
   }
 
-  protected openSection(section: AdminSection, caseId?: number): void {
+  protected openSection(section: AdminSection, caseId?: number, destino: EnfoqueSeccionAdmin | null = caseId === undefined ? null : { tipo: 'caso', id: caseId }): void {
+    const anterior = this.activeSection();
+    if (anterior === 'resumen' && section !== anterior) this.cargaResumen?.unsubscribe();
     this.activeSection.set(section);
+    this.enfoque.set(destino ? { seccion: section, destino } : null);
     // La sección queda en la URL, así «Volver» desde el detalle de una reserva (o un perfil) vuelve a ella.
     if (this.route.snapshot.fragment !== (section === 'resumen' ? null : section))
       void this.router.navigate([], { relativeTo: this.route, fragment: section === 'resumen' ? undefined : section, replaceUrl: true });
-    if (caseId !== undefined) this.mostrarCaso(section, caseId);
+    if (section === 'bloqueos' && caseId !== undefined) {
+      this.vistaBloqueos.set('actuales');
+      this.listaBloqueos.mostrar((item) => item.usuario.id === caseId);
+    }
+    if (anterior !== section && ['resumen', 'usuarios', 'bloqueos', 'liquidaciones'].includes(section)) this.reload();
     afterNextRender(() => {
       if (this.activeSection() !== section) return;
       const heading = this.host.nativeElement.querySelector<HTMLElement>('#admin-section-title');
@@ -432,51 +419,40 @@ export class AdminComponent {
         : this.host.nativeElement.querySelector<HTMLElement>(`#admin-${section}-${caseId}`) ?? heading;
       target?.focus({ preventScroll: true });
       target?.scrollIntoView({ block: 'start' });
-      if (section === 'reembolsos' && caseId !== undefined) {
-        const refund = this.refunds().find(({ id }) => id === caseId);
-        if (refund) this.abrirReembolso(refund);
-      }
-      if (section === 'liquidaciones' && caseId !== undefined) {
-        const liquidacion = this.liquidacionesAPagar().find(({ id }) => id === caseId);
-        if (liquidacion) this.abrirPagoAnunciante(liquidacion);
-      }
     }, { injector: this.injector });
   }
 
-  /** Abre el reclamo más reciente de la reserva del aviso, una sola vez: las recargas no vuelven a mover la vista. */
-  private mostrarReclamoDelAviso(reclamos: Reclamo[]): void {
-    const reclamo = this.reservaDelAviso ? reclamoDeLaReserva(reclamos, this.reservaDelAviso) : undefined;
-    this.reservaDelAviso = null;
-    if (!reclamo) return;
-    this.reclamoDestacado.set(reclamo.id);
-    this.openSection('reclamos', reclamo.id);
-    // El router lleva a la sección (#reclamos) después del primer render; esto deja el reclamo a la vista igual.
-    llevarALaVista(`admin-reclamos-${reclamo.id}`, this.injector);
+  protected enfoqueDe(seccion: AdminSection): EnfoqueSeccionAdmin | null {
+    const enfoque = this.enfoque();
+    return enfoque?.seccion === seccion ? enfoque.destino : null;
   }
 
-  /** Lleva a la página del caso; si la búsqueda o los filtros lo ocultan, los limpia. */
-  private mostrarCaso(section: AdminSection, id: number): void {
-    if (section === 'reclamos') this.listaReclamos.mostrar((item) => item.id === id);
-    else if (section === 'reembolsos') this.listaReembolsos.mostrar((item) => item.id === id);
-    else if (section === 'liquidaciones') this.listaLiquidaciones.mostrar((item) => item.id === id);
-    else if (section === 'verificaciones') this.listaVerificaciones.mostrar((item) => item.id === id);
-    else if (section === 'bloqueos') {
-      this.vistaBloqueos.set('actuales');
-      this.listaBloqueos.mostrar((item) => item.usuario.id === id);
-    }
+  private idReservaDeAviso(valor: string | null): number | null {
+    const id = Number(valor);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+  }
+
+  private mostrarLiquidacion(id: number): void {
+    this.listaLiquidaciones.mostrar((item) => item.id === id);
+    afterNextRender(() => {
+      if (this.activeSection() !== 'liquidaciones') return;
+      const liquidacion = this.liquidacionesAPagar().find((item) => item.id === id);
+      if (liquidacion) this.abrirPagoAnunciante(liquidacion);
+    }, { injector: this.injector });
+  }
+
+  protected verReembolsoReclamo(id: number): void {
+    this.openSection('reembolsos', undefined, { tipo: 'reclamo', id });
   }
 
   /** Cada contador abre su lista mostrando exactamente los casos que cuenta. */
   protected abrirDesdeContador(section: 'reclamos' | 'reembolsos' | 'verificaciones' | 'liquidaciones' | 'bloqueos'): void {
-    if (section === 'verificaciones') this.listaVerificaciones.limpiar();
-    else if (section === 'reclamos') this.aplicarFiltro(this.listaReclamos, 'estado', 'abiertos');
-    else if (section === 'reembolsos') this.aplicarFiltro(this.listaReembolsos, 'estado', 'pendientes');
-    else if (section === 'liquidaciones') this.aplicarFiltro(this.listaLiquidaciones, 'situacion', 'habilitado');
-    else {
+    if (section === 'liquidaciones') this.aplicarFiltro(this.listaLiquidaciones, 'situacion', 'habilitado');
+    if (section === 'bloqueos') {
       this.vistaBloqueos.set('actuales');
       this.aplicarFiltro(this.listaBloqueos, 'apelacion', 'en-curso');
     }
-    this.openSection(section);
+    this.openSection(section, undefined, { tipo: 'pendientes' });
   }
 
   private aplicarFiltro<T>(lista: ListaFiltrable<T>, nombre: string, valor: string): void {
@@ -637,223 +613,10 @@ export class AdminComponent {
           this.api.listarLiquidaciones().pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({ next: (valor) => this.settlements.set(valor), error: () => undefined });
         this.toast.mostrar(devolver ? 'Caso enviado a Reembolsos.' : 'Revisión de liquidación cerrada.', 'exito');
-        if (devolver) {
-          this.reload();
-          this.openSection('reembolsos');
-        }
+        if (devolver) this.openSection('reembolsos');
       },
       error: (error: Error) => this.resolucionError.set(error.message),
     });
-  }
-
-  /** Comprobante elegido para registrar la transferencia del reembolso. */
-  protected readonly comprobanteReembolso = signal<File | null>(null);
-  protected observacionReembolso = '';
-  protected readonly urlComprobanteReembolso = (id: number) => () => this.api.urlComprobanteReembolso(id);
-
-  protected abrirReembolso(reembolso: AdminReembolso): void {
-    this.reembolsoSeleccionado.set(reembolso);
-    this.referenciaReembolso = '';
-    this.observacionReembolso = '';
-    this.comprobanteReembolso.set(null);
-    this.errorReembolso.set('');
-    this.dialogoReembolso().nativeElement.showModal();
-  }
-
-  protected cerrarReembolso(evento?: Event): void {
-    evento?.preventDefault();
-    if (!this.guardandoReembolso()) this.dialogoReembolso().nativeElement.close();
-  }
-
-  protected puedeSolicitarReembolso(reembolso: AdminReembolso): boolean {
-    return !reembolso.referencia_interna?.startsWith('auto-can:') &&
-      !reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE' && !!reembolso.pago?.payment_id;
-  }
-
-  protected puedeConciliarReembolso(reembolso: AdminReembolso): boolean {
-    return !reembolso.transferencia_manual && !!reembolso.pago?.payment_id && (reembolso.estado === 'FALLIDO' || reembolso.estado === 'EN_PROCESO');
-  }
-
-  protected puedeHabilitarTransferencia(reembolso: AdminReembolso): boolean {
-    return reembolso.estado === 'FALLIDO' && !reembolso.transferencia_manual && reembolso.origen !== 'CONTRACARGO';
-  }
-
-  protected habilitarTransferenciaReembolso(reembolso: AdminReembolso): void {
-    if (!this.puedeHabilitarTransferencia(reembolso) || this.guardandoReembolso()) return;
-    this.errorReembolso.set('');
-    this.guardandoReembolso.set(true);
-    this.api.habilitarTransferenciaReembolso(reembolso.id)
-      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
-      .subscribe({
-        next: (actualizado) => {
-          this.reembolsoSeleccionado.set(actualizado);
-          this.referenciaReembolso = '';
-          this.toast.mostrar('Transferencia habilitada. Coordiná la devolución desde el chat.', 'exito');
-          this.reload();
-        },
-        error: (error: Error) => this.errorReembolso.set(error.message),
-      });
-  }
-
-  protected puedeRegistrarTransferencia(reembolso: AdminReembolso): boolean {
-    return !!reembolso.transferencia_manual && reembolso.estado === 'PENDIENTE';
-  }
-
-  /** Mismo formato que el desglose que va debajo, para que no se mezclen «ARS4.00» y «ARS 4,00». */
-
-  protected referenciaReembolsoValida(reembolso: AdminReembolso): boolean {
-    const referencia = this.referenciaReembolso.trim();
-    // El comprobante es obligatorio; la referencia y la observación, opcionales.
-    if (this.puedeRegistrarTransferencia(reembolso))
-      return !!this.comprobanteReembolso() && referencia.length <= 150 && this.observacionReembolso.trim().length <= 500;
-    if (this.puedeConciliarReembolso(reembolso)) return /^\d{1,100}$/.test(referencia);
-    return this.puedeSolicitarReembolso(reembolso);
-  }
-
-  protected procesarReembolso(reembolso: AdminReembolso): void {
-    const referencia = this.referenciaReembolso.trim();
-    if (this.guardandoReembolso() || !this.referenciaReembolsoValida(reembolso)) return;
-
-    this.errorReembolso.set('');
-    this.guardandoReembolso.set(true);
-    const comprobante = this.comprobanteReembolso();
-    const operacion = this.puedeRegistrarTransferencia(reembolso) && comprobante
-      ? this.api.registrarTransferenciaReembolso(reembolso.id, comprobante, { referencia, observacion: this.observacionReembolso.trim() })
-      : this.puedeConciliarReembolso(reembolso)
-      ? this.api.conciliarReembolso(reembolso.id, referencia)
-      : this.api.solicitarReembolso(reembolso.id);
-    operacion
-      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.guardandoReembolso.set(false)))
-      .subscribe({
-        next: ({ reembolso: actualizado }) => {
-          if (actualizado.estado !== 'APROBADO') {
-            this.reembolsoSeleccionado.set(actualizado);
-            this.referenciaReembolso = '';
-            this.toast.mostrar(actualizado.transferencia_manual
-              ? 'Mercado Pago rechazó el reembolso. Continuá por el chat de transferencia.'
-              : 'La devolución quedó en seguimiento en Mercado Pago.', 'advertencia');
-            this.reload();
-            return;
-          }
-          this.dialogoReembolso().nativeElement.close();
-          this.toast.mostrar('Reembolso confirmado y aplicado a la reserva.', 'exito');
-          this.reload();
-        },
-        error: (e: Error) => {
-          this.errorReembolso.set(e.message);
-          this.api.listarReembolsos().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-            next: (items) => {
-              this.refunds.set(items);
-              const vigente = items.find((item) => item.id === reembolso.id);
-              if (vigente && this.reembolsoSeleccionado()?.id === vigente.id) {
-                this.reembolsoSeleccionado.set(vigente);
-              }
-            },
-            error: () => {},
-          });
-        },
-      });
-  }
-
-  protected abrirGestionReclamo(id: number, accion: 'mensaje' | 'resolver'): void {
-    if (this.busy()) return;
-    this.textoReclamo = '';
-    this.imagenesReclamo.set([]);
-    const reclamo = this.claims().find(item => item.id === id);
-    const pedidoDeCodigo = reclamo?.categoria === 'CODIGO_BLOQUEADO';
-    this.resolucionReclamo = !pedidoDeCodigo ? 'SIN_DEVOLUCION'
-      : reclamo?.reserva?.estado_estadia === 'PENDIENTE_INGRESO' ? 'REINICIAR_CODIGO' : 'CONFIRMAR_INGRESO';
-    this.importeReclamo = null;
-    this.observacionReclamo = '';
-    this.gestionReclamo.set({ id, accion });
-  }
-
-  /** El mensaje puede llevar imágenes; con imágenes, el texto es opcional. */
-  protected responderReclamo(reclamo: Reclamo): void {
-    const texto = this.textoReclamo.trim();
-    const imagenes = this.imagenesReclamo();
-    if ((!texto && !imagenes.length) || texto.length > 1000 || this.busy()) return;
-    this.run(
-      `claim-${reclamo.id}`,
-      () => this.api.responderReclamo(reclamo.id, texto, imagenes),
-      (value) => {
-        const mensaje = value as NonNullable<Reclamo['mensajes']>[number];
-        this.claims.update((items) => items.map((item) => item.id === reclamo.id ? {
-          ...item,
-          estado: item.estado === 'ABIERTO' ? 'EN_REVISION' : item.estado,
-          mensajes: [...(item.mensajes ?? []).filter((previo) => previo.id !== mensaje.id), mensaje],
-        } : item));
-        this.imagenesReclamo.set([]);
-        this.gestionReclamo.set(null);
-      },
-      'Mensaje enviado al hilo del reclamo.',
-    );
-  }
-
-  protected resolverReclamoReserva(reclamo: Reclamo): void {
-    if (this.busy()) return;
-    const resolucion = this.resolucionReclamo;
-    const importe = resolucion === 'DEVOLUCION_PARCIAL' ? this.importeReclamo : undefined;
-    const observacion = this.observacionReclamo.trim();
-    if (!observacion || observacion.length > 500) return;
-    if (resolucion === 'DEVOLUCION_PARCIAL' && (importe == null || !Number.isFinite(importe) || importe <= 0)) {
-      this.toast.mostrar('Indicá un importe parcial válido.', 'error');
-      return;
-    }
-    if (resolucion === 'DEVOLUCION_PARCIAL' && this.parcialCubreElTotal(reclamo)) {
-      this.toast.mostrar((reclamo.solicitud_cancelacion_id && reclamo.categoria !== 'DEMORA_ADMINISTRATIVA')
-        ? 'La devolución parcial debe ser menor al faltante. Para completarlo elegí «Completar faltante».'
-        : 'La devolución parcial tiene que ser menor que lo que pagó el inquilino. Para devolver todo elegí «Devolución total».', 'error');
-      return;
-    }
-    this.run(
-      `claim-${reclamo.id}`,
-      () => this.api.resolverReclamo(reclamo.id, resolucion, importe ?? undefined, observacion),
-      (value) => {
-        const resuelto = value as Reclamo;
-        this.claims.update((items) => items.map((item) => item.id === reclamo.id ? { ...item, ...resuelto, reserva: item.reserva } : item));
-        this.gestionReclamo.set(null);
-        this.toast.mostrar(this.avisoResolucion(reclamo, resuelto), 'exito');
-        this.reload();
-      },
-      null,
-    );
-  }
-
-  private avisoResolucion(reclamo: Reclamo, resuelto: Reclamo): string {
-    if ((reclamo.solicitud_cancelacion_id && reclamo.categoria !== 'DEMORA_ADMINISTRATIVA')) return resuelto.resolucion === 'SIN_DEVOLUCION'
-      ? 'Reclamo cerrado sin devolución adicional.'
-      : `Reclamo resuelto con devolución del faltante de ${this.montoReclamo(reclamo, resuelto.importe_reembolso ?? 0)}. La devolución sigue en Reembolsos.`;
-    if (resuelto.resolucion === 'SIN_DEVOLUCION') return 'Reclamo resuelto a favor del anunciante, sin devolución.';
-    if (resuelto.resolucion === 'REINICIAR_CODIGO') return 'Pedido resuelto: el anunciante ya puede volver a cargar el código.';
-    if (resuelto.resolucion === 'CONFIRMAR_INGRESO') return 'Pedido resuelto: el ingreso quedó confirmado y la liquidación pasa a pendiente de pago.';
-    const tipo = resuelto.resolucion === 'DEVOLUCION_TOTAL' ? 'total' : 'parcial';
-    const importe = resuelto.importe_reembolso ? ` de ${this.montoReclamo(reclamo, resuelto.importe_reembolso)}` : '';
-    return `Reclamo resuelto con devolución ${tipo}${importe}. La devolución sigue en Reembolsos.`;
-  }
-
-  /** Lleva al reembolso del reclamo; si ya no está en la lista, abre la sección igual. */
-  protected verReembolsoReclamo(reclamo: Reclamo): void {
-    const reembolso = this.refunds().find((item) =>
-      item.origen === 'RECLAMO' && item.referencia_interna === `rec:${reclamo.id}`);
-    this.openSection('reembolsos', reembolso?.id);
-  }
-
-  /** Lo que pagó el inquilino; el back controla el saldo exacto descontando devoluciones previas. */
-  protected totalPagadoReclamo(reclamo: Reclamo): number | null {
-    if (reclamo.devolucion_cancelacion) return reclamo.devolucion_cancelacion.importeReclamable;
-    const total = Number(reclamo.reserva?.monto_pago);
-    return Number.isFinite(total) && total > 0 ? total : null;
-  }
-
-  /** Un parcial por todo lo pagado es una devolución total: se pide elegir esa opción. */
-  protected parcialCubreElTotal(reclamo: Reclamo): boolean {
-    const total = this.totalPagadoReclamo(reclamo);
-    return total != null && this.importeReclamo != null && Number(this.importeReclamo) >= total - 0.009;
-  }
-
-  protected montoReclamo(reclamo: Reclamo, importe: number): string {
-    return formatearMoneda(importe, reclamo.devolucion_cancelacion?.moneda || reclamo.reserva?.moneda_contratada);
   }
 
   protected readonly nombreInquilino = nombreInquilino;
@@ -1022,72 +785,16 @@ export class AdminComponent {
       });
   }
 
-  protected approve(request: VerificationRequest): void {
-    if (!this.puedeResolverVerificacion(request, false, false)) return;
-    const id = request.anunciante.idUsuario;
-    this.run(
-      `request-${id}`,
-      () => this.api.aprobar(id, request.numero_revision, !!request.cbu_pendiente, this.titularCbuConfirmado === request.id),
-      () => {
-        this.titularCbuConfirmado = null;
-        this.requests.update((v) => v.filter((r) => r.id !== request.id));
-      },
-      'Solicitud aprobada.',
-    );
-  }
-  protected openReject(request: VerificationRequest): void {
-    this.rejectReason = '';
-    this.rechazarIdentidad = request.revisar_identidad && !request.cbu_pendiente;
-    this.rechazarCbu = !!request.cbu_pendiente && !request.revisar_identidad;
-    this.rejectId.set(request.id);
-  }
-  protected cancelReject(): void {
-    this.rejectId.set(null);
-    this.rejectReason = '';
-  }
-  protected confirmReject(request: VerificationRequest): void {
-    const motivo = this.rejectReason.trim();
-    if (motivo.length < 5 || (!this.rechazarIdentidad && !this.rechazarCbu) ||
-      !this.puedeResolverVerificacion(request, this.rechazarIdentidad, this.rechazarCbu)) return;
-    const id = request.anunciante.idUsuario;
-    this.run(
-      `request-${id}`,
-      () => this.api.rechazar(id, {
-        motivo,
-        numero_revision: request.numero_revision,
-        revisar_cbu: !!request.cbu_pendiente,
-        titular_cbu_confirmado: this.titularCbuConfirmado === request.id,
-        rechazar_identidad: this.rechazarIdentidad,
-        rechazar_cbu: this.rechazarCbu,
-      }),
-      () => {
-        this.titularCbuConfirmado = null;
-        this.requests.update((v) => v.filter((r) => r.id !== request.id));
-        this.cancelReject();
-      },
-      'Solicitud rechazada.',
-    );
-  }
-  protected puedeResolverVerificacion(request: VerificationRequest, rechazaIdentidad: boolean, rechazaCbu: boolean): boolean {
-    return this.busy() !== 'request-' + request.anunciante.idUsuario &&
-      (!request.revisar_identidad || rechazaIdentidad || !!request.prueba_vida_validada_en) &&
-      (!request.cbu_pendiente || rechazaCbu || this.titularCbuConfirmado === request.id);
-  }
-  protected esVideo(url: string): boolean {
-    return /\.(mp4|webm|mov)(?:\?|$)/i.test(url);
-  }
-  private run(key: string, request: () => any, success: (value: unknown) => void, message: string | null, failure?: () => void): void {
+  private run<T>(key: string, request: () => Observable<T>, success: (value: T) => void, message: string | null, failure?: () => void): void {
     this.busy.set(key);
-    request().subscribe({
-      next: (v: unknown) => {
+    request().pipe(takeUntilDestroyed(this.destroyRef), finalize(() => this.busy.set(null))).subscribe({
+      next: (v) => {
         success(v);
         if (message) this.toast.mostrar(message, 'exito');
-        this.busy.set(null);
       },
       error: (e: Error) => {
         failure?.();
         this.toast.mostrar(e.message, 'error');
-        this.busy.set(null);
       },
     });
   }
