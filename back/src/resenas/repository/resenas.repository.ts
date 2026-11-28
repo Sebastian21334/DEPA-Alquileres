@@ -1,23 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, type EntityManager } from 'typeorm';
 import { guardarSinDuplicados } from '../../common/persistence/valor-duplicado.error';
 import { paginar, type Pagina } from '../../common/persistence/paginacion';
-import { Resena } from '../entity/resena.entity';
+import { Resena, type ObjetivoResena } from '../entity/resena.entity';
 import type {
   DatosModeracionResena,
+  DatosResenaAnunciante,
+  DatosResenaPublicacion,
+  DatosResolucionDenuncia,
   FiltroResenasAdministracion,
   IResenaAccesoRepository,
   IResenaRepository,
   ResenaAcceso,
   ResolucionDenunciaResena,
 } from './resena.repository.interface';
-import type {
-  DatosResenaAnunciante,
-  DatosResenaPublicacion,
-  ResumenResenas,
-  TipoObjetivoResena,
-} from '../resenas.types';
 
 const RESTRICCIONES_RESEÑA = [
   'uq_resena_publicacion_autor',
@@ -28,14 +25,33 @@ const RESTRICCIONES_RESEÑA = [
 export class ResenasRepository implements IResenaRepository, IResenaAccesoRepository {
   constructor(@InjectRepository(Resena) private readonly repo: Repository<Resena>) {}
 
-  async resolverDenuncia(idResena: number, idAdministrador: number, aceptada: boolean, motivo: string): Promise<boolean> {
-    return this.repo.manager.transaction(async (manager) => {
-      const filas = await manager.query('SELECT id_resena, denunciada, motivo_denuncia, fecha_denuncia, denunciada_por FROM public.resena WHERE id_resena = $1 FOR UPDATE', [idResena]);
-      const resena = filas[0];
-      if (!resena?.denunciada) return false;
-      await manager.query('INSERT INTO public.resena_denuncia_resolucion (id_resena, id_denunciante, motivo_denuncia, fecha_denuncia, aceptada, motivo_resolucion, id_administrador) VALUES ($1, $2, $3, $4, $5, $6, $7)', [idResena, resena.denunciada_por, resena.motivo_denuncia, resena.fecha_denuncia, aceptada, motivo, idAdministrador]);
-      await manager.query('UPDATE public.resena SET denunciada = false, motivo_denuncia = NULL, fecha_denuncia = NULL, denunciada_por = NULL, visible = CASE WHEN $2 THEN false ELSE visible END, motivo_moderacion = CASE WHEN $2 THEN $3 ELSE motivo_moderacion END, fecha_moderacion = CASE WHEN $2 THEN now() ELSE fecha_moderacion END, moderada_por = CASE WHEN $2 THEN $4 ELSE moderada_por END WHERE id_resena = $1', [idResena, aceptada, motivo, idAdministrador]);
-      return true;
+  conTransaccion<T>(operacion: (repositorio: IResenaRepository, transaccion: EntityManager) => Promise<T>): Promise<T> {
+    return this.repo.manager.transaction((transaccion) =>
+      operacion(new ResenasRepository(transaccion.getRepository(Resena)), transaccion),
+    );
+  }
+
+  async buscarParaModerar(id: number): Promise<Resena | null> {
+    const bloqueada = await this.repo.findOne({
+      where: { id },
+      select: { id: true },
+      lock: { mode: 'pessimistic_write' },
+    });
+    return bloqueada ? this.buscarPorId(id) : null;
+  }
+
+  async registrarResolucionDenuncia(idResena: number, datos: DatosResolucionDenuncia): Promise<void> {
+    await this.repo.manager.query(`
+      INSERT INTO public.resena_denuncia_resolucion
+        (id_resena, id_denunciante, motivo_denuncia, fecha_denuncia, aceptada, motivo_resolucion, id_administrador)
+      SELECT id_resena, denunciada_por, motivo_denuncia, fecha_denuncia, $2, $3, $4
+      FROM public.resena WHERE id_resena = $1
+    `, [idResena, datos.aceptada, datos.motivo, datos.idAdministrador]);
+    await this.repo.update(idResena, {
+      denunciada: false,
+      motivo_denuncia: null,
+      fecha_denuncia: null,
+      denunciante: null,
     });
   }
 
@@ -118,7 +134,7 @@ export class ResenasRepository implements IResenaRepository, IResenaAccesoReposi
       .getRawMany();
   }
 
-  buscarPorObjetivoYAutor(tipo: TipoObjetivoResena, idObjetivo: number, idUsuario: number): Promise<Resena | null> {
+  buscarPorObjetivoYAutor(tipo: ObjetivoResena['tipo'], idObjetivo: number, idUsuario: number): Promise<Resena | null> {
     return this.repo.findOne({
       where: {
         ...(tipo === 'PUBLICACION'
@@ -130,13 +146,7 @@ export class ResenasRepository implements IResenaRepository, IResenaAccesoReposi
     });
   }
 
-  buscarPaginaPorObjetivo(
-    tipo: TipoObjetivoResena,
-    idObjetivo: number,
-    pagina: number,
-    limite: number,
-    excluirAutorId?: number,
-  ): Promise<Pagina<Resena>> {
+  buscarPaginaPorObjetivo(tipo: ObjetivoResena['tipo'], idObjetivo: number, pagina: number, limite: number, excluirAutorId?: number): Promise<Pagina<Resena>> {
     const consulta = this.repo
       .createQueryBuilder('resena')
       .leftJoinAndSelect('resena.autor', 'autor')
@@ -155,36 +165,23 @@ export class ResenasRepository implements IResenaRepository, IResenaAccesoReposi
     return paginar(consulta, { pagina, limite });
   }
 
-  async obtenerResumen(tipo: TipoObjetivoResena, idObjetivo: number): Promise<ResumenResenas> {
+  contarVisiblesPorPuntaje(objetivo: ObjetivoResena): Promise<{ puntaje: number; cantidad: number }[]> {
     const consulta = this.repo
       .createQueryBuilder('resena')
       .select('resena.puntaje', 'puntaje')
       .addSelect('COUNT(*)::int', 'cantidad')
       .where('resena.visible = true')
       .groupBy('resena.puntaje');
-    if (tipo === 'PUBLICACION') {
-      consulta.andWhere('resena.id_publicacion = :idObjetivo', { idObjetivo });
+    if (objetivo.tipo === 'PUBLICACION') {
+      consulta.andWhere('resena.id_publicacion = :idObjetivo', { idObjetivo: objetivo.id });
     } else {
-      consulta.andWhere('resena.id_anunciante = :idObjetivo', { idObjetivo });
+      consulta.andWhere('resena.id_anunciante = :idObjetivo', { idObjetivo: objetivo.id });
     }
-    const filas = await consulta.getRawMany<{ puntaje: number; cantidad: number }>();
-    const porPuntaje = new Map(
-      filas.map((fila) => [Number(fila.puntaje), Number(fila.cantidad)]),
-    );
-    const distribucion = [5, 4, 3, 2, 1].map((puntaje) => ({
-      puntaje,
-      cantidad: porPuntaje.get(puntaje) ?? 0,
-    }));
-    const cantidad = distribucion.reduce((total, fila) => total + fila.cantidad, 0);
-    const suma = distribucion.reduce(
-      (total, fila) => total + fila.puntaje * fila.cantidad,
-      0,
-    );
-    return {
-      cantidad,
-      promedio: cantidad ? Math.round((suma / cantidad) * 100) / 100 : null,
-      distribucion,
-    };
+    return consulta.getRawMany<{ puntaje: number; cantidad: number }>();
+  }
+
+  async bloquearResumen(objetivo: ObjetivoResena): Promise<void> {
+    await this.repo.manager.query('SELECT pg_advisory_xact_lock(hashtext($1), $2)', [`depa:resenas:${objetivo.tipo}`, objetivo.id]);
   }
 
   actualizar(resena: Resena, cambios: Partial<Resena>): Promise<Resena> {
@@ -232,22 +229,11 @@ export class ResenasRepository implements IResenaRepository, IResenaAccesoReposi
   }
 
   async registrarModeracion(idResena: number, datos: DatosModeracionResena): Promise<void> {
-    await this.repo.save(this.repo.create({
-      id: idResena,
+    await this.repo.update(idResena, {
       visible: datos.visible,
       motivo_moderacion: datos.motivo,
       fecha_moderacion: datos.fecha,
       moderador: datos.idAdministrador === null ? null : { id: datos.idAdministrador },
-    }));
-  }
-
-  async quitarDenuncia(idResena: number): Promise<void> {
-    await this.repo.save(this.repo.create({
-      id: idResena,
-      denunciada: false,
-      motivo_denuncia: null,
-      fecha_denuncia: null,
-      denunciante: null,
-    }));
+    });
   }
 }

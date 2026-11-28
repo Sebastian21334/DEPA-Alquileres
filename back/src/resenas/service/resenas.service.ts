@@ -21,7 +21,7 @@ import type {
   ResenaPublicaDto,
   ResenasObjetivoDto,
 } from '../dto/resena-respuesta.dto';
-import type { Resena } from '../entity/resena.entity';
+import type { ObjetivoResena, Resena } from '../entity/resena.entity';
 import {
   objetivoDeResena,
   prepararResena,
@@ -30,7 +30,6 @@ import {
   RESENA_REPOSITORY,
   type IResenaRepository,
 } from '../repository/resena.repository.interface';
-import type { ObjetivoResena } from '../resenas.types';
 import type { ReservaRespuestaDto } from '../../reservas-consulta/dto/reserva-respuesta.dto';
 import { ResenasImagenesService } from './resenas-imagenes.service';
 import { ResenasResumenService } from './resenas-resumen.service';

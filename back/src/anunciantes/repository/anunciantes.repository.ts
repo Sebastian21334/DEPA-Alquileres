@@ -115,8 +115,9 @@ export class AnunciantesRepository implements IAnunciantesRepository {
     });
   }
 
-  async actualizarResumenResenas(idUsuario: number, cantidad: number, promedio: number | null): Promise<void> {
-    await this.repo.update({ idUsuario }, {
+  async actualizarResumenResenas(idUsuario: number, cantidad: number, promedio: number | null, transaccion?: EntityManager): Promise<void> {
+    const repo = transaccion?.getRepository(Anunciante) ?? this.repo;
+    await repo.update({ idUsuario }, {
       cantidad_resenas: cantidad,
       promedio_resenas: promedio,
     });

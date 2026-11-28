@@ -1,5 +1,5 @@
 import type { Pagina } from '../../common/persistence/paginacion';
-import type { ResumenResenas, TipoObjetivoResena } from '../resenas.types';
+import type { ObjetivoResena } from '../entity/resena.entity';
 
 export type MotivoNoPuedeResenar =
   | 'SESION'
@@ -34,13 +34,17 @@ export interface ResenaPublicaDto {
   denunciada?: boolean;
 }
 
-export interface ObjetivoResenaDto {
-  tipo: TipoObjetivoResena;
-  id: number;
+export interface ObjetivoResenaDto extends ObjetivoResena {
   titulo: string;
 }
 
-export interface ResenasObjetivoDto extends ResumenResenas {
+export interface ResumenResenasDto {
+  cantidad: number;
+  promedio: number | null;
+  distribucion: { puntaje: number; cantidad: number }[];
+}
+
+export interface ResenasObjetivoDto extends ResumenResenasDto {
   objetivo: ObjetivoResenaDto;
   resenas: ResenaPublicaDto[];
   pagina: number;
@@ -64,3 +68,16 @@ export interface ResenaAdministracionDto extends ResenaPublicaDto {
 }
 
 export type PaginaResenasAdministracionDto = Pagina<ResenaAdministracionDto>;
+
+export interface ResolucionDenunciaResenaDto {
+  id: number;
+  id_resena: number;
+  motivo_denuncia: string | null;
+  fecha_denuncia: Date | null;
+  aceptada: boolean;
+  motivo_resolucion: string;
+  fecha_resolucion: Date;
+  id_administrador: number | null;
+  administrador_nombre: string | null;
+  administrador_apellido: string | null;
+}

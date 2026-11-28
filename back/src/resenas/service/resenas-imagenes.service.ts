@@ -14,10 +14,7 @@ import { PreparacionImagenesService } from '../../almacenamiento/service/prepara
 import { ValorDuplicadoError } from '../../common/persistence/valor-duplicado.error';
 import type { ResenaImagenDto } from '../dto/resena-respuesta.dto';
 import type { ResenaImagen } from '../entity/resena-imagen.entity';
-import {
-  MAX_BYTES_IMAGEN_RESENA,
-  MAX_IMAGENES_RESENA,
-} from '../resenas.constants';
+import { MAX_BYTES_IMAGEN_RESENA } from '../resenas.constants';
 import {
   RESENA_ACCESO_REPOSITORY,
   type IResenaAccesoRepository,
@@ -26,6 +23,8 @@ import {
   RESENA_IMAGEN_REPOSITORY,
   type IResenaImagenRepository,
 } from '../repository/resena-imagen.repository.interface';
+
+const MAX_IMAGENES_RESENA = 3;
 
 @Injectable()
 export class ResenasImagenesService {

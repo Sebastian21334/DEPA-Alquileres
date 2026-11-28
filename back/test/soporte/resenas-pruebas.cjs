@@ -83,10 +83,12 @@ function repositorioMock(overrides = {}) {
     eliminar: false,
     denuncia: null,
     moderacion: null,
-    quitarDenuncia: false,
+    resolucionDenuncia: null,
     listarAdministracion: null,
   };
   const repo = {
+    conTransaccion: async (operacion) => operacion(repo, undefined),
+    buscarParaModerar: (id) => repo.buscarPorId(id),
     crearParaPublicacion: (datos) => {
       estado.crearPublicacion = datos;
       return { ...datos, id: 99, autor: autor(datos.idUsuario), publicacion: { id: datos.idPublicacion } };
@@ -103,7 +105,8 @@ function repositorioMock(overrides = {}) {
     buscarParaImagenes: async () => ({ id: 10, visible: true, autor: { id: 3 } }),
     buscarPorObjetivoYAutor: async () => null,
     buscarPaginaPorObjetivo: async () => paginaMock(),
-    obtenerResumen: async () => resumenMock(),
+    contarVisiblesPorPuntaje: async () => [{ puntaje: 5, cantidad: 1 }],
+    bloquearResumen: async () => {},
     actualizar: async (resena, cambios) => {
       estado.actualizar = cambios;
       return Object.assign({}, resena, cambios);
@@ -121,8 +124,8 @@ function repositorioMock(overrides = {}) {
     registrarModeracion: async (...args) => {
       estado.moderacion = args;
     },
-    quitarDenuncia: async () => {
-      estado.quitarDenuncia = true;
+    registrarResolucionDenuncia: async (...args) => {
+      estado.resolucionDenuncia = args;
     },
     ...overrides,
   };
@@ -134,8 +137,8 @@ function servicioMock(overrides = {}) {
   const publicaciones = {
     buscarPublicaPorId: async () => publicacionMock(),
     admiteReservaPorFecha: () => true,
-    actualizarResumenResenas: async (...args) => {
-      estado.resumenPublicacion = args;
+    actualizarResumenResenas: async (id, cantidad, promedio) => {
+      estado.resumenPublicacion = [id, cantidad, promedio];
     },
     ...(overrides.publicaciones ?? {}),
   };
@@ -150,8 +153,8 @@ function servicioMock(overrides = {}) {
     // La regla real: una cuenta bloqueada o dada de baja no expone su perfil.
     cuentaHabilitada: AnunciantesService.prototype.cuentaHabilitada,
     datosContacto: () => ({ nombre: 'Carlos Dominguez' }),
-    actualizarResumenResenas: async (...args) => {
-      estado.resumenAnunciante = args;
+    actualizarResumenResenas: async (id, cantidad, promedio) => {
+      estado.resumenAnunciante = [id, cantidad, promedio];
     },
     ...(overrides.anunciantes ?? {}),
   };

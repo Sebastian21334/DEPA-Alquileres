@@ -4,13 +4,13 @@ const assert = require('node:assert/strict');
 const { plainToInstance } = require('class-transformer');
 const { validate } = require('class-validator');
 const { BadRequestException } = require('@nestjs/common');
-const { ListarResenasAdministracionDto } = require('../dist/resenas/dto/listar-resenas-administracion.dto');
-const { ESTADOS_RESENAS_ADMINISTRACION } = require('../dist/resenas/resenas.constants');
+const { ResenasAdministracionController } = require('../dist/resenas/controller/resenas-administracion.controller');
+const { ListarResenasAdministracionDto, ESTADOS_RESENAS_ADMINISTRACION } = require('../dist/resenas/dto/listar-resenas-administracion.dto');
 const { resenaMock, servicioMock } = require('./soporte/resenas-pruebas.cjs');
 
 test('el DTO administrativo reutiliza los estados válidos y rechaza otros', async () => {
   const dto = (datos) => plainToInstance(ListarResenasAdministracionDto, datos);
-  for (const estado of ESTADOS_RESENAS_ADMINISTRACION) {
+  for (const estado of Object.values(ESTADOS_RESENAS_ADMINISTRACION)) {
     assert.equal((await validate(dto({ estado }))).length, 0, estado);
   }
   assert.ok((await validate(dto({ estado: 'inventado' }))).length);
@@ -89,8 +89,8 @@ test('moderar exige motivo, valida su tipo, audita y recalcula el promedio', asy
       },
     },
     publicaciones: {
-      actualizarResumenResenas: async (...args) => {
-        resumen = args;
+      actualizarResumenResenas: async (id, cantidad, promedio) => {
+        resumen = [id, cantidad, promedio];
       },
     },
   });
@@ -171,17 +171,19 @@ test('si el correo al autor falla, la reseña igual queda oculta', async () => {
   assert.equal(oculta.motivo_moderacion, 'Lenguaje ofensivo');
 });
 
-test('quitar denuncia limpia la auditoría y conserva la visibilidad', async () => {
+test('quitar denuncia registra el rechazo y conserva la visibilidad', async () => {
   let actual = resenaMock({
     denunciada: true,
     motivo_denuncia: 'Prueba',
     fecha_denuncia: new Date('2026-11-20T12:00:00.000Z'),
     visible: false,
   });
-  const { admin } = servicioMock({
+  let resolucion;
+  const { admin, estado } = servicioMock({
     repo: {
       buscarPorId: async () => actual,
-      quitarDenuncia: async () => {
+      registrarResolucionDenuncia: async (id, datos) => {
+        resolucion = { id, ...datos };
         actual = resenaMock({
           ...actual,
           denunciada: false,
@@ -191,9 +193,12 @@ test('quitar denuncia limpia la auditoría y conserva la visibilidad', async () 
       },
     },
   });
-  const resultado = await admin.quitarDenuncia(10);
+  const controller = new ResenasAdministracionController(admin);
+  const resultado = await controller.quitarDenuncia(10, { user: { id: 1 } });
+  assert.deepEqual(resolucion, { id: 10, idAdministrador: 1, aceptada: false, motivo: 'Denuncia desestimada por administración.' });
   assert.equal(resultado.denunciada, false);
   assert.equal(resultado.motivo_denuncia, null);
   assert.equal(resultado.fecha_denuncia, null);
   assert.equal(resultado.visible, false);
+  assert.equal(estado.resumenPublicacion, undefined);
 });

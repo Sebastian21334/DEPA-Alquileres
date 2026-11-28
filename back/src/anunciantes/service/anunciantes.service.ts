@@ -39,8 +39,8 @@ export class AnunciantesService {
   }
 
   /** ResenasResumenService es el único escritor de estas cachés derivadas. */
-  actualizarResumenResenas(idUsuario: number, cantidad: number, promedio: number | null): Promise<void> {
-    return this.anunciantesRepo.actualizarResumenResenas(idUsuario, cantidad, promedio);
+  actualizarResumenResenas(idUsuario: number, cantidad: number, promedio: number | null, transaccion?: EntityManager): Promise<void> {
+    return this.anunciantesRepo.actualizarResumenResenas(idUsuario, cantidad, promedio, transaccion);
   }
 
   buscarCbuValidado(idUsuario: number, transaccion?: EntityManager): Promise<string | null> {

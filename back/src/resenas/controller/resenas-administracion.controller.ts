@@ -63,6 +63,6 @@ export class ResenasAdministracionController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(ROL.ADMINISTRADOR)
   quitarDenuncia(@Param('id', ParseIntPipe) id: number, @Req() req: AuthenticatedRequest) {
-    return this.resenasService.resolverDenuncia(id, req.user.id, { aceptada: false, motivo: 'Denuncia desestimada por administración.' });
+    return this.resenasService.quitarDenuncia(id, req.user.id);
   }
 }

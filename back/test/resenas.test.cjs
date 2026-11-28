@@ -552,11 +552,6 @@ test('el repositorio real pagina con joins, excluye al autor y traduce duplicado
     let actualizada = await repo.buscarPorId(idResena);
     assert.equal(actualizada.denunciada, true);
     assert.equal(actualizada.denunciante.id, 3);
-    await repo.quitarDenuncia(idResena);
-    actualizada = await repo.buscarPorId(idResena);
-    assert.equal(actualizada.denunciada, false);
-    assert.equal(actualizada.denunciante, null);
-
     await repo.registrarModeracion(idResena, {
       visible: false,
       motivo: 'Lenguaje ofensivo',

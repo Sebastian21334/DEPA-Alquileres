@@ -18,6 +18,11 @@ import {
   MAX_CARACTERES_MOTIVO_MODERACION,
 } from '../resenas.constants';
 
+export interface ObjetivoResena {
+  tipo: 'PUBLICACION' | 'ANUNCIANTE';
+  id: number;
+}
+
 /** Una reseña apunta a una publicación o a un perfil de anunciante, nunca a ambos. */
 @Entity('resena')
 @Check('ck_resena_un_objetivo', `((id_publicacion IS NOT NULL)::int + (id_anunciante IS NOT NULL)::int) = 1`)

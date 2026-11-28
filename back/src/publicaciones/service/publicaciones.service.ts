@@ -192,8 +192,8 @@ export class PublicacionesService {
   }
 
   /** ResenasResumenService es el único escritor de estas cachés derivadas. */
-  actualizarResumenResenas(id: number, cantidad: number, promedio: number | null): Promise<void> {
-    return this.publicacionesRepo.actualizarResumenResenas(id, cantidad, promedio);
+  actualizarResumenResenas(id: number, cantidad: number, promedio: number | null, transaccion?: EntityManager): Promise<void> {
+    return this.publicacionesRepo.actualizarResumenResenas(id, cantidad, promedio, transaccion);
   }
 
   prepararRespuesta<T extends Publicacion>(publicacion: T): T {

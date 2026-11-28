@@ -52,7 +52,8 @@ lógica de autoría, moderación y promedio aplica a los dos objetivos.
   **ocultarla**.
 - La denuncia se guarda con `denunciada_por`, `motivo_denuncia` y
   `fecha_denuncia`. La primera denuncia define el estado; las siguientes son
-  idempotentes. Quitar la denuncia limpia esos datos.
+  idempotentes. Resolver la denuncia limpia esos datos y registra el motivo y
+  el administrador de la decisión en el historial.
 - El DTO público incluye el booleano `denunciada` **solo** para deshabilitar la
   acción “Marcar como inapropiada” en el menú de la reseña. No se renderiza
   como estado, no muestra “En revisión” y el motivo/fecha quedan reservados a la
@@ -87,11 +88,12 @@ reseñas visibles después de crear, editar, borrar, ocultar o restaurar. El
 promedio se guarda con dos decimales y es `null` cuando no hay reseñas; el
 frontend muestra estrellas solo si `cantidad_resenas > 0`.
 
-La caché es derivada y eventual: si el segundo statement de actualización falla,
-la fila de la reseña ya quedó confirmada y el promedio puede quedar desfasado
-hasta la próxima operación que lo recalcule. La migración y el seed reconstruyen
-ambas cachés con un backfill. No se abre una transacción cruzada entre
-`resenas`, `publicaciones` y `anunciantes`.
+Administración confirma el cambio de visibilidad, la resolución de la denuncia
+y el resumen en una misma transacción. Al crear, editar o borrar desde el flujo
+del autor, el recálculo sigue siendo posterior a la escritura de la reseña. Si
+falla, el promedio puede quedar desfasado hasta el próximo recálculo. Los
+recálculos se serializan por objetivo. La migración y el seed reconstruyen
+ambas cachés.
 
 ## 4. Endpoints
 
@@ -109,6 +111,8 @@ ambas cachés con un backfill. No se abre una transacción cruzada entre
 | `GET` | `/administracion/resenas` | JWT + Administrador; `estado`, `q` por ID |
 | `PATCH` | `/administracion/resenas/:id/visibilidad` | JWT + Administrador |
 | `DELETE` | `/administracion/resenas/:id/denuncia` | JWT + Administrador |
+| `PATCH` | `/administracion/resenas/:id/denuncia/resolucion` | JWT + Administrador |
+| `GET` | `/administracion/resenas/denuncias/historial` | JWT + Administrador |
 
 La respuesta pública incluye `promedio`, `cantidad`, `distribucion`, la página de
 reseñas visibles, `puedeResenar`, `motivoNoPuede` y `miResena` (incluye las
@@ -137,6 +141,7 @@ Con el backend detenido y sobre una base descartable:
 ```sh
 cd back
 npm run db:resenas          # aplica 20261126-resenas.sql
+npm run db:historial-denuncias-resenas   # aplica 20261127-historial-denuncias-resenas.sql
 npm run db:datos-resenas    # carga usuarios, publicaciones, estadías y reseñas demo
 ```
 
@@ -162,8 +167,8 @@ npm run test:condiciones-economicas
 El test de reseñas cubre DTO, reglas de autoría y objetivo, largo plazo,
 denuncias, moderación, límite de imágenes, duplicados, borrado fila→blob,
 paginación fuera de rango, visibilidad de publicaciones, guards y la migración
-real sobre PGlite. La suite administrativa vive en
-`test/resenas-administracion.test.cjs`; `npm run test:resenas` ejecuta ambas. El
+real sobre PGlite. `npm run test:resenas` ejecuta las suites general,
+administrativa, de denuncias y de reseñas recibidas. El
 frontend se verifica con `npm run build`, `npm run test:resenas` y la prueba
 manual en escritorio y móvil. La moderación se usa dentro de `/admin#resenas`,
 en la sección “Reseñas” de Gestión.

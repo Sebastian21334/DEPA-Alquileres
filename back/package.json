@@ -67,7 +67,7 @@
     "db:resenas": "node scripts/resenas.cjs --aplicar",
     "db:historial-denuncias-resenas": "node scripts/historial-denuncias-resenas.cjs --aplicar",
     "db:datos-resenas": "node scripts/datos-resenas.cjs --aplicar",
-    "test:resenas": "npm run build && node --test test/resenas.test.cjs test/resenas-administracion.test.cjs"
+    "test:resenas": "npm run build && node --test test/resenas.test.cjs test/resenas-administracion.test.cjs test/denuncias-resenas.test.cjs test/resenas-recibidas.test.cjs"
   },
   "dependencies": {
     "@azure/communication-email": "^1.1.0",

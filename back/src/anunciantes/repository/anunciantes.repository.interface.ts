@@ -19,7 +19,7 @@ export interface IAnunciantesRepository {
   buscarPendientes(): Promise<Anunciante[]>;
   eliminar(anunciante: Anunciante): Promise<Anunciante>;
   buscarPorId(id: number): Promise<Anunciante | null>;
-  actualizarResumenResenas(idUsuario: number, cantidad: number, promedio: number | null): Promise<void>;
+  actualizarResumenResenas(idUsuario: number, cantidad: number, promedio: number | null, transaccion?: EntityManager): Promise<void>;
   /** true si una cuenta vigente ya usa ese CUIT/CUIL (se comparan solo los dígitos). */
   existeCuitVigente(cuit: string, transaccion?: EntityManager): Promise<boolean>;
 }
